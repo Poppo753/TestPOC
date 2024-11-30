@@ -1,0 +1,18 @@
+{
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.8",
+    "@nomicfoundation/hardhat-ethers": "^3.0.8",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@typechain/ethers-v6": "^0.5.1",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.4",
+    "hardhat": "^2.22.16",
+    "typechain": "^8.3.2"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.9.2",
+    "@uniswap/sdk-core": "^6.0.0",
+    "@uniswap/smart-order-router": "^4.8.1",
+    "@uniswap/v3-sdk": "^3.19.0"
+  }
+}
