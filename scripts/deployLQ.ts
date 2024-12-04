@@ -2,9 +2,9 @@ import { ethers } from "hardhat";
 
 async function main() {
     // Ottieni il contratto
-    const Pool = await ethers.getContractFactory("LiquidityPoolETH");
+    const Pool = await ethers.getContractFactory("TokenPriceManager");
 
-    console.log("Deploying LiquidityPoolETH...");
+    console.log("Deploying TokenPriceManager...");
 
     // Distribuisci il contratto
     const pool = await Pool.deploy(); // Non è necessario chiamare deployed()
