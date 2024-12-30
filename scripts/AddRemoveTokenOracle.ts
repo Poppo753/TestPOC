@@ -1,61 +1,86 @@
+import { expect } from "chai";
 import { ethers } from "hardhat";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-async function main() {
-    const contractAddress = "0x386E12fe14563A8E7607E3b4e0cD30517809c038";
-    const tokenManager = await ethers.getContractAt("TokenPriceManager", contractAddress);
+describe("EnhancedLiquidityPoolETH Arbitrum Tests", function () {
+    this.timeout(120000);
 
-    // Array di token da aggiungere
-    const tokens = [
-        {
-            tokenAddress: "0x0fBcbaEA96Ce0cF7Ee00A8c19c3ab6f5Dc8E1921", // wstETH
-            tokenDecimals: 18,
-            tokenCode: "wstETH",
+    let liquidityPool: any;
+    let owner: HardhatEthersSigner;
+    
+    // Arbitrum Mainnet Addresses
+    const TOKENS = {
+        wstETH: {
+            address: "0x0fBcbaEA96Ce0cF7Ee00A8c19c3ab6f5Dc8E1921",
             priceFeed: "0xB1552C5e96B312d0Bf8b554186F846C40614a540",
-            priceFeedDecimals: 18,
+            decimals: 18,
+            code: "wstETH"
         },
-        {
-            tokenAddress: "0x35751007a407ca6FEFfE80b3cB397736D2cf4dbe", // weETH
-            tokenDecimals: 18,
-            tokenCode: "weETH",
+        weETH: {
+            address: "0x35751007a407ca6FEFfE80b3cB397736D2cf4dbe",
             priceFeed: "0x20bAe7e1De9c596f5F7615aeaa1342Ba99294e12",
-            priceFeedDecimals: 18,
+            decimals: 18,
+            code: "weETH"
         },
-        {
-            tokenAddress: "0x2416092f143378750bb29b79eD961ab195CcEea5", // ezEth
-            tokenDecimals: 18,
-            tokenCode: "ezETH",
+        ezETH: {
+            address: "0x2416092f143378750bb29b79eD961ab195CcEea5",
             priceFeed: "0x989a480b6054389075CBCdC385C18CfB6FC08186",
-            priceFeedDecimals: 18,
+            decimals: 18,
+            code: "ezETH"
         },
-        {
-            tokenAddress: "0x4186BFC76E2E237523CBC30FD220FE055156b41F", // rsETH
-            tokenDecimals: 18,
-            tokenCode: "rsETH",
+        rsETH: {
+            address: "0x4186BFC76E2E237523CBC30FD220FE055156b41F",
             priceFeed: "0xb0EA543f9F8d4B818550365d13F66Da747e1476A",
-            priceFeedDecimals: 18,
-        },
-    ];
-
-    for (const token of tokens) {
-        console.log(`Adding token: ${token.tokenCode}`);
-        try {
-            const tx = await tokenManager.manageTokenData(
-                ethers.getAddress(token.tokenAddress),
-                token.tokenDecimals,
-                token.tokenCode,
-                ethers.getAddress(token.priceFeed),
-                token.priceFeedDecimals
-            );
-            console.log(`Transaction sent for ${token.tokenCode}: ${tx.hash}`);
-            await tx.wait();
-            console.log(`${token.tokenCode} data updated successfully.`);
-        } catch (error) {
-            console.error(`Failed to add token ${token.tokenCode}:`, error);
+            decimals: 18,
+            code: "rsETH"
         }
-    }
-}
+    };
 
-main().catch((error) => {
-    console.error(error);
-    process.exit(1);
+    const TEST_AMOUNT = ethers.parseEther("0.0001");
+    const HEARTBEAT = 3600;
+
+    before(async function () {
+        [owner] = await ethers.getSigners();
+        console.log("Testing from address:", owner.address);
+        
+        const LiquidityPool = await ethers.getContractFactory("EnhancedLiquidityPoolETH");
+        liquidityPool = await LiquidityPool.deploy();
+        await liquidityPool.waitForDeployment();
+        console.log("Contract deployed at:", await liquidityPool.getAddress());
+    });
+
+    it("Should configure all LSD tokens", async function () {
+        for (const [name, token] of Object.entries(TOKENS)) {
+            const tx = await liquidityPool.manageTokenData(
+                token.address,
+                token.decimals,
+                token.code,
+                token.priceFeed,
+                18, // priceFeedDecimals
+                HEARTBEAT
+            );
+            await tx.wait();
+            console.log(`${name} configured`);
+        }
+    });
+
+    it("Should deposit ETH", async function () {
+        const tx = await liquidityPool.deposit({ value: TEST_AMOUNT });
+        await tx.wait();
+        console.log("Deposited:", ethers.formatEther(TEST_AMOUNT), "ETH");
+    });
+
+    it("Should check all LSD prices", async function () {
+        for (const [name, token] of Object.entries(TOKENS)) {
+            const price = await liquidityPool.getTokenPrice(token.code);
+            console.log(`Current ${name} price:`, ethers.formatUnits(price, 18));
+        }
+    });
+
+    it("Should initiate withdrawal", async function () {
+        const lpBalance = await liquidityPool.balanceOf(owner.address);
+        const tx = await liquidityPool.initiateWithdraw(lpBalance);
+        await tx.wait();
+        console.log("Withdrawal initiated for", ethers.formatEther(lpBalance), "LP tokens");
+    });
 });

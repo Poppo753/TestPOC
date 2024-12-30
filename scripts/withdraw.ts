@@ -1,56 +1,129 @@
-import { ethers } from "ethers";
-import * as dotenv from "dotenv";
+import { ethers } from 'ethers';
+import { Log } from '@ethersproject/abstract-provider';
+import dotenv from 'dotenv';
 
+// Load environment variables
 dotenv.config();
 
-async function withdraw() {
-  // Configurazione
-  const provider = new ethers.JsonRpcProvider(process.env.ARBITRUM_RPC_URL);
-  const wallet = new ethers.Wallet(process.env.PRIVATE_KEY as string, provider);
+const ABI_FRAGMENT = [
+    "function withdraw(uint256 _shares, uint256 _minEthAmount) external returns (uint256)",
+    "function balanceOf(address account) external view returns (uint256)",
+    "function maxSlippage() external view returns (uint256)",
+    "function getTotalPoolValue() external view returns (uint256)",
+    "event Withdrawn(address indexed user, uint256 shares, uint256 ethAmount, uint256 totalValue, uint256 poolBalance)"
+];
 
-  // Indirizzo del contratto (inserisci quello corretto dopo il deployment)
-  const contractAddress = "0x0B11d8d864A02B40970e1a39aaD4A20BdE4C0F95";
+async function withdrawFromPool() {
+    const provider = new ethers.JsonRpcProvider(process.env.ARBITRUM_RPC_URL);
+    const wallet = new ethers.Wallet(process.env.PRIVATE_KEY!, provider);
+    const contractAddress = process.env.EthResVaultAdress!;
+    const contract = new ethers.Contract(contractAddress, ABI_FRAGMENT, wallet);
+    
+    try {
+        // Get user's LP token balance
+        const balance = await contract.balanceOf(wallet.address);
+        
+        if (balance === 0n) {
+            console.log("No LP tokens to withdraw");
+            return;
+        }
+        
+        console.log(`Current LP token balance: ${ethers.formatEther(balance)} LP`);
 
-  // ABI del contratto
-  const abi = [
-    "function initiateWithdraw(uint256 shares) external",
-    "function completeWithdraw() external",
-    "function balanceOf(address owner) view returns (uint256)",
-  ];
+        // Get contract's maxSlippage
+        const maxSlippage = await contract.maxSlippage();
+        console.log(`Contract maxSlippage: ${maxSlippage} basis points (${Number(maxSlippage)/100}%)`);
+        
+        // Calculate expected minimum amount as per contract logic
+        const expectedMinAmount = (balance * (10000n - maxSlippage)) / 10000n;
+        console.log(`Contract's expectedMinAmount: ${ethers.formatEther(expectedMinAmount)} ETH`);
 
-  // Connessione al contratto
-  const contract = new ethers.Contract(contractAddress, abi, wallet);
+        // Try with different minEthAmount values for testing (using raw BigInt values)
+        const testValues = [
+            0n,                     // Zero
+            expectedMinAmount,      // Exact expected amount
+            balance,                // Full amount
+            expectedMinAmount - 1n  // Just below expected
+        ];
 
-  // Ottieni il bilancio di LP token dell'utente
-  const balance = await contract.balanceOf(wallet.address);
-  console.log(
-    `Balance of LP tokens: ${ethers.formatEther(balance.toString())}`
-  );
+        console.log('\nTesting different minEthAmount values:');
+        for (const testValue of testValues) {
+            try {
+                await contract.withdraw.estimateGas(
+                    balance,
+                    testValue
+                );
+                console.log(`✓ Raw minEthAmount: ${testValue} (${ethers.formatEther(testValue)} ETH) would work`);
+            } catch (error: any) {
+                console.log(`✗ Raw minEthAmount: ${testValue} (${ethers.formatEther(testValue)} ETH) would fail:`, error.reason);
+            }
+        }
 
-  if (balance === 0n) {
-    console.error("No LP tokens to withdraw.");
-    return;
-  }
+        // Proceed with actual withdrawal using the expected minimum amount
+        console.log('\nProceeding with withdrawal...');
+        
+        const gasEstimate = await contract.withdraw.estimateGas(
+            balance,
+            expectedMinAmount
+        );
+        
+        console.log(`Estimated gas: ${gasEstimate}`);
 
-  // Inizio del prelievo
-  console.log(`Initiating withdrawal of ${ethers.formatEther(balance)} shares...`);
-  const tx1 = await contract.initiateWithdraw(balance);
-  console.log("Transaction sent. Hash:", tx1.hash);
+        const gasLimit = gasEstimate * 120n / 100n;
+        
+        const tx = await contract.withdraw(
+            balance,
+            expectedMinAmount,
+            {
+                gasLimit,
+            }
+        );
+        
+        console.log(`Transaction submitted: ${tx.hash}`);
+        
+        const receipt = await tx.wait();
+        console.log(`Transaction confirmed in block ${receipt.blockNumber}`);
+        
+        const withdrawalEvent = receipt.logs.find((log: Log) => {
+            try {
+                const parsedLog = contract.interface.parseLog({
+                    topics: log.topics,
+                    data: log.data
+                });
+                return parsedLog?.name === 'Withdrawn';
+            } catch {
+                return false;
+            }
+        });
 
-  // Aspetta la conferma
-  const receipt1 = await tx1.wait();
-  console.log("Initiate withdraw confirmed. Block:", receipt1.blockNumber);
-
-  // Completa il prelievo
-  console.log("Completing withdrawal...");
-  const tx2 = await contract.completeWithdraw();
-  console.log("Transaction sent. Hash:", tx2.hash);
-
-  // Aspetta la conferma
-  const receipt2 = await tx2.wait();
-  console.log("Withdraw completed. Block:", receipt2.blockNumber);
+        if (withdrawalEvent) {
+            const parsedLog = contract.interface.parseLog({
+                topics: withdrawalEvent.topics,
+                data: withdrawalEvent.data
+            });
+            if (parsedLog && parsedLog.args) {
+                const ethAmount = ethers.formatEther(parsedLog.args.ethAmount);
+                console.log(`Successfully withdrew ${ethAmount} ETH`);
+            }
+        }
+        
+    } catch (error: any) {
+        console.error('Error during withdrawal:', error);
+        
+        // More detailed error reporting
+        if (error.transaction) {
+            console.log('\nTransaction details:');
+            console.log('From:', error.transaction.from);
+            console.log('To:', error.transaction.to);
+            console.log('Data:', error.transaction.data);
+        }
+        if (error.receipt) {
+            console.log('\nTransaction receipt:');
+            console.log('Status:', error.receipt.status);
+            console.log('Gas used:', error.receipt.gasUsed.toString());
+        }
+    }
 }
 
-withdraw().catch((error) => {
-  console.error("Error during withdrawal:", error);
-});
+// Execute the withdrawal
+withdrawFromPool().catch(console.error);

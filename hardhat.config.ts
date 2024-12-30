@@ -2,6 +2,7 @@ import { HardhatUserConfig } from "hardhat/config"; // Importa il tipo corretto
 import "@nomicfoundation/hardhat-toolbox";
 import "dotenv/config";
 import "@typechain/hardhat";
+import "@nomicfoundation/hardhat-toolbox";
 
 
 
