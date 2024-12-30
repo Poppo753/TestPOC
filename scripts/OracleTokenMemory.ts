@@ -1,7 +1,7 @@
 import { ethers } from "hardhat";
 
 async function main() {
-    const contractAddress = "0x386E12fe14563A8E7607E3b4e0cD30517809c038";
+    const contractAddress = "0xCcFB44a82335447260CD56540c02191109D3e9ED";
     const tokenManager = await ethers.getContractAt("TokenPriceManager", contractAddress);
 
     const allTokenData = await tokenManager.getAllTokenData();

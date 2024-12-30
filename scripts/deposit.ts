@@ -9,7 +9,7 @@ async function deposit() {
   const wallet = new ethers.Wallet(process.env.PRIVATE_KEY as string, provider);
 
   // Indirizzo del contratto (inserisci quello corretto dopo il deployment)
-  const contractAddress = "0x0B11d8d864A02B40970e1a39aaD4A20BdE4C0F95";
+  const contractAddress = process.env.EthResVaultAdress!;
 
   // ABI del contratto
   const abi = [
@@ -21,7 +21,7 @@ async function deposit() {
   const contract = new ethers.Contract(contractAddress, abi, wallet);
 
   // Invio del deposito
-  const amount = ethers.parseEther("0.0001"); // 0.0001 ETH
+  const amount = ethers.parseEther("0.00001"); // 0.00001 ETH
   console.log(`Sending deposit of ${ethers.formatEther(amount)} ETH...`);
 
   const tx = await contract.deposit({ value: amount });

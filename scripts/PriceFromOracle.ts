@@ -1,7 +1,7 @@
 import { ethers } from "hardhat";
 
 async function main() {
-    const contractAddress = "0x386E12fe14563A8E7607E3b4e0cD30517809c038";
+    const contractAddress = "0xCcFB44a82335447260CD56540c02191109D3e9ED";
     const tokenManager = await ethers.getContractAt("TokenPriceManager", contractAddress);
 
     // Array dei codici identificativi dei token
@@ -10,7 +10,9 @@ async function main() {
     for (const tokenCode of tokenCodes) {
         try {
             const price = await tokenManager.getTokenPrice(tokenCode);
-            console.log(`The price of ${tokenCode} is: ${price.toString()}`);
+// Converti il prezzo in un formato leggibile (esempio: in formato ETH)
+            const formattedPrice = ethers.formatUnits(price, 18);
+            console.log(`The price of ${tokenCode} is: ${formattedPrice.toString()}`);
         } catch (error) {
             console.error(`Failed to fetch price for ${tokenCode}:`, error);
         }

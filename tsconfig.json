@@ -8,7 +8,10 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "outDir": "dist",
+    "noImplicitAny": true,
+    "strictNullChecks": true
   },
-  "include": ["./scripts", "./test","./typechain-types", "vari/Script/etrha.test.ts"],
-  "files": ["./hardhat.config.ts"]
+    "include": ["./scripts", "./test","./typechain-types", "vari/Script/etrha.test.ts", "vari/Script/EnhancedLiquidityPoolETH.test.new.ts"],
+    "files": ["./hardhat.config.ts"]
 }
+
