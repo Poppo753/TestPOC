@@ -1,0 +1,430 @@
+Ecco l'analisi tecnica, modulo-per-modulo, dell’architettura che abbiamo messo in piedi (Beacon + 6 moduli + Proxy Generale come custode fondi/LP). Evidenzio responsabilità, storage, interfacce, flussi, sicurezza, failure-modes e gap ancora da chiudere.
+
+Beacon (registry degli indirizzi)
+
+Ruolo
+
+Sorgente unica di verità per gli indirizzi di tutti i componenti: moduli (“TokenManager”, “SwapManager”, “ValueCalculator”, “EmergencyHandler”, “ParameterManager”, “LiquidityManager”), servizi esterni (“SimpleSwap”), asset (“WETH”), e “ProxyGeneral”.
+
+Consente upgrade/modularità senza migrare fondi.
+
+API chiave
+
+updateImplementation(string module, address impl) (owner-only).
+
+getImplementation(string module) -> address (read).
+
+Pattern d’uso
+
+Tutti i moduli leggono gli indirizzi runtime via IBeacon(beacon).getImplementation("<Name>").
+
+Niente logica applicativa nel Beacon; solo mapping string→address.
+
+Sicurezza
+
+Solo owner può aggiornare; audit trail via ImplementationUpdated.
+
+Evitare typo nel module (definisci costanti di nome sui moduli nella codebase TS per deploy/scripts).
+
+“WETH” viene trattato come modulo/chiave dedicata.
+
+TokenManager
+
+Ruolo
+
+Registro on-chain dei token gestiti (address, decimals, feed Chainlink, heartbeat, attivo/inattivo).
+
+Fonte di verità per i moduli che devono conoscere quali token sono validi e i loro meta-dati.
+
+Storage/Strutture
+
+mapping(string => TokenInfo) con: tokenAddress, tokenDecimals, priceFeed, priceFeedDecimals, heartbeat, isActive, lastPrice, lastPriceTimestamp.
+
+string[] tokenCodes + tokenCodesCount.
+
+Funzioni (copiate dal monolite, invariate nella logica)
+
+manageTokenData(...) (owner-only; add/update; limita numero via maxTokensPerOperation).
+
+removeToken(string) (owner-only; soft-remove + compattazione dell’array).
+
+updateHeartbeat(string,uint256) (owner-only).
+
+getTokenPrice(string) (view, Chainlink; valida roundId/answeredInRound/heartbeat).
+
+getTokenPriceWithEvents(string) (aggiorna cache on-chain lastPrice* e emette PriceStale se serve).
+
+getTokenCount(), getActiveTokens().
+
+Interazioni
+
+Chiamato da ValueCalculator (per prezzi) e da SwapManager (per tokenAddress e validità).
+
+LiquidityManager non deve toccarlo direttamente, ma attinge info indirettamente via ValueCalculator/SwapManager.
+
+Sicurezza
+
+Parametri owner-only; validazioni su indirizzi, heartbeat, no WETH come “token”.
+
+Contatori errori e heartbeat riducono rischio di usare prezzi stantii.
+
+ValueCalculator
+
+Ruolo
+
+Calcolo del valore in ETH del portafoglio e delle percentuali per token (incluso WETH).
+
+Cache a breve durata per ridurre gas.
+
+Storage
+
+mapping(string => TokenValueCache) con value, timestamp, isValid.
+
+Funzioni (copiate)
+
+getCachedTokenValue(string) view — TTL su cacheDuration.
+
+calculateTokenValue(string) — usa cache se valida, altrimenti getTokenPriceWithEvents (TokenManager) e bilancio IERC20(token).balanceOf(<HOLDER>) per calcolare value normalizzato su priceFeedDecimals; aggiorna cache ed eventi.
+
+getTotalPoolValue() — somma WETH + valori token attivi; produce array TokenValueInfo[] con percentage (basis points con 2 decimali logici, 10000 = 100%).
+
+invalidateCache(string) (owner-only).
+
+Interazioni
+
+Fonte bilanci: nel monolite era address(this). In architettura modulare il holder degli asset è il ProxyGeneral → ValueCalculator deve leggere i balance del ProxyGeneral (non del modulo). Se non l’abbiamo già fatto nel file, va adattato: recupera proxy = IBeacon.getImplementation("ProxyGeneral") e usa IERC20(token).balanceOf(proxy), e IWETH.balanceOf(proxy) per WETH.
+
+Prezzi da TokenManager; elenco token da TokenManager (getActiveTokens()).
+
+Sicurezza
+
+Gestione stale data (maxPriceAge) + heartbeat per feed.
+
+try/catch sui feed: incrementa tokenErrors e emette ErrorThresholdReached.
+
+Failure-modes
+
+Cache invalida o feed in errore → revert su Value calculation failed.
+
+Decimali/normalizzazione coerenti con priceFeedDecimals.
+
+SwapManager
+
+Ruolo
+
+Esegue swap tramite integrazione con SimpleSwap (o altro router), astratto dietro Beacon.
+
+Utilizzato:
+
+dall’owner per ribilanciamenti manuali,
+
+dal LiquidityManager durante withdraw se serve colmare WETH insufficiente.
+
+Funzioni
+
+performSwap(spendTokenCode, receiveTokenCode, amountIn) — valida i codici con TokenManager, risolve gli address, approva lo spender (reset a 0 poi amountIn), chiama ISimpleSwap.inputSwap(...), emette eventi.
+
+Interfacce e interazioni
+
+ITokenManager (validità + address dei token),
+
+ISimpleSwap (router esterno),
+
+IBeacon per risolvere indirizzi (TokenManager, SimpleSwap, ProxyGeneral e WETH quando serve).
+
+Custodia asset: gli asset stanno in ProxyGeneral. Per poterli swappare, serve uno dei due pattern:
+
+A. Approve from Proxy: ProxyGeneral (detentore) esegue IERC20(spendToken).approve(SimpleSwap, amountIn) e SwapManager chiama il router specificando from = Proxy (se il router lo supporta) oppure
+
+B. Executor: ProxyGeneral espone executeSwap(...) o transferToModule(...) con ACL (solo SwapManager/LiquidityManager) per spostare temporaneamente i token al modulo che poi approva e swappa.
+
+Ad oggi lo skeleton approva localmente in SwapManager — da aggiustare perché i token non sono in suo possesso. Consigliato: pattern A, con una funzione IProxyGeneral.approveSpender(token, spender, amount) + IProxyGeneral.callSwap(spender, data) se il router richiede msg.sender = holder. Alternativa: permit se i token lo supportano.
+
+Sicurezza
+
+onlyOwner per ribilanciamenti manuali; ma deve essere invocabile anche da LiquidityManager → aggiungere un modifier onlyOwnerOr(module("LiquidityManager")).
+
+Reset allowance a 0 prima di impostare nuova (best practice).
+
+Validazione che spendToken != receiveToken e token attivi.
+
+Failure-modes
+
+Mancanza approvazione dal ProxyGeneral → swap fallisce. Da coprire con flusso orchestrato dal LiquidityManager (vedi sotto).
+
+EmergencyHandler
+
+Ruolo
+
+Gestione di pause()/unpause() e ritiro d’emergenza di tutti gli asset verso l’owner (o vault di salvataggio).
+
+Funzioni (copiate)
+
+pause() / unpause() (owner-only).
+
+emergencyWithdraw() (owner-only, richiede paused).
+
+Trasferisce WETH e poi ogni token attivo; emette EmergencyWithdrawal*.
+
+Interazioni
+
+Legge:
+
+WETH via Beacon,
+
+TokenManager per elenco token attivi (getActiveTokens) e meta-dati,
+
+ProxyGeneral come sorgente dei fondi (non il modulo stesso), invocando funzioni tipo transferAll(asset, to) oppure eseguendo IERC20(...).transferFrom(proxy, owner, amount) se il Proxy consente allowance al modulo di emergenza.
+
+Se non l’abbiamo già riallineato, spostiamo i balanceOf(address(this)) del monolite in balanceOf(proxyGeneral).
+
+Sicurezza
+
+Solo quando paused == true.
+
+Sequenza WETH→altri token; try/catch per ciascun token.
+
+ParameterManager
+
+Ruolo
+
+Endpoint unico per la governance dei parametri operativi (valori soglia, limiti orari, cache durations, ecc.).
+
+Funzioni (copiate)
+
+isValidParameter(string,uint256) internal pure — whitelist di parametri e validazioni (range).
+
+getCurrentParameterValue(string) view — nel monolite leggeva state locali; nella visione modulare può:
+
+(fase 1) restituire default costanti come nello snippet che hai mostrato (warning “could be pure” accettabile),
+
+(fase 2) diventare stateful e/o leggere i parametri effettivi dal ProxyGeneral (fonte di stato immutabile).
+
+updateParameterValue(string,uint256) (owner-only) — nel monolite mutava lo state locale ed emetteva ParameterUpdated. In architettura modulare è preferibile:
+
+o farlo scrivere nel ProxyGeneral (che applica i parametri),
+
+o custodire i parametri direttamente nel ParameterManager e farli leggere dagli altri moduli via interfaccia.
+
+Interazioni
+
+Gli altri moduli (Liquidity/Swap/Emergency/ValueCalc) dovrebbero leggere i parametri dal ParameterManager/ProxyGeneral, non da variabili locali.
+
+Sicurezza
+
+Strict whitelist dei nomi parametrici + range check.
+
+Eventi di audit su update.
+
+LiquidityManager
+
+Ruolo
+
+Orchestratore dei flussi deposit e withdraw, mantenendo la logica del monolite (calcolo quote, limiti, slippage, reserve ratio, swap di compensazione, emissione eventi).
+
+Non detiene fondi: usa ProxyGeneral per custodia e LP mint/burn.
+
+Funzioni (derivate e riallineate al monolite)
+
+constructor(beacon) — salva Beacon; non memorizza WETH hard-coded (lo risolve via Beacon).
+
+deposit():
+
+Controlli: minDeposit, maxDeposit (parametri da ParameterManager).
+
+Wrap ETH→WETH (via IWETH).
+
+Holder corretto: il WETH deve andare nel ProxyGeneral (non nel modulo).
+
+Stima share come nel monolite (1:1 semplificata nel vecchio stub; noi manteniamo la formula originale se già migrata).
+
+proxy.mint(msg.sender, shares).
+
+Emit Deposit.
+
+withdraw(shares, minWethOut):
+
+Controlli: maxWithdrawPerTx, withinLimits (limite orario), saldo LP, whenNotPaused.
+
+Pre-state: totalSupply, preWithdrawBalance (WETH nel ProxyGeneral, non nel modulo).
+
+PoolValue: chiede a ValueCalculator.getTotalPoolValue() (che deve leggere i balance del ProxyGeneral).
+
+Calcola ethAmount proporzionale a totalValue/totalSupply (logica monolite).
+
+Slippage & reserve: expectedMinAmount, poolReserveRatio.
+
+Se wethBalance < ethAmount:
+
+Determina wethNeeded.
+
+Seleziona token con percentuale più bassa tra gli attivi (usa le percentuali da ValueCalculator).
+
+Determina tokenAmountToSwap usando cache o prezzo corrente (+10% buffer).
+
+Chiama SwapManager.performSwap(tokenCode, "WETH", tokenAmountToSwap).
+
+Precondizione: ProxyGeneral deve aver concesso allowance al router (o al modulo) per spendere i token detenuti → vedi sezione SwapManager/ProxyGeneral.
+
+Verifica che ora il WETH nel ProxyGeneral sia sufficiente.
+
+Post-checks: reserve ratio post-withdraw.
+
+Burn LP: proxy.burn(msg.sender, shares).
+
+Trasferisce WETH all’utente via ProxyGeneral.transferFunds(msg.sender, ethAmount) (il modulo non invia fondi direttamente).
+
+Emit Withdrawn.
+
+receive()/fallback() — rifiutano ETH diretti (come monolite).
+
+Interfacce usate
+
+IBeacon, IWETH, IValueCalculator (versione che legge bilanci del Proxy), ISwapManager, IProxyGeneral.
+
+Sicurezza
+
+CEI (Checks-Effects-Interactions) e nonReentrant.
+
+Pausa globale (potrebbe centralizzarsi in ProxyGeneral o EmergencyHandler).
+
+Requisiti su limiti orari: mantenere contatori in ProxyGeneral (fonte di stato) per coerenza multi-modulo.
+
+Gap residui (vedi “Open items”)
+
+Alcune variabili (es. maxDeposit, maxSlippage, withdrawLimitPerHour) devono essere lette da ParameterManager/ProxyGeneral.
+
+Le letture dei balance devono riferirsi sempre al ProxyGeneral (non address(this)).
+
+ProxyGeneral (custode fondi & LP)
+
+Stato: non ancora implementato qui, ma l’architettura lo richiede.
+Ruolo
+
+Custodia tutti gli asset (WETH + ERC20).
+
+Detentore dell’LP token (supply) e autorità di mint/burn.
+
+Espone primitiva di trasferimento fondi verso utenti/moduli con ACL: solo LiquidityManager/SwapManager/EmergencyHandler possono movimentare fondi.
+
+Punto di verità per parametri operativi (opzionale: o ParameterManager tiene lo state e Proxy legge da lì).
+
+API suggerita
+
+mint(address to, uint256 amount), burn(address from, uint256 amount).
+
+transferFunds(address to, address asset, uint256 amount) (o overload per default WETH).
+
+approveSpender(address token, address spender, uint256 amount) (per swap).
+
+ACL: onlyModule("LiquidityManager" | "SwapManager" | "EmergencyHandler") (indirizzi risolti via Beacon).
+
+Sicurezza
+
+Nessun utente può prelevare direttamente dal ProxyGeneral.
+
+Ogni movimento parte da un modulo autorizzato, con i controlli già descritti.
+
+Flussi end-to-end (come da design)
+
+1) Deposito
+
+Utente chiama LiquidityManager.deposit() con ETH.
+
+Modulo wrappa in WETH e trasferisce al ProxyGeneral.
+
+Calcola shares come nel monolite (1:1 o formula basata su stato precedente).
+
+ProxyGeneral.mint(user, shares).
+
+Eventi emessi (Deposit).
+
+2) Withdraw “liquido”
+
+Utente chiama LiquidityManager.withdraw(shares, minWethOut).
+
+Modulo valida limiti, totale pool (ValueCalculator), calcola ethAmount.
+
+Se WETH in Proxy ≥ ethAmount: burn LP + ProxyGeneral.transferFunds(user, WETH, ethAmount).
+
+Eventi (Withdrawn).
+
+3) Withdraw con swap di compensazione
+
+Come sopra fino al punto 3 ma WETH < ethAmount.
+
+LiquidityManager chiede a ValueCalculator.getTotalPoolValue() le percentuali e sceglie il token da vendere (quello con percentuale più bassa che copre il bisogno).
+
+Calcola tokenAmountToSwap con buffer 10% usando getCachedTokenValue o getTokenPriceWithEvents.
+
+Invoca SwapManager.performSwap(tokenCode, "WETH", tokenAmountToSwap).
+
+ProxyGeneral deve garantire l’allowance del spendToken → vedere i pattern sopra.
+
+Verifica WETH sufficiente, burn LP, ProxyGeneral.transferFunds(user, WETH, ethAmount).
+
+4) Ribilanciamento manuale (owner)
+
+Owner invoca SwapManager.performSwap(...) per spostare esposizione; stesso percorso allowance.
+
+5) Emergenza
+
+EmergencyHandler.pause() → emergencyWithdraw() sposta tutto all’owner, iterando su WETH e su token attivi (enumerati da TokenManager). Movimenti via ProxyGeneral con ACL.
+
+Sicurezza & Best-Practices complessive
+
+Access control: ogni modulo applica onlyOwner dove serve; per operazioni cross-modulo usare onlyModule("<Name>") (indirizzi dal Beacon).
+
+Custodia centralizzata: solo ProxyGeneral detiene asset/LP.
+
+Reentrancy: nonReentrant su deposit/withdraw/swap; CEI (controlli → aggiornamenti → interazioni esterne).
+
+Allowance: reset a 0 prima di settare nuovi importi; mai lasciare allowance illimitate su router se non strettamente necessario.
+
+Prezzi e stale-data: heartbeat + maxPriceAge + cache TTL; eventi di warning.
+
+Slippage & reserve ratio: enforcement identico al monolite (parametrizzabile).
+
+Pausa: palo unico di controllo (EmergencyHandler) che blinda deposit/withdraw/swap (direttamente o via ProxyGeneral che consulta stato paused).
+
+Eventi: ricchi e coerenti (Deposit, Withdrawn, SwapExecuted/Failed, PoolValueUpdated, CacheUpdated, ErrorThresholdReached).
+
+Open items (da chiudere per allineare 100% al monolite)
+
+ProxyGeneral: implementare (ACL su moduli, custodia fondi, mint/burn LP, transferFunds, approveSpender/callSwap).
+
+ValueCalculator: assicurarsi che legga sempre i balance del ProxyGeneral, non del modulo.
+
+LiquidityManager:
+
+Integrare tutte le convalide numeriche del monolite (min/max deposit/withdraw, limiti orari, reserve ratio, slippage) facendo fetch dei parametri dal ParameterManager/ProxyGeneral (oggi nello stub alcune soglie erano “hardcoded”).
+
+Durante lo swap per withdraw: sostituire qualsiasi uso di tokenData/tokenCodes locali con interfacce verso TokenManager + ValueCalculator (percentuali e prezzi).
+
+SwapManager:
+
+Aggiungere via Beacon la dipendenza da ProxyGeneral e WETH.
+
+Definire il percorso allowance: o ProxyGeneral.approveSpender(spendToken, SimpleSwap, amount) o funzione di executor.
+
+ACL: onlyOwner o onlyOwnerOr(LiquidityManager).
+
+EmergencyHandler: spostare le letture dei bilanci verso ProxyGeneral; usare TokenManager.getActiveTokens() (già fatto) per enumerazione.
+
+ParameterManager: decidere se lo stato vive qui o nel Proxy; uniformare le letture in tutti i moduli.
+
+Beacon keys: standardizzare i nomi ("WETH", "ProxyGeneral", "TokenManager", "ValueCalculator", "SwapManager", "EmergencyHandler", "ParameterManager", "SimpleSwap").
+
+Test suite (Hardhat, ethers v6):
+
+Unit: ogni modulo con stub/mocks del Beacon e degli altri moduli.
+
+Integrazione: end-to-end con ProxyGeneral reale e SimpleSwap mock.
+
+Edge: prezzi stantii, heartbeat scaduto, limiti orari, swap parziali/insufficienti, reserve ratio sotto soglia, pause attiva, token feed malfunzionanti.
+
+Gas & UX:
+
+Verificare i try/catch su feed e swap per evitare revert non necessari.
+
+Considerare eventi di diagnostica sufficienti per il monitoraggio off-chain.

@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeFi System - Detailed Function Architecture</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0b1020;
+            color: #e5e7eb;
+            overflow-x: auto;
+        }
+        #root {
+            width: 100%;
+            min-height: 100vh;
+        }
+        .function-item {
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .function-item:hover {
+            opacity: 0.8;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes slideIn {
+            from { transform: translateY(-10px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes drawLine {
+            from { stroke-dashoffset: 1000; }
+            to { stroke-dashoffset: 0; }
+        }
+        .animate-in {
+            animation: fadeIn 0.4s ease-out;
+        }
+        .slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+        .tooltip {
+            position: fixed;
+            background: rgba(15, 23, 42, 0.98);
+            border: 2px solid #60a5fa;
+            border-radius: 8px;
+            padding: 12px 16px;
+            z-index: 1000;
+            max-width: 400px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            transition: opacity 0.2s ease;
+        }
+        .mode-toggle {
+            background: #1e293b;
+            border: 2px solid #475569;
+            border-radius: 12px;
+            padding: 8px;
+            display: inline-flex;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+        .mode-button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            background: transparent;
+            color: #94a3b8;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        .mode-button.active {
+            background: #60a5fa;
+            color: #0b1020;
+        }
+        .mode-button:hover:not(.active) {
+            background: rgba(96, 165, 250, 0.1);
+            color: #60a5fa;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef } = React;
+
+        // Colors
+        const READ = "#2563eb";
+        const WRITE = "#ef4444";
+        const EXTERNAL = "#ea580c";
+        const EMERGENCY = "#991b1b";
+        const BORDER = "#0f172a";
+        const BG = "#0b1020";
+        const CARD = "#0f172a";
+        const TEXT = "#e5e7eb";
+        const SUBT = "#cbd5e1";
+        const MUTED = "#94a3b8";
+        const HIGHLIGHT = "#60a5fa";
+
+        // Detailed function call mapping
+        const functionCalls = {
+          // PROXYGENERAL calls
+          "ProxyGeneral.emergencyTransferAll": [
+            { target: "Beacon.getImplementation", type: READ, param: "WETH" },
+            { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
+          ],
+          
+          // TOKENMANAGER calls
+          "TokenManager.manageTokenData": [
+            { target: "Beacon.getImplementation", type: READ, param: "WETH" },
+          ],
+          "TokenManager.getTokenPrice": [
+            { target: "External.AggregatorV3.latestRoundData", type: EXTERNAL },
+            { target: "External.AggregatorV3.decimals", type: EXTERNAL },
+          ],
+          "TokenManager.getTokenPriceWithEvents": [
+            { target: "External.AggregatorV3.latestRoundData", type: EXTERNAL },
+            { target: "External.AggregatorV3.decimals", type: EXTERNAL },
+          ],
+          
+          // VALUECALCULATOR calls
+          "ValueCalculator.calculateTokenValue": [
+            { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
+            { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
+            { target: "TokenManager.getTokenAddress", type: READ },
+            { target: "TokenManager.getTokenPriceWithEvents", type: READ },
+            { target: "External.IERC20.balanceOf", type: READ },
+          ],
+          "ValueCalculator.calculateTokenValueView": [
+            { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
+            { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
+            { target: "TokenManager.getTokenAddress", type: READ },
+            { target: "TokenManager.getTokenPrice", type: READ },
+            { target: "External.IERC20.balanceOf", type: READ },
+          ],
+          "ValueCalculator.getTotalPoolValue": [
+            { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
+            { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
+            { target: "Beacon.getImplementation", type: READ, param: "WETH" },
+            { target: "TokenManager.getActiveTokens", type: READ },
+            { target: "TokenManager.getTokenInfo", type: READ },
+            { target: "External.WETH.balanceOf", type: READ },
+          ],
+          "ValueCalculator.getTotalPoolValueView": [
+            { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
+            { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
+            { target: "Beacon.getImplementation", type: READ, param: "WETH" },
+            { target: "TokenManager.getActiveTokens", type: READ },
+            { target: "External.WETH.balanceOf", type: READ },
+          ],
+          "ValueCalculator.selectTokenForSwap": [
+            { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
+            { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
+            { target: "TokenManager.getActiveTokens", type: READ },
+          ],
+          
+          // LIQUIDITYMANAGER calls
+          "LiquidityManager.deposit": [
+            { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
+            { target: "Beacon.getImplementation", type: READ, param: "ValueCalculator" },
+            { target: "Beacon.getImplementation", type: READ, param: "WETH" },
+            { target: "ProxyGeneral.isPaused", type: READ },
+            { target: "ProxyGeneral.totalSupply", type: READ },
+            { target: "ValueCalculator.getTotalPoolValue", type: READ },
+            { target: "ProxyGeneral.mint", type: WRITE },
+            { target: "External.WETH.deposit", type: EXTERNAL },
+          ],
+          "LiquidityManager.calculateDepositShares": [
+            { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
+            { target: "Beacon.getImplementation", type: READ, param: "ValueCalculator" },
+            { target: "ProxyGeneral.totalSupply", type: READ },
+            { target: "ValueCalculator.getTotalPoolValueView", type: READ },
+          ],
+          "LiquidityManager.withdraw": [
+            { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
+            { target: "Beacon.getImplementation", type: READ, param: "ValueCalculator" },
+            { target: "Beacon.getImplementation", type: READ, param: "SwapManager" },
+            { target: "Beacon.getImplementation", type: READ, param: "WETH" },
+            { target: "ProxyGeneral.isPaused", type: READ },
+            { target: "ProxyGeneral.balanceOf", type: READ },
+            { target: "ProxyGeneral.totalSupply", type: READ },
+            { target: "ProxyGeneral.getHourlyWithdrawn", type: READ },
+            { target: "ValueCalculator.getTotalPoolValue", type: READ },
+            { target: "ValueCalculator.selectTokenForSwap", type: READ },
+            { target: "SwapManager.swapTokenForWETH", type: WRITE },
+            { target: "ProxyGeneral.burn", type: WRITE },
+            { target: "ProxyGeneral.incrementHourlyWithdrawn", type: WRITE },
+            { target: "ProxyGeneral.transferFunds", type: WRITE },
+            { target: "External.WETH.balanceOf", type: EXTERNAL },
+            { target: "External.WETH.withdraw", type: EXTERNAL },
+          ],
+          "LiquidityManager.calculateWithdrawAmount": [
+            { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
+            { target: "Beacon.getImplementation", type: READ, param: "ValueCalculator" },
+            { target: "ProxyGeneral.totalSupply", type: READ },
+            { target: "ValueCalculator.getTotalPoolValueView", type: READ },
+          ],
+          
+          // SWAPMANAGER calls
+          "SwapManager.swapTokenForWETH": [
+            { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
+            { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
+            { target: "Beacon.getImplementation", type: READ, param: "WETH" },
+            { target: "ProxyGeneral.isPaused", type: READ },
+            { target: "TokenManager.isTokenActive", type: READ },
+            { target: "TokenManager.getTokenAddress", type: READ },
+            { target: "ProxyGeneral.approveSpender", type: WRITE },
+            { target: "External.IERC20.balanceOf", type: READ },
+            { target: "External.SimpleSwap.swap", type: EXTERNAL },
+          ],
+          "SwapManager.getSwapQuote": [
+            { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
+            { target: "Beacon.getImplementation", type: READ, param: "WETH" },
+            { target: "TokenManager.getTokenAddress", type: READ },
+            { target: "External.SimpleSwap.getAmountOut", type: EXTERNAL },
+          ],
+          "SwapManager.calculateMinAmountOut": [
+            { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
+            { target: "TokenManager.getTokenInfo", type: READ },
+          ],
+          
+          // EMERGENCYHANDLER calls
+          "EmergencyHandler.triggerEmergencyPause": [
+            { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
+            { target: "ProxyGeneral.pause", type: EMERGENCY },
+          ],
+          "EmergencyHandler.unpause": [
+            { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
+            { target: "ProxyGeneral.unpause", type: EMERGENCY },
+          ],
+          "EmergencyHandler.emergencyWithdraw": [
+            { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
+            { target: "Beacon.getImplementation", type: READ, param: "WETH" },
+            { target: "ProxyGeneral.emergencyTransferAll", type: EMERGENCY },
+          ],
+          "EmergencyHandler.getSystemHealthStatus": [
+            { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
+            { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
+            { target: "Beacon.getImplementation", type: READ, param: "ValueCalculator" },
+            { target: "Beacon.getImplementation", type: READ, param: "WETH" },
+            { target: "ProxyGeneral.isPaused", type: READ },
+            { target: "ProxyGeneral.totalSupply", type: READ },
+            { target: "TokenManager.getActiveTokens", type: READ },
+            { target: "TokenManager.getTokenAddress", type: READ },
+            { target: "ValueCalculator.getTotalPoolValueView", type: READ },
+            { target: "External.WETH.balanceOf", type: EXTERNAL },
+            { target: "External.IERC20.balanceOf", type: EXTERNAL },
+          ],
+          
+          // PARAMETERMANAGER calls
+          "ParameterManager.emergencySetParameter": [
+            { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
+            { target: "ProxyGeneral.isPaused", type: READ },
+          ],
+        };
+
+        // Reverse mapping: chi chiama questa funzione
+        const reverseCallMap = {};
+        Object.entries(functionCalls).forEach(([caller, calls]) => {
+          calls.forEach(call => {
+            if (!reverseCallMap[call.target]) {
+              reverseCallMap[call.target] = [];
+            }
+            reverseCallMap[call.target].push({
+              caller: caller,
+              type: call.type,
+              param: call.param
+            });
+          });
+        });
+
+        // Detailed function info with documentation links
+        const functionDetails = {
+          "Beacon.getImplementation": {
+            signature: "getImplementation(string moduleName) → address",
+            params: "moduleName: Name of the module to resolve",
+            returns: "address: Implementation contract address",
+            access: "public view",
+            description: "Resolves module names to their implementation addresses. Called by all modules for dynamic address resolution.",
+            docs: "docs/Technical_Module_Analysis.md#beacon"
+          },
+          "ProxyGeneral.mint": {
+            signature: "mint(address to, uint256 amount)",
+            params: "to: Recipient address, amount: LP tokens to mint",
+            returns: "void",
+            access: "onlyAuthorizedModule",
+            description: "Mints LP tokens to user during deposits. Only callable by LiquidityManager.",
+            docs: "docs/Technical_Module_Analysis.md#proxygeneral"
+          },
+          "ProxyGeneral.burn": {
+            signature: "burn(address from, uint256 amount)",
+            params: "from: Token holder address, amount: LP tokens to burn",
+            returns: "void",
+            access: "onlyAuthorizedModule",
+            description: "Burns LP tokens from user during withdrawals. Only callable by LiquidityManager.",
+            docs: "docs/Technical_Module_Analysis.md#proxygeneral"
+          },
+          "LiquidityManager.deposit": {
+            signature: "deposit() payable → uint256",
+            params: "msg.value: ETH amount to deposit",
+            returns: "uint256: LP tokens minted",
+            access: "public payable",
+            description: "Main entry point for user deposits. Converts ETH to WETH, calculates shares, and mints LP tokens.",
+            docs: "docs/Functional_Specifications_Part1.md#deposit-flow"
+          },
+          "LiquidityManager.withdraw": {
+            signature: "withdraw(uint256 lpTokens) → uint256",
+            params: "lpTokens: Amount of LP tokens to burn",
+            returns: "uint256: ETH amount returned",
+            access: "public",
+            description: "Main entry point for withdrawals. Burns LP tokens, swaps assets to WETH if needed, converts to ETH and transfers to user.",
+            docs: "docs/Functional_Specifications_Part1.md#withdraw-flow"
+          },
+          "ValueCalculator.getTotalPoolValue": {
+            signature: "getTotalPoolValue() → PoolValueInfo",
+            params: "none",
+            returns: "PoolValueInfo: Total value, token values, timestamp",
+            access: "public",
+            description: "Calculates total pool value in ETH by summing WETH balance and all token balances converted via oracle prices.",
+            docs: "docs/Technical_Module_Analysis.md#valuecalculator"
+          },
+          "SwapManager.swapTokenForWETH": {
+            signature: "swapTokenForWETH(string code, uint256 amountIn, uint256 minOut) → uint256",
+            params: "code: Token code, amountIn: Amount to swap, minOut: Minimum WETH to receive",
+            returns: "uint256: WETH amount received",
+            access: "public",
+            description: "Swaps any supported token to WETH via SimpleSwap DEX with slippage protection.",
+            docs: "docs/Technical_Module_Analysis.md#swapmanager"
+          },
+          "TokenManager.getTokenPrice": {
+            signature: "getTokenPrice(string code) → (uint256 price, uint256 updatedAt, bool isStale)",
+            params: "code: Token code",
+            returns: "price: USD price (18 decimals), updatedAt: Timestamp, isStale: Freshness flag",
+            access: "public view",
+            description: "Fetches token price from Chainlink oracle with staleness check based on heartbeat.",
+            docs: "docs/Technical_Module_Analysis.md#tokenmanager"
+          },
+          "EmergencyHandler.triggerEmergencyPause": {
+            signature: "triggerEmergencyPause(string reason)",
+            params: "reason: Human-readable reason for emergency",
+            returns: "void",
+            access: "onlyEmergency",
+            description: "Pauses all system operations. Only callable by authorized emergency contacts.",
+            docs: "docs/Technical_Module_Analysis.md#emergencyhandler"
+          },
+        };
+
+        // Module definitions with all functions
+        const modules = [
+          {
+            key: "Beacon",
+            title: "BEACON",
+            subtitle: "Central Registry",
+            x: 50,
+            y: 50,
+            functions: [
+              { id: "getImplementation", name: "getImplementation(name)", access: "view", color: READ },
+              { id: "updateImplementation", name: "updateImplementation(...)", access: "owner", color: WRITE },
+              { id: "transferOwnership", name: "transferOwnership(...)", access: "owner", color: WRITE },
+              { id: "acceptOwnership", name: "acceptOwnership()", access: "owner", color: WRITE },
+            ]
+          },
+          {
+            key: "ProxyGeneral",
+            title: "PROXYGENERAL",
+            subtitle: "Asset Custodian + LP Token",
+            x: 450,
+            y: 50,
+            functions: [
+              { id: "mint", name: "mint(to, amount)", access: "auth", color: WRITE },
+              { id: "burn", name: "burn(from, amount)", access: "auth", color: WRITE },
+              { id: "balanceOf", name: "balanceOf(account)", access: "view", color: READ },
+              { id: "totalSupply", name: "totalSupply()", access: "view", color: READ },
+              { id: "transferFunds", name: "transferFunds(...)", access: "auth", color: WRITE },
+              { id: "approveSpender", name: "approveSpender(...)", access: "auth", color: WRITE },
+              { id: "isPaused", name: "isPaused()", access: "view", color: READ },
+              { id: "pause", name: "pause()", access: "emergency", color: EMERGENCY },
+              { id: "unpause", name: "unpause()", access: "emergency", color: EMERGENCY },
+              { id: "emergencyTransferAll", name: "emergencyTransferAll(...)", access: "emergency", color: EMERGENCY },
+              { id: "getHourlyWithdrawn", name: "getHourlyWithdrawn(...)", access: "view", color: READ },
+              { id: "incrementHourlyWithdrawn", name: "incrementHourlyWithdrawn(...)", access: "auth", color: WRITE },
+            ]
+          },
+          {
+            key: "TokenManager",
+            title: "TOKENMANAGER",
+            subtitle: "Registry + Oracle",
+            x: 900,
+            y: 50,
+            functions: [
+              { id: "manageTokenData", name: "manageTokenData(...)", access: "owner", color: WRITE },
+              { id: "removeToken", name: "removeToken(code)", access: "owner", color: WRITE },
+              { id: "isTokenActive", name: "isTokenActive(code)", access: "view", color: READ },
+              { id: "getTokenAddress", name: "getTokenAddress(code)", access: "view", color: READ },
+              { id: "getTokenInfo", name: "getTokenInfo(code)", access: "view", color: READ },
+              { id: "getActiveTokens", name: "getActiveTokens()", access: "view", color: READ },
+              { id: "getTokenPrice", name: "getTokenPrice(code)", access: "view", color: READ },
+              { id: "getTokenPriceWithEvents", name: "getTokenPriceWithEvents(code)", access: "view", color: READ },
+            ]
+          },
+          {
+            key: "ValueCalculator",
+            title: "VALUECALCULATOR",
+            subtitle: "Valuation + Cache",
+            x: 50,
+            y: 400,
+            functions: [
+              { id: "calculateTokenValue", name: "calculateTokenValue(code)", access: "public", color: READ },
+              { id: "calculateTokenValueView", name: "calculateTokenValueView(code)", access: "view", color: READ },
+              { id: "getTotalPoolValue", name: "getTotalPoolValue()", access: "public", color: READ },
+              { id: "getTotalPoolValueView", name: "getTotalPoolValueView()", access: "view", color: READ },
+              { id: "selectTokenForSwap", name: "selectTokenForSwap(target)", access: "public", color: READ },
+              { id: "getCachedTokenValue", name: "getCachedTokenValue(code)", access: "view", color: READ },
+              { id: "invalidateCache", name: "invalidateCache(code)", access: "ops", color: WRITE },
+            ]
+          },
+          {
+            key: "LiquidityManager",
+            title: "LIQUIDITYMANAGER",
+            subtitle: "Deposit/Withdraw",
+            x: 450,
+            y: 400,
+            functions: [
+              { id: "deposit", name: "deposit() payable", access: "public", color: WRITE },
+              { id: "calculateDepositShares", name: "calculateDepositShares(...)", access: "view", color: READ },
+              { id: "withdraw", name: "withdraw(lpTokens)", access: "public", color: WRITE },
+              { id: "calculateWithdrawAmount", name: "calculateWithdrawAmount(...)", access: "view", color: READ },
+              { id: "setWithdrawLimits", name: "setWithdrawLimits(...)", access: "owner", color: WRITE },
+              { id: "checkWithdrawLimits", name: "checkWithdrawLimits(...)", access: "view", color: READ },
+            ]
+          },
+          {
+            key: "SwapManager",
+            title: "SWAPMANAGER",
+            subtitle: "DEX Integration",
+            x: 900,
+            y: 400,
+            functions: [
+              { id: "swapTokenForWETH", name: "swapTokenForWETH(...)", access: "public", color: WRITE },
+              { id: "getSwapQuote", name: "getSwapQuote(code, amount)", access: "view", color: READ },
+              { id: "calculateMinAmountOut", name: "calculateMinAmountOut(...)", access: "view", color: READ },
+              { id: "setSimpleSwapRouter", name: "setSimpleSwapRouter(...)", access: "owner", color: WRITE },
+            ]
+          },
+          {
+            key: "EmergencyHandler",
+            title: "EMERGENCYHANDLER",
+            subtitle: "Emergency Operations",
+            x: 50,
+            y: 750,
+            functions: [
+              { id: "triggerEmergencyPause", name: "triggerEmergencyPause(...)", access: "emergency", color: EMERGENCY },
+              { id: "unpause", name: "unpause()", access: "emergency", color: EMERGENCY },
+              { id: "emergencyWithdraw", name: "emergencyWithdraw(...)", access: "emergency", color: EMERGENCY },
+              { id: "addEmergencyContact", name: "addEmergencyContact(...)", access: "owner", color: WRITE },
+              { id: "getSystemHealthStatus", name: "getSystemHealthStatus()", access: "view", color: READ },
+            ]
+          },
+          {
+            key: "ParameterManager",
+            title: "PARAMETERMANAGER",
+            subtitle: "Configuration",
+            x: 450,
+            y: 750,
+            functions: [
+              { id: "registerParameter", name: "registerParameter(...)", access: "owner", color: WRITE },
+              { id: "proposeParameterChange", name: "proposeParameterChange(...)", access: "owner", color: WRITE },
+              { id: "executeParameterChange", name: "executeParameterChange(...)", access: "owner", color: WRITE },
+              { id: "emergencySetParameter", name: "emergencySetParameter(...)", access: "owner", color: EMERGENCY },
+              { id: "getCurrentParameterValue", name: "getCurrentParameterValue(...)", access: "view", color: READ },
+            ]
+          },
+          {
+            key: "External",
+            title: "EXTERNAL",
+            subtitle: "Integrations",
+            x: 900,
+            y: 750,
+            functions: [
+              { id: "AggregatorV3.latestRoundData", name: "Chainlink.latestRoundData()", access: "external", color: EXTERNAL },
+              { id: "AggregatorV3.decimals", name: "Chainlink.decimals()", access: "external", color: EXTERNAL },
+              { id: "SimpleSwap.getAmountOut", name: "SimpleSwap.getAmountOut(...)", access: "external", color: EXTERNAL },
+              { id: "SimpleSwap.swap", name: "SimpleSwap.swap(...)", access: "external", color: EXTERNAL },
+              { id: "WETH.deposit", name: "WETH.deposit()", access: "external", color: EXTERNAL },
+              { id: "WETH.withdraw", name: "WETH.withdraw(amount)", access: "external", color: EXTERNAL },
+              { id: "WETH.balanceOf", name: "WETH.balanceOf(account)", access: "external", color: EXTERNAL },
+              { id: "IERC20.balanceOf", name: "IERC20.balanceOf(account)", access: "external", color: EXTERNAL },
+            ]
+          },
+        ];
+
+        function ModuleCard({ mod, selectedFunction, viewMode, onFunctionClick, onFunctionHover, onFunctionLeave }) {
+          const functionHeight = 20;
+          const headerHeight = 50;
+          const totalHeight = headerHeight + mod.functions.length * functionHeight + 20;
+          
+          return (
+            <g>
+              <rect
+                x={mod.x}
+                y={mod.y}
+                width={350}
+                height={totalHeight}
+                rx={12}
+                fill={CARD}
+                stroke={BORDER}
+                strokeWidth={1.5}
+              />
+              <text x={mod.x + 15} y={mod.y + 22} fontSize={14} fill={TEXT} fontWeight={600}>
+                {mod.title}
+              </text>
+              <text x={mod.x + 15} y={mod.y + 38} fontSize={11} fill={SUBT}>
+                {mod.subtitle}
+              </text>
+              
+              {mod.functions.map((fn, idx) => {
+                const fnY = mod.y + headerHeight + idx * functionHeight;
+                const fullId = `${mod.key}.${fn.id}`;
+                const isSelected = selectedFunction === fullId;
+                const isTarget = selectedFunction && viewMode === 'outgoing' && functionCalls[selectedFunction]?.some(
+                  call => call.target === fullId
+                );
+                const isCaller = selectedFunction && viewMode === 'incoming' && reverseCallMap[selectedFunction]?.some(
+                  caller => caller.caller === fullId
+                );
+                
+                let bgColor = CARD;
+                let opacity = 1;
+                
+                if (selectedFunction) {
+                  if (isSelected) {
+                    bgColor = HIGHLIGHT;
+                    opacity = 1;
+                  } else if (isTarget || isCaller) {
+                    bgColor = fn.color;
+                    opacity = 0.8;
+                  } else {
+                    opacity = 0.25;
+                  }
+                }
+                
+                return (
+                  <g 
+                    key={fn.id} 
+                    className="function-item"
+                    onClick={() => onFunctionClick(fullId)}
+                    opacity={opacity}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <rect
+                      x={mod.x + 10}
+                      y={fnY}
+                      width={330}
+                      height={functionHeight - 2}
+                      rx={4}
+                      fill={bgColor}
+                      stroke={isSelected ? HIGHLIGHT : fn.color}
+                      strokeWidth={isSelected ? 2 : 0.5}
+                      onMouseEnter={(e) => onFunctionHover(fullId, e)}
+                      onMouseLeave={onFunctionLeave}
+                    />
+                    <circle
+                      cx={mod.x + 20}
+                      cy={fnY + 9}
+                      r={3}
+                      fill={fn.color}
+                    />
+                    <text 
+                      x={mod.x + 28} 
+                      y={fnY + 13} 
+                      fontSize={10} 
+                      fill={TEXT}
+                      fontWeight={isSelected ? 600 : 400}
+                    >
+                      {fn.name}
+                    </text>
+                    <text 
+                      x={mod.x + 320} 
+                      y={fnY + 13} 
+                      fontSize={8} 
+                      fill={MUTED}
+                      textAnchor="end"
+                    >
+                      {fn.access}
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
+          );
+        }
+
+        function getModuleCenter(mod) {
+          const functionHeight = 20;
+          const headerHeight = 50;
+          const totalHeight = headerHeight + mod.functions.length * functionHeight + 20;
+          return {
+            x: mod.x + 175,
+            y: mod.y + totalHeight / 2
+          };
+        }
+
+        function getFunctionPosition(moduleKey, functionId) {
+          const mod = modules.find(m => m.key === moduleKey);
+          if (!mod) return null;
+          
+          const fnIdx = mod.functions.findIndex(f => f.id === functionId);
+          if (fnIdx === -1) return null;
+          
+          const functionHeight = 20;
+          const headerHeight = 50;
+          const fnY = mod.y + headerHeight + fnIdx * functionHeight + 9;
+          
+          return {
+            x: mod.x + 175,
+            y: fnY
+          };
+        }
+
+        function Arrow({ from, to, type, label, index = 0 }) {
+          const fromPos = getFunctionPosition(from.module, from.fn);
+          const toPos = getFunctionPosition(to.module, to.fn);
+          
+          if (!fromPos || !toPos) return null;
+          
+          const dx = toPos.x - fromPos.x;
+          const dy = toPos.y - fromPos.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          // Offset multiplo per evitare sovrapposizioni
+          const baseOffset = Math.min(distance * 0.25, 80);
+          const offset = baseOffset + (index * 20);
+          const perpX = -dy / distance * offset;
+          const perpY = dx / distance * offset;
+          
+          const c1x = fromPos.x + dx * 0.3 + perpX;
+          const c1y = fromPos.y + dy * 0.3 + perpY;
+          const c2x = fromPos.x + dx * 0.7 + perpX;
+          const c2y = fromPos.y + dy * 0.7 + perpY;
+          
+          const pathId = `arrow-${from.module}-${from.fn}-${to.module}-${to.fn}-${index}`;
+          const midX = fromPos.x + dx * 0.5 + perpX;
+          const midY = fromPos.y + dy * 0.5 + perpY;
+          
+          // Calcola lunghezza del path per l'animazione
+          const pathLength = Math.abs(distance * 1.5);
+          
+          return (
+            <g>
+              <defs>
+                <marker
+                  id={`arrowhead-${type}-${index}`}
+                  markerWidth="12"
+                  markerHeight="12"
+                  refX="12"
+                  refY="6"
+                  orient="auto"
+                >
+                  <path d="M 0 0 L 12 6 L 0 12 z" fill={type} />
+                </marker>
+              </defs>
+              {/* Shadow per maggiore visibilità */}
+              <path
+                d={`M ${fromPos.x} ${fromPos.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${toPos.x} ${toPos.y}`}
+                fill="none"
+                stroke="#000"
+                strokeWidth={6}
+                opacity={0.3}
+              />
+              {/* Freccia principale con animazione corretta */}
+              <path
+                id={pathId}
+                d={`M ${fromPos.x} ${fromPos.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${toPos.x} ${toPos.y}`}
+                fill="none"
+                stroke={type}
+                strokeWidth={4}
+                markerEnd={`url(#arrowhead-${type}-${index})`}
+                opacity={0}
+                style={{
+                  strokeDasharray: pathLength,
+                  strokeDashoffset: pathLength,
+                  animation: `drawArrow-${index} 1s ease-out forwards`,
+                  animationDelay: `${index * 0.1}s`
+                }}
+              />
+              <style>{`
+                @keyframes drawArrow-${index} {
+                  0% { 
+                    stroke-dashoffset: ${pathLength}; 
+                    opacity: 0;
+                  }
+                  1% {
+                    opacity: 0.95;
+                  }
+                  100% { 
+                    stroke-dashoffset: 0; 
+                    opacity: 0.95;
+                  }
+                }
+              `}</style>
+              {/* Etichetta più grande con sfondo */}
+              <g style={{ 
+                animation: `fadeInLabel 0.5s ease-out forwards`,
+                animationDelay: `${0.8 + index * 0.1}s`,
+                opacity: 0
+              }}>
+                <rect
+                  x={midX - 60}
+                  y={midY - 12}
+                  width={120}
+                  height={24}
+                  rx={6}
+                  fill={CARD}
+                  stroke={type}
+                  strokeWidth={2}
+                  opacity={0.95}
+                />
+                <text 
+                  x={midX} 
+                  y={midY + 5} 
+                  fontSize={11} 
+                  fill={TEXT} 
+                  fontWeight={600}
+                  textAnchor="middle"
+                >
+                  {to.fn.length > 18 ? to.fn.substring(0, 15) + '...' : to.fn}
+                </text>
+              </g>
+              <style>{`
+                @keyframes fadeInLabel {
+                  from { opacity: 0; transform: translateY(-5px); }
+                  to { opacity: 1; transform: translateY(0); }
+                }
+              `}</style>
+              {label && (
+                <text 
+                  x={midX} 
+                  y={midY + 20} 
+                  fontSize={9} 
+                  fill={MUTED}
+                  textAnchor="middle"
+                  fontStyle="italic"
+                  style={{
+                    animation: `fadeInLabel 0.5s ease-out forwards`,
+                    animationDelay: `${0.8 + index * 0.1}s`,
+                    opacity: 0
+                  }}
+                >
+                  ({label})
+                </text>
+              )}
+            </g>
+          );
+        }
+
+        function Diagram() {
+          const [selectedFunction, setSelectedFunction] = useState(null);
+          const [viewMode, setViewMode] = useState('outgoing'); // 'outgoing' or 'incoming'
+          const [tooltip, setTooltip] = useState(null);
+          const tooltipTimeoutRef = React.useRef(null);
+
+          const handleFunctionClick = (fullId) => {
+            setSelectedFunction(selectedFunction === fullId ? null : fullId);
+          };
+
+          const handleFunctionHover = (fullId, event) => {
+            // Cancella timeout pendenti
+            if (tooltipTimeoutRef.current) {
+              clearTimeout(tooltipTimeoutRef.current);
+              tooltipTimeoutRef.current = null;
+            }
+            
+            const details = functionDetails[fullId];
+            if (details) {
+              setTooltip({
+                x: event.clientX + 15,
+                y: event.clientY + 15,
+                content: details,
+                functionId: fullId
+              });
+            }
+          };
+
+          const handleFunctionLeave = () => {
+            // Delay prima di nascondere
+            tooltipTimeoutRef.current = setTimeout(() => {
+              setTooltip(null);
+            }, 200);
+          };
+
+          const handleTooltipEnter = () => {
+            // Cancella il timeout quando entri nel tooltip
+            if (tooltipTimeoutRef.current) {
+              clearTimeout(tooltipTimeoutRef.current);
+              tooltipTimeoutRef.current = null;
+            }
+          };
+
+          const handleTooltipLeave = () => {
+            // Nascondi immediatamente quando esci dal tooltip
+            setTooltip(null);
+          };
+
+          // Calculate arrows based on current state
+          let arrows = [];
+          if (selectedFunction) {
+            if (viewMode === 'outgoing') {
+              // Cosa chiama questa funzione (originale)
+              const calls = functionCalls[selectedFunction];
+              if (calls && calls.length > 0) {
+                const [fromModule, fromFn] = selectedFunction.split('.');
+                
+                arrows = calls.map((call, index) => {
+                  const [toModule, ...toFnParts] = call.target.split('.');
+                  const toFn = toFnParts.join('.');
+                  
+                  return {
+                    from: { module: fromModule, fn: fromFn },
+                    to: { module: toModule, fn: toFn },
+                    type: call.type,
+                    label: call.param || null,
+                    index: index
+                  };
+                });
+              }
+            } else {
+              // Chi chiama questa funzione (reverse)
+              const callers = reverseCallMap[selectedFunction];
+              if (callers && callers.length > 0) {
+                const [toModule, toFn] = selectedFunction.split('.');
+                
+                arrows = callers.map((caller, index) => {
+                  const [fromModule, ...fromFnParts] = caller.caller.split('.');
+                  const fromFn = fromFnParts.join('.');
+                  
+                  return {
+                    from: { module: fromModule, fn: fromFn },
+                    to: { module: toModule, fn: toFn },
+                    type: caller.type,
+                    label: caller.param || null,
+                    index: index
+                  };
+                });
+              }
+            }
+          }
+
+          return (
+            <div style={{ width: "100%", minHeight: "100vh", padding: "20px", background: BG, color: TEXT, position: "relative" }}>
+              <div style={{ marginBottom: "20px", maxWidth: "1300px", margin: "0 auto" }}>
+                <div style={{ fontSize: "28px", fontWeight: 600, marginBottom: "8px" }}>
+                  DeFi System – Detailed Function Architecture
+                </div>
+                <div style={{ fontSize: "14px", color: SUBT, marginBottom: "12px" }}>
+                  Click on any function • Hover for details • Toggle view mode
+                </div>
+                
+                {/* Mode Toggle */}
+                <div className="mode-toggle" style={{ marginBottom: "15px" }}>
+                  <button 
+                    className={`mode-button ${viewMode === 'outgoing' ? 'active' : ''}`}
+                    onClick={() => setViewMode('outgoing')}
+                  >
+                    📤 Outgoing Calls
+                  </button>
+                  <button 
+                    className={`mode-button ${viewMode === 'incoming' ? 'active' : ''}`}
+                    onClick={() => setViewMode('incoming')}
+                  >
+                    📥 Incoming Calls
+                  </button>
+                  <div style={{ fontSize: "12px", color: MUTED, padding: "10px 15px", alignSelf: "center" }}>
+                    {viewMode === 'outgoing' ? 'What does this function call?' : 'Who calls this function?'}
+                  </div>
+                </div>
+                {selectedFunction && (
+                  <div className="animate-in" style={{ 
+                    fontSize: "16px", 
+                    color: HIGHLIGHT, 
+                    padding: "15px 20px", 
+                    background: "rgba(96, 165, 250, 0.15)",
+                    borderRadius: "10px",
+                    border: `2px solid ${HIGHLIGHT}`,
+                    cursor: "pointer",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center"
+                  }} onClick={() => setSelectedFunction(null)}>
+                    <div>
+                      <strong style={{ fontSize: "18px" }}>{selectedFunction}</strong>
+                      <div style={{ fontSize: "13px", marginTop: "5px", color: SUBT }}>
+                        {viewMode === 'outgoing' ? (
+                          <>
+                            {(functionCalls[selectedFunction]?.length || 0) > 0 ? (
+                              <>
+                                Calls {functionCalls[selectedFunction].length} function(s)
+                                {" → " + functionCalls[selectedFunction].map(c => {
+                                  const parts = c.target.split('.');
+                                  return parts[parts.length - 1];
+                                }).join(', ')}
+                              </>
+                            ) : (
+                              <span style={{ color: '#f59e0b' }}>⚠️ This function doesn't call any other functions (or not mapped yet)</span>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {(reverseCallMap[selectedFunction]?.length || 0) > 0 ? (
+                              <>
+                                Called by {reverseCallMap[selectedFunction].length} function(s)
+                                {" ← " + reverseCallMap[selectedFunction].map(c => {
+                                  const parts = c.caller.split('.');
+                                  return parts[parts.length - 1];
+                                }).join(', ')}
+                              </>
+                            ) : (
+                              <span style={{ color: '#f59e0b' }}>⚠️ No functions call this one (or not mapped yet)</span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: "24px", fontWeight: "bold" }}>✕</div>
+                  </div>
+                )}
+              </div>
+
+              <svg width={1300} height={1300} style={{ display: "block", margin: "0 auto" }}>
+                {/* Draw modules first */}
+                {modules.map(mod => (
+                  <ModuleCard 
+                    key={mod.key} 
+                    mod={mod} 
+                    selectedFunction={selectedFunction}
+                    viewMode={viewMode}
+                    onFunctionClick={handleFunctionClick}
+                    onFunctionHover={handleFunctionHover}
+                    onFunctionLeave={handleFunctionLeave}
+                  />
+                ))}
+                
+                {/* Draw arrows on top for visibility */}
+                {arrows.map((arrow, idx) => (
+                  <Arrow key={idx} {...arrow} />
+                ))}
+                
+                {/* Legend - moved down and improved */}
+                <g transform="translate(50, 1200)">
+                  <rect x={0} y={0} width={1200} height={90} rx={10} fill={CARD} stroke={BORDER} strokeWidth={2} />
+                  <text x={20} y={30} fontSize={16} fill={TEXT} fontWeight={600}>Legend & Instructions</text>
+                  
+                  <circle cx={20} cy={55} r={6} fill={READ} />
+                  <text x={35} y={60} fontSize={12} fill={SUBT}>Read/View calls</text>
+                  
+                  <circle cx={170} cy={55} r={6} fill={WRITE} />
+                  <text x={185} y={60} fontSize={12} fill={SUBT}>Write/State changes</text>
+                  
+                  <circle cx={360} cy={55} r={6} fill={EXTERNAL} />
+                  <text x={375} y={60} fontSize={12} fill={SUBT}>External integrations</text>
+                  
+                  <circle cx={560} cy={55} r={6} fill={EMERGENCY} />
+                  <text x={575} y={60} fontSize={12} fill={SUBT}>Emergency operations</text>
+                  
+                  <text x={20} y={80} fontSize={11} fill={HIGHLIGHT} fontWeight={500}>
+                    💡 Click any function to see what it calls → Arrows show exact function-to-function connections
+                  </text>
+                </g>
+              </svg>
+
+              {/* Tooltip */}
+              {tooltip && (
+                <div 
+                  className="tooltip slide-in"
+                  style={{
+                    left: tooltip.x + 'px',
+                    top: tooltip.y + 'px'
+                  }}
+                  onMouseEnter={handleTooltipEnter}
+                  onMouseLeave={handleTooltipLeave}
+                >
+                  <div style={{ fontSize: "14px", fontWeight: 600, color: HIGHLIGHT, marginBottom: "8px" }}>
+                    {tooltip.content.signature}
+                  </div>
+                  <div style={{ fontSize: "11px", color: SUBT, marginBottom: "4px" }}>
+                    <strong>Access:</strong> {tooltip.content.access}
+                  </div>
+                  <div style={{ fontSize: "11px", color: SUBT, marginBottom: "4px" }}>
+                    <strong>Parameters:</strong> {tooltip.content.params}
+                  </div>
+                  <div style={{ fontSize: "11px", color: SUBT, marginBottom: "4px" }}>
+                    <strong>Returns:</strong> {tooltip.content.returns}
+                  </div>
+                  <div style={{ fontSize: "11px", color: TEXT, marginTop: "8px", borderTop: "1px solid #334155", paddingTop: "8px" }}>
+                    {tooltip.content.description}
+                  </div>
+                  {tooltip.content.docs && (
+                    <div style={{ marginTop: "10px", paddingTop: "8px", borderTop: "1px solid #334155" }}>
+                      <a 
+                        href={tooltip.content.docs} 
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ 
+                          color: HIGHLIGHT, 
+                          fontSize: "11px", 
+                          textDecoration: "none",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "5px"
+                        }}
+                      >
+                        📄 View Documentation →
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<Diagram />);
+    </script>
+</body>
+</html>

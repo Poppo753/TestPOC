@@ -1,0 +1,344 @@
+# Audit tecnico — **EnhancedLiquidityPoolETH** (Solidity ^0.8.19)
+
+**Commit analizzato**: codice incollato in chat
+
+**Scope**: Revisione approfondita della logica, sicurezza, correttezza economica, coerenza degli invarianti, gestione oracoli, superficie d’attacco, UX on-chain, eventi, gas & manutenzione.
+
+---
+
+## 1) Executive summary
+
+* **Che cosa fa**: pool di liquidità con LP token ERC20 (1:1 con ETH in ingresso, immediata conversione in WETH). Il ritiro brucia LPT e restituisce WETH proporzionale al *valore totale* del pool (WETH + altri token ERC20 valutati tramite Chainlink) con possibilità di vendere asset per coprire la quota.
+* **Punti di forza**: separazione chiara dei parametri operativi; uso di `nonReentrant`; eventi ricchi; difese base (pause, limiti per-ora/tx); caching prezzi; struttura modulare per token + oracoli; swap via `ISimpleSwap` astratto.
+* **Rischi critici individuati (alta priorità)**:
+
+  1. **Bug di calcolo nel path “cache” durante lo swap in `withdraw`** → uso di un *valore totale di posizione* al posto del *prezzo per token* porta a quantità di token da vendere **sproporzionate** o **insufficienti**. (Dettaglio §4.2.A)
+  2. **Limite orario applicato su `_shares` anziché su ETH/WETH** → by-pass della protezione/DoS economico. (Dettaglio §4.2.B)
+  3. **Confronto `maxWithdrawPerTx` su `_shares` invece che su valore/ETH** → incoerenza con la semantica “per-transaction ETH limit”. (Dettaglio §4.2.C)
+  4. **Rischio divisione per zero nei check del reserve ratio** quando il *postWithdrawValue* o *totalValue* diventano 0. (Dettaglio §4.2.D)
+  5. **Assunzione implicita su quote currency dei feed (ETH)** non verificata/normalizzata. Feed in USD o altra quote **rompono i calcoli**. (Dettaglio §4.2.E)
+* **Rischi medi**: gestione approvazioni ERC20 senza `SafeERC20`; assenza controlli slippage/MEV sugli swap in `withdraw`; prezzo “stale” trattato solo parzialmente; `tokenCodesCount` non si riduce su remove → limite “perenne”; `emergencyWithdraw` somma contatori in modo inconsistente; vari requisiti di valore parametrici non sempre coerenti con UX.
+* **Raccomandazione**: applicare le patch in §5 (Priorità **C**/ **H**/ **M**), aggiungere test di proprietà/fuzz in §6 e unificare semantica dei limiti. Considerare un design *assets-backed only* con *share price* puro o un *basket manager* separato.
+
+---
+
+## 2) Architettura & invarianti desiderati
+
+* **LP token**: mint = `msg.value` (ETH) → supply cresce 1:1 con depositi in ETH, non con “valore” del portafoglio.
+* **Valutazione del pool**: `getTotalPoolValue()` = WETH on-hand + somma (per ciascun token attivo) di `balance * price / 10^priceFeedDecimals`.
+* **Withdraw**: calcola `ethAmount = (_shares * totalValue) / totalSupply`. Se WETH on-hand insufficiente → swap di un token “più piccolo in %” per raggiungere il fabbisogno.
+* **Invarianti implicite**:
+
+  * I) `totalSupply` ≥ somma LPT in circolazione e coerente con mint/burn.
+  * II) `totalValue` correttamente normalizzato in **ETH**.
+  * III) `reserveRatio` = WETH/totalValue ≥ `poolReserveRatio` prima e dopo il withdraw.
+  * IV) Limiti per-ora/tx applicati **sulla stessa unità** dell’asset prelevato (ETH/WETH).
+
+**Osservazione**: con mint 1:1 in ETH ma valutazione su *valore totale* (inclusi token), il prezzo per share può deviare da 1 WETH → è richiesto swap in uscita → **superficie MEV/price-impact**.
+
+---
+
+## 3) Superficie d’attacco & threat model
+
+* **Oracoli/Prezzi**: feed Chainlink presi “as-is”. Se la *quote* non è ETH oppure se l’asset non ha feed affidabile → valutazione errata, prelievi sovra/sotto-remunerati, swap sub-ottimali.
+* **MEV / Sandwich**: durante `withdraw` il contratto effettua *market swap* per alzare WETH on-hand. Chiamate osservabili → rischio front-run/back-run con slippage/price impact a carico del pool.
+* **Reentrancy**: mitigato da `nonReentrant` su entry-points (`deposit`, `withdraw`, `performSwap`). Rimangono call esterne a token ERC20 (non-ERC777) e a `ISimpleSwap`.
+* **DoS economico/Logico**: stale-price, division-by-zero, limiti mal applicati, approvazioni mancanti, token illiquidi, price-cache errata.
+* **Rischio di governance/admin**: owner può impostare `simpleSwapAddress`, aggiornare parametri critici, `pause/unpause`, e **svuotare** il pool via `emergencyWithdraw` anche con LP in circolo (rischio di *admin key*).
+
+---
+
+## 4) Review funzione-per-funzione (punti salienti)
+
+### 4.1 `deposit()`
+
+* **Pro**: wrap ETH→WETH, mint LPT = `msg.value`; controlli min/max; eventi consistenti.
+* **Nota**: `share calculation error` branch è inutile perché `shares = msg.value` e non ridimensiona su pool esistente.
+* **Suggerimento**: consolidare invariante su supply/balance con assert interni (gas-neutrale in dev/testing) e rimuovere check superflui in prod.
+
+### 4.2 `withdraw(uint256 _shares, uint256 _minWethAmount)`
+
+A) **Bug critico (cache path)**
+
+* Nel ramo dove si usa la cache per calcolare `tokenAmountToSwap` si prende `cachedValue = getCachedTokenValue(tokenToSwap)` e si calcola:
+
+  `tokenAmountToSwap = (wethWithBuffer * 10^tokenDecimals) / cachedValue`
+
+  Ma **`cachedValue` è il valore TOTALE della posizione del contratto in quel token**, non il prezzo per token. Quindi l’unità è *ETH*, non *ETH per token*. Il risultato è dimensionalmente scorretto → quantità di token da swappare errata (spesso **molto** errata).
+
+  **Fix**: memorizzare in cache anche **il prezzo per token** (ETH-per-token scalato) oppure ricalcolarlo sempre da `getTokenPriceWithEvents` per il ramo “swap”.
+
+B) **Limite orario su `_shares` (non su ETH)**
+
+* Il `modifier withinLimits(amount)` riceve in `withdraw` **`_shares`**, ma il limite dovrebbe attenersi a **ETH/WETH uscente** (`validation.ethAmount`). Puoi così aggirare il limite o bloccare prelievi legittimi a seconda del NAV.
+
+  **Fix**: sposta il controllo post-calcolo: `withinLimits(validation.ethAmount)`.
+
+C) **`maxWithdrawPerTx` confrontato con `_shares`**
+
+* Stessa asimmetria: parametro descritto come “Maximum amount of ETH per tx”, ma applicato ai *shares*. Con NAV ≠ 1, il limite *de facto* non corrisponde all’intenzione.
+
+  **Fix**: confrontare `validation.ethAmount` con `maxWithdrawPerTx`.
+
+D) **Divisione per zero nel reserve ratio**
+
+* Pre e post withdraw: `(poolEthBalance * 10000) / validation.totalValue` e `(postWithdrawBalance * 10000) / postWithdrawValue`. Se il denominatore = 0 (pool vuoto o prelievo totale) → revert per division-by-zero.
+
+  **Fix**: gestire caso `totalValue == 0` e `postWithdrawValue == 0` con path dedicato (es. consentire ultimo prelievo se `postWithdrawBalance == 0` e `postWithdrawValue == 0` preservando ratio = 0/0 → definito).
+
+E) **Assunzione sulla quote currency del feed**
+
+* `calculateTokenValue` assume che `price` sia già in **ETH**. Se il feed è in USD (caso comune), il calcolo è **sbagliato**.
+
+  **Fix**: introdurre normalizzazione: mantenere per ciascun token `quoteAsset` (ETH/USD) e, se USD, moltiplicare per `ETH/USD` inverso (o direttamente usare feed *token/ETH*). Documentare forte precondizione.
+
+F) **Slippage `_minWethAmount` vs `maxSlippage`**
+
+* Doppi check: (i) `ethAmount >= _minWethAmount` (standard), **e** (ii) `_minWethAmount >= expectedMinAmount` con `expectedMinAmount = ethAmount*(1 - maxSlippage)`. Il secondo vincola l’utente a non mettere una soglia “troppo bassa”, ma non protegge il pool.
+
+  **Suggerito**: mantieni solo (i). Se vuoi enforcement lato protocollo, applica tu lo slippage massimo **sul trasferito** (non sulla preferenza utente).
+
+G) **Selezione token da vendere**
+
+* Si sceglie la % più bassa tra i token che coprono `wethNeeded`. Heuristica ok, ma nessun controllo su **liquidità**/profondità. Potrebbe fallire con token illiquidi o causare slippage eccessivo.
+
+H) **Approvals**
+
+* `IERC20(token).approve(simpleSwapAddress, tokenAmountToSwap)` senza reset/`SafeERC20`. Invece in `performSwap` fai reset a 0 e poi set.
+
+  **Fix**: uniformare: azzera prima, poi set, e verifica esito con `SafeERC20`.
+
+I) **Contabilità post-swap**
+
+* Dopo `inputSwap` controlli solo che `WETH >= ethAmount`. Nessun controllo di *execution shortfall* per altri asset (se `receiveToken != WETH`). Nel path withdraw è sempre WETH, ok. Ma in generale, meglio verificare il delta di bilancio atteso.
+
+### 4.3 `manageTokenData(...)`
+
+* Impedisce di aggiungere WETH come token (bene).
+* **`tokenCodesCount`** si incrementa all’aggiunta ma **non si decrementa** alla rimozione: dopo molte rimozioni non potrai più aggiungere anche se il pool è “vuoto” lato elenco. (Semantica “per operazione” vs “totale storico”).
+* **Max tokens**: la variabile si chiama `maxTokensPerOperation` ma di fatto limita il **totale**. Rinominare per chiarezza o cambiare logica.
+
+### 4.4 `removeToken(...)`
+
+* Rimozione *swap and pop* dall’array `tokenCodes`; ok. Mantieni `isActive=false`.
+
+### 4.5 `setSimpleSwapAddress(...)`
+
+* Nessuna timelock/2-step/guard → rischio admin-change improvviso. Valuta **2-step** (propose/accept) o timelock.
+
+### 4.6 `performSwap(...)`
+
+* `nonReentrant`, reset allowance a 0 poi set (bene).
+* Se `receiveToken == WETH` verifichi effettivo incremento; per altri token non controlli il delta (potrebbe essere utile).
+* Nessun parametro di slippage → **MEV/price-impact** a carico del pool. Prevedi variante con minOut o usa `outputSwap`.
+
+### 4.7 `updateHeartbeat(...)`
+
+* Solo owner, valida >0.
+
+### 4.8 Prezzi & Cache
+
+* `getTokenPrice(...)`: controlli base su Chainlink; `isStale` se `now - timestamp > heartbeat`.
+* `getTokenPriceWithEvents(...)`: aggiorna `lastPrice`/`lastPriceTimestamp` **solo se fresco**; emette `PriceStale` altrimenti. Bene.
+* `getCachedTokenValue(...)`: cache TTL su `cacheDuration`. Nota: come detto, **cache memorizza il *valore totale di posizione***, non il *prezzo per token* ⇒ *non riutilizzabile per calcolo quantità*.
+* `calculateTokenValue(...)`: se cache invalida → usa prezzo, calcola valore (bilancio * prezzo / 10^feedDec) e aggiorna cache. Se fallisce, incrementa `tokenErrors` ed emette eventi.
+
+### 4.9 `getTotalPoolValue()`
+
+* Due passate: prima somma valori, poi percentuali. Emette `PoolValueUpdated`.
+* È **non-view** perché chiama `calculateTokenValue` che può scrivere cache/eventi. Accettabile ma da documentare.
+
+### 4.10 `invalidateCache(...)`
+
+* Richiede `validToken` (quindi non invalida per token rimossi). Potrebbe essere utile consentire anche su inattivi.
+
+### 4.11 Pausa/Unpausa & Emergency
+
+* `pause/unpause`: standard.
+* `emergencyWithdraw()`:
+
+  * Richiede `paused==true`.
+  * Trasferisce WETH e poi ogni token al **owner**. **Forte rischio admin** per LP.
+  * Variabile `totalAssetsWithdrawn` **usa `++` per token** trasferito invece di sommare le quantità/token, quindi il conteggio è poco informativo.
+
+### 4.12 Ricezione ETH / fallback
+
+* Entrambi revert per forzare `deposit()` (ok).
+
+---
+
+## 5) Patch & raccomandazioni (priorità)
+
+### Priorità **C** (Critical)
+
+1. **Fix quantità in swap (cache path)**
+
+   * Cambia cache: mantieni `pricePerTokenInETH` (scala: `10^priceFeedDecimals`).
+   * Oppure **ignora la cache per calcolo quantità** e *sempre* usa `price` fresco (o ultimo non-stale) da `getTokenPriceWithEvents`.
+   * Patch esemplificativa:
+
+   ```solidity
+   // In withdraw, quando calcoli tokenAmountToSwap
+   (uint256 price,,) = getTokenPrice(spokenToken); // prezzo per token, scala feed
+   uint256 wethWithBuffer = (wethNeeded * 110) / 100;
+   uint256 tokenAmountToSwap = (wethWithBuffer * (10 ** tokenDecimals)) / price; // coerente dimensioni
+   ```
+
+2. **Applicare limiti in ETH, non in shares**
+
+   * Sposta `withinLimits` **dopo** aver calcolato `validation.ethAmount` e passagli `validation.ethAmount`.
+   * Confronta anche `validation.ethAmount` con `maxWithdrawPerTx`.
+
+3. **Gestire division-by-zero nel reserve ratio**
+
+   * Short-circuit quando `validation.totalValue == 0`.
+   * Per post-withdraw: se `postWithdrawValue == 0`, consenti l’ultimo ritiro **solo** se `postWithdrawBalance == 0` (pool svuotato) o definisci policy chiara.
+
+4. **Normalizzare quote currency dei feed**
+
+   * Aggiungi `enum Quote { ETH, USD }` in `TokenInfo` + feed `ETH/USD` (o `USD/ETH`) globale.
+   * Se `USD`, converti: `value = balance * (priceTokenUSD * 1eX) / priceETHUSD` con scaling coerente.
+
+### Priorità **H** (High)
+
+5. **Slippage / MEV sugli swap**
+
+   * Aggiungi parametri `minOut`/`maxIn` o usa `outputSwap` con `amountOut` fisso.
+   * Per `withdraw`, computa *ex-ante* la quantità da vendere e fai `outputSwap(token, WETH, maxIn, wethNeeded)`.
+
+6. **Uniformare approvazioni**
+
+   * Usa `SafeERC20` ovunque; reset allowance a 0 prima di settare.
+
+7. **Timelock / 2-step per `simpleSwapAddress` e parametri sensibili**
+
+   * Mitiga rischio admin improvviso.
+
+8. **`tokenCodesCount` coerente**
+
+   * Decrementa su `removeToken` oppure ricalcola come `tokenCodes.length`.
+
+### Priorità **M** (Medium)
+
+9. **Eventi & metriche**
+
+   * In `emergencyWithdraw`, somma le **quantità** (in unità nativa) o emetti per-token + totale per asset.
+   * Emissione evento anche per `setSimpleSwapAddress`.
+
+10. **API view**
+
+* Fornire funzioni `view` per: prezzo ultimo valido, NAV per share, reserve ratio corrente.
+
+11. **UX `_minWethAmount`**
+
+* Mantieni solo il controllo `ethAmount >= _minWethAmount`. Rimuovi il vincolo “*minWethAmount ≥ expectedMinAmount*`” (non aggiunge sicurezza, peggiora UX).
+
+12. **Invalidate cache per token inattivi**
+
+* Rimuovi `validToken` dal modifier o aggiungi variante separata.
+
+---
+
+## 6) Test plan (unit, property-based, fuzz)
+
+**Unit**
+
+* `deposit`: mint 1:1, eventi, rifiuto sotto/oltre limiti, supply/balance invariants.
+* `withdraw`:
+
+  * NAV ≈ 1 (solo WETH), NAV ≠ 1 (con token), con e senza swap.
+  * Limiti: per-ora/tx **in ETH** post-patch.
+  * Reserve ratio: casi bordo (`totalValue==0`, ultimo prelievo).
+  * Slippage: `_minWethAmount` rispettato.
+* `manageTokenData/removeToken`: limiti, conteggi, rimozione/riaggiunta.
+* `performSwap`: path WETH→token e token→WETH, allowance reset, delta bilanci.
+* Oracoli: feed freschi vs stale; cache valida/invalidata.
+* Emergency: `pause` required, trasferimenti, eventi coerenti.
+
+**Property/Fuzz** (con Echidna/Foundry):
+
+* Invarianti: `totalSupply` dopo deposito/withdraw corretta; `reserveRatio >= poolReserveRatio` (quando definita); `hourlyWithdrawnAmount` monotona entro finestra.
+* Random NAV/price shock: withdraw sempre trasferisce ≥ `_minWethAmount` e non va in division-by-zero.
+* Random token decimals/feed decimals: nessun overflow e scaling coerente.
+
+---
+
+## 7) Gas & performance
+
+* `getTotalPoolValue` non-view per via della cache: considerare versione `view` che **non** aggiorna cache per dashboard/UI.
+* Evitare self-calls `this.getTotalPoolValue()`/`this.getTokenPriceWithEvents()` quando non necessario (overhead). Usare interno a visibilità `internal` + refactoring.
+* Consolidare letture ripetute di `IWETH.balanceOf(this)` in variabili locali.
+
+---
+
+## 8) Documentazione & assunzioni operative
+
+* **Feed richiesti**: idealmente *token/ETH* per tutti gli asset. Se *token/USD*, richiedere anche *ETH/USD* e normalizzare.
+* **SimpleSwap**: definire interfaccia di sicurezza (slippage, deadline). In assenza, harden con outputSwap + bounds.
+* **Parametri**: chiarire unità (ETH vs shares) in docstring e nel nome dei campi.
+
+---
+
+## 9) Roadmap patch sintetica
+
+1. Fix calcolo quantità nello swap (cache → prezzo per token) **[C]**
+2. Applicare i limiti su ETH (`ethAmount`) e non su shares **[C]**
+3. Gestione 0-division nei ratio **[C]**
+4. Normalizzazione quote currency **[C]**
+5. Slippage controllato su swap / usare `outputSwap` **[H]**
+6. SafeERC20 + uniformare approvals **[H]**
+7. Timelock/2-step sugli indirizzi sensibili **[H]**
+8. Fix `tokenCodesCount` **[H]**
+9. Migliorie eventi/metriche e API view **[M]**
+
+---
+
+## 10) Esempi di patch (estratti)
+
+### 10.1 Calcolo quantità da swappare (sempre da prezzo, non da cache di *valore*)
+
+```solidity
+// prima
+(uint256 cachedValue, bool ok) = getCachedTokenValue(tokenToSwap);
+if (ok) {
+    uint256 wethWithBuffer = (wethNeeded * 110) / 100;
+    tokenAmountToSwap = (wethWithBuffer * (10 ** tokenData[tokenToSwap].tokenDecimals)) / cachedValue; // ❌ cachedValue = valore totale
+}
+
+// dopo (semplificato)
+(uint256 price,,) = getTokenPrice(tokenToSwap); // prezzo per token nella quote prevista
+uint256 wethWithBuffer = (wethNeeded * 110) / 100;
+// Se quote != ETH, normalizza prima `price`
+uint256 tokenAmountToSwap = (wethWithBuffer * (10 ** tokenData[tokenToSwap].tokenDecimals)) / price; // ✅ dimensioni corrette
+```
+
+### 10.2 Limiti in ETH e max per tx
+
+```solidity
+// rimuovi `withinLimits(_shares)` dal signature
+after computing `validation.ethAmount` {
+    require(validation.ethAmount <= maxWithdrawPerTx, "Exceeds per-tx ETH limit");
+    _enforceHourlyLimit(validation.ethAmount);
+}
+```
+
+### 10.3 SafeERC20
+
+```solidity
+using SafeERC20 for IERC20;
+...
+IERC20(tokenAddress).safeApprove(simpleSwapAddress, 0);
+IERC20(tokenAddress).safeApprove(simpleSwapAddress, tokenAmountToSwap);
+```
+
+---
+
+## 11) Valutazione finale
+
+Il contratto è **ben strutturato** e copre diverse cautele operative, ma presenta alcuni **punti critici** che, in specifici scenari (soprattutto durante i prelievi con swap), possono portare a errori quantitativi, incoerenze dei limiti, e vulnerabilità economiche/MEV. Con le patch proposte e una strategia più robusta per gli oracoli e lo slippage, può raggiungere un buon livello di sicurezza operativa.
+
+**Stato raccomandato**: *Require fixes* prima di produzione.
+
+---
+
+*Preparato per: utente — Revisione di EnhancedLiquidityPoolETH*
