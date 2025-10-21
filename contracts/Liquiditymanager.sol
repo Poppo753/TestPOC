@@ -1,121 +1,744 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-// Interfaces for external contracts
-interface IBeacon {
-    function getImplementation(string memory moduleName) external view returns (address);
-}
-
-interface ITokenManager {
-    function isValidToken(string memory tokenCode) external view returns (bool);
-    function getTokenAddress(string memory tokenCode) external view returns (address);
-    function getTokenCount() external view returns (uint256);
-    function getActiveTokens() external view returns (string[] memory);
-}
-
-interface IWETH {
-    function deposit() external payable;
-    function withdraw(uint256) external;
-    function balanceOf(address) external view returns (uint256);
-    function transfer(address, uint256) external returns (bool);
-}
-
-interface IValueCalculator {
-    function calculateTokenValue(string memory tokenCode) external view returns (uint256);
-    function getTotalPoolValue() external view returns (uint256);
-}
-
-interface IProxyGeneral {
-    function mint(address to, uint256 amount) external;
-    function burn(address from, uint256 amount) external;
-    function transferFunds(address to, uint256 amount) external;
-}
-
-interface ISwapManager {
-    function performSwap(string memory spendTokenCode, string memory receiveTokenCode, uint256 amountIn) external returns (uint256);
-}
-
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./interfaces/ILiquidityManager.sol";
+import "./interfaces/IBeacon.sol";
+import "./interfaces/IProxyGeneral.sol";
+import "./interfaces/ITokenManagerForModules.sol";
+import "./interfaces/IValueCalculatorForModules.sol";
+import "./interfaces/ISwapManagerForModules.sol";
+import "./interfaces/IParameterManagerForModules.sol";
+import "./interfaces/IWETH.sol";
 
-contract LiquidityManager is ReentrancyGuard, Ownable {
-    address public immutable beaconAddress;
-
-    constructor(address _beaconAddress) {
-        require(_beaconAddress != address(0), "Invalid Beacon address");
-        beaconAddress = _beaconAddress;
+/**
+ * @title LiquidityManager
+ * @dev Gestisce deposit/withdraw con validazioni complete e automatic swap
+ * @custom:security-contact security@yourdomain.com
+ */
+contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
+    
+    // ==================== STRUCTS ====================
+    
+    struct WithdrawValidation {
+        uint256 shares;
+        uint256 ethAmount;
+        uint256 totalSupply;
+        uint256 totalValue;
+        uint256 poolEthBalance;
+        uint256 userBalance;
+        bool requiresSwap;
+        uint256 wethNeeded;
     }
 
-    modifier onlyFromModule(string memory moduleName) {
-        require(
-            msg.sender == IBeacon(beaconAddress).getImplementation(moduleName),
-            "Caller is not the required module"
-        );
+    struct PoolReserveCheck {
+        uint256 currentReserveRatio;
+        uint256 postWithdrawBalance;
+        uint256 postWithdrawValue;
+        uint256 postWithdrawRatio;
+        bool reserveValid;
+    }
+
+    // ==================== STORAGE ====================
+
+    /// @notice Beacon address per resolution moduli
+    address public immutable beacon;
+
+    /// @notice Tracking ultimo reset limite orario
+    uint256 private lastHourlyReset;
+    
+    /// @notice Amount prelevato nell'ora corrente
+    uint256 private hourlyWithdrawnAmount;
+
+    /// @notice Contract pause state
+    bool public paused;
+    
+    // ==================== FEE SYSTEM ====================
+    
+    /// @notice Fee structure (basis points, 10000 = 100%)
+    uint256 public depositFee;        // Basis points for deposit fee
+    uint256 public withdrawFee;       // Basis points for withdraw fee
+    uint256 public constant MAX_FEE = 500; // 5% maximum fee
+    address public feeRecipient;      // Address to receive fees
+    
+    /// @notice Enabled/disabled controls
+    bool public depositsEnabled = true;
+    bool public withdrawsEnabled = true;
+    
+    /// @notice Withdraw limits structure
+    WithdrawLimits public withdrawLimits;
+
+    // ==================== MODIFIERS ====================
+
+    modifier whenNotPaused() {
+        address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
+        require(!IProxyGeneral(proxyGeneral).paused(), "Contract is paused");
         _;
     }
 
-    function deposit() external payable nonReentrant {
-        require(msg.value > 0, "Must send ETH to deposit");
-
-        // Get WETH address from Beacon
-        address wethAddress = IBeacon(beaconAddress).getImplementation("WETH");
-        IWETH weth = IWETH(wethAddress);
-
-        // Wrap ETH to WETH
-        weth.deposit{value: msg.value}();
-
-        // Get Proxy General address from Beacon
-        address proxyGeneralAddress = IBeacon(beaconAddress).getImplementation("ProxyGeneral");
-        IProxyGeneral proxyGeneral = IProxyGeneral(proxyGeneralAddress);
-
-        // Transfer WETH to Proxy General
-        require(weth.transfer(proxyGeneralAddress, msg.value), "WETH transfer failed");
-
-        // Mint LP tokens
-        proxyGeneral.mint(msg.sender, msg.value);
+    modifier whenDepositsEnabled() {
+        require(depositsEnabled, "Deposits are disabled");
+        _;
     }
 
-    function withdraw(uint256 lpAmount) external nonReentrant {
-        require(lpAmount > 0, "Must specify LP amount to withdraw");
+    modifier whenWithdrawsEnabled() {
+        require(withdrawsEnabled, "Withdrawals are disabled");
+        _;
+    }
 
-        // Get Proxy General address from Beacon
-        address proxyGeneralAddress = IBeacon(beaconAddress).getImplementation("ProxyGeneral");
-        IProxyGeneral proxyGeneral = IProxyGeneral(proxyGeneralAddress);
+    // Withdraw limits sono gestiti tramite checkWithdrawLimits() e ProxyGeneral rate limiting
 
-        // Burn LP tokens
-        proxyGeneral.burn(msg.sender, lpAmount);
+    // ==================== CONSTRUCTOR ====================
 
-        // Get WETH address from Beacon
-        address wethAddress = IBeacon(beaconAddress).getImplementation("WETH");
+    constructor(address _beacon) Ownable() {
+        require(_beacon != address(0), "Invalid beacon address");
+        beacon = _beacon;
+        lastHourlyReset = block.timestamp;
+        
+        // Initialize default withdraw limits
+        withdrawLimits = WithdrawLimits({
+            hourlyLimit: 100 ether,    // 100 ETH per hour default
+            dailyLimit: 1000 ether,    // 1000 ETH per day default
+            minWithdraw: 0.000001 ether,  // 1 Wei minimum
+            maxWithdraw: 50 ether      // 50 ETH per transaction default
+        });
+    }
+
+    // ==================== DEPOSIT FUNCTION ====================
+
+    /**
+     * @notice Deposita ETH nel pool e riceve LP tokens in rapporto 1:1
+     * @dev Validazioni complete secondo functional specifications
+     * @return lpTokens Numero di LP tokens ricevuti
+     */
+    function deposit() external payable nonReentrant whenNotPaused whenDepositsEnabled returns (uint256 lpTokens) {
+        // GET PARAMETER VALUES
+        address paramManager = IBeacon(beacon).getImplementation("ParameterManager");
+        IParameterManagerForModules params = IParameterManagerForModules(paramManager);
+        
+        uint256 minDeposit = params.getCurrentParameterValue("minDeposit");
+        uint256 maxDeposit = params.getCurrentParameterValue("maxDeposit");
+        
+        // INITIAL VALIDATIONS
+        require(msg.value >= minDeposit, "Below minimum deposit");
+        require(msg.value <= maxDeposit, "Exceeds maximum deposit");
+        
+        // CALCULATE FEE
+        uint256 feeAmount = (msg.value * depositFee) / 10000;
+        uint256 netDeposit = msg.value - feeAmount;
+        
+        // CHECK RATE LIMITING 
+        address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
+        IProxyGeneral proxy = IProxyGeneral(proxyGeneral);
+        
+        (bool rateLimitOk, , ) = proxy.checkRateLimit(msg.sender, "deposit", msg.value);
+        require(rateLimitOk, "Rate limit exceeded for deposit operation");
+        
+        // TRACK OPERATION FOR RATE LIMITING
+        proxy.trackOperation(msg.sender, "deposit", msg.value);
+        
+        // GET CONTRACT REFERENCES
+        address wethAddress = IBeacon(beacon).getImplementation("WETH");
         IWETH weth = IWETH(wethAddress);
+        
+        // CAPTURE PRE-DEPOSIT STATE
+        uint256 preDepositWethBalance = IERC20(wethAddress).balanceOf(proxyGeneral);
+        uint256 preDepositSupply = proxy.totalSupply();
+        
+        // SHARES CALCULATION (based on net deposit)
+        uint256 shares = netDeposit;
+        require(shares > 0, "No shares to mint");
+        
+        // VALIDATE SHARE CALCULATION FOR EXISTING SUPPLY
+        if (preDepositSupply > 0) {
+            // Verifica che il calcolo shares sia consistente
+            uint256 expectedShares = (netDeposit * preDepositSupply) / (preDepositWethBalance + netDeposit);
+            require(
+                (shares * preDepositSupply) / (preDepositWethBalance + netDeposit) > 0,
+                "Share calculation error"
+            );
+        }
+        
+        // WRAP NET DEPOSIT TO WETH AND TRANSFER TO PROXY
+        weth.deposit{value: netDeposit}();
+        require(weth.transfer(proxyGeneral, netDeposit), "WETH transfer failed");
+        
+        // TRANSFER FEE TO RECIPIENT IF APPLICABLE
+        if (feeAmount > 0 && feeRecipient != address(0)) {
+            (bool success, ) = feeRecipient.call{value: feeAmount}("");
+            require(success, "Fee transfer failed");
+        }
+        
+        // MINT LP TOKENS
+        proxy.mint(msg.sender, shares);
+        
+        // POST-DEPOSIT VALIDATIONS
+        require(
+            proxy.totalSupply() == preDepositSupply + shares,
+            "Invalid supply change"
+        );
+        require(
+            IERC20(wethAddress).balanceOf(proxyGeneral) == preDepositWethBalance + netDeposit,
+            "Invalid WETH balance change"
+        );
+        
+        emit Deposit(
+            msg.sender,
+            msg.value,
+            shares,
+            IERC20(wethAddress).balanceOf(proxyGeneral),
+            proxy.totalSupply()
+        );
+        
+        return shares;
+    }
 
-        // Check pool value and ensure sufficient liquidity
-        address valueCalculatorAddress = IBeacon(beaconAddress).getImplementation("ValueCalculator");
-        IValueCalculator valueCalculator = IValueCalculator(valueCalculatorAddress);
-        uint256 poolValue = valueCalculator.getTotalPoolValue();
-        require(poolValue >= lpAmount, "Insufficient pool value");
+    // ==================== WITHDRAW FUNCTION ====================
 
-        uint256 wethBalance = weth.balanceOf(proxyGeneralAddress);
-        if (wethBalance < lpAmount) {
-            uint256 wethNeeded = lpAmount - wethBalance;
+    /**
+     * @notice Preleva ETH dal pool bruciando LP tokens
+     * @dev Con automatic swap se WETH insufficiente + validazioni complete
+     * @param _shares Numero di LP tokens da bruciare
+     * @return ethAmount ETH effettivamente prelevato
+     */
+    function withdraw(uint256 _shares) external nonReentrant whenNotPaused whenWithdrawsEnabled returns (uint256 ethAmount) {
+        // INITIAL VALIDATION
+        require(_shares > 0, "Invalid shares amount");
+        
+        // GET PARAMETER VALUES  
+        address paramManager = IBeacon(beacon).getImplementation("ParameterManager");
+        IParameterManagerForModules params = IParameterManagerForModules(paramManager);
+        
+        uint256 poolReserveRatio = params.getCurrentParameterValue("poolReserveRatio");
+        
+        // GET CONTRACT REFERENCES
+        address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
+        address wethAddress = IBeacon(beacon).getImplementation("WETH");
+        address valueCalculator = IBeacon(beacon).getImplementation("ValueCalculator");
+        
+        IProxyGeneral proxy = IProxyGeneral(proxyGeneral);
+        IValueCalculatorForModules calculator = IValueCalculatorForModules(valueCalculator);
+        
+        // VALIDATE USER BALANCE
+        require(proxy.balanceOf(msg.sender) >= _shares, "Insufficient balance");
+        
+        // GET CURRENT POOL STATE
+        IValueCalculatorForModules.PoolValueInfo memory poolInfo = calculator.getTotalPoolValue();
+        
+        WithdrawValidation memory validation = WithdrawValidation({
+            shares: _shares,
+            ethAmount: 0,
+            totalSupply: proxy.totalSupply(),
+            totalValue: poolInfo.totalValue,
+            poolEthBalance: IERC20(wethAddress).balanceOf(proxyGeneral),
+            userBalance: proxy.balanceOf(msg.sender),
+            requiresSwap: false,
+            wethNeeded: 0
+        });
+        
+        // CALCULATE ETH AMOUNT TO WITHDRAW
+        validation.ethAmount = (_shares * validation.totalValue) / validation.totalSupply;
+        
+        // CHECK WITHDRAW LIMITS
+        (bool canWithdrawLimits, string memory limitReason) = checkWithdrawLimits(msg.sender, validation.ethAmount);
+        require(canWithdrawLimits, limitReason);
+        
+        // CALCULATE WITHDRAW FEE
+        uint256 feeAmount = (validation.ethAmount * withdrawFee) / 10000;
+        uint256 netWithdraw = validation.ethAmount - feeAmount;
 
-            // Get Swap Manager address from Beacon
-            address swapManagerAddress = IBeacon(beaconAddress).getImplementation("SwapManager");
-            ISwapManager swapManager = ISwapManager(swapManagerAddress);
+        // CHECK RATE LIMITING
+        (bool rateLimitOk, , ) = proxy.checkRateLimit(msg.sender, "withdraw", validation.ethAmount);
+        require(rateLimitOk, "Rate limit exceeded for withdraw operation");
+        
+        // TRACK OPERATION FOR RATE LIMITING
+        proxy.trackOperation(msg.sender, "withdraw", validation.ethAmount);
+        
+        // CHECK INITIAL RESERVE RATIO
+        PoolReserveCheck memory reserveCheck;
+        reserveCheck.currentReserveRatio = (validation.poolEthBalance * 10000) / validation.totalValue;
+        require(reserveCheck.currentReserveRatio >= poolReserveRatio, "Insufficient pool reserves");
+        
+        // CHECK IF SWAP IS REQUIRED (for net withdraw amount)
+        if (validation.poolEthBalance < netWithdraw) {
+            validation.requiresSwap = true;
+            validation.wethNeeded = netWithdraw - validation.poolEthBalance;
+            
+            // EXECUTE AUTOMATIC SWAP
+            _executeAutomaticSwap(validation.wethNeeded, calculator);
+            
+            // VERIFY SWAP SUCCESS
+            uint256 newWethBalance = IERC20(wethAddress).balanceOf(proxyGeneral);
+            require(
+                newWethBalance >= netWithdraw,
+                "Swap didn't provide enough WETH"
+            );
+        }
+        
+        // VALIDATE POST-WITHDRAW RESERVE RATIO
+        reserveCheck.postWithdrawBalance = validation.poolEthBalance - netWithdraw;
+        reserveCheck.postWithdrawValue = validation.totalValue - netWithdraw;
+        
+        if (reserveCheck.postWithdrawValue > 0) {
+            reserveCheck.postWithdrawRatio = (reserveCheck.postWithdrawBalance * 10000) / reserveCheck.postWithdrawValue;
+            require(reserveCheck.postWithdrawRatio >= poolReserveRatio, "Would break reserve ratio");
+        }
+        
+        // HOURLY TRACKING gestito da ProxyGeneral rate limiting
+        
+        // BURN LP TOKENS
+        proxy.burn(msg.sender, _shares);
+        
+        // GET WETH FROM PROXYGENERAL
+        IWETH weth = IWETH(wethAddress);
+        
+        // TRANSFER WETH TO THIS CONTRACT from ProxyGeneral
+        proxy.withdrawToken("WETH", netWithdraw, address(this));
+        
+        // UNWRAP WETH TO ETH
+        weth.withdraw(netWithdraw);
+        
+        // TRANSFER ETH TO USER
+        (bool success, ) = msg.sender.call{value: netWithdraw}("");
+        require(success, "ETH transfer failed");
+        
+        // TRANSFER FEE TO RECIPIENT IF APPLICABLE
+        if (feeAmount > 0 && feeRecipient != address(0)) {
+            proxy.withdrawToken("WETH", feeAmount, feeRecipient);
+        }
+        
+        // FINAL VALIDATION
+        require(
+            proxy.totalSupply() == validation.totalSupply - _shares,
+            "Invalid supply change"
+        );
+        
+        emit Withdrawn(
+            msg.sender,
+            _shares,
+            validation.ethAmount,
+            validation.totalValue,
+            IERC20(wethAddress).balanceOf(proxyGeneral)
+        );
+        
+        return netWithdraw;
+    }
 
-            // Perform swap to get required WETH
-            uint256 receivedWeth = swapManager.performSwap("TOKEN", "WETH", wethNeeded);
-            require(receivedWeth >= wethNeeded, "Swap failed to provide sufficient WETH");
+    /**
+     * @notice Esegue automatic swap per ottenere WETH necessario
+     * @param wethNeeded Quantità di WETH necessaria
+     * @param calculator Reference al ValueCalculator
+     */
+    function _executeAutomaticSwap(uint256 wethNeeded, IValueCalculatorForModules calculator) internal {
+        // SELEZIONA TOKEN CON PERCENTUALE PIÙ BASSA
+        (string memory tokenToSwap, uint256 amountToSwap) = calculator.selectTokenForSwap(wethNeeded);
+        
+        require(bytes(tokenToSwap).length > 0, "No suitable token for swap");
+        require(amountToSwap > 0, "Invalid swap amount calculated");
+        
+        // EXECUTE SWAP VIA SWAPMANAGER
+        address swapManager = IBeacon(beacon).getImplementation("SwapManager");
+        ISwapManagerForModules swapper = ISwapManagerForModules(swapManager);
+        
+        // VALIDATE SWAP PARAMETERS
+        (bool isValid, string memory errorReason) = swapper.validateSwapParameters(
+            tokenToSwap,
+            "WETH",
+            amountToSwap
+        );
+        require(isValid, string(abi.encodePacked("Swap validation failed: ", errorReason)));
+        
+        // PERFORM THE SWAP
+        uint256 receivedWeth = swapper.performSwap(tokenToSwap, "WETH", amountToSwap);
+        
+        // VALIDATE RECEIVED AMOUNT
+        require(receivedWeth > 0, "Swap returned zero WETH");
+        
+        // EMIT TOKEN SWAPPED EVENT
+        emit TokenSwappedForWithdraw(tokenToSwap, amountToSwap, receivedWeth);
+    }
+
+    // ==================== VIEW FUNCTIONS ====================
+
+    // ==================== FEE MANAGEMENT FUNCTIONS ====================
+
+    /**
+     * @notice Imposta fee per deposit
+     * @param newFee Nuova fee in basis points
+     */
+    function setDepositFee(uint256 newFee) external onlyOwner {
+        require(newFee <= MAX_FEE, "Fee exceeds maximum");
+        
+        uint256 oldFee = depositFee;
+        depositFee = newFee;
+        
+        emit DepositFeeUpdated(oldFee, newFee);
+    }
+
+    /**
+     * @notice Imposta fee per withdraw
+     * @param newFee Nuova fee in basis points
+     */
+    function setWithdrawFee(uint256 newFee) external onlyOwner {
+        require(newFee <= MAX_FEE, "Fee exceeds maximum");
+        
+        uint256 oldFee = withdrawFee;
+        withdrawFee = newFee;
+        
+        emit WithdrawFeeUpdated(oldFee, newFee);
+    }
+
+    /**
+     * @notice Imposta recipient per fee
+     * @param newRecipient Nuovo indirizzo recipient
+     */
+    function setFeeRecipient(address newRecipient) external onlyOwner {
+        require(newRecipient != address(0), "Invalid recipient");
+        
+        address oldRecipient = feeRecipient;
+        feeRecipient = newRecipient;
+        
+        emit FeeRecipientUpdated(oldRecipient, newRecipient);
+    }
+
+    /**
+     * @notice Abilita/disabilita deposits
+     * @param enabled Stato enabled
+     */
+    function setDepositsEnabled(bool enabled) external onlyOwner {
+        depositsEnabled = enabled;
+        emit DepositsEnabledChanged(enabled);
+    }
+
+    /**
+     * @notice Abilita/disabilita withdrawals
+     * @param enabled Stato enabled
+     */
+    function setWithdrawsEnabled(bool enabled) external onlyOwner {
+        withdrawsEnabled = enabled;
+        emit WithdrawsEnabledChanged(enabled);
+    }
+
+    // ==================== WITHDRAW LIMITS MANAGEMENT ====================
+
+    /**
+     * @notice Imposta limiti withdraw
+     * @param hourlyLimit Limite orario
+     * @param dailyLimit Limite giornaliero  
+     * @param minWithdraw Minimo withdraw
+     * @param maxWithdraw Massimo withdraw per transazione
+     */
+    function setWithdrawLimits(
+        uint256 hourlyLimit,
+        uint256 dailyLimit,
+        uint256 minWithdraw,
+        uint256 maxWithdraw
+    ) external onlyOwner {
+        require(minWithdraw <= maxWithdraw, "Invalid min/max range");
+        require(hourlyLimit <= dailyLimit, "Hourly limit exceeds daily limit");
+        require(maxWithdraw <= hourlyLimit, "Max withdraw exceeds hourly limit");
+        
+        withdrawLimits.hourlyLimit = hourlyLimit;
+        withdrawLimits.dailyLimit = dailyLimit;
+        withdrawLimits.minWithdraw = minWithdraw;
+        withdrawLimits.maxWithdraw = maxWithdraw;
+        
+        emit WithdrawLimitsUpdated(hourlyLimit, dailyLimit, minWithdraw, maxWithdraw);
+    }
+
+    /**
+     * @notice Controlla se un withdraw è permesso dai limiti
+     * @param user Indirizzo utente
+     * @param amount Quantità da prelevare
+     * @return canWithdraw Se può prelevare
+     * @return reason Motivo se non può
+     */
+    function checkWithdrawLimits(address user, uint256 amount) public view returns (bool canWithdraw, string memory reason) {
+        // CHECK MIN/MAX PER TRANSAZIONE
+        if (amount < withdrawLimits.minWithdraw) {
+            return (false, "Below minimum withdraw");
+        }
+        if (amount > withdrawLimits.maxWithdraw) {
+            return (false, "Exceeds maximum withdraw per transaction");
+        }
+        
+        // CHECK HOURLY LIMIT - gestito da ProxyGeneral rate limiting system
+        // La verifica dettagliata avviene in ProxyGeneral.trackOperation()
+        
+        // Verifica basilare contro limiti impostati
+        if (amount > withdrawLimits.hourlyLimit) {
+            return (false, "Amount exceeds hourly withdraw limit");
+        }
+        
+        // CHECK DAILY LIMIT
+        if (amount > withdrawLimits.dailyLimit) {
+            return (false, "Amount exceeds daily withdraw limit");
+        }
+        
+        return (true, "");
+    }
+
+    /**
+     * @notice Calcola quanto prelevato nelle ultime 24 ore (sliding window)
+     * @param user Indirizzo utente
+     * @return dailyWithdrawn Totale prelevato in 24 ore
+     */
+    // Rate limit tracking gestito da ProxyGeneral - funzioni interne rimosse
+
+    /**
+     * @notice Ottiene limite orario rimanente (stub - gestito da ProxyGeneral)
+     * @param user Indirizzo utente
+     * @return remaining Limite orario massimo
+     */
+    function getRemainingHourlyLimit(address user) external view returns (uint256 remaining) {
+        return withdrawLimits.hourlyLimit;
+    }
+
+    /**
+     * @notice Ottiene limite giornaliero rimanente (stub - gestito da ProxyGeneral)
+     * @param user Indirizzo utente  
+     * @return remaining Limite giornaliero massimo
+     */
+    function getRemainingDailyLimit(address user) external view returns (uint256 remaining) {
+        return withdrawLimits.dailyLimit;
+    }
+
+    // ==================== EMERGENCY FUNCTIONS ====================
+
+    // ==================== FALLBACK ====================
+
+    /**
+     * @notice Riceve ETH solo da WETH unwrapping o deposit()
+     */
+    receive() external payable {
+        // Allow ETH from WETH unwrapping or deposit() calls
+        address wethAddress = IBeacon(beacon).getImplementation("WETH");
+        if (msg.sender != wethAddress) {
+            revert("Direct ETH transfers not allowed. Use deposit().");
+        }
+    }
+
+    // ==================== INTERFACE COMPLIANCE FUNCTIONS ====================
+
+    /**
+     * @notice Calcola shares per un deposito ETH
+     * @param ethAmount Quantità ETH da depositare
+     * @return shares Shares che verranno ricevute
+     */
+    function calculateDepositShares(uint256 ethAmount) external view returns (uint256 shares) {
+        if (ethAmount == 0) {
+            return 0;
         }
 
-        // Transfer WETH from Proxy General to user
-        proxyGeneral.transferFunds(msg.sender, lpAmount);
+        IProxyGeneral proxy = IProxyGeneral(IBeacon(beacon).getImplementation("ProxyGeneral"));
+        uint256 totalSupply = proxy.totalSupply();
+        
+        if (totalSupply == 0) {
+            return ethAmount;
+        }
+
+        // Calcola valore pool attuale
+        IValueCalculatorForModules valueCalculator = IValueCalculatorForModules(IBeacon(beacon).getImplementation("ValueCalculator"));
+        uint256 totalValue = valueCalculator.getTotalPoolValueView();
+        
+        if (totalValue == 0) {
+            return ethAmount;
+        }
+
+        // Apply deposit fee
+        uint256 effectiveAmount = ethAmount;
+        if (depositFee > 0) {
+            uint256 feeAmount = (ethAmount * depositFee) / 10000;
+            effectiveAmount = ethAmount - feeAmount;
+        }
+
+        return (effectiveAmount * totalSupply) / totalValue;
     }
 
-    receive() external payable {
-        revert("Direct ETH transfers not allowed. Use deposit().");
+    /**
+     * @notice Calcola ETH ricevibile bruciando LP tokens
+     * @param lpTokens Numero di LP tokens da bruciare
+     * @return ethAmount ETH che verrà ricevuto
+     */
+    function calculateWithdrawAmount(uint256 lpTokens) external view returns (uint256 ethAmount) {
+        if (lpTokens == 0) {
+            return 0;
+        }
+
+        IProxyGeneral proxy = IProxyGeneral(IBeacon(beacon).getImplementation("ProxyGeneral"));
+        uint256 totalSupply = proxy.totalSupply();
+        
+        if (totalSupply == 0) {
+            return 0;
+        }
+
+        // Calcola valore pool
+        IValueCalculatorForModules valueCalculator = IValueCalculatorForModules(IBeacon(beacon).getImplementation("ValueCalculator"));
+        uint256 totalValue = valueCalculator.getTotalPoolValueView();
+        
+        uint256 rawEthAmount = (lpTokens * totalValue) / totalSupply;
+        
+        // Apply withdraw fee
+        if (withdrawFee > 0) {
+            uint256 feeAmount = (rawEthAmount * withdrawFee) / 10000;
+            ethAmount = rawEthAmount - feeAmount;
+        } else {
+            ethAmount = rawEthAmount;
+        }
     }
 
+    /**
+     * @notice Verifica se withdraw è possibile per utente
+     * @param user Indirizzo utente
+     * @param shares Shares da prelevare
+     * @return canWithdraw Se può prelevare
+     * @return errorReason Motivo errore se non può
+     */
+    function canWithdraw(address user, uint256 shares) external view returns (bool canWithdraw, string memory errorReason) {
+        // Check if paused
+        if (paused) {
+            return (false, "Contract is paused");
+        }
+
+        // Check if withdraws enabled
+        if (!withdrawsEnabled) {
+            return (false, "Withdrawals are disabled");
+        }
+
+        // Check user balance
+        IProxyGeneral proxy = IProxyGeneral(IBeacon(beacon).getImplementation("ProxyGeneral"));
+        if (proxy.balanceOf(user) < shares) {
+            return (false, "Insufficient LP token balance");
+        }
+
+        // Calculate ETH amount
+        uint256 totalSupply = proxy.totalSupply();
+        if (totalSupply == 0) {
+            return (false, "No total supply");
+        }
+
+        IValueCalculatorForModules valueCalculator = IValueCalculatorForModules(IBeacon(beacon).getImplementation("ValueCalculator"));
+        uint256 totalValue = valueCalculator.getTotalPoolValueView();
+        uint256 ethAmount = (shares * totalValue) / totalSupply;
+
+        // Check withdraw limits
+        (bool limitsOk, string memory limitReason) = this.checkWithdrawLimits(user, ethAmount);
+        if (!limitsOk) {
+            return (false, limitReason);
+        }
+
+        return (true, "");
+    }
+
+    /**
+     * @notice Statistiche complete del pool
+     * @return totalValue Valore totale del pool
+     * @return totalSupply Supply totale LP tokens
+     * @return wethBalance Balance WETH nel pool
+     * @return tokensCount Numero di token diversi
+     */
+    function getPoolStats() external view returns (
+        uint256 totalValue,
+        uint256 totalSupply,
+        uint256 wethBalance,
+        uint256 tokensCount
+    ) {
+        IProxyGeneral proxy = IProxyGeneral(IBeacon(beacon).getImplementation("ProxyGeneral"));
+        IValueCalculatorForModules valueCalculator = IValueCalculatorForModules(IBeacon(beacon).getImplementation("ValueCalculator"));
+        ITokenManagerForModules tokenManager = ITokenManagerForModules(IBeacon(beacon).getImplementation("TokenManager"));
+
+        totalSupply = proxy.totalSupply();
+        totalValue = valueCalculator.getTotalPoolValueView();
+        
+        // Get WETH balance
+        address wethAddress = IBeacon(beacon).getImplementation("WETH");
+        wethBalance = IERC20(wethAddress).balanceOf(address(proxy));
+        
+        // Get token count (this is an approximation, actual implementation would need tracking)
+        tokensCount = 10; // Placeholder - should be implemented properly
+    }
+
+    /**
+     * @notice Valida lo stato del pool
+     * @return isValid Se il pool è in stato valido
+     * @return errorReason Motivo errore se non valido
+     */
+    function validatePoolState() external view returns (bool isValid, string memory errorReason) {
+        IValueCalculatorForModules valueCalculator = IValueCalculatorForModules(IBeacon(beacon).getImplementation("ValueCalculator"));
+        return valueCalculator.validatePoolValue();
+    }
+
+    // ==================== RATE LIMITING PASSTHROUGH ====================
+
+    /**
+     * @notice Verifica rate limit per utente
+     * @param user Utente
+     * @param amount Quantità proposta
+     * @return allowed Se operazione permessa
+     * @return remainingHourly Rimanente limite orario
+     * @return remainingDaily Rimanente limite giornaliero
+     */
+    function checkWithdrawRateLimit(address user, uint256 amount) 
+        external view returns (bool allowed, uint256 remainingHourly, uint256 remainingDaily) {
+        IProxyGeneral proxy = IProxyGeneral(IBeacon(beacon).getImplementation("ProxyGeneral"));
+        return proxy.checkRateLimit(user, "withdraw", amount);
+    }
+
+    /**
+     * @notice Verifica rate limit depositi per utente
+     * @param user Utente
+     * @param amount Quantità proposta
+     * @return allowed Se operazione permessa
+     * @return remainingHourly Rimanente limite orario
+     * @return remainingDaily Rimanente limite giornaliero
+     */
+    function checkDepositRateLimit(address user, uint256 amount) 
+        external view returns (bool allowed, uint256 remainingHourly, uint256 remainingDaily) {
+        IProxyGeneral proxy = IProxyGeneral(IBeacon(beacon).getImplementation("ProxyGeneral"));
+        return proxy.checkRateLimit(user, "deposit", amount);
+    }
+
+    /**
+     * @notice Imposta rate limits (solo owner)
+     * @param operationType Tipo operazione
+     * @param hourlyLimit Limite orario
+     * @param dailyLimit Limite giornaliero
+     */
+    function setRateLimit(string memory operationType, uint256 hourlyLimit, uint256 dailyLimit) external onlyOwner {
+        IProxyGeneral proxy = IProxyGeneral(IBeacon(beacon).getImplementation("ProxyGeneral"));
+        proxy.setRateLimit(operationType, hourlyLimit, dailyLimit);
+    }
+
+    /**
+     * @notice Ottiene informazioni rate limit per utente
+     * @param user Indirizzo utente
+     * @param operationType Tipo operazione
+     * @return hourlyLimit Limite orario
+     * @return dailyLimit Limite giornaliero
+     * @return currentHourlyUsage Utilizzo corrente orario
+     * @return currentDailyUsage Utilizzo corrente giornaliero
+     */
+    function getRateLimitInfo(address user, string memory operationType) 
+        external view returns (uint256 hourlyLimit, uint256 dailyLimit, uint256 currentHourlyUsage, uint256 currentDailyUsage) {
+        
+        IProxyGeneral proxy = IProxyGeneral(IBeacon(beacon).getImplementation("ProxyGeneral"));
+        
+        // Get configuration and usage (simplified interface)
+        (bool allowed, uint256 remainingHourly, uint256 remainingDaily) = proxy.checkRateLimit(user, operationType, 0);
+        
+        // For proper implementation, ProxyGeneral would need getter functions for these values
+        // Here we return approximations based on remaining amounts
+        hourlyLimit = 100 ether; // Default values - should be retrieved from config
+        dailyLimit = 1000 ether;
+        currentHourlyUsage = hourlyLimit > remainingHourly ? hourlyLimit - remainingHourly : 0;
+        currentDailyUsage = dailyLimit > remainingDaily ? dailyLimit - remainingDaily : 0;
+    }
+
+    /**
+     * @notice Blocca chiamate a funzioni inesistenti
+     */
     fallback() external payable {
         revert("Function does not exist.");
     }

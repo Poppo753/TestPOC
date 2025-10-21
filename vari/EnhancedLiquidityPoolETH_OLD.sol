@@ -143,6 +143,32 @@ contract EnhancedLiquidityPoolETH is ERC20, ReentrancyGuard, Ownable {
         TokenValueInfo[] tokenValues;
     }
 
+    /**
+     * @dev Struct for rate limiting configuration
+     * @param hourlyLimit Maximum amount per hour
+     * @param dailyLimit Maximum amount per day
+     * @param enabled Whether rate limiting is enabled for this operation
+     */
+    struct RateLimitConfig {
+        uint256 hourlyLimit;
+        uint256 dailyLimit;
+        bool enabled;
+    }
+
+    /**
+     * @dev Struct for tracking user operations
+     * @param hourlyAmount Amount used in current hour
+     * @param dailyAmount Amount used in current day
+     * @param lastHourlyReset Timestamp of last hourly reset
+     * @param lastDailyReset Timestamp of last daily reset
+     */
+    struct UserRateLimit {
+        uint256 hourlyAmount;
+        uint256 dailyAmount;
+        uint256 lastHourlyReset;
+        uint256 lastDailyReset;
+    }
+
     // Storage
     /// @notice Mapping of token codes to their information
     mapping(string => TokenInfo) public tokenData;
@@ -161,6 +187,14 @@ contract EnhancedLiquidityPoolETH is ERC20, ReentrancyGuard, Ownable {
     
     /// @notice Amount withdrawn in current hour
     uint256 public hourlyWithdrawnAmount;
+
+    // ==================== RATE LIMITING STORAGE ====================
+
+    /// @notice Rate limiting configuration per operation type
+    mapping(string => RateLimitConfig) public rateLimitConfigs;
+    
+    /// @notice User rate limit tracking per operation type
+    mapping(address => mapping(string => UserRateLimit)) public userRateLimits;
     
     /// @notice Emergency pause flag
     bool public paused;
@@ -275,6 +309,35 @@ contract EnhancedLiquidityPoolETH is ERC20, ReentrancyGuard, Ownable {
         require(_wethAddress != address(0), "Invalid WETH address");
         WETH_ADDRESS = _wethAddress;
         lastHourlyReset = block.timestamp;
+        
+        // Initialize default rate limits
+        _initializeDefaultRateLimits();
+    }
+
+    /**
+     * @dev Initialize default rate limiting configurations
+     */
+    function _initializeDefaultRateLimits() internal {
+        // Withdraw rate limits
+        rateLimitConfigs["withdraw"] = RateLimitConfig({
+            hourlyLimit: 100 ether,
+            dailyLimit: 1000 ether,
+            enabled: true
+        });
+        
+        // Deposit rate limits
+        rateLimitConfigs["deposit"] = RateLimitConfig({
+            hourlyLimit: 1000 ether,
+            dailyLimit: 10000 ether,
+            enabled: true
+        });
+        
+        // Swap rate limits
+        rateLimitConfigs["swap"] = RateLimitConfig({
+            hourlyLimit: 50 ether,
+            dailyLimit: 500 ether,
+            enabled: true
+        });
     }
 
 
@@ -1043,6 +1106,309 @@ function updateParameterValue(string calldata parameterName, uint256 newValue) e
         );
 
         return allWithdrawalsSuccessful;
+    }
+
+    // ==================== RATE LIMITING FUNCTIONS ====================
+
+    /**
+     * @notice Tracks operation for rate limiting
+     * @param user User address
+     * @param operationType Type of operation ("deposit", "withdraw", "swap")
+     * @param amount Amount for this operation
+     */
+    function trackOperation(address user, string memory operationType, uint256 amount) external onlyAuthorizedModule {
+        require(user != address(0), "Invalid user address");
+        require(amount > 0, "Amount must be greater than 0");
+        
+        RateLimitConfig storage config = rateLimitConfigs[operationType];
+        if (!config.enabled) {
+            return; // Rate limiting disabled for this operation
+        }
+        
+        UserRateLimit storage userLimit = userRateLimits[user][operationType];
+        
+        // Reset hourly tracking if hour has passed
+        if (block.timestamp >= userLimit.lastHourlyReset + 1 hours) {
+            userLimit.hourlyAmount = 0;
+            userLimit.lastHourlyReset = block.timestamp;
+        }
+        
+        // Reset daily tracking if day has passed
+        if (block.timestamp >= userLimit.lastDailyReset + 1 days) {
+            userLimit.dailyAmount = 0;
+            userLimit.lastDailyReset = block.timestamp;
+        }
+        
+        // Add to tracking
+        userLimit.hourlyAmount += amount;
+        userLimit.dailyAmount += amount;
+        
+        emit OperationTracked(user, operationType, amount, block.timestamp);
+    }
+
+    /**
+     * @notice Checks rate limit for user operation
+     * @param user User address
+     * @param operationType Type of operation
+     * @param amount Proposed operation amount
+     * @return allowed If operation is allowed
+     * @return remainingHourly Remaining hourly limit
+     * @return remainingDaily Remaining daily limit
+     */
+    function checkRateLimit(address user, string memory operationType, uint256 amount) 
+        external view returns (bool allowed, uint256 remainingHourly, uint256 remainingDaily) {
+        
+        RateLimitConfig storage config = rateLimitConfigs[operationType];
+        
+        if (!config.enabled) {
+            return (true, type(uint256).max, type(uint256).max);
+        }
+        
+        UserRateLimit storage userLimit = userRateLimits[user][operationType];
+        
+        // Calculate current usage (accounting for resets)
+        uint256 currentHourlyUsage = userLimit.hourlyAmount;
+        uint256 currentDailyUsage = userLimit.dailyAmount;
+        
+        if (block.timestamp >= userLimit.lastHourlyReset + 1 hours) {
+            currentHourlyUsage = 0;
+        }
+        
+        if (block.timestamp >= userLimit.lastDailyReset + 1 days) {
+            currentDailyUsage = 0;
+        }
+        
+        // Calculate remaining limits
+        remainingHourly = config.hourlyLimit > currentHourlyUsage ? 
+            config.hourlyLimit - currentHourlyUsage : 0;
+            
+        remainingDaily = config.dailyLimit > currentDailyUsage ? 
+            config.dailyLimit - currentDailyUsage : 0;
+        
+        // Check if proposed amount fits within limits
+        allowed = (amount <= remainingHourly) && (amount <= remainingDaily);
+        
+        if (!allowed) {
+            emit RateLimitExceeded(user, operationType, amount, remainingHourly < remainingDaily ? remainingHourly : remainingDaily);
+        }
+    }
+
+    /**
+     * @notice Sets rate limit configuration for operation type
+     * @param operationType Type of operation
+     * @param hourlyLimit Hourly limit
+     * @param dailyLimit Daily limit
+     */
+    function setRateLimit(string memory operationType, uint256 hourlyLimit, uint256 dailyLimit) external onlyOwner {
+        require(hourlyLimit > 0, "Hourly limit must be greater than 0");
+        require(dailyLimit >= hourlyLimit, "Daily limit must be >= hourly limit");
+        
+        uint256 oldHourlyLimit = rateLimitConfigs[operationType].hourlyLimit;
+        uint256 oldDailyLimit = rateLimitConfigs[operationType].dailyLimit;
+        
+        rateLimitConfigs[operationType] = RateLimitConfig({
+            hourlyLimit: hourlyLimit,
+            dailyLimit: dailyLimit,
+            enabled: true
+        });
+        
+        emit RateLimitUpdated(operationType, hourlyLimit, dailyLimit);
+    }
+
+    /**
+     * @notice Enables/disables rate limiting for operation type
+     * @param operationType Type of operation
+     * @param enabled Whether to enable rate limiting
+     */
+    function setRateLimitEnabled(string memory operationType, bool enabled) external onlyOwner {
+        rateLimitConfigs[operationType].enabled = enabled;
+    }
+
+    /**
+     * @notice Gets rate limit info for user and operation
+     * @param user User address
+     * @param operationType Operation type
+     * @return config Rate limit configuration
+     * @return userLimit Current user limits
+     */
+    function getRateLimitInfo(address user, string memory operationType) 
+        external view returns (RateLimitConfig memory config, UserRateLimit memory userLimit) {
+        config = rateLimitConfigs[operationType];
+        userLimit = userRateLimits[user][operationType];
+    }
+
+    // ==================== ACCESS CONTROL ====================
+
+    /// @notice Mapping of authorized modules
+    mapping(address => bool) public authorizedModules;
+
+    /**
+     * @notice Modifier to restrict access to authorized modules only
+     */
+    modifier onlyAuthorizedModule() {
+        require(authorizedModules[msg.sender] || msg.sender == owner(), "Not authorized module");
+        _;
+    }
+
+    /**
+     * @notice Adds an authorized module
+     * @param module Module address
+     * @param moduleType Type description
+     */
+    function addAuthorizedModule(address module, string memory moduleType) external onlyOwner {
+        require(module != address(0), "Invalid module address");
+        require(!authorizedModules[module], "Module already authorized");
+        
+        authorizedModules[module] = true;
+        emit ModuleAuthorized(module, moduleType);
+    }
+
+    /**
+     * @notice Removes an authorized module
+     * @param module Module address
+     */
+    function removeAuthorizedModule(address module) external onlyOwner {
+        require(authorizedModules[module], "Module not authorized");
+        
+        authorizedModules[module] = false;
+        emit ModuleDeauthorized(module);
+    }
+
+    /**
+     * @notice Checks if address is authorized module
+     * @param module Address to check
+     * @return isAuthorized If address is authorized
+     */
+    function isAuthorizedModule(address module) external view returns (bool isAuthorized) {
+        return authorizedModules[module];
+    }
+
+    // ==================== CUSTODY FUNCTIONS ====================
+
+    /**
+     * @notice Deposits token into custody (for authorized modules)
+     * @param tokenCode Token code
+     * @param amount Amount to deposit
+     * @param from Source address
+     */
+    function depositToken(string memory tokenCode, uint256 amount, address from) external onlyAuthorizedModule {
+        require(amount > 0, "Amount must be greater than 0");
+        require(from != address(0), "Invalid source address");
+        
+        TokenInfo storage token = tokenData[tokenCode];
+        require(token.isActive, "Token not active");
+        
+        IERC20(token.tokenAddress).transferFrom(from, address(this), amount);
+        emit TokenDeposited(tokenCode, amount, from);
+    }
+
+    /**
+     * @notice Withdraws token from custody (for authorized modules)
+     * @param tokenCode Token code
+     * @param amount Amount to withdraw
+     * @param to Destination address
+     */
+    function withdrawToken(string memory tokenCode, uint256 amount, address to) external onlyAuthorizedModule {
+        require(amount > 0, "Amount must be greater than 0");
+        require(to != address(0), "Invalid destination address");
+        
+        TokenInfo storage token = tokenData[tokenCode];
+        require(token.isActive, "Token not active");
+        
+        uint256 balance = IERC20(token.tokenAddress).balanceOf(address(this));
+        require(balance >= amount, "Insufficient balance");
+        
+        IERC20(token.tokenAddress).transfer(to, amount);
+        emit TokenWithdrawn(tokenCode, amount, to);
+    }
+
+    /**
+     * @notice Gets token balance in custody
+     * @param tokenCode Token code
+     * @return balance Current balance
+     */
+    function getTokenBalance(string memory tokenCode) external view returns (uint256 balance) {
+        TokenInfo storage token = tokenData[tokenCode];
+        if (token.isActive) {
+            return IERC20(token.tokenAddress).balanceOf(address(this));
+        }
+        return 0;
+    }
+
+    /**
+     * @notice Gets all token balances
+     * @return tokenCodesArray Array of token codes
+     * @return balances Array of corresponding balances
+     */
+    function getAllTokenBalances() external view returns (string[] memory tokenCodesArray, uint256[] memory balances) {
+        tokenCodesArray = new string[](tokenCodes.length);
+        balances = new uint256[](tokenCodes.length);
+        
+        for (uint256 i = 0; i < tokenCodes.length; i++) {
+            tokenCodesArray[i] = tokenCodes[i];
+            TokenInfo storage token = tokenData[tokenCodes[i]];
+            if (token.isActive) {
+                balances[i] = IERC20(token.tokenAddress).balanceOf(address(this));
+            }
+        }
+    }
+
+    // ==================== ETH/WETH MANAGEMENT ====================
+
+    /**
+     * @notice Deposits ETH into pool (authorized modules)
+     */
+    function depositETH() external payable onlyAuthorizedModule {
+        require(msg.value > 0, "Must send ETH");
+        emit ETHDeposited(msg.sender, msg.value);
+    }
+
+    /**
+     * @notice Withdraws ETH from pool (authorized modules)
+     * @param amount Amount to withdraw
+     * @param to Destination address
+     */
+    function withdrawETH(uint256 amount, address payable to) external onlyAuthorizedModule {
+        require(amount > 0, "Amount must be greater than 0");
+        require(to != address(0), "Invalid destination");
+        require(address(this).balance >= amount, "Insufficient ETH balance");
+        
+        to.transfer(amount);
+        emit ETHWithdrawn(to, amount);
+    }
+
+    /**
+     * @notice Gets ETH balance of contract
+     * @return balance Current ETH balance
+     */
+    function getETHBalance() external view returns (uint256 balance) {
+        return address(this).balance;
+    }
+
+    /**
+     * @notice Wraps ETH to WETH
+     * @param amount Amount to wrap
+     */
+    function wrapETH(uint256 amount) external onlyAuthorizedModule {
+        require(amount > 0, "Amount must be greater than 0");
+        require(address(this).balance >= amount, "Insufficient ETH");
+        
+        IWETH(WETH_ADDRESS).deposit{value: amount}();
+        emit ETHWrapped(amount);
+    }
+
+    /**
+     * @notice Unwraps WETH to ETH
+     * @param amount Amount to unwrap
+     */
+    function unwrapWETH(uint256 amount) external onlyAuthorizedModule {
+        require(amount > 0, "Amount must be greater than 0");
+        
+        uint256 wethBalance = IWETH(WETH_ADDRESS).balanceOf(address(this));
+        require(wethBalance >= amount, "Insufficient WETH");
+        
+        IWETH(WETH_ADDRESS).withdraw(amount);
+        emit ETHUnwrapped(amount);
     }
 
 /**

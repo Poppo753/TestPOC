@@ -1,93 +1,40 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-// Interface to interact with the Beacon contract
-interface IBeacon {
-    function getImplementation(string memory moduleName) external view returns (address);
-}
-
-import "./Beacon.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "./interfaces/IParameterManager.sol";
+import "./interfaces/IBeacon.sol";
+import "./interfaces/IProxyGeneral.sol";
 
-contract ParameterManager is Ownable {
-    // Beacon address to retrieve module addresses
-    address public immutable beaconAddress;
+/**
+ * @title ParameterManager
+ * @dev Gestisce parametri di sistema con governance timelock
+ * @custom:security-contact security@yourdomain.com
+ */
+contract ParameterManager is IParameterManager, Ownable {
+    
+    // ==================== STORAGE ====================
+    
+    /// @notice Beacon address per resolution moduli
+    address public immutable beacon;
+    
+    /// @notice Storage parametri completo
+    mapping(string => IParameterManager.Parameter) private parameters;
+    
+    /// @notice Lista di tutti i parametri per iterazione
+    string[] private parameterNames;
+    
+    mapping(string => IParameterManager.ParameterHistory[]) private parameterHistory;
+    
+    /// @notice Timelock configuration
+    uint256 public parameterTimelock;
+    uint256 public constant MIN_TIMELOCK = 1 hours;
+    uint256 public constant MAX_TIMELOCK = 7 days;
 
-    constructor(address _beaconAddress) {
-        require(_beaconAddress != address(0), "Invalid Beacon address");
-        beaconAddress = _beaconAddress;
-    }
+    // ==================== EVENTS (ENHANCED) ====================
 
-    modifier onlyFromModule(string memory moduleName) {
-        require(msg.sender == IBeacon(beaconAddress).getImplementation(moduleName), "Caller is not the required module");
-        _;
-    }
-
-    // Function to check if a parameter is valid
-    function isValidParameter(string calldata parameterName, uint256 newValue) internal pure returns (bool) {
-        bytes32 paramHash = keccak256(bytes(parameterName));
-
-        if (paramHash == keccak256(bytes("maxDeposit"))) {
-            return newValue >= 1 ether;
-        } else if (paramHash == keccak256(bytes("maxWithdrawPerTx"))) {
-            return newValue >= 0.1 ether;
-        } else if (paramHash == keccak256(bytes("minDeposit"))) {
-            return newValue <= 1 ether;
-        } else if (paramHash == keccak256(bytes("minWithdraw"))) {
-            return newValue <= 1 ether;
-        } else if (paramHash == keccak256(bytes("maxSlippage"))) {
-            return newValue <= 1000; // Max 10%
-        } else if (paramHash == keccak256(bytes("poolReserveRatio"))) {
-            return newValue <= 5000; // Max 50%
-        } else if (paramHash == keccak256(bytes("cacheDuration"))) {
-            return newValue <= 1 hours;
-        } else if (paramHash == keccak256(bytes("maxPriceAge"))) {
-            return newValue <= 48 hours;
-        } else if (paramHash == keccak256(bytes("maxTokensPerOperation"))) {
-            return newValue <= 20;
-        } else if (paramHash == keccak256(bytes("maxErrors"))) {
-            return newValue <= 10;
-        } else if (paramHash == keccak256(bytes("withdrawLimitPerHour"))) {
-            return newValue >= 1 ether;
-        }
-
-        return false;
-    }
-
-    // Function to get the current value of a parameter
-    function getCurrentParameterValue(string calldata parameterName) public view returns (uint256) {
-        bytes32 paramHash = keccak256(bytes(parameterName));
-
-        if (paramHash == keccak256(bytes("maxDeposit"))) return 100 ether;
-        if (paramHash == keccak256(bytes("maxWithdrawPerTx"))) return 50 ether;
-        if (paramHash == keccak256(bytes("minDeposit"))) return 0.000001 ether;
-        if (paramHash == keccak256(bytes("minWithdraw"))) return 0.000001 ether;
-        if (paramHash == keccak256(bytes("maxSlippage"))) return 200;
-        if (paramHash == keccak256(bytes("poolReserveRatio"))) return 0;
-        if (paramHash == keccak256(bytes("cacheDuration"))) return 5 minutes;
-        if (paramHash == keccak256(bytes("maxPriceAge"))) return 24 hours;
-        if (paramHash == keccak256(bytes("maxTokensPerOperation"))) return 10;
-        if (paramHash == keccak256(bytes("maxErrors"))) return 3;
-        if (paramHash == keccak256(bytes("withdrawLimitPerHour"))) return 100 ether;
-
-        revert("Invalid parameter name");
-    }
-
-    // Function to update a parameter value
-    function updateParameterValue(string calldata parameterName, uint256 newValue) external onlyOwner {
-        require(newValue > 0, "Invalid value");
-
-        // Validate parameter name and value
-        require(isValidParameter(parameterName, newValue), "Invalid parameter or value");
-
-        // Get old value for event emission
-        uint256 oldValue = getCurrentParameterValue(parameterName);
-
-        // Emit event for parameter update
-        emit ParameterUpdated(parameterName, oldValue, newValue, block.timestamp, msg.sender);
-    }
-
-    // Event for parameter updates
+    // ==================== EVENTS ====================
+    
     event ParameterUpdated(
         string indexed parameterName,
         uint256 oldValue,
@@ -95,4 +42,828 @@ contract ParameterManager is Ownable {
         uint256 timestamp,
         address indexed executor
     );
+    
+    event ParameterInitialized(
+        string indexed parameterName,
+        uint256 value,
+        uint256 minValue,
+        uint256 maxValue
+    );
+    
+    event ParameterRegistered(
+        string indexed parameterName,
+        uint256 initialValue,
+        uint256 minValue,
+        uint256 maxValue,
+        bool requiresTimelock
+    );
+    
+    event ParameterChangeProposed(
+        string indexed parameterName,
+        uint256 oldValue,
+        uint256 newValue,
+        uint256 effectiveAt
+    );
+    
+    event ParameterEmergencyChanged(
+        string indexed parameterName,
+        uint256 oldValue,
+        uint256 newValue,
+        address indexed changedBy
+    );
+
+    // ==================== MODIFIERS ====================
+
+    modifier onlyAuthorizedUpdater() {
+        require(
+            msg.sender == owner() ||
+            msg.sender == IBeacon(beacon).getImplementation("EmergencyHandler"),
+            "Not authorized to update parameters"
+        );
+        _;
+    }
+
+    // ==================== CONSTRUCTOR ====================
+
+    constructor(address _beacon) Ownable() {
+        require(_beacon != address(0), "Invalid beacon address");
+        beacon = _beacon;
+        
+        // Initialize default parameter timelock to 24 hours
+        parameterTimelock = 24 hours;
+        
+        // INITIALIZE DEFAULT PARAMETERS
+        _initializeDefaultParameters();
+    }
+
+    /**
+     * @notice Inizializza parametri di default del sistema con complete struct
+     */
+    function _initializeDefaultParameters() internal {
+        // LIQUIDITY LIMITS (critical - require timelock)
+        _registerParameter("maxDeposit", 100 ether, 1 ether, 1000 ether, true);
+        _registerParameter("maxWithdrawPerTx", 50 ether, 0.1 ether, 500 ether, true);
+        _registerParameter("minDeposit", 0.000001 ether, 0.000001 ether, 1 ether, false);
+        _registerParameter("minWithdraw", 0.000001 ether, 0.000001 ether, 1 ether, false);
+        _registerParameter("withdrawLimitPerHour", 100 ether, 1 ether, 10000 ether, true);
+        
+        // POOL PARAMETERS (critical - require timelock)
+        _registerParameter("maxSlippage", 200, 10, 1000, true); // 0.1% to 10%
+        _registerParameter("poolReserveRatio", 0, 0, 5000, true); // 0% to 50%
+        
+        // CACHE & TIMING (non-critical)
+        _registerParameter("cacheDuration", 5 minutes, 1 minutes, 1 hours, false);
+        _registerParameter("maxPriceAge", 1 hours, 5 minutes, 24 hours, false);
+        
+        // OPERATIONAL LIMITS (non-critical)
+        _registerParameter("maxTokensPerOperation", 10, 1, 50, false);
+        _registerParameter("maxErrors", 3, 1, 100, false);
+    }
+
+    /**
+     * @notice Helper per registrare parametro completo
+     */
+    function _registerParameter(
+        string memory name,
+        uint256 value,
+        uint256 minVal,
+        uint256 maxVal,
+        bool requiresTimelock
+    ) internal {
+        require(value >= minVal && value <= maxVal, "Value out of range");
+        require(!parameters[name].isActive, "Parameter already exists");
+        
+        parameters[name] = Parameter({
+            currentValue: value,
+            proposedValue: 0,
+            proposedAt: 0,
+            effectiveAt: 0,
+            minValue: minVal,
+            maxValue: maxVal,
+            requiresTimelock: requiresTimelock,
+            isActive: true
+        });
+        
+        parameterNames.push(name);
+        
+        // Add to history
+        parameterHistory[name].push(ParameterHistory({
+            value: value,
+            timestamp: block.timestamp,
+            changedBy: address(this) // system initialization
+        }));
+        
+        emit ParameterRegistered(name, value, minVal, maxVal, requiresTimelock);
+    }
+
+    // ==================== PARAMETER ACCESS ====================
+
+    /**
+     * @notice Ottiene valore corrente di un parametro
+     * @param parameterName Nome del parametro
+     * @return value Valore del parametro
+     */
+    function getCurrentParameterValue(string memory parameterName) public view returns (uint256 value) {
+        require(parameters[parameterName].isActive, "Parameter does not exist");
+        return parameters[parameterName].currentValue;
+    }
+
+    /**
+     * @notice Ottiene lista di tutti i parametri
+     * @return names Array nomi parametri
+     */
+    function getAllParameterNames() external view returns (string[] memory names) {
+        return parameterNames;
+    }
+
+    /**
+     * @notice Ottiene info complete di un parametro
+     * @param parameterName Nome del parametro
+     * @return param Parameter struct completo
+     */
+    function getParameterInfo(string memory parameterName) external view returns (Parameter memory param) {
+        require(parameters[parameterName].isActive, "Parameter does not exist");
+        return parameters[parameterName];
+    }
+
+    // ==================== PARAMETER UPDATES ====================
+
+    /**
+     * @notice Propone cambio parametro (con timelock se richiesto)
+     * @param parameterName Nome del parametro
+     * @param newValue Nuovo valore
+     */
+    function proposeParameterChange(string memory parameterName, uint256 newValue) external onlyAuthorizedUpdater {
+        Parameter storage param = parameters[parameterName];
+        require(param.isActive, "Parameter does not exist");
+        require(newValue >= param.minValue && newValue <= param.maxValue, "Value out of range");
+        require(newValue != param.currentValue, "Same as current value");
+        
+        if (param.requiresTimelock) {
+            // PROPOSE WITH TIMELOCK
+            param.proposedValue = newValue;
+            param.proposedAt = block.timestamp;
+            param.effectiveAt = block.timestamp + parameterTimelock;
+            
+            emit ParameterChangeProposed(parameterName, param.currentValue, newValue, param.effectiveAt);
+        } else {
+            // IMMEDIATE CHANGE
+            uint256 oldValue = param.currentValue;
+            param.currentValue = newValue;
+            
+            // ADD TO HISTORY
+            parameterHistory[parameterName].push(ParameterHistory({
+                value: newValue,
+                timestamp: block.timestamp,
+                changedBy: msg.sender
+            }));
+            
+            emit ParameterUpdated(parameterName, oldValue, newValue, block.timestamp, msg.sender);
+        }
+    }
+
+    /**
+     * @notice Esegue cambio parametro dopo timelock
+     * @param parameterName Nome del parametro
+     */
+    function executeParameterChange(string memory parameterName) external onlyAuthorizedUpdater {
+        Parameter storage param = parameters[parameterName];
+        require(param.isActive, "Parameter does not exist");
+        require(param.requiresTimelock, "Parameter doesn't require timelock");
+        require(param.proposedValue > 0, "No pending proposal");
+        require(block.timestamp >= param.effectiveAt, "Timelock not expired");
+        
+        uint256 oldValue = param.currentValue;
+        param.currentValue = param.proposedValue;
+        
+        // RESET PROPOSAL
+        uint256 newValue = param.proposedValue;
+        param.proposedValue = 0;
+        param.proposedAt = 0;
+        param.effectiveAt = 0;
+        
+        // ADD TO HISTORY
+        parameterHistory[parameterName].push(ParameterHistory({
+            value: newValue,
+            timestamp: block.timestamp,
+            changedBy: msg.sender
+        }));
+        
+        emit ParameterUpdated(parameterName, oldValue, newValue, block.timestamp, msg.sender);
+    }
+
+    /**
+     * @notice Emergency parameter change (bypasses timelock)
+     * @param parameterName Nome del parametro
+     * @param newValue Nuovo valore
+     */
+    function emergencySetParameter(string memory parameterName, uint256 newValue) external onlyAuthorizedUpdater {
+        Parameter storage param = parameters[parameterName];
+        require(param.isActive, "Parameter does not exist");
+        require(newValue >= param.minValue && newValue <= param.maxValue, "Value out of range");
+        
+        // CHECK EMERGENCY STATE (system must be paused)
+        IProxyGeneral proxyGeneral = IProxyGeneral(IBeacon(beacon).getImplementation("ProxyGeneral"));
+        require(proxyGeneral.paused(), "System must be paused for emergency override");
+        
+        uint256 oldValue = param.currentValue;
+        param.currentValue = newValue;
+        
+        // CLEAR PENDING PROPOSAL
+        param.proposedValue = 0;
+        param.proposedAt = 0;
+        param.effectiveAt = 0;
+        
+        // ADD TO HISTORY
+        parameterHistory[parameterName].push(ParameterHistory({
+            value: newValue,
+            timestamp: block.timestamp,
+            changedBy: msg.sender
+        }));
+        
+        emit ParameterEmergencyChanged(parameterName, oldValue, newValue, msg.sender);
+    }
+
+    /**
+     * @notice Aggiorna multipli parametri in una transazione
+     * @param parameterNames Array nomi parametri
+     * @param newValues Array nuovi valori
+     */
+    function updateMultipleParameters(
+        string[] memory parameterNames,
+        uint256[] memory newValues
+    ) external onlyAuthorizedUpdater {
+        require(parameterNames.length == newValues.length, "Arrays length mismatch");
+        require(parameterNames.length <= 20, "Too many parameters");
+        
+        for (uint256 i = 0; i < parameterNames.length; i++) {
+            string memory paramName = parameterNames[i];
+            uint256 newValue = newValues[i];
+            
+            require(parameters[paramName].isActive, "Parameter does not exist");
+            require(_isValidParameterValue(paramName, newValue), "Invalid parameter value");
+            
+            uint256 oldValue = parameters[paramName].currentValue;
+            parameters[paramName].currentValue = newValue;
+            
+            emit ParameterUpdated(
+                paramName,
+                oldValue,
+                newValue,
+                block.timestamp,
+                msg.sender
+            );
+        }
+    }
+
+    // ==================== VALIDATION ====================
+
+    /**
+     * @notice Valida se un valore è accettabile per un parametro
+     * @param parameterName Nome parametro
+     * @param newValue Valore da validare
+     * @return isValid Se il valore è valido
+     */
+    function isValidParameterValue(string memory parameterName, uint256 newValue) external view returns (bool isValid) {
+        if (!parameters[parameterName].isActive) return false;
+        return _isValidParameterValue(parameterName, newValue);
+    }
+
+    /**
+     * @notice Controlla se un cambio parametro può essere eseguito
+     * @param parameterName Nome parametro
+     * @return canExecute Se può essere eseguito
+     * @return reason Motivo se non può
+     */
+    function canExecuteParameterChange(string memory parameterName) external view returns (bool canExecute, string memory reason) {
+        Parameter storage param = parameters[parameterName];
+        
+        if (!param.isActive) {
+            return (false, "Parameter not registered");
+        }
+        
+        if (!param.requiresTimelock) {
+            return (false, "Parameter doesn't require timelock execution");
+        }
+        
+        if (param.proposedValue == 0) {
+            return (false, "No pending proposal");
+        }
+        
+        if (block.timestamp < param.effectiveAt) {
+            uint256 remaining = param.effectiveAt - block.timestamp;
+            return (false, "Timelock active");
+        }
+        
+        return (true, "Can execute");
+    }
+
+    /**
+     * @notice Validazione interna parametri
+     */
+    function _isValidParameterValue(string memory parameterName, uint256 newValue) internal pure returns (bool) {
+        bytes32 paramHash = keccak256(bytes(parameterName));
+        
+        // LIQUIDITY LIMITS
+        if (paramHash == keccak256(bytes("maxDeposit"))) {
+            return newValue >= 1 ether && newValue <= 1000 ether;
+        }
+        if (paramHash == keccak256(bytes("maxWithdrawPerTx"))) {
+            return newValue >= 0.1 ether && newValue <= 500 ether;
+        }
+        if (paramHash == keccak256(bytes("minDeposit"))) {
+            return newValue >= 0.000001 ether && newValue <= 1 ether;
+        }
+        if (paramHash == keccak256(bytes("minWithdraw"))) {
+            return newValue >= 0.000001 ether && newValue <= 1 ether;
+        }
+        if (paramHash == keccak256(bytes("withdrawLimitPerHour"))) {
+            return newValue >= 1 ether && newValue <= 10000 ether;
+        }
+        
+        // POOL PARAMETERS
+        if (paramHash == keccak256(bytes("maxSlippage"))) {
+            return newValue >= 10 && newValue <= 1000; // 0.1% to 10%
+        }
+        if (paramHash == keccak256(bytes("poolReserveRatio"))) {
+            return newValue <= 5000; // Max 50%
+        }
+        
+        // CACHE & TIMING
+        if (paramHash == keccak256(bytes("cacheDuration"))) {
+            return newValue >= 1 minutes && newValue <= 1 hours;
+        }
+        if (paramHash == keccak256(bytes("maxPriceAge"))) {
+            return newValue >= 5 minutes && newValue <= 24 hours;
+        }
+        
+        // OPERATIONAL LIMITS
+        if (paramHash == keccak256(bytes("maxTokensPerOperation"))) {
+            return newValue >= 1 && newValue <= 50;
+        }
+        if (paramHash == keccak256(bytes("maxErrors"))) {
+            return newValue >= 1 && newValue <= 100;
+        }
+        
+        return false;
+    }
+
+    /**
+     * @notice Ottiene range validazione per un parametro
+     */
+    function _getValidationRange(string memory parameterName) internal pure returns (uint256 minVal, uint256 maxVal) {
+        bytes32 paramHash = keccak256(bytes(parameterName));
+        
+        if (paramHash == keccak256(bytes("maxDeposit"))) return (1 ether, 1000 ether);
+        if (paramHash == keccak256(bytes("maxWithdrawPerTx"))) return (0.1 ether, 500 ether);
+        if (paramHash == keccak256(bytes("minDeposit"))) return (0.000001 ether, 1 ether);
+        if (paramHash == keccak256(bytes("minWithdraw"))) return (0.000001 ether, 1 ether);
+        if (paramHash == keccak256(bytes("withdrawLimitPerHour"))) return (1 ether, 10000 ether);
+        if (paramHash == keccak256(bytes("maxSlippage"))) return (10, 1000);
+        if (paramHash == keccak256(bytes("poolReserveRatio"))) return (0, 5000);
+        if (paramHash == keccak256(bytes("cacheDuration"))) return (1 minutes, 1 hours);
+        if (paramHash == keccak256(bytes("maxPriceAge"))) return (5 minutes, 24 hours);
+        if (paramHash == keccak256(bytes("maxTokensPerOperation"))) return (1, 50);
+        if (paramHash == keccak256(bytes("maxErrors"))) return (1, 100);
+        
+        return (0, type(uint256).max);
+    }
+
+    // ==================== ADMIN FUNCTIONS ====================
+
+    /**
+     * @notice Registra nuovo parametro nel sistema
+     * @param parameterName Nome nuovo parametro
+     * @param initialValue Valore iniziale
+     * @param minValue Valore minimo
+     * @param maxValue Valore massimo
+     * @param requiresTimelock Se richiede timelock
+     */
+    function registerParameter(
+        string memory parameterName,
+        uint256 initialValue,
+        uint256 minValue,
+        uint256 maxValue,
+        bool requiresTimelock
+    ) external onlyOwner {
+        require(!parameters[parameterName].isActive, "Parameter already exists");
+        require(bytes(parameterName).length > 0, "Invalid parameter name");
+        require(initialValue >= minValue && initialValue <= maxValue, "Invalid initial value");
+        
+        _registerParameter(parameterName, initialValue, minValue, maxValue, requiresTimelock);
+    }
+
+    /**
+     * @notice Imposta parameter timelock
+     * @param newTimelock Nuovo timelock
+     */
+    function setParameterTimelock(uint256 newTimelock) external onlyOwner {
+        require(newTimelock >= MIN_TIMELOCK, "Timelock below minimum");
+        require(newTimelock <= MAX_TIMELOCK, "Timelock exceeds maximum");
+        
+        parameterTimelock = newTimelock;
+    }
+
+    /**
+     * @notice Reset parametro al valore di default
+     * @param parameterName Nome parametro da resettare
+     */
+    function resetParameterToDefault(string memory parameterName) external onlyOwner {
+        require(parameters[parameterName].isActive, "Parameter does not exist");
+        
+        uint256 oldValue = parameters[parameterName].currentValue;
+        uint256 defaultValue = _getDefaultValue(parameterName);
+        
+        parameters[parameterName].currentValue = defaultValue;
+        
+        emit ParameterUpdated(
+            parameterName,
+            oldValue,
+            defaultValue,
+            block.timestamp,
+            msg.sender
+        );
+    }
+
+    /**
+     * @notice Ottiene valore di default per un parametro
+     */
+    function _getDefaultValue(string memory parameterName) internal pure returns (uint256) {
+        bytes32 paramHash = keccak256(bytes(parameterName));
+        
+        if (paramHash == keccak256(bytes("maxDeposit"))) return 100 ether;
+        if (paramHash == keccak256(bytes("maxWithdrawPerTx"))) return 50 ether;
+        if (paramHash == keccak256(bytes("minDeposit"))) return 0.000001 ether;
+        if (paramHash == keccak256(bytes("minWithdraw"))) return 0.000001 ether;
+        if (paramHash == keccak256(bytes("withdrawLimitPerHour"))) return 100 ether;
+        if (paramHash == keccak256(bytes("maxSlippage"))) return 200;
+        if (paramHash == keccak256(bytes("poolReserveRatio"))) return 0;
+        if (paramHash == keccak256(bytes("cacheDuration"))) return 5 minutes;
+        if (paramHash == keccak256(bytes("maxPriceAge"))) return 1 hours;
+        if (paramHash == keccak256(bytes("maxTokensPerOperation"))) return 10;
+        if (paramHash == keccak256(bytes("maxErrors"))) return 3;
+        
+        return 0;
+    }
+
+    // ==================== INTERFACE COMPLIANCE FUNCTIONS ====================
+
+    /**
+     * @notice Propone cambio parametro con timelock (usando struttura Parameter)
+     * @param key Chiave parametro
+     * @param value Nuovo valore (encoded come bytes)
+     * @param description Descrizione cambio
+     * @return proposalId ID della proposta
+     */
+    function proposeParameterChange(
+        string memory key,
+        bytes memory value,
+        string memory description
+    ) external override onlyOwner returns (uint256 proposalId) {
+        require(bytes(key).length > 0, "Invalid parameter key");
+        
+        // Decode uint256 from bytes
+        uint256 newValue = abi.decode(value, (uint256));
+        
+        // Store as parameter change proposal 
+        Parameter storage param = parameters[key];
+        param.proposedValue = newValue;
+        param.proposedAt = block.timestamp;
+        param.effectiveAt = block.timestamp + parameterTimelock;
+        
+        proposalId = uint256(keccak256(abi.encodePacked(key, block.timestamp)));
+        
+        emit ParameterProposed(proposalId, key, value, msg.sender, param.effectiveAt);
+        emit ParameterChangeProposed(key, param.currentValue, newValue, param.effectiveAt);
+    }
+
+    /**
+     * @notice Esegue cambio parametro dopo timelock
+     * @param proposalId ID proposta (usando key encoding)
+     */
+    function executeParameterChange(uint256 proposalId) external override {
+        // Find parameter by reconstructing from proposal ID
+        // In full implementation, would maintain proposal mapping
+        
+        // For now, iterate through all parameters to find executable ones
+        for (uint256 i = 0; i < parameterNames.length; i++) {
+            string memory key = parameterNames[i];
+            Parameter storage param = parameters[key];
+            
+            if (param.proposedAt > 0 && block.timestamp >= param.effectiveAt && !param.isActive) {
+                uint256 oldValue = param.currentValue;
+                param.currentValue = param.proposedValue;
+                param.isActive = true;
+                
+                // Reset proposal state
+                param.proposedValue = 0;
+                param.proposedAt = 0;
+                param.effectiveAt = 0;
+                
+                emit ParameterProposalExecuted(proposalId, key, msg.sender);
+                emit ParameterChanged(key, abi.encode(oldValue), abi.encode(param.currentValue), msg.sender, block.timestamp);
+                return;
+            }
+        }
+        
+        revert("No executable proposal found");
+    }
+
+    /**
+     * @notice Annulla proposta parametro
+     * @param proposalId ID proposta
+     */
+    function cancelParameterProposal(uint256 proposalId) external override onlyOwner {
+        // Similar logic to find and cancel proposal
+        for (uint256 i = 0; i < parameterNames.length; i++) {
+            string memory key = parameterNames[i];
+            Parameter storage param = parameters[key];
+            
+            if (param.proposedAt > 0) {
+                param.proposedValue = 0;
+                param.proposedAt = 0;
+                param.effectiveAt = 0;
+                
+                emit ParameterProposalCancelled(proposalId, key, msg.sender);
+                return;
+            }
+        }
+    }
+
+    /**
+     * @notice Ottiene valore parametro come bytes
+     * @param key Chiave parametro
+     * @return value Valore parametro encoded
+     */
+    function getParameter(string memory key) external view override returns (bytes memory value) {
+        uint256 paramValue = parameters[key].currentValue;
+        return abi.encode(paramValue);
+    }
+
+    /**
+     * @notice Imposta parametro direttamente (emergency override)
+     * @param key Chiave parametro
+     * @param value Valore parametro (bytes encoded)
+     * @param reason Motivo override
+     */
+    function setParameterEmergency(
+        string memory key,
+        bytes memory value,
+        string memory reason
+    ) external override onlyOwner {
+        uint256 newValue = abi.decode(value, (uint256));
+        uint256 oldValue = parameters[key].currentValue;
+        
+        parameters[key].currentValue = newValue;
+        
+        emit EmergencyParameterSet(key, value, reason, msg.sender);
+        emit ParameterEmergencyChanged(key, oldValue, newValue, msg.sender);
+    }
+
+    /**
+     * @notice Verifica se parametro esiste
+     * @param key Chiave parametro
+     * @return exists Se parametro esiste
+     */
+    function parameterExists(string memory key) external view override returns (bool exists) {
+        return parameters[key].isActive;
+    }
+
+    /**
+     * @notice Valida valore parametro
+     * @param key Chiave parametro
+     * @param value Valore da validare
+     * @return isValid Se valore valido
+     * @return errorMessage Messaggio errore
+     */
+    function validateParameterValue(
+        string memory key,
+        bytes memory value
+    ) external view override returns (bool isValid, string memory errorMessage) {
+        if (!parameters[key].isActive) {
+            return (false, "Parameter does not exist");
+        }
+        
+        uint256 newValue = abi.decode(value, (uint256));
+        Parameter storage param = parameters[key];
+        
+        if (newValue < param.minValue) {
+            return (false, "Value below minimum");
+        }
+        
+        if (newValue > param.maxValue) {
+            return (false, "Value above maximum");
+        }
+        
+        return (true, "");
+    }
+
+    /**
+     * @notice Registra nuovo parametro nel sistema
+     * @param key Chiave parametro
+     * @param defaultValue Valore default (bytes)
+     * @param description Descrizione parametro
+     */
+    function registerParameter(
+        string memory key,
+        bytes memory defaultValue,
+        string memory description
+    ) external override onlyOwner {
+        require(!parameters[key].isActive, "Parameter already exists");
+        
+        uint256 value = abi.decode(defaultValue, (uint256));
+        parameters[key].isActive = true;
+        parameterNames.push(key);
+        
+        parameters[key] = Parameter({
+            currentValue: value,
+            proposedValue: 0,
+            proposedAt: 0,
+            effectiveAt: 0,
+            minValue: 0,
+            maxValue: type(uint256).max,
+            requiresTimelock: true,
+            isActive: true
+        });
+        
+        emit ParameterRegistered(key, defaultValue, description);
+    }
+
+    /**
+     * @notice Lista parametri registrati
+     * @return keys Array chiavi parametri
+     */
+    function getRegisteredParameters() external view override returns (string[] memory keys) {
+        return parameterNames;
+    }
+
+    /**
+     * @notice Rimuove parametro dal registro
+     * @param key Chiave parametro
+     */
+    function unregisterParameter(string memory key) external override onlyOwner {
+        require(parameters[key].isActive, "Parameter does not exist");
+        
+        parameters[key].isActive = false;
+        delete parameters[key];
+        
+        // Remove from array (expensive operation)
+        for (uint256 i = 0; i < parameterNames.length; i++) {
+            if (keccak256(bytes(parameterNames[i])) == keccak256(bytes(key))) {
+                parameterNames[i] = parameterNames[parameterNames.length - 1];
+                parameterNames.pop();
+                break;
+            }
+        }
+        
+        emit ParameterUnregistered(key);
+    }
+
+    /**
+     * @notice Ottiene timelock corrente
+     * @return timelock Timelock in secondi
+     */
+    function getParameterTimelock() external view override returns (uint256 timelock) {
+        return parameterTimelock;
+    }
+
+    /**
+     * @notice Ottiene proposta per ID (placeholder implementation)
+     */
+    function getProposal(uint256 proposalId) external view override returns (Parameter memory proposal) {
+        // In full implementation would maintain proposal storage
+        // Return empty proposal for now
+        return proposal;
+    }
+
+    /**
+     * @notice Lista proposte attive
+     * @return proposals Array proposte attive
+     */
+    function getActiveProposals() external view override returns (Parameter[] memory proposals) {
+        uint256 activeCount = 0;
+        
+        // Count active proposals
+        for (uint256 i = 0; i < parameterNames.length; i++) {
+            if (parameters[parameterNames[i]].proposedAt > 0) {
+                activeCount++;
+            }
+        }
+        
+        proposals = new Parameter[](activeCount);
+        uint256 index = 0;
+        
+        // Fill active proposals
+        for (uint256 i = 0; i < parameterNames.length; i++) {
+            Parameter storage param = parameters[parameterNames[i]];
+            if (param.proposedAt > 0) {
+                proposals[index] = param;
+                index++;
+            }
+        }
+    }
+
+    /**
+     * @notice Lista proposte eseguibili
+     * @return proposals Array proposte pronte
+     */
+    function getExecutableProposals() external view override returns (Parameter[] memory proposals) {
+        uint256 executableCount = 0;
+        
+        // Count executable proposals
+        for (uint256 i = 0; i < parameterNames.length; i++) {
+            Parameter storage param = parameters[parameterNames[i]];
+            if (param.proposedAt > 0 && block.timestamp >= param.effectiveAt) {
+                executableCount++;
+            }
+        }
+        
+        proposals = new Parameter[](executableCount);
+        uint256 index = 0;
+        
+        // Fill executable proposals
+        for (uint256 i = 0; i < parameterNames.length; i++) {
+            Parameter storage param = parameters[parameterNames[i]];
+            if (param.proposedAt > 0 && block.timestamp >= param.effectiveAt) {
+                proposals[index] = param;
+                index++;
+            }
+        }
+    }
+
+    /**
+     * @notice Storico modifiche parametro
+     * @param key Chiave parametro
+     * @return history Array modifiche
+     */
+    function getParameterHistory(string memory key) external view override returns (ParameterHistory[] memory history) {
+        return parameterHistory[key];
+    }
+
+    /**
+     * @notice Ultima modifica parametro
+     * @param key Chiave parametro
+     * @return lastChange Ultima modifica
+     */
+    function getLastParameterChange(string memory key) external view override returns (ParameterHistory memory lastChange) {
+        ParameterHistory[] storage history = parameterHistory[key];
+        if (history.length > 0) {
+            return history[history.length - 1];
+        }
+        // Return empty struct if no history
+    }
+
+    // Typed parameter access functions
+    function getUintParameter(string memory key) external view override returns (uint256 value) {
+        return parameters[key].currentValue;
+    }
+
+    function getBoolParameter(string memory key) external view override returns (bool value) {
+        return parameters[key].currentValue != 0;
+    }
+
+    function getAddressParameter(string memory key) external view override returns (address value) {
+        return address(uint160(parameters[key].currentValue));
+    }
+
+    function getStringParameter(string memory key) external view override returns (string memory value) {
+        // For strings, would need different storage mechanism
+        // Return empty string for now
+        return "";
+    }
+
+    /**
+     * @notice Propone multiple modifiche parametri
+     * @param keys Array chiavi
+     * @param values Array valori
+     * @param description Descrizione batch
+     * @return proposalIds Array ID proposte
+     */
+    function proposeBatchParameterChanges(
+        string[] memory keys,
+        bytes[] memory values,
+        string memory description
+    ) external override onlyOwner returns (uint256[] memory proposalIds) {
+        require(keys.length == values.length, "Arrays length mismatch");
+        
+        proposalIds = new uint256[](keys.length);
+        
+        for (uint256 i = 0; i < keys.length; i++) {
+            proposalIds[i] = this.proposeParameterChange(keys[i], values[i], description);
+        }
+        
+        emit BatchParametersProposed(proposalIds, keys, description);
+    }
+
+    /**
+     * @notice Esegue multiple proposte
+     * @param proposalIds Array ID proposte
+     */
+    function executeBatchProposals(uint256[] memory proposalIds) external override {
+        for (uint256 i = 0; i < proposalIds.length; i++) {
+            this.executeParameterChange(proposalIds[i]);
+        }
+        
+        emit BatchParametersExecuted(proposalIds, msg.sender);
+    }
 }
