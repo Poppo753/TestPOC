@@ -450,10 +450,18 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
 
     /**
      * @notice Controlla se un withdraw è permesso dai limiti
+     * @dev Implementa accumulo reale degli ultimi 24h invece di semplice validazione (Issue #2 FIX)
      * @param user Indirizzo utente
-     * @param amount Quantità da prelevare
+     * @param amount Quantità da prelevare (in ETH wei)
      * @return canWithdraw Se può prelevare
      * @return reason Motivo se non può
+     * 
+     * @custom:logic-flow
+     * 1. CHECK MIN/MAX per transazione
+     * 2. Calcola current hour = block.timestamp / 3600
+     * 3. Accumula hourly usage (current hour only)
+     * 4. Loop ultimi 24 ore per daily usage
+     * 5. Valida: hourly + amount <= hourlyLimit && daily + amount <= dailyLimit
      */
     function checkWithdrawLimits(address user, uint256 amount) public view returns (bool canWithdraw, string memory reason) {
         // CHECK MIN/MAX PER TRANSAZIONE
@@ -464,19 +472,34 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
             return (false, "Exceeds maximum withdraw per transaction");
         }
         
-        // CHECK HOURLY LIMIT - gestito da ProxyGeneral rate limiting system
-        // La verifica dettagliata avviene in ProxyGeneral.trackOperation()
+        IProxyGeneral proxy = IProxyGeneral(IBeacon(beacon).getImplementation("ProxyGeneral"));
         
-        // Verifica basilare contro limiti impostati
-        if (amount > withdrawLimits.hourlyLimit) {
-            return (false, "Amount exceeds hourly withdraw limit");
+        // Calculate current hour
+        uint256 currentHour = block.timestamp / 1 hours;
+        
+        // 1. CHECK HOURLY LIMIT (current hour only)
+        uint256 currentHourlyUsed = proxy.getHourlyWithdrawn(user, currentHour);
+        
+        if (currentHourlyUsed + amount > withdrawLimits.hourlyLimit) {
+            return (false, "Hourly withdraw limit exceeded");
         }
         
-        // CHECK DAILY LIMIT
-        if (amount > withdrawLimits.dailyLimit) {
-            return (false, "Amount exceeds daily withdraw limit");
+        // 2. CHECK DAILY LIMIT (last 24 hours)
+        uint256 totalDailyUsed = 0;
+        
+        // Loop through last 24 hours
+        for (uint256 i = 0; i < 24; i++) {
+            uint256 hour = currentHour - i;
+            uint256 hourlyAmount = proxy.getHourlyWithdrawn(user, hour);
+            totalDailyUsed += hourlyAmount;
+            
+            // Early exit optimization: if already over limit, no need to continue
+            if (totalDailyUsed + amount > withdrawLimits.dailyLimit) {
+                return (false, "Daily withdraw limit exceeded");
+            }
         }
         
+        // All checks passed
         return (true, "");
     }
 
@@ -488,21 +511,62 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
     // Rate limit tracking gestito da ProxyGeneral - funzioni interne rimosse
 
     /**
-     * @notice Ottiene limite orario rimanente (stub - gestito da ProxyGeneral)
+     * @notice Ottiene limite orario rimanente (Issue #3 FIX)
+     * @dev Calcola usage reale dell'ora corrente
      * @param user Indirizzo utente
-     * @return remaining Limite orario massimo
+     * @return remaining Importo rimanente prelevabile nell'ora corrente (in wei)
+     * 
+     * @custom:implementation
+     * - Legge hourlyWithdrawn per current hour da ProxyGeneral
+     * - Calcola: hourlyLimit - currentHourUsage
+     * - Ritorna 0 se limite già superato
      */
     function getRemainingHourlyLimit(address user) external view returns (uint256 remaining) {
-        return withdrawLimits.hourlyLimit;
+        IProxyGeneral proxy = IProxyGeneral(IBeacon(beacon).getImplementation("ProxyGeneral"));
+        
+        // Get current hour usage
+        uint256 currentHour = block.timestamp / 1 hours;
+        uint256 currentHourUsed = proxy.getHourlyWithdrawn(user, currentHour);
+        
+        // Calculate remaining
+        if (currentHourUsed >= withdrawLimits.hourlyLimit) {
+            return 0;
+        }
+        
+        return withdrawLimits.hourlyLimit - currentHourUsed;
     }
 
     /**
-     * @notice Ottiene limite giornaliero rimanente (stub - gestito da ProxyGeneral)
+     * @notice Ottiene limite giornaliero rimanente (Issue #3 FIX)
+     * @dev Accumula usage degli ultimi 24h
      * @param user Indirizzo utente  
-     * @return remaining Limite giornaliero massimo
+     * @return remaining Importo rimanente prelevabile nelle prossime 24h (in wei)
+     * 
+     * @custom:implementation
+     * - Loop ultimi 24 ore
+     * - Accumula totalDailyUsed da ProxyGeneral.getHourlyWithdrawn()
+     * - Calcola: dailyLimit - totalDailyUsed
+     * - Ritorna 0 se limite già superato
      */
     function getRemainingDailyLimit(address user) external view returns (uint256 remaining) {
-        return withdrawLimits.dailyLimit;
+        IProxyGeneral proxy = IProxyGeneral(IBeacon(beacon).getImplementation("ProxyGeneral"));
+        
+        // Calculate current hour
+        uint256 currentHour = block.timestamp / 1 hours;
+        
+        // Accumulate last 24 hours usage
+        uint256 totalDailyUsed = 0;
+        for (uint256 i = 0; i < 24; i++) {
+            uint256 hour = currentHour - i;
+            totalDailyUsed += proxy.getHourlyWithdrawn(user, hour);
+        }
+        
+        // Calculate remaining
+        if (totalDailyUsed >= withdrawLimits.dailyLimit) {
+            return 0;
+        }
+        
+        return withdrawLimits.dailyLimit - totalDailyUsed;
     }
 
     // ==================== EMERGENCY FUNCTIONS ====================
@@ -656,8 +720,8 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
         address wethAddress = IBeacon(beacon).getImplementation("WETH");
         wethBalance = IERC20(wethAddress).balanceOf(address(proxy));
         
-        // Get token count (this is an approximation, actual implementation would need tracking)
-        tokensCount = 10; // Placeholder - should be implemented properly
+        // Get token count from TokenManager (Issue #7 FIX)
+        tokensCount = tokenManager.getActiveTokens().length;
     }
 
     /**
@@ -735,6 +799,11 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
         currentHourlyUsage = hourlyLimit > remainingHourly ? hourlyLimit - remainingHourly : 0;
         currentDailyUsage = dailyLimit > remainingDaily ? dailyLimit - remainingDaily : 0;
     }
+
+    // ==================== WITHDRAW LIMIT FUNCTIONS (Issue #2-3 FIX) ====================
+    // Funzioni già implementate sopra: checkWithdrawLimits(), getRemainingHourlyLimit(), getRemainingDailyLimit()
+
+    // ==================== FALLBACK ====================
 
     /**
      * @notice Blocca chiamate a funzioni inesistenti

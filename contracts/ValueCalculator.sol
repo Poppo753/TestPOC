@@ -329,18 +329,122 @@ contract ValueCalculator is Ownable {
     // ==================== UTILITY FUNCTIONS ====================
 
     /**
-     * @notice Seleziona token per swap basato su percentuale più bassa
-     * @param targetValue Valore target da ottenere dallo swap
-     * @return tokenCode Codice del token selezionato, amount Quantità da swappare
+     * @notice Seleziona token per swap basato su percentuale più bassa nel pool
+     * @dev Strategia: seleziona il token con la percentuale più bassa per preservare diversificazione
+     * @param targetValue Valore target da ottenere dallo swap (in wei ETH)
+     * @return tokenCode Codice del token selezionato per lo swap
+     * @return amount Quantità del token da swappare (con 10% buffer incluso)
+     * 
+     * @custom:logic-flow
+     * 1. Ottiene tutti i token attivi dal TokenManager
+     * 2. Per ogni token calcola: balance, value, price, percentage
+     * 3. Ordina per percentuale crescente (lowest first)
+     * 4. Seleziona token con percentuale più bassa che ha balance sufficiente
+     * 5. Calcola amount necessario: (targetValue * 1.1) / tokenPrice + buffer
+     * 6. Valida che amount <= tokenBalance disponibile
+     * 
+     * @custom:edge-cases
+     * - No active tokens → revert "No swappable tokens"
+     * - All tokens have zero balance → revert "Insufficient liquidity"
+     * - targetValue > any single token value → try next token in list
+     * - Price staleness → handled by TokenManager validation
      */
     function selectTokenForSwap(uint256 targetValue) external view returns (string memory tokenCode, uint256 amount) {
-        // GET CURRENT POOL STATE - Use internal call since we need PoolValueInfo struct
-        // Note: This requires getTotalPoolValue to be made view-compatible or use getTotalPoolValueView differently
-        uint256 totalValue = this.getTotalPoolValueView();
+        require(targetValue > 0, "Target value must be positive");
         
-        // For now, return empty values - this function needs proper implementation
-        // based on actual pool state tracking
-        return ("", 0);
+        // GET INTERFACES
+        ITokenManagerForModules tokenManager = ITokenManagerForModules(IBeacon(beacon).getImplementation("TokenManager"));
+        address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
+        
+        // GET ACTIVE TOKENS
+        string[] memory activeTokens = tokenManager.getActiveTokens();
+        require(activeTokens.length > 0, "No swappable tokens");
+        
+        // GET TOTAL POOL VALUE FOR PERCENTAGE CALCULATION
+        uint256 totalPoolValue = this.getTotalPoolValueView();
+        require(totalPoolValue > 0, "Pool has no value");
+        
+        // BUILD TOKEN INFO ARRAY
+        TokenValueInfo[] memory tokenInfos = new TokenValueInfo[](activeTokens.length);
+        uint256 validTokenCount = 0;
+        
+        for (uint256 i = 0; i < activeTokens.length; i++) {
+            string memory currentToken = activeTokens[i];
+            
+            // Skip WETH (we're swapping TO WETH, not FROM it)
+            if (keccak256(bytes(currentToken)) == keccak256(bytes("WETH"))) {
+                continue;
+            }
+            
+            // GET TOKEN DATA
+            address tokenAddress = tokenManager.getTokenAddress(currentToken);
+            uint256 tokenBalance = IERC20(tokenAddress).balanceOf(proxyGeneral);
+            
+            // Skip tokens with zero balance
+            if (tokenBalance == 0) {
+                continue;
+            }
+            
+            // GET PRICE
+            (uint256 price, , bool isStale) = tokenManager.getTokenPrice(currentToken);
+            if (isStale || price == 0) {
+                continue; // Skip tokens with stale/invalid prices
+            }
+            
+            // CALCULATE VALUE
+            ITokenManagerForModules.TokenInfo memory tokenInfo = tokenManager.getTokenInfo(currentToken);
+            uint256 tokenValue = (tokenBalance * price) / (10 ** tokenInfo.priceFeedDecimals);
+            
+            // CALCULATE PERCENTAGE (basis points: 10000 = 100%)
+            uint256 percentage = (tokenValue * 10000) / totalPoolValue;
+            
+            // STORE TOKEN INFO
+            tokenInfos[validTokenCount] = TokenValueInfo({
+                tokenCode: currentToken,
+                value: tokenValue,
+                balance: tokenBalance,
+                pricePerToken: price,
+                percentage: percentage
+            });
+            validTokenCount++;
+        }
+        
+        require(validTokenCount > 0, "Insufficient liquidity");
+        
+        // SORT BY PERCENTAGE (ASCENDING - lowest first)
+        // Simple bubble sort - OK for small arrays (typically < 10 tokens)
+        for (uint256 i = 0; i < validTokenCount - 1; i++) {
+            for (uint256 j = 0; j < validTokenCount - i - 1; j++) {
+                if (tokenInfos[j].percentage > tokenInfos[j + 1].percentage) {
+                    // Swap
+                    TokenValueInfo memory temp = tokenInfos[j];
+                    tokenInfos[j] = tokenInfos[j + 1];
+                    tokenInfos[j + 1] = temp;
+                }
+            }
+        }
+        
+        // SELECT TOKEN WITH LOWEST PERCENTAGE THAT HAS SUFFICIENT VALUE
+        for (uint256 i = 0; i < validTokenCount; i++) {
+            TokenValueInfo memory candidateToken = tokenInfos[i];
+            
+            // CALCULATE REQUIRED AMOUNT WITH 10% BUFFER
+            // Formula: amount = (targetValue * 1.1 * 10^priceFeedDecimals) / price
+            uint256 targetWithBuffer = (targetValue * 110) / 100; // +10% buffer
+            
+            ITokenManagerForModules.TokenInfo memory tokenInfo = tokenManager.getTokenInfo(candidateToken.tokenCode);
+            uint256 requiredAmount = (targetWithBuffer * (10 ** tokenInfo.priceFeedDecimals)) / candidateToken.pricePerToken;
+            
+            // CHECK IF TOKEN HAS SUFFICIENT BALANCE
+            if (requiredAmount <= candidateToken.balance) {
+                return (candidateToken.tokenCode, requiredAmount);
+            }
+            
+            // If insufficient, try next token (higher percentage but might have more balance)
+        }
+        
+        // NO TOKEN HAS SUFFICIENT BALANCE
+        revert("Insufficient liquidity for target value");
     }
 
     /**

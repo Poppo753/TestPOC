@@ -635,31 +635,115 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Stima gas per uno swap (placeholder implementation)
+     * @notice Stima gas necessario per uno swap (Issue #8 FIX)
+     * @dev Combina stima fissa con query al router per maggiore accuratezza
      * @param tokenCodeIn Token input
      * @param tokenCodeOut Token output  
      * @param amountIn Quantità input
      * @return gasEstimate Stima gas
+     * 
+     * @custom:implementation
+     * - Base gas: 150k (swap base)
+     * - WETH swaps: più economici (-50k)
+     * - Token-to-token: più costosi (+50k)
+     * - Router query: se disponibile, aggiunge validazione
+     * - Fallback: se router non disponibile, usa stime fisse
      */
     function estimateSwapGas(
         string memory tokenCodeIn,
         string memory tokenCodeOut,
         uint256 amountIn
     ) external view returns (uint256 gasEstimate) {
-        // Simple estimation - in production this would call the router
         if (amountIn == 0) return 0;
         
-        // Base gas + variable based on token types
-        uint256 baseGas = 150000; // Base swap cost
+        // Base gas cost for swap operation
+        uint256 baseGas = 150000;
         
-        // WETH swaps are cheaper
-        if (keccak256(bytes(tokenCodeIn)) == keccak256(bytes("WETH")) ||
-            keccak256(bytes(tokenCodeOut)) == keccak256(bytes("WETH"))) {
-            return baseGas;
+        // WETH swaps are cheaper (no need for token-to-token routing)
+        bool isWethSwap = keccak256(bytes(tokenCodeIn)) == keccak256(bytes("WETH")) ||
+                          keccak256(bytes(tokenCodeOut)) == keccak256(bytes("WETH"));
+        
+        if (isWethSwap) {
+            baseGas = 100000; // WETH swaps more efficient
+        } else {
+            // Token-to-token swaps cost more (may need intermediate WETH hop)
+            baseGas = 200000;
         }
         
-        // Token-to-token swaps cost more
-        return baseGas + 50000;
+        // If router is available, try to get more accurate estimate
+        if (simpleSwapRouter != address(0)) {
+            try this._tryGetRouterEstimate(tokenCodeIn, tokenCodeOut, amountIn) returns (uint256 routerGas) {
+                // Router provided estimate - use it with safety margin
+                return routerGas + 50000; // Add 50k safety buffer
+            } catch {
+                // Router query failed - fall back to base estimate
+                return baseGas;
+            }
+        }
+        
+        // No router available - return base estimate
+        return baseGas;
+    }
+    
+    /**
+     * @notice Helper per query router (internal per try/catch)
+     * @dev Chiamata esterna per permettere try/catch
+     */
+    function _tryGetRouterEstimate(
+        string memory tokenCodeIn,
+        string memory tokenCodeOut,
+        uint256 amountIn
+    ) external view returns (uint256 estimatedGas) {
+        require(msg.sender == address(this), "Internal only");
+        
+        // Get token addresses from TokenManager
+        ITokenManagerForModules tokenManager = ITokenManagerForModules(
+            IBeacon(beacon).getImplementation("TokenManager")
+        );
+        
+        ITokenManagerForModules.TokenInfo memory tokenInInfo = tokenManager.getTokenInfo(tokenCodeIn);
+        ITokenManagerForModules.TokenInfo memory tokenOutInfo = tokenManager.getTokenInfo(tokenCodeOut);
+        
+        address tokenInAddress = tokenInInfo.tokenAddress;
+        address tokenOutAddress = tokenOutInfo.tokenAddress;
+        
+        // Query router for expected output (this validates route exists)
+        ISimpleSwap router = ISimpleSwap(simpleSwapRouter);
+        uint256 expectedOutput = router.getExpectedOutput(tokenInAddress, tokenOutAddress, amountIn);
+        
+        // If we got output, estimate gas based on complexity
+        if (expectedOutput > 0) {
+            // Base swap gas
+            uint256 gas = 150000;
+            
+            // Add for token approvals (if needed)
+            gas += 50000;
+            
+            // Add for potential multi-hop routes
+            if (!_isDirectPair(tokenInAddress, tokenOutAddress)) {
+                gas += 100000; // Multi-hop adds significant gas
+            }
+            
+            return gas;
+        }
+        
+        revert("No route available");
+    }
+    
+    /**
+     * @notice Verifica se due token hanno pair diretta
+     * @dev Semplificato: assume WETH sempre ha pair diretta
+     */
+    function _isDirectPair(address tokenA, address tokenB) internal view returns (bool) {
+        address wethAddress = IBeacon(beacon).getImplementation("WETH");
+        
+        // If either token is WETH, assume direct pair
+        if (tokenA == wethAddress || tokenB == wethAddress) {
+            return true;
+        }
+        
+        // For other tokens, assume indirect (conservative estimate)
+        return false;
     }
 
     /**

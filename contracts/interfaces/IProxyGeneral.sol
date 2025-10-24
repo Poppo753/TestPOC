@@ -179,6 +179,14 @@ interface IProxyGeneral {
     // ==================== RATE LIMITING ====================
     
     /**
+     * @notice Ottiene l'importo prelevato in una specifica ora per un utente
+     * @param user Indirizzo dell'utente
+     * @param hour Timestamp dell'ora (in ore dal epoch)
+     * @return amount Importo prelevato in quella ora
+     */
+    function getHourlyWithdrawn(address user, uint256 hour) external view returns (uint256 amount);
+    
+    /**
      * @notice Traccia operazione per rate limiting
      * @param user Utente
      * @param operationType Tipo operazione ("withdraw", "deposit", etc.)

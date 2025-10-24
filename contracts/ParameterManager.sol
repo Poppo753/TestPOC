@@ -30,6 +30,14 @@ contract ParameterManager is IParameterManager, Ownable {
     uint256 public parameterTimelock;
     uint256 public constant MIN_TIMELOCK = 1 hours;
     uint256 public constant MAX_TIMELOCK = 7 days;
+    
+    // ==================== STORAGE ENHANCEMENT (Issue #9) ====================
+    
+    /// @notice Proposal storage by ID for getProposal(uint256) lookup
+    mapping(uint256 => IParameterManager.Parameter) private proposalById;
+    
+    /// @notice Counter for proposal IDs
+    uint256 private nextProposalId = 1; // Start from 1 (0 = no proposal)
 
     // ==================== EVENTS (ENHANCED) ====================
 
@@ -204,6 +212,10 @@ contract ParameterManager is IParameterManager, Ownable {
             param.proposedValue = newValue;
             param.proposedAt = block.timestamp;
             param.effectiveAt = block.timestamp + parameterTimelock;
+            
+            // Store proposal by ID for getProposal(uint256) lookup (Issue #9 FIX)
+            uint256 proposalId = nextProposalId++;
+            proposalById[proposalId] = param;
             
             emit ParameterChangeProposed(parameterName, param.currentValue, newValue, param.effectiveAt);
         } else {
@@ -728,12 +740,18 @@ contract ParameterManager is IParameterManager, Ownable {
     }
 
     /**
-     * @notice Ottiene proposta per ID (placeholder implementation)
+     * @notice Ottiene proposta per ID (Issue #9 FIX)
+     * @param proposalId ID della proposta
+     * @return proposal Struct Parameter con dati proposta
+     * 
+     * @custom:implementation
+     * - Lookup diretto da proposalById mapping
+     * - Ritorna proposta vuota se ID non esiste
+     * - Usato per query alternative rispetto a getActiveProposals()
      */
     function getProposal(uint256 proposalId) external view override returns (Parameter memory proposal) {
-        // In full implementation would maintain proposal storage
-        // Return empty proposal for now
-        return proposal;
+        // Return proposal from storage (empty if not exists)
+        return proposalById[proposalId];
     }
 
     /**

@@ -1,8 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { Contract, Signer } from "ethers";
-import { time } from "@nomicfoundation/hardhat-network-helpers";
-import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import "@nomicfoundation/hardhat-chai-matchers";
 
 /**

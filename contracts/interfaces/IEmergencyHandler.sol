@@ -25,13 +25,19 @@ interface IEmergencyHandler {
         uint256 cooldownUntil;
     }
     
+    struct TokenBalance {
+        string tokenCode;
+        address tokenAddress;
+        uint256 balance;
+    }
+    
     struct AssetSnapshot {
+        uint256 snapshotId;
         uint256 timestamp;
         uint256 totalValue;
         uint256 wethBalance;
-        string[] tokenCodes;
-        uint256[] tokenBalances;
-        uint256[] tokenValues;
+        TokenBalance[] tokenBalances;
+        address capturedBy;
     }
 
     // ==================== EMERGENCY MANAGEMENT ====================

@@ -31,6 +31,8 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
     /// @notice Emergency contacts system
     address[] public emergencyContacts;
     mapping(address => bool) public isEmergencyContact;
+    mapping(address => uint256) public contactAddedAt; // Sprint 3.3: Track addition timestamp
+    mapping(address => string) public contactRole; // Sprint 3.3: Store contact role
     
     /// @notice Timelock mechanism
     uint256 public unpauseTimelock;
@@ -43,6 +45,11 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
     /// @notice Emergency cooldown system
     uint256 public constant EMERGENCY_COOLDOWN = 1 days;
     uint256 public lastEmergencyTimestamp;
+    
+    /// @notice Snapshot storage system (Sprint 3.2)
+    mapping(uint256 => IEmergencyHandler.AssetSnapshot) private snapshots;
+    uint256 private snapshotCount;
+    uint256[] private snapshotIds; // For getAllSnapshots() iteration
     
     // ==================== STRUCTS ====================
     
@@ -121,6 +128,11 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
         address indexed tokenAddress,
         uint256 amount,
         address indexed recipient
+    );
+    
+    event UnpauseTimelockUpdated(
+        uint256 oldTimelock,
+        uint256 newTimelock
     );
 
     // ==================== CONSTRUCTOR ====================
@@ -283,12 +295,10 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
         // GET CONTRACT REFERENCES
         address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
         address tokenManager = IBeacon(beacon).getImplementation("TokenManager");
-        address valueCalculator = IBeacon(beacon).getImplementation("ValueCalculator");
         address wethAddress = IBeacon(beacon).getImplementation("WETH");
         
         IProxyGeneral proxy = IProxyGeneral(proxyGeneral);
         ITokenManagerForModules tokens = ITokenManagerForModules(tokenManager);
-        IValueCalculatorForModules calculator = IValueCalculatorForModules(valueCalculator);
         
         // GET CURRENT POOL VALUE
         uint256 totalValueBefore = _getCurrentTotalValue();
@@ -417,8 +427,8 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
             address tokenAddress = tokens.getTokenAddress(activeTokens[i]);
             uint256 balance = IERC20(tokenAddress).balanceOf(proxyGeneral);
             
-            // Approximation: assume 1:1 with ETH for simplicity
-            // In production, would use actual price feeds
+            // Note: Simplified value calculation for emergency report
+            // For precise values, use ValueCalculator.getTotalPoolValueView()
             totalTokensValue += balance;
         }
         
@@ -526,6 +536,7 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
 
     /**
      * @notice Aggiunge emergency contact
+     * @dev Stores contact with timestamp and role (Sprint 3.3)
      * @param contact Indirizzo contact da aggiungere
      * @param role Ruolo del contact
      */
@@ -533,15 +544,19 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
         require(contact != address(0), "Invalid contact address");
         require(!isEmergencyContact[contact], "Contact already added");
         require(emergencyContacts.length < 10, "Too many emergency contacts"); // Limit to 10
+        require(bytes(role).length > 0, "Role cannot be empty");
         
         emergencyContacts.push(contact);
         isEmergencyContact[contact] = true;
+        contactAddedAt[contact] = block.timestamp; // Sprint 3.3: Store actual timestamp
+        contactRole[contact] = role; // Sprint 3.3: Store role
         
         emit EmergencyContactAdded(contact);
     }
 
     /**
      * @notice Rimuove emergency contact
+     * @dev Cleans up all contact data including timestamp and role (Sprint 3.3)
      * @param contact Indirizzo contact da rimuovere
      */
     function removeEmergencyContact(address contact) external onlyOwner {
@@ -557,6 +572,10 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
                 break;
             }
         }
+        
+        // Sprint 3.3: Clean up timestamp and role
+        delete contactAddedAt[contact];
+        delete contactRole[contact];
         
         emit EmergencyContactRemoved(contact);
     }
@@ -576,6 +595,22 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
      */
     function getEmergencyContactsCount() external view returns (uint256 count) {
         return emergencyContacts.length;
+    }
+    
+    /**
+     * @notice Ottiene dettagli di un emergency contact (Sprint 3.3)
+     * @param contact Indirizzo contact
+     * @return role Ruolo del contact
+     * @return addedAt Timestamp aggiunta
+     * @return isActive Se attualmente attivo
+     */
+    function getContactInfo(address contact) external view returns (
+        string memory role,
+        uint256 addedAt,
+        bool isActive
+    ) {
+        require(isEmergencyContact[contact], "Not an emergency contact");
+        return (contactRole[contact], contactAddedAt[contact], true);
     }
 
     // ==================== INTERNAL HELPER FUNCTIONS ====================
@@ -632,7 +667,7 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
         uint256 oldTimelock = unpauseTimelock;
         unpauseTimelock = newTimelock;
         
-        // Could add event here: emit UnpauseTimelockUpdated(oldTimelock, newTimelock);
+        emit UnpauseTimelockUpdated(oldTimelock, newTimelock);
     }
 
     /**
@@ -676,17 +711,19 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
 
     /**
      * @notice Lista tutti i contatti emergenza
-     * @return contacts Array contatti con metadati
+     * @dev Returns real timestamps and roles stored during addition (Sprint 3.3)
+     * @return contacts Array contatti con metadati completi
      */
     function getEmergencyContacts() external view override returns (EmergencyContact[] memory contacts) {
         contacts = new EmergencyContact[](emergencyContacts.length);
         
         for (uint256 i = 0; i < emergencyContacts.length; i++) {
+            address contactAddr = emergencyContacts[i];
             contacts[i] = EmergencyContact({
-                contactAddress: emergencyContacts[i],
-                role: "Emergency Contact",
+                contactAddress: contactAddr,
+                role: contactRole[contactAddr], // Sprint 3.3: Real role from storage
                 isActive: true,
-                addedAt: block.timestamp // Placeholder - should track actual addition time
+                addedAt: contactAddedAt[contactAddr] // Sprint 3.3: Real timestamp from storage
             });
         }
     }
@@ -755,38 +792,110 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
 
     /**
      * @notice Crea snapshot asset correnti
-     * @return snapshotId ID dello snapshot
+     * @dev Stores complete snapshot of system state for audit/recovery
+     * @return snapshotId ID dello snapshot creato
      */
     function createAssetSnapshot() external override returns (uint256 snapshotId) {
-        // Simple implementation - in production would store snapshots
-        snapshotId = block.timestamp;
+        // INCREMENT SNAPSHOT COUNTER
+        snapshotCount++;
+        snapshotId = snapshotCount;
+        
+        // GET CONTRACT REFERENCES
+        address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
+        address tokenManager = IBeacon(beacon).getImplementation("TokenManager");
+        address wethAddress = IBeacon(beacon).getImplementation("WETH");
+        
+        ITokenManagerForModules tokens = ITokenManagerForModules(tokenManager);
+        
+        // GET ACTIVE TOKENS
+        string[] memory activeTokens = tokens.getActiveTokens();
+        
+        // BUILD TOKEN BALANCES ARRAY
+        IEmergencyHandler.TokenBalance[] memory tokenBalances = new IEmergencyHandler.TokenBalance[](activeTokens.length + 1);
+        
+        // SNAPSHOT ALL ERC20 TOKENS
+        for (uint256 i = 0; i < activeTokens.length; i++) {
+            string memory tokenCode = activeTokens[i];
+            address tokenAddress = tokens.getTokenAddress(tokenCode);
+            uint256 balance = IERC20(tokenAddress).balanceOf(proxyGeneral);
+            
+            tokenBalances[i] = IEmergencyHandler.TokenBalance({
+                tokenCode: tokenCode,
+                tokenAddress: tokenAddress,
+                balance: balance
+            });
+        }
+        
+        // SNAPSHOT WETH
+        uint256 wethBalance = IERC20(wethAddress).balanceOf(proxyGeneral);
+        tokenBalances[activeTokens.length] = IEmergencyHandler.TokenBalance({
+            tokenCode: "WETH",
+            tokenAddress: wethAddress,
+            balance: wethBalance
+        });
+        
+        // CREATE SNAPSHOT STRUCT
+        IEmergencyHandler.AssetSnapshot memory snapshot = IEmergencyHandler.AssetSnapshot({
+            snapshotId: snapshotId,
+            timestamp: block.timestamp,
+            totalValue: _getTotalPoolValue(),
+            wethBalance: wethBalance,
+            tokenBalances: tokenBalances,
+            capturedBy: msg.sender
+        });
+        
+        // STORE SNAPSHOT
+        snapshots[snapshotId] = snapshot;
+        snapshotIds.push(snapshotId);
         
         emit AssetSnapshotCreated({
             snapshotId: snapshotId,
-            totalValue: _getTotalPoolValue(),
+            totalValue: snapshot.totalValue,
             timestamp: block.timestamp
         });
+        
+        return snapshotId;
     }
 
     /**
-     * @notice Ottiene snapshot per ID (placeholder implementation)
-     * @param snapshotId ID snapshot
-     * @return snapshot Dati snapshot
+     * @notice Ottiene snapshot per ID
+     * @dev Retrieves stored snapshot from mapping
+     * @param snapshotId ID snapshot da recuperare
+     * @return snapshot Dati completi snapshot
      */
     function getAssetSnapshot(uint256 snapshotId) external view override returns (AssetSnapshot memory snapshot) {
-        // Placeholder - in production would retrieve stored snapshot
-        snapshot.timestamp = snapshotId;
-        snapshot.totalValue = _getTotalPoolValue();
-        // Additional fields would be populated from storage
+        require(snapshotId > 0 && snapshotId <= snapshotCount, "Invalid snapshot ID");
+        
+        snapshot = snapshots[snapshotId];
+        
+        // Validate snapshot exists (check timestamp as indicator)
+        require(snapshot.timestamp > 0, "Snapshot not found");
+        
+        return snapshot;
     }
 
     /**
-     * @notice Lista tutti gli snapshot (placeholder implementation)
-     * @return snapshots Array snapshot
+     * @notice Lista tutti gli snapshot creati
+     * @dev Returns all stored snapshots (use with caution for large datasets)
+     * @return snapshotList Array completo di tutti gli snapshot
      */
-    function getAllSnapshots() external view override returns (AssetSnapshot[] memory snapshots) {
-        // Placeholder - in production would return stored snapshots
-        snapshots = new AssetSnapshot[](0);
+    function getAllSnapshots() external view override returns (AssetSnapshot[] memory snapshotList) {
+        snapshotList = new AssetSnapshot[](snapshotCount);
+        
+        for (uint256 i = 0; i < snapshotIds.length; i++) {
+            uint256 id = snapshotIds[i];
+            snapshotList[i] = snapshots[id];
+        }
+        
+        return snapshotList;
+    }
+    
+    /**
+     * @notice Ottiene numero totale di snapshot creati
+     * @return count Numero snapshot
+     */
+    function getSnapshotCount() external view returns (uint256 count) {
+        return snapshotCount;
     }
 
     /**
