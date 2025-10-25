@@ -64,6 +64,24 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         bool success;
     }
 
+    // ==================== EVENTS ====================
+
+    /// @notice Emitted when max slippage is updated
+    event MaxSlippageUpdated(uint256 oldSlippage, uint256 newSlippage);
+    
+    /// @notice Emitted when SimpleSwap router is updated
+    event SimpleSwapRouterUpdated(address oldRouter, address newRouter);
+    
+    /// @notice Emitted when a swap is executed with slippage data
+    event SwapExecuted(
+        string indexed tokenIn,
+        string indexed tokenOut,
+        uint256 amountIn,
+        uint256 amountOut,
+        uint256 slippageBps,
+        address indexed executor
+    );
+
     // ==================== MODIFIERS ====================
 
     modifier onlyAuthorizedCaller() {
@@ -229,9 +247,11 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             bytes32 pairHash = keccak256(abi.encodePacked(spendTokenCode, "WETH"));
             swapSuccesses[pairHash]++;
             
+            // CALCULATE SLIPPAGE FOR ANALYTICS
             uint256 slippage = ((validation.expectedOutput - execution.actualReceived) * 10000) / validation.expectedOutput;
             
-            emit SwapExecuted(msg.sender, spendTokenCode, "WETH", amountIn, execution.actualReceived, block.timestamp);
+            // EMIT EVENT WITH SLIPPAGE DATA
+            emit SwapExecuted(spendTokenCode, "WETH", amountIn, execution.actualReceived, slippage, msg.sender);
             
             return execution.actualReceived;
             
@@ -279,9 +299,11 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             bytes32 pairHash = keccak256(abi.encodePacked("WETH", receiveTokenCode));
             swapSuccesses[pairHash]++;
             
+            // CALCULATE SLIPPAGE FOR ANALYTICS
             uint256 slippage = ((validation.expectedOutput - execution.actualReceived) * 10000) / validation.expectedOutput;
             
-            emit SwapExecuted(msg.sender, "WETH", receiveTokenCode, amountIn, execution.actualReceived, block.timestamp);
+            // EMIT EVENT WITH SLIPPAGE DATA
+            emit SwapExecuted("WETH", receiveTokenCode, amountIn, execution.actualReceived, slippage, msg.sender);
             
             return execution.actualReceived;
             
@@ -330,9 +352,11 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             bytes32 pairHash = keccak256(abi.encodePacked(spendTokenCode, receiveTokenCode));
             swapSuccesses[pairHash]++;
             
+            // CALCULATE SLIPPAGE FOR ANALYTICS
             uint256 slippage = ((validation.expectedOutput - execution.actualReceived) * 10000) / validation.expectedOutput;
             
-            emit SwapExecuted(msg.sender, spendTokenCode, receiveTokenCode, amountIn, execution.actualReceived, block.timestamp);
+            // EMIT EVENT WITH SLIPPAGE DATA
+            emit SwapExecuted(spendTokenCode, receiveTokenCode, amountIn, execution.actualReceived, slippage, msg.sender);
             
             return execution.actualReceived;
             
@@ -564,7 +588,7 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         uint256 oldSlippage = maxSlippage;
         maxSlippage = newSlippage;
         
-        // Max slippage updated
+        emit MaxSlippageUpdated(oldSlippage, newSlippage);
     }
 
     /**
@@ -578,7 +602,7 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         address oldRouter = simpleSwapRouter;
         simpleSwapRouter = newRouter;
         
-        // SimpleSwap router updated
+        emit SimpleSwapRouterUpdated(oldRouter, newRouter);
     }
 
     /**
@@ -751,14 +775,14 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
      * @param tokenCodeIn Token input
      * @param tokenCodeOut Token output
      * @param amountIn Quantità input
-     * @return canSwap Se fattibile
+     * @return isValid Se fattibile
      * @return reason Motivo se non fattibile
      */
     function canSwap(
         string memory tokenCodeIn,
         string memory tokenCodeOut,
         uint256 amountIn
-    ) external view returns (bool canSwap, string memory reason) {
+    ) external view returns (bool isValid, string memory reason) {
         // Check if swaps enabled
         if (!swapsEnabled) {
             return (false, "Swaps are disabled");

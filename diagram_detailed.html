@@ -48,6 +48,164 @@
         .slide-in {
             animation: slideIn 0.3s ease-out;
         }
+        
+        /* Documentation Modal Styles - from Old_diagram.html */
+        .docs-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .docs-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .docs-popup {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            border: 2px solid #60a5fa;
+            border-radius: 16px;
+            max-width: 90vw;
+            max-height: 90vh;
+            width: 800px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+            transform: scale(0.9) translateY(20px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .docs-overlay.active .docs-popup {
+            transform: scale(1) translateY(0);
+        }
+        
+        .docs-header {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            padding: 20px 24px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .docs-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .docs-close {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 8px;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .docs-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+        
+        .docs-content {
+            padding: 24px;
+            max-height: 70vh;
+            overflow-y: auto;
+            color: #e5e7eb;
+            line-height: 1.6;
+        }
+        
+        .docs-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .docs-content::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+        
+        .docs-content::-webkit-scrollbar-thumb {
+            background: #60a5fa;
+            border-radius: 4px;
+        }
+        
+        .docs-signature {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid #374151;
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 14px;
+            color: #60a5fa;
+            margin-bottom: 20px;
+            overflow-x: auto;
+        }
+        
+        .docs-section {
+            margin-bottom: 24px;
+        }
+        
+        .docs-section h4 {
+            color: #60a5fa;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0 0 12px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .docs-section p, .docs-section ul {
+            margin: 0 0 12px 0;
+            color: #d1d5db;
+        }
+        
+        .docs-section ul {
+            padding-left: 20px;
+        }
+        
+        .docs-section li {
+            margin-bottom: 6px;
+        }
+        
+        .access-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .access-owner { background: #fbbf24; color: #92400e; }
+        .access-auth { background: #34d399; color: #065f46; }
+        .access-view { background: #60a5fa; color: #1e40af; }
+        .access-public { background: #a78bfa; color: #5b21b6; }
+        .access-emergency { background: #f87171; color: #991b1b; }
+        
         .tooltip {
             position: fixed;
             background: rgba(15, 23, 42, 0.98);
@@ -109,64 +267,205 @@
         const MUTED = "#94a3b8";
         const HIGHLIGHT = "#60a5fa";
 
-        // Detailed function call mapping
+        // Detailed function call mapping - COMPLETE SYSTEM
         const functionCalls = {
-          // PROXYGENERAL calls
+          // ==================== BEACON CALLS ====================
+          
+          "Beacon.updateImplementation": [],
+          
+          "Beacon.getImplementation": [],
+          
+          "Beacon.checkModuleExists": [],
+          
+          "Beacon.getRegisteredModules": [],
+          
+          "Beacon.getImplementationHistory": [],
+          
+          "Beacon.getModuleInfo": [],
+          
+          "Beacon.freezeModule": [],
+          
+          "Beacon.unfreezeModule": [],
+          
+          "Beacon.activateGlobalFreeze": [],
+          
+          "Beacon.deactivateGlobalFreeze": [],
+          
+          "Beacon.transferOwnership": [],
+          
+          "Beacon.acceptOwnership": [],
+          
+          "Beacon.cancelOwnershipTransfer": [],
+          
+          "Beacon.batchUpdateImplementations": [],
+          
+          "Beacon.getBeaconStatus": [],
+          
+          "Beacon.checkSystemHealth": [],
+          
+          // ==================== PROXYGENERAL CALLS ====================
+          
+          "ProxyGeneral.mint": [],
+          
+          "ProxyGeneral.burn": [],
+          
+          "ProxyGeneral.balanceOf": [],
+          
+          "ProxyGeneral.totalSupply": [],
+          
+          "ProxyGeneral.transferFunds": [
+            { target: "External.IERC20.balanceOf", type: READ },
+            { target: "External.IERC20.transfer", type: EXTERNAL },
+          ],
+          
+          "ProxyGeneral.getAssetBalance": [
+            { target: "External.IERC20.balanceOf", type: EXTERNAL },
+          ],
+          
+          "ProxyGeneral.approveSpender": [
+            { target: "External.IERC20.approve", type: EXTERNAL },
+          ],
+          
+          "ProxyGeneral.transferToModule": [
+            { target: "External.IERC20.balanceOf", type: READ },
+            { target: "External.IERC20.transfer", type: EXTERNAL },
+          ],
+          
+          "ProxyGeneral.transferFromModule": [
+            { target: "External.IERC20.transferFrom", type: EXTERNAL },
+          ],
+          
+          "ProxyGeneral.authorizeModule": [],
+          
+          "ProxyGeneral.deauthorizeModule": [],
+          
+          "ProxyGeneral.isAuthorizedModule": [],
+          
+          "ProxyGeneral.pause": [],
+          
+          "ProxyGeneral.unpause": [],
+          
+          "ProxyGeneral.isPaused": [],
+          
           "ProxyGeneral.emergencyTransferAll": [
             { target: "Beacon.getImplementation", type: READ, param: "WETH" },
-            { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
+            { target: "External.IERC20.balanceOf", type: READ },
+            { target: "External.IERC20.transfer", type: EXTERNAL },
           ],
           
-          // TOKENMANAGER calls
+          "ProxyGeneral.setHourlyWithdrawn": [],
+          
+          "ProxyGeneral.getHourlyWithdrawn": [],
+          
+          "ProxyGeneral.incrementHourlyWithdrawn": [],
+          
+          "ProxyGeneral.setModuleParameter": [],
+          
+          "ProxyGeneral.getModuleParameter": [],
+          
+          // ==================== TOKENMANAGER CALLS ====================
+          
           "TokenManager.manageTokenData": [
             { target: "Beacon.getImplementation", type: READ, param: "WETH" },
-          ],
-          "TokenManager.getTokenPrice": [
             { target: "External.AggregatorV3.latestRoundData", type: EXTERNAL },
-            { target: "External.AggregatorV3.decimals", type: EXTERNAL },
-          ],
-          "TokenManager.getTokenPriceWithEvents": [
-            { target: "External.AggregatorV3.latestRoundData", type: EXTERNAL },
-            { target: "External.AggregatorV3.decimals", type: EXTERNAL },
           ],
           
-          // VALUECALCULATOR calls
+          "TokenManager.removeToken": [],
+          
+          "TokenManager.isTokenActive": [],
+          
+          "TokenManager.getTokenAddress": [],
+          
+          "TokenManager.getTokenInfo": [],
+          
+          "TokenManager.getActiveTokens": [],
+          
+          "TokenManager.getTokenCount": [],
+          
+          "TokenManager.getTokenPrice": [
+            { target: "External.AggregatorV3.latestRoundData", type: EXTERNAL },
+          ],
+          
+          "TokenManager.getTokenPriceWithEvents": [
+            { target: "TokenManager.getTokenPrice", type: READ },
+          ],
+          
+          "TokenManager.addOrUpdateOracle": [],
+          
+          "TokenManager.removeOracle": [],
+          
+          "TokenManager.updateHeartbeat": [],
+          
+          "TokenManager.batchUpdateTokens": [
+            { target: "TokenManager.manageTokenData", type: WRITE },
+          ],
+          
+          "TokenManager.getSystemTokensInfo": [
+            { target: "TokenManager.getActiveTokens", type: READ },
+            { target: "TokenManager.getTokenInfo", type: READ },
+          ],
+          
+          // ==================== VALUECALCULATOR CALLS ====================
+          
           "ValueCalculator.calculateTokenValue": [
             { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
             { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
+            { target: "TokenManager.getTokenPrice", type: READ },
             { target: "TokenManager.getTokenAddress", type: READ },
-            { target: "TokenManager.getTokenPriceWithEvents", type: READ },
+            { target: "TokenManager.getTokenInfo", type: READ },
             { target: "External.IERC20.balanceOf", type: READ },
           ],
+          
           "ValueCalculator.calculateTokenValueView": [
             { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
             { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
-            { target: "TokenManager.getTokenAddress", type: READ },
             { target: "TokenManager.getTokenPrice", type: READ },
+            { target: "TokenManager.getTokenAddress", type: READ },
+            { target: "TokenManager.getTokenInfo", type: READ },
             { target: "External.IERC20.balanceOf", type: READ },
           ],
+          
           "ValueCalculator.getTotalPoolValue": [
             { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
             { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
             { target: "Beacon.getImplementation", type: READ, param: "WETH" },
             { target: "TokenManager.getActiveTokens", type: READ },
-            { target: "TokenManager.getTokenInfo", type: READ },
+            { target: "TokenManager.getTokenAddress", type: READ },
+            { target: "ValueCalculator.calculateTokenValue", type: READ },
             { target: "External.WETH.balanceOf", type: READ },
           ],
+          
           "ValueCalculator.getTotalPoolValueView": [
-            { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
             { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
             { target: "Beacon.getImplementation", type: READ, param: "WETH" },
             { target: "TokenManager.getActiveTokens", type: READ },
+            { target: "ValueCalculator.calculateTokenValueView", type: READ },
             { target: "External.WETH.balanceOf", type: READ },
           ],
+          
           "ValueCalculator.selectTokenForSwap": [
             { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
             { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
             { target: "TokenManager.getActiveTokens", type: READ },
+            { target: "ValueCalculator.calculateTokenValueView", type: READ },
           ],
           
-          // LIQUIDITYMANAGER calls
+          "ValueCalculator.getCachedTokenValue": [],
+          
+          "ValueCalculator.invalidateCache": [],
+          
+          "ValueCalculator.refreshCache": [
+            { target: "ValueCalculator.calculateTokenValue", type: READ },
+          ],
+          
+          "ValueCalculator.getPoolComposition": [
+            { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
+            { target: "TokenManager.getActiveTokens", type: READ },
+            { target: "ValueCalculator.calculateTokenValueView", type: READ },
+          ],
+          
+          // ==================== LIQUIDITYMANAGER CALLS ====================
+          
           "LiquidityManager.deposit": [
             { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
             { target: "Beacon.getImplementation", type: READ, param: "ValueCalculator" },
@@ -177,12 +476,14 @@
             { target: "ProxyGeneral.mint", type: WRITE },
             { target: "External.WETH.deposit", type: EXTERNAL },
           ],
+          
           "LiquidityManager.calculateDepositShares": [
             { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
             { target: "Beacon.getImplementation", type: READ, param: "ValueCalculator" },
             { target: "ProxyGeneral.totalSupply", type: READ },
             { target: "ValueCalculator.getTotalPoolValueView", type: READ },
           ],
+          
           "LiquidityManager.withdraw": [
             { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
             { target: "Beacon.getImplementation", type: READ, param: "ValueCalculator" },
@@ -201,6 +502,7 @@
             { target: "External.WETH.balanceOf", type: EXTERNAL },
             { target: "External.WETH.withdraw", type: EXTERNAL },
           ],
+          
           "LiquidityManager.calculateWithdrawAmount": [
             { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
             { target: "Beacon.getImplementation", type: READ, param: "ValueCalculator" },
@@ -208,7 +510,19 @@
             { target: "ValueCalculator.getTotalPoolValueView", type: READ },
           ],
           
-          // SWAPMANAGER calls
+          "LiquidityManager.setWithdrawLimits": [],
+          
+          "LiquidityManager.checkWithdrawLimits": [
+            { target: "ProxyGeneral.getHourlyWithdrawn", type: READ },
+          ],
+          
+          "LiquidityManager.emergencyWithdraw": [
+            { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
+            { target: "ProxyGeneral.emergencyTransferAll", type: EMERGENCY },
+          ],
+          
+          // ==================== SWAPMANAGER CALLS ====================
+          
           "SwapManager.swapTokenForWETH": [
             { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
             { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
@@ -220,31 +534,51 @@
             { target: "External.IERC20.balanceOf", type: READ },
             { target: "External.SimpleSwap.swap", type: EXTERNAL },
           ],
+          
           "SwapManager.getSwapQuote": [
             { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
             { target: "Beacon.getImplementation", type: READ, param: "WETH" },
             { target: "TokenManager.getTokenAddress", type: READ },
             { target: "External.SimpleSwap.getAmountOut", type: EXTERNAL },
           ],
+          
           "SwapManager.calculateMinAmountOut": [
             { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
             { target: "TokenManager.getTokenInfo", type: READ },
           ],
           
-          // EMERGENCYHANDLER calls
+          "SwapManager.setSimpleSwapRouter": [],
+          
+          "SwapManager.setSlippageTolerance": [],
+          
+          "SwapManager.batchSwap": [
+            { target: "SwapManager.swapTokenForWETH", type: WRITE },
+          ],
+          
+          "SwapManager.getSwapHistory": [],
+          
+          // ==================== EMERGENCYHANDLER CALLS ====================
+          
           "EmergencyHandler.triggerEmergencyPause": [
             { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
             { target: "ProxyGeneral.pause", type: EMERGENCY },
           ],
+          
           "EmergencyHandler.unpause": [
             { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
             { target: "ProxyGeneral.unpause", type: EMERGENCY },
           ],
+          
           "EmergencyHandler.emergencyWithdraw": [
             { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
             { target: "Beacon.getImplementation", type: READ, param: "WETH" },
             { target: "ProxyGeneral.emergencyTransferAll", type: EMERGENCY },
           ],
+          
+          "EmergencyHandler.addEmergencyContact": [],
+          
+          "EmergencyHandler.removeEmergencyContact": [],
+          
           "EmergencyHandler.getSystemHealthStatus": [
             { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
             { target: "Beacon.getImplementation", type: READ, param: "TokenManager" },
@@ -259,10 +593,31 @@
             { target: "External.IERC20.balanceOf", type: EXTERNAL },
           ],
           
-          // PARAMETERMANAGER calls
+          "EmergencyHandler.setEmergencyTimelock": [],
+          
+          "EmergencyHandler.executeTimelockedAction": [],
+          
+          // ==================== PARAMETERMANAGER CALLS ====================
+          
+          "ParameterManager.registerParameter": [],
+          
+          "ParameterManager.proposeParameterChange": [],
+          
+          "ParameterManager.executeParameterChange": [],
+          
           "ParameterManager.emergencySetParameter": [
             { target: "Beacon.getImplementation", type: READ, param: "ProxyGeneral" },
             { target: "ProxyGeneral.isPaused", type: READ },
+          ],
+          
+          "ParameterManager.getCurrentParameterValue": [],
+          
+          "ParameterManager.getParameterHistory": [],
+          
+          "ParameterManager.cancelProposal": [],
+          
+          "ParameterManager.batchExecuteChanges": [
+            { target: "ParameterManager.executeParameterChange", type: WRITE },
           ],
         };
 
@@ -281,79 +636,824 @@
           });
         });
 
-        // Detailed function info with documentation links
+        // Detailed function info with documentation links - COMPLETE SYSTEM
         const functionDetails = {
+          // ==================== BEACON FUNCTIONS ====================
+          "Beacon.updateImplementation": {
+            signature: "updateImplementation(string module, address newImpl)",
+            params: "module: Module name, newImpl: New implementation address",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Updates the implementation address for a specific module with comprehensive security validations and history tracking.",
+            docs: "docs/API_Reference.md#beacon-updateimplementation"
+          },
+          
           "Beacon.getImplementation": {
-            signature: "getImplementation(string moduleName) → address",
-            params: "moduleName: Name of the module to resolve",
+            signature: "getImplementation(string module) → address",
+            params: "module: Name of the module to resolve",
             returns: "address: Implementation contract address",
             access: "public view",
-            description: "Resolves module names to their implementation addresses. Called by all modules for dynamic address resolution.",
-            docs: "docs/Technical_Module_Analysis.md#beacon"
+            description: "Resolves module names to their implementation addresses. Core function for dynamic address resolution with freeze protection.",
+            docs: "docs/API_Reference.md#beacon-getimplementation"
           },
+          
+          "Beacon.checkModuleExists": {
+            signature: "checkModuleExists(string module) → bool",
+            params: "module: Name of the module to check",
+            returns: "bool: True if module is registered",
+            access: "public view",
+            description: "Verifies if a module exists in the registry without revealing implementation details.",
+            docs: "docs/API_Reference.md#beacon-checkmoduleexists"
+          },
+          
+          "Beacon.getRegisteredModules": {
+            signature: "getRegisteredModules() → string[]",
+            params: "none",
+            returns: "string[]: Array of all registered module names",
+            access: "public view",
+            description: "Returns complete list of registered modules for system auditing and monitoring.",
+            docs: "docs/API_Reference.md#beacon-getregisteredmodules"
+          },
+          
+          "Beacon.getImplementationHistory": {
+            signature: "getImplementationHistory(string module) → address[]",
+            params: "module: Name of the module",
+            returns: "address[]: Array of previous implementation addresses",
+            access: "public view",
+            description: "Provides audit trail of all previous implementations for a module.",
+            docs: "docs/API_Reference.md#beacon-getimplementationhistory"
+          },
+          
+          "Beacon.getModuleInfo": {
+            signature: "getModuleInfo(string module) → (address, uint256, uint256, bool)",
+            params: "module: Name of the module",
+            returns: "currentImpl: Current implementation, lastUpdated: Last update timestamp, historyCount: Number of previous versions, isFrozen: Freeze status",
+            access: "public view",
+            description: "Returns comprehensive information about a module including implementation, update history, and status.",
+            docs: "docs/API_Reference.md#beacon-getmoduleinfo"
+          },
+          
+          "Beacon.freezeModule": {
+            signature: "freezeModule(string module)",
+            params: "module: Name of the module to freeze",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Emergency function to freeze a specific module, preventing access to its implementation.",
+            docs: "docs/API_Reference.md#beacon-freezemodule"
+          },
+          
+          "Beacon.unfreezeModule": {
+            signature: "unfreezeModule(string module)",
+            params: "module: Name of the module to unfreeze",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Removes freeze from a module, restoring normal access to its implementation.",
+            docs: "docs/API_Reference.md#beacon-unfreezemodule"
+          },
+          
+          "Beacon.activateGlobalFreeze": {
+            signature: "activateGlobalFreeze()",
+            params: "none",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Emergency function to freeze the entire system, blocking all module access.",
+            docs: "docs/API_Reference.md#beacon-activateglobalfreeze"
+          },
+          
+          "Beacon.deactivateGlobalFreeze": {
+            signature: "deactivateGlobalFreeze()",
+            params: "none",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Removes global freeze, restoring normal system operations.",
+            docs: "docs/API_Reference.md#beacon-deactivateglobalfreeze"
+          },
+          
+          "Beacon.transferOwnership": {
+            signature: "transferOwnership(address newOwner)",
+            params: "newOwner: Address of the proposed new owner",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Initiates 2-step ownership transfer process. New owner must accept to complete transfer.",
+            docs: "docs/API_Reference.md#beacon-transferownership"
+          },
+          
+          "Beacon.acceptOwnership": {
+            signature: "acceptOwnership()",
+            params: "none",
+            returns: "void",
+            access: "pendingOwner only",
+            description: "Completes ownership transfer by accepting the transfer from the pending owner account.",
+            docs: "docs/API_Reference.md#beacon-acceptownership"
+          },
+          
+          "Beacon.cancelOwnershipTransfer": {
+            signature: "cancelOwnershipTransfer()",
+            params: "none",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Cancels pending ownership transfer, clearing the pending owner.",
+            docs: "docs/API_Reference.md#beacon-cancelownershiptransfer"
+          },
+          
+          "Beacon.batchUpdateImplementations": {
+            signature: "batchUpdateImplementations(string[] modules, address[] impls)",
+            params: "modules: Array of module names, impls: Array of corresponding implementations",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Updates multiple module implementations in a single transaction for efficient upgrades.",
+            docs: "docs/API_Reference.md#beacon-batchupdateimplementations"
+          },
+          
+          "Beacon.getBeaconStatus": {
+            signature: "getBeaconStatus() → (uint256, uint256, bool)",
+            params: "none",
+            returns: "totalModules: Number of registered modules, frozenModules: Number of frozen modules, globalFreeze: Global freeze status",
+            access: "public view",
+            description: "Returns comprehensive status of the beacon including module counts and freeze state.",
+            docs: "docs/API_Reference.md#beacon-getbeaconstatus"
+          },
+          
+          "Beacon.checkSystemHealth": {
+            signature: "checkSystemHealth() → bool",
+            params: "none",
+            returns: "bool: True if system is healthy",
+            access: "public view",
+            description: "Performs health check on all registered modules and returns overall system status.",
+            docs: "docs/API_Reference.md#beacon-checksystemhealth"
+          },
+          
+          // ==================== PROXYGENERAL FUNCTIONS ====================
           "ProxyGeneral.mint": {
             signature: "mint(address to, uint256 amount)",
             params: "to: Recipient address, amount: LP tokens to mint",
             returns: "void",
             access: "onlyAuthorizedModule",
-            description: "Mints LP tokens to user during deposits. Only callable by LiquidityManager.",
-            docs: "docs/Technical_Module_Analysis.md#proxygeneral"
+            description: "Mints LP tokens to user during deposits. Only callable by LiquidityManager with strict rate limiting.",
+            docs: "docs/API_Reference.md#proxygeneral-mint"
           },
+          
           "ProxyGeneral.burn": {
             signature: "burn(address from, uint256 amount)",
             params: "from: Token holder address, amount: LP tokens to burn",
             returns: "void",
             access: "onlyAuthorizedModule",
-            description: "Burns LP tokens from user during withdrawals. Only callable by LiquidityManager.",
-            docs: "docs/Technical_Module_Analysis.md#proxygeneral"
+            description: "Burns LP tokens from user during withdrawals. Only callable by LiquidityManager with validation.",
+            docs: "docs/API_Reference.md#proxygeneral-burn"
           },
+          
+          "ProxyGeneral.balanceOf": {
+            signature: "balanceOf(address account) → uint256",
+            params: "account: Address to check balance for",
+            returns: "uint256: LP token balance",
+            access: "public view",
+            description: "Returns LP token balance for the specified account.",
+            docs: "docs/API_Reference.md#proxygeneral-balanceof"
+          },
+          
+          "ProxyGeneral.totalSupply": {
+            signature: "totalSupply() → uint256",
+            params: "none",
+            returns: "uint256: Total LP token supply",
+            access: "public view",
+            description: "Returns total supply of LP tokens currently in circulation.",
+            docs: "docs/API_Reference.md#proxygeneral-totalsupply"
+          },
+          
+          "ProxyGeneral.transferFunds": {
+            signature: "transferFunds(address token, address to, uint256 amount)",
+            params: "token: Token contract address, to: Recipient address, amount: Transfer amount",
+            returns: "void",
+            access: "onlyAuthorizedModule",
+            description: "Transfers tokens from the pool to specified address with comprehensive security checks.",
+            docs: "docs/API_Reference.md#proxygeneral-transferfunds"
+          },
+          
+          "ProxyGeneral.getAssetBalance": {
+            signature: "getAssetBalance(address asset) → uint256",
+            params: "asset: Asset contract address",
+            returns: "uint256: Asset balance in the pool",
+            access: "public view",
+            description: "Returns the current balance of a specific asset held by the pool.",
+            docs: "docs/API_Reference.md#proxygeneral-getassetbalance"
+          },
+          
+          "ProxyGeneral.approveSpender": {
+            signature: "approveSpender(address token, address spender, uint256 amount)",
+            params: "token: Token contract, spender: Address to approve, amount: Approval amount",
+            returns: "void",
+            access: "onlyAuthorizedModule",
+            description: "Approves external contracts to spend pool tokens, used for DEX interactions.",
+            docs: "docs/API_Reference.md#proxygeneral-approvespender"
+          },
+          
+          "ProxyGeneral.transferToModule": {
+            signature: "transferToModule(address token, address module, uint256 amount)",
+            params: "token: Token to transfer, module: Destination module, amount: Transfer amount",
+            returns: "void",
+            access: "onlyAuthorizedModule",
+            description: "Transfers tokens to another authorized module for processing.",
+            docs: "docs/API_Reference.md#proxygeneral-transfertomodule"
+          },
+          
+          "ProxyGeneral.transferFromModule": {
+            signature: "transferFromModule(address token, address module, uint256 amount)",
+            params: "token: Token to receive, module: Source module, amount: Transfer amount",
+            returns: "void",
+            access: "onlyAuthorizedModule",
+            description: "Receives tokens from another authorized module after processing.",
+            docs: "docs/API_Reference.md#proxygeneral-transferfrommodule"
+          },
+          
+          "ProxyGeneral.authorizeModule": {
+            signature: "authorizeModule(address module)",
+            params: "module: Module address to authorize",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Grants authorization to a module to interact with pool functions.",
+            docs: "docs/API_Reference.md#proxygeneral-authorizemodule"
+          },
+          
+          "ProxyGeneral.deauthorizeModule": {
+            signature: "deauthorizeModule(address module)",
+            params: "module: Module address to deauthorize",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Revokes authorization from a module, preventing future interactions.",
+            docs: "docs/API_Reference.md#proxygeneral-deauthorizemodule"
+          },
+          
+          "ProxyGeneral.isAuthorizedModule": {
+            signature: "isAuthorizedModule(address module) → bool",
+            params: "module: Module address to check",
+            returns: "bool: True if module is authorized",
+            access: "public view",
+            description: "Checks if a module is currently authorized to interact with the pool.",
+            docs: "docs/API_Reference.md#proxygeneral-isauthorizedmodule"
+          },
+          
+          "ProxyGeneral.pause": {
+            signature: "pause()",
+            params: "none",
+            returns: "void",
+            access: "onlyAuthorizedModule",
+            description: "Emergency function to pause all pool operations. Callable by EmergencyHandler.",
+            docs: "docs/API_Reference.md#proxygeneral-pause"
+          },
+          
+          "ProxyGeneral.unpause": {
+            signature: "unpause()",
+            params: "none",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Removes pause from pool operations, restoring normal functionality.",
+            docs: "docs/API_Reference.md#proxygeneral-unpause"
+          },
+          
+          "ProxyGeneral.isPaused": {
+            signature: "isPaused() → bool",
+            params: "none",
+            returns: "bool: True if contract is paused",
+            access: "public view",
+            description: "Returns current pause status of the pool contract.",
+            docs: "docs/API_Reference.md#proxygeneral-ispaused"
+          },
+          
+          "ProxyGeneral.emergencyTransferAll": {
+            signature: "emergencyTransferAll(address to)",
+            params: "to: Emergency recipient address",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Emergency function to transfer all pool assets to a safe address during critical situations.",
+            docs: "docs/API_Reference.md#proxygeneral-emergencytransferall"
+          },
+          
+          "ProxyGeneral.setHourlyWithdrawn": {
+            signature: "setHourlyWithdrawn(address account, uint256 amount)",
+            params: "account: User account, amount: Amount withdrawn in current hour",
+            returns: "void",
+            access: "onlyAuthorizedModule",
+            description: "Sets the hourly withdrawal amount for rate limiting enforcement.",
+            docs: "docs/API_Reference.md#proxygeneral-sethourlywithdwarn"
+          },
+          
+          "ProxyGeneral.getHourlyWithdrawn": {
+            signature: "getHourlyWithdrawn(address account) → uint256",
+            params: "account: User account to check",
+            returns: "uint256: Amount withdrawn in current hour",
+            access: "public view",
+            description: "Returns the amount withdrawn by an account in the current hour for rate limiting.",
+            docs: "docs/API_Reference.md#proxygeneral-gethourlywithdraw"
+          },
+          
+          "ProxyGeneral.incrementHourlyWithdrawn": {
+            signature: "incrementHourlyWithdrawn(address account, uint256 amount)",
+            params: "account: User account, amount: Amount to add to hourly total",
+            returns: "void",
+            access: "onlyAuthorizedModule",
+            description: "Increments hourly withdrawal tracking for rate limiting enforcement.",
+            docs: "docs/API_Reference.md#proxygeneral-incrementhourlywithdraw"
+          },
+          
+          "ProxyGeneral.setModuleParameter": {
+            signature: "setModuleParameter(string key, uint256 value)",
+            params: "key: Parameter name, value: Parameter value",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Sets configuration parameters for pool operation and module interaction.",
+            docs: "docs/API_Reference.md#proxygeneral-setmoduleparameter"
+          },
+          
+          "ProxyGeneral.getModuleParameter": {
+            signature: "getModuleParameter(string key) → uint256",
+            params: "key: Parameter name",
+            returns: "uint256: Parameter value",
+            access: "public view",
+            description: "Retrieves configuration parameter values for pool operation.",
+            docs: "docs/API_Reference.md#proxygeneral-getmoduleparameter"
+          },
+          
+          // ==================== TOKENMANAGER FUNCTIONS ====================
+          "TokenManager.manageTokenData": {
+            signature: "manageTokenData(string code, address tokenAddr, address oracleAddr, uint256 heartbeat)",
+            params: "code: Token identifier, tokenAddr: Token contract, oracleAddr: Oracle contract, heartbeat: Price freshness limit",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Comprehensive token management including registration, oracle setup, and heartbeat configuration.",
+            docs: "docs/API_Reference.md#tokenmanager-managetokendata"
+          },
+          
+          "TokenManager.removeToken": {
+            signature: "removeToken(string code)",
+            params: "code: Token identifier to remove",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Removes a token from the registry, making it unavailable for new operations.",
+            docs: "docs/API_Reference.md#tokenmanager-removetoken"
+          },
+          
+          "TokenManager.isTokenActive": {
+            signature: "isTokenActive(string code) → bool",
+            params: "code: Token identifier",
+            returns: "bool: True if token is active",
+            access: "public view",
+            description: "Checks if a token is currently active and available for operations.",
+            docs: "docs/API_Reference.md#tokenmanager-istokenactive"
+          },
+          
+          "TokenManager.getTokenAddress": {
+            signature: "getTokenAddress(string code) → address",
+            params: "code: Token identifier",
+            returns: "address: Token contract address",
+            access: "public view",
+            description: "Returns the contract address for a registered token.",
+            docs: "docs/API_Reference.md#tokenmanager-gettokenaddress"
+          },
+          
+          "TokenManager.getTokenInfo": {
+            signature: "getTokenInfo(string code) → (address, address, uint256, bool)",
+            params: "code: Token identifier",
+            returns: "tokenAddr: Token contract, oracleAddr: Oracle contract, heartbeat: Price freshness limit, active: Activity status",
+            access: "public view",
+            description: "Returns comprehensive information about a registered token including oracle configuration.",
+            docs: "docs/API_Reference.md#tokenmanager-gettokeninfo"
+          },
+          
+          "TokenManager.getActiveTokens": {
+            signature: "getActiveTokens() → string[]",
+            params: "none",
+            returns: "string[]: Array of active token codes",
+            access: "public view",
+            description: "Returns list of all currently active token identifiers.",
+            docs: "docs/API_Reference.md#tokenmanager-getactivetokens"
+          },
+          
+          "TokenManager.getTokenCount": {
+            signature: "getTokenCount() → uint256",
+            params: "none",
+            returns: "uint256: Number of registered tokens",
+            access: "public view",
+            description: "Returns total count of registered tokens (both active and inactive).",
+            docs: "docs/API_Reference.md#tokenmanager-gettokencount"
+          },
+          
+          "TokenManager.getTokenPrice": {
+            signature: "getTokenPrice(string code) → (uint256, uint256, bool)",
+            params: "code: Token identifier",
+            returns: "price: USD price (18 decimals), updatedAt: Last update timestamp, isStale: Staleness flag",
+            access: "public view",
+            description: "Fetches current token price from Chainlink oracle with staleness detection based on heartbeat.",
+            docs: "docs/API_Reference.md#tokenmanager-gettokenprice"
+          },
+          
+          "TokenManager.getTokenPriceWithEvents": {
+            signature: "getTokenPriceWithEvents(string code) → (uint256, uint256, bool)",
+            params: "code: Token identifier",
+            returns: "price: USD price (18 decimals), updatedAt: Last update timestamp, isStale: Staleness flag",
+            access: "public",
+            description: "Fetches token price with event emission for monitoring and logging purposes.",
+            docs: "docs/API_Reference.md#tokenmanager-gettokenpricewithevents"
+          },
+          
+          "TokenManager.addOrUpdateOracle": {
+            signature: "addOrUpdateOracle(string code, address oracleAddr)",
+            params: "code: Token identifier, oracleAddr: New oracle contract address",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Updates the oracle address for an existing token, enabling price feed changes.",
+            docs: "docs/API_Reference.md#tokenmanager-addorupdateoracle"
+          },
+          
+          "TokenManager.removeOracle": {
+            signature: "removeOracle(string code)",
+            params: "code: Token identifier",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Removes oracle association from a token, disabling price feeds.",
+            docs: "docs/API_Reference.md#tokenmanager-removeoracle"
+          },
+          
+          "TokenManager.updateHeartbeat": {
+            signature: "updateHeartbeat(string code, uint256 newHeartbeat)",
+            params: "code: Token identifier, newHeartbeat: New heartbeat duration in seconds",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Updates the heartbeat duration for price staleness detection.",
+            docs: "docs/API_Reference.md#tokenmanager-updateheartbeat"
+          },
+          
+          "TokenManager.batchUpdateTokens": {
+            signature: "batchUpdateTokens(string[] codes, TokenData[] data)",
+            params: "codes: Array of token identifiers, data: Array of token configuration data",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Updates multiple tokens in a single transaction for efficient management.",
+            docs: "docs/API_Reference.md#tokenmanager-batchupdatetokens"
+          },
+          
+          "TokenManager.getSystemTokensInfo": {
+            signature: "getSystemTokensInfo() → (string[], address[], address[])",
+            params: "none",
+            returns: "codes: Token identifiers, tokenAddrs: Token contracts, oracleAddrs: Oracle contracts",
+            access: "public view",
+            description: "Returns comprehensive information about all registered tokens for system overview.",
+            docs: "docs/API_Reference.md#tokenmanager-getsystemtokensinfo"
+          },
+          
+          // ==================== VALUECALCULATOR FUNCTIONS ====================
+          "ValueCalculator.calculateTokenValue": {
+            signature: "calculateTokenValue(string code) → (uint256, uint256)",
+            params: "code: Token identifier",
+            returns: "tokenValue: Token value in ETH, timestamp: Calculation timestamp",
+            access: "public",
+            description: "Calculates current value of a token holding in ETH using oracle prices and pool balances.",
+            docs: "docs/API_Reference.md#valuecalculator-calculatetokenvalue"
+          },
+          
+          "ValueCalculator.calculateTokenValueView": {
+            signature: "calculateTokenValueView(string code) → (uint256, uint256)",
+            params: "code: Token identifier",
+            returns: "tokenValue: Token value in ETH, timestamp: Calculation timestamp",
+            access: "view",
+            description: "View-only version of token value calculation for gas-free queries.",
+            docs: "docs/API_Reference.md#valuecalculator-calculatetokenvalueview"
+          },
+          
+          "ValueCalculator.getTotalPoolValue": {
+            signature: "getTotalPoolValue() → (uint256, uint256[], uint256)",
+            params: "none",
+            returns: "totalValue: Total pool value in ETH, tokenValues: Individual token values, timestamp: Calculation timestamp",
+            access: "public",
+            description: "Calculates total pool value by summing WETH balance and all token values converted to ETH.",
+            docs: "docs/API_Reference.md#valuecalculator-gettotalpoolvalue"
+          },
+          
+          "ValueCalculator.getTotalPoolValueView": {
+            signature: "getTotalPoolValueView() → (uint256, uint256[], uint256)",
+            params: "none",
+            returns: "totalValue: Total pool value in ETH, tokenValues: Individual token values, timestamp: Calculation timestamp",
+            access: "view",
+            description: "View-only version of total pool value calculation for gas-free queries.",
+            docs: "docs/API_Reference.md#valuecalculator-gettotalpoolvalueview"
+          },
+          
+          "ValueCalculator.selectTokenForSwap": {
+            signature: "selectTokenForSwap(uint256 targetAmount) → string",
+            params: "targetAmount: Desired amount in ETH",
+            returns: "string: Selected token code for optimal swap",
+            access: "view",
+            description: "Selects optimal token for swapping based on pool composition and target amount.",
+            docs: "docs/API_Reference.md#valuecalculator-selecttokenforswap"
+          },
+          
+          "ValueCalculator.getCachedTokenValue": {
+            signature: "getCachedTokenValue(string code) → (uint256, uint256, bool)",
+            params: "code: Token identifier",
+            returns: "value: Cached token value, timestamp: Cache timestamp, isValid: Cache validity",
+            access: "public view",
+            description: "Returns cached token value for performance optimization with validity checking.",
+            docs: "docs/API_Reference.md#valuecalculator-getcachedtokenvalue"
+          },
+          
+          "ValueCalculator.invalidateCache": {
+            signature: "invalidateCache(string code)",
+            params: "code: Token identifier",
+            returns: "void",
+            access: "onlyAuthorizedModule",
+            description: "Invalidates cached token value, forcing fresh calculation on next request.",
+            docs: "docs/API_Reference.md#valuecalculator-invalidatecache"
+          },
+          
+          "ValueCalculator.refreshCache": {
+            signature: "refreshCache(string code)",
+            params: "code: Token identifier",
+            returns: "void",
+            access: "public",
+            description: "Refreshes cached token value with current calculation for performance optimization.",
+            docs: "docs/API_Reference.md#valuecalculator-refreshcache"
+          },
+          
+          "ValueCalculator.getPoolComposition": {
+            signature: "getPoolComposition() → (string[], uint256[], uint256[])",
+            params: "none",
+            returns: "tokens: Token codes, values: Token values in ETH, percentages: Allocation percentages",
+            access: "public view",
+            description: "Returns detailed pool composition showing token distribution and percentages.",
+            docs: "docs/API_Reference.md#valuecalculator-getpoolcomposition"
+          },
+          
+          // ==================== LIQUIDITYMANAGER FUNCTIONS ====================
           "LiquidityManager.deposit": {
             signature: "deposit() payable → uint256",
             params: "msg.value: ETH amount to deposit",
             returns: "uint256: LP tokens minted",
             access: "public payable",
-            description: "Main entry point for user deposits. Converts ETH to WETH, calculates shares, and mints LP tokens.",
-            docs: "docs/Functional_Specifications_Part1.md#deposit-flow"
+            description: "Main entry point for deposits. Converts ETH to WETH, calculates shares, and mints LP tokens.",
+            docs: "docs/API_Reference.md#liquiditymanager-deposit"
           },
+          
+          "LiquidityManager.calculateDepositShares": {
+            signature: "calculateDepositShares(uint256 ethAmount) → uint256",
+            params: "ethAmount: ETH amount being deposited",
+            returns: "uint256: LP tokens to be minted",
+            access: "public view",
+            description: "Calculates LP tokens to mint based on deposit amount and current pool value.",
+            docs: "docs/API_Reference.md#liquiditymanager-calculatedepositshares"
+          },
+          
           "LiquidityManager.withdraw": {
             signature: "withdraw(uint256 lpTokens) → uint256",
             params: "lpTokens: Amount of LP tokens to burn",
             returns: "uint256: ETH amount returned",
             access: "public",
-            description: "Main entry point for withdrawals. Burns LP tokens, swaps assets to WETH if needed, converts to ETH and transfers to user.",
-            docs: "docs/Functional_Specifications_Part1.md#withdraw-flow"
+            description: "Main withdrawal function. Burns LP tokens, performs swaps if needed, and returns ETH.",
+            docs: "docs/API_Reference.md#liquiditymanager-withdraw"
           },
-          "ValueCalculator.getTotalPoolValue": {
-            signature: "getTotalPoolValue() → PoolValueInfo",
-            params: "none",
-            returns: "PoolValueInfo: Total value, token values, timestamp",
-            access: "public",
-            description: "Calculates total pool value in ETH by summing WETH balance and all token balances converted via oracle prices.",
-            docs: "docs/Technical_Module_Analysis.md#valuecalculator"
+          
+          "LiquidityManager.calculateWithdrawAmount": {
+            signature: "calculateWithdrawAmount(uint256 lpTokens) → uint256",
+            params: "lpTokens: LP tokens to burn",
+            returns: "uint256: ETH amount to be returned",
+            access: "public view",
+            description: "Calculates ETH amount to return based on LP tokens and current pool value.",
+            docs: "docs/API_Reference.md#liquiditymanager-calculatewithdrawamount"
           },
+          
+          "LiquidityManager.setWithdrawLimits": {
+            signature: "setWithdrawLimits(uint256 hourlyLimit, uint256 dailyLimit)",
+            params: "hourlyLimit: ETH withdrawal limit per hour, dailyLimit: ETH withdrawal limit per day",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Sets withdrawal rate limits for enhanced security and risk management.",
+            docs: "docs/API_Reference.md#liquiditymanager-setwithdrawlimits"
+          },
+          
+          "LiquidityManager.checkWithdrawLimits": {
+            signature: "checkWithdrawLimits(address account, uint256 amount) → bool",
+            params: "account: User account, amount: Withdrawal amount in ETH",
+            returns: "bool: True if withdrawal is within limits",
+            access: "public view",
+            description: "Checks if a withdrawal amount is within the user's rate limits.",
+            docs: "docs/API_Reference.md#liquiditymanager-checkwithdrawlimits"
+          },
+          
+          "LiquidityManager.emergencyWithdraw": {
+            signature: "emergencyWithdraw(address to, uint256 amount)",
+            params: "to: Emergency recipient address, amount: Amount to withdraw",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Emergency withdrawal function bypassing normal limits and checks.",
+            docs: "docs/API_Reference.md#liquiditymanager-emergencywithdraw"
+          },
+          
+          // ==================== SWAPMANAGER FUNCTIONS ====================
           "SwapManager.swapTokenForWETH": {
             signature: "swapTokenForWETH(string code, uint256 amountIn, uint256 minOut) → uint256",
-            params: "code: Token code, amountIn: Amount to swap, minOut: Minimum WETH to receive",
+            params: "code: Token to swap, amountIn: Input amount, minOut: Minimum WETH to receive",
             returns: "uint256: WETH amount received",
             access: "public",
-            description: "Swaps any supported token to WETH via SimpleSwap DEX with slippage protection.",
-            docs: "docs/Technical_Module_Analysis.md#swapmanager"
+            description: "Swaps any supported token to WETH via DEX with slippage protection.",
+            docs: "docs/API_Reference.md#swapmanager-swaptokenforweth"
           },
-          "TokenManager.getTokenPrice": {
-            signature: "getTokenPrice(string code) → (uint256 price, uint256 updatedAt, bool isStale)",
-            params: "code: Token code",
-            returns: "price: USD price (18 decimals), updatedAt: Timestamp, isStale: Freshness flag",
+          
+          "SwapManager.getSwapQuote": {
+            signature: "getSwapQuote(string code, uint256 amountIn) → uint256",
+            params: "code: Token to swap, amountIn: Input amount",
+            returns: "uint256: Expected WETH output",
             access: "public view",
-            description: "Fetches token price from Chainlink oracle with staleness check based on heartbeat.",
-            docs: "docs/Technical_Module_Analysis.md#tokenmanager"
+            description: "Gets quote for swapping token to WETH without executing the swap.",
+            docs: "docs/API_Reference.md#swapmanager-getswapquote"
           },
+          
+          "SwapManager.calculateMinAmountOut": {
+            signature: "calculateMinAmountOut(uint256 amountOut, uint256 slippage) → uint256",
+            params: "amountOut: Expected output amount, slippage: Slippage tolerance (basis points)",
+            returns: "uint256: Minimum acceptable output",
+            access: "public view",
+            description: "Calculates minimum acceptable output considering slippage tolerance.",
+            docs: "docs/API_Reference.md#swapmanager-calculateminamountout"
+          },
+          
+          "SwapManager.setSimpleSwapRouter": {
+            signature: "setSimpleSwapRouter(address router)",
+            params: "router: New DEX router address",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Updates the DEX router address for swap operations.",
+            docs: "docs/API_Reference.md#swapmanager-setsimpleswaprouter"
+          },
+          
+          "SwapManager.setSlippageTolerance": {
+            signature: "setSlippageTolerance(uint256 tolerance)",
+            params: "tolerance: Slippage tolerance in basis points",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Sets default slippage tolerance for swap operations.",
+            docs: "docs/API_Reference.md#swapmanager-setslippagetolerance"
+          },
+          
+          "SwapManager.batchSwap": {
+            signature: "batchSwap(string[] codes, uint256[] amounts, uint256[] minOuts) → uint256[]",
+            params: "codes: Tokens to swap, amounts: Input amounts, minOuts: Minimum outputs",
+            returns: "uint256[]: WETH amounts received for each swap",
+            access: "public",
+            description: "Executes multiple token swaps in a single transaction for efficiency.",
+            docs: "docs/API_Reference.md#swapmanager-batchswap"
+          },
+          
+          "SwapManager.getSwapHistory": {
+            signature: "getSwapHistory(address account) → SwapRecord[]",
+            params: "account: User account to query",
+            returns: "SwapRecord[]: Array of historical swap records",
+            access: "public view",
+            description: "Returns swap history for an account including amounts, tokens, and timestamps.",
+            docs: "docs/API_Reference.md#swapmanager-getswaphistory"
+          },
+          
+          // ==================== EMERGENCYHANDLER FUNCTIONS ====================
           "EmergencyHandler.triggerEmergencyPause": {
             signature: "triggerEmergencyPause(string reason)",
-            params: "reason: Human-readable reason for emergency",
+            params: "reason: Human-readable reason for emergency pause",
             returns: "void",
-            access: "onlyEmergency",
-            description: "Pauses all system operations. Only callable by authorized emergency contacts.",
-            docs: "docs/Technical_Module_Analysis.md#emergencyhandler"
+            access: "onlyEmergencyContact",
+            description: "Immediately pauses all system operations with reason logging for emergency situations.",
+            docs: "docs/API_Reference.md#emergencyhandler-triggeremergencypause"
+          },
+          
+          "EmergencyHandler.unpause": {
+            signature: "unpause()",
+            params: "none",
+            returns: "void",
+            access: "onlyEmergencyContact",
+            description: "Removes emergency pause, restoring normal system operations after review.",
+            docs: "docs/API_Reference.md#emergencyhandler-unpause"
+          },
+          
+          "EmergencyHandler.emergencyWithdraw": {
+            signature: "emergencyWithdraw(address to, uint256 amount)",
+            params: "to: Emergency recipient address, amount: Amount to withdraw",
+            returns: "void",
+            access: "onlyEmergencyContact",
+            description: "Emergency withdrawal bypassing normal checks for critical fund recovery.",
+            docs: "docs/API_Reference.md#emergencyhandler-emergencywithdraw"
+          },
+          
+          "EmergencyHandler.addEmergencyContact": {
+            signature: "addEmergencyContact(address contact)",
+            params: "contact: Address to grant emergency privileges",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Adds an address to the emergency contact list with pause and withdraw privileges.",
+            docs: "docs/API_Reference.md#emergencyhandler-addemergencycontact"
+          },
+          
+          "EmergencyHandler.removeEmergencyContact": {
+            signature: "removeEmergencyContact(address contact)",
+            params: "contact: Address to revoke emergency privileges",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Removes an address from the emergency contact list.",
+            docs: "docs/API_Reference.md#emergencyhandler-removeemergencycontact"
+          },
+          
+          "EmergencyHandler.getSystemHealthStatus": {
+            signature: "getSystemHealthStatus() → (bool, string, uint256)",
+            params: "none",
+            returns: "isHealthy: Overall health status, issues: Description of any issues, lastCheck: Last health check timestamp",
+            access: "public view",
+            description: "Comprehensive system health check including all modules and external dependencies.",
+            docs: "docs/API_Reference.md#emergencyhandler-getsystemhealthstatus"
+          },
+          
+          "EmergencyHandler.setEmergencyTimelock": {
+            signature: "setEmergencyTimelock(uint256 delay)",
+            params: "delay: Timelock delay in seconds",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Sets timelock delay for emergency actions to prevent rushed decisions.",
+            docs: "docs/API_Reference.md#emergencyhandler-setemergencytimelock"
+          },
+          
+          "EmergencyHandler.executeTimelockedAction": {
+            signature: "executeTimelockedAction(uint256 actionId)",
+            params: "actionId: ID of the timelocked action",
+            returns: "void",
+            access: "onlyEmergencyContact",
+            description: "Executes a previously proposed emergency action after timelock delay.",
+            docs: "docs/API_Reference.md#emergencyhandler-executeimelockedaction"
+          },
+          
+          // ==================== PARAMETERMANAGER FUNCTIONS ====================
+          "ParameterManager.registerParameter": {
+            signature: "registerParameter(string name, uint256 initialValue, uint256 minValue, uint256 maxValue)",
+            params: "name: Parameter name, initialValue: Initial value, minValue: Minimum allowed, maxValue: Maximum allowed",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Registers a new system parameter with validation bounds and initial value.",
+            docs: "docs/API_Reference.md#parametermanager-registerparameter"
+          },
+          
+          "ParameterManager.proposeParameterChange": {
+            signature: "proposeParameterChange(string name, uint256 newValue)",
+            params: "name: Parameter name, newValue: Proposed new value",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Proposes a parameter change with governance timelock for community review.",
+            docs: "docs/API_Reference.md#parametermanager-proposeparameterchange"
+          },
+          
+          "ParameterManager.executeParameterChange": {
+            signature: "executeParameterChange(uint256 proposalId)",
+            params: "proposalId: ID of the parameter change proposal",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Executes an approved parameter change after timelock period.",
+            docs: "docs/API_Reference.md#parametermanager-executeparameterchange"
+          },
+          
+          "ParameterManager.emergencySetParameter": {
+            signature: "emergencySetParameter(string name, uint256 value)",
+            params: "name: Parameter name, value: New parameter value",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Emergency parameter update bypassing normal governance for critical situations.",
+            docs: "docs/API_Reference.md#parametermanager-emergencysetparameter"
+          },
+          
+          "ParameterManager.getCurrentParameterValue": {
+            signature: "getCurrentParameterValue(string name) → uint256",
+            params: "name: Parameter name",
+            returns: "uint256: Current parameter value",
+            access: "public view",
+            description: "Returns the current value of a registered system parameter.",
+            docs: "docs/API_Reference.md#parametermanager-getcurrentparametervalue"
+          },
+          
+          "ParameterManager.getParameterHistory": {
+            signature: "getParameterHistory(string name) → (uint256[], uint256[])",
+            params: "name: Parameter name",
+            returns: "values: Historical values, timestamps: Change timestamps",
+            access: "public view",
+            description: "Returns complete history of parameter changes for audit and analysis.",
+            docs: "docs/API_Reference.md#parametermanager-getparameterhistory"
+          },
+          
+          "ParameterManager.cancelProposal": {
+            signature: "cancelProposal(uint256 proposalId)",
+            params: "proposalId: ID of the proposal to cancel",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Cancels a pending parameter change proposal before execution.",
+            docs: "docs/API_Reference.md#parametermanager-cancelproposal"
+          },
+          
+          "ParameterManager.batchExecuteChanges": {
+            signature: "batchExecuteChanges(uint256[] proposalIds)",
+            params: "proposalIds: Array of proposal IDs to execute",
+            returns: "void",
+            access: "onlyOwner",
+            description: "Executes multiple approved parameter changes in a single transaction.",
+            docs: "docs/API_Reference.md#parametermanager-batchexecutechanges"
           },
         };
 
@@ -362,14 +1462,26 @@
           {
             key: "Beacon",
             title: "BEACON",
-            subtitle: "Central Registry",
+            subtitle: "Central Registry + Security",
             x: 50,
             y: 50,
             functions: [
               { id: "getImplementation", name: "getImplementation(name)", access: "view", color: READ },
               { id: "updateImplementation", name: "updateImplementation(...)", access: "owner", color: WRITE },
+              { id: "checkModuleExists", name: "checkModuleExists(...)", access: "view", color: READ },
+              { id: "getRegisteredModules", name: "getRegisteredModules()", access: "view", color: READ },
+              { id: "getImplementationHistory", name: "getImplementationHistory(...)", access: "view", color: READ },
+              { id: "getModuleInfo", name: "getModuleInfo(...)", access: "view", color: READ },
+              { id: "freezeModule", name: "freezeModule(...)", access: "owner", color: EMERGENCY },
+              { id: "unfreezeModule", name: "unfreezeModule(...)", access: "owner", color: EMERGENCY },
+              { id: "activateGlobalFreeze", name: "activateGlobalFreeze()", access: "owner", color: EMERGENCY },
+              { id: "deactivateGlobalFreeze", name: "deactivateGlobalFreeze()", access: "owner", color: EMERGENCY },
               { id: "transferOwnership", name: "transferOwnership(...)", access: "owner", color: WRITE },
-              { id: "acceptOwnership", name: "acceptOwnership()", access: "owner", color: WRITE },
+              { id: "acceptOwnership", name: "acceptOwnership()", access: "pending", color: WRITE },
+              { id: "cancelOwnershipTransfer", name: "cancelOwnershipTransfer()", access: "owner", color: WRITE },
+              { id: "batchUpdateImplementations", name: "batchUpdateImplementations(...)", access: "owner", color: WRITE },
+              { id: "getBeaconStatus", name: "getBeaconStatus()", access: "view", color: READ },
+              { id: "checkSystemHealth", name: "checkSystemHealth()", access: "view", color: READ },
             ]
           },
           {
@@ -384,19 +1496,28 @@
               { id: "balanceOf", name: "balanceOf(account)", access: "view", color: READ },
               { id: "totalSupply", name: "totalSupply()", access: "view", color: READ },
               { id: "transferFunds", name: "transferFunds(...)", access: "auth", color: WRITE },
+              { id: "getAssetBalance", name: "getAssetBalance(asset)", access: "view", color: READ },
               { id: "approveSpender", name: "approveSpender(...)", access: "auth", color: WRITE },
+              { id: "transferToModule", name: "transferToModule(...)", access: "auth", color: WRITE },
+              { id: "transferFromModule", name: "transferFromModule(...)", access: "auth", color: WRITE },
+              { id: "authorizeModule", name: "authorizeModule(...)", access: "owner", color: WRITE },
+              { id: "deauthorizeModule", name: "deauthorizeModule(...)", access: "owner", color: WRITE },
+              { id: "isAuthorizedModule", name: "isAuthorizedModule(...)", access: "view", color: READ },
+              { id: "pause", name: "pause()", access: "auth", color: EMERGENCY },
+              { id: "unpause", name: "unpause()", access: "owner", color: EMERGENCY },
               { id: "isPaused", name: "isPaused()", access: "view", color: READ },
-              { id: "pause", name: "pause()", access: "emergency", color: EMERGENCY },
-              { id: "unpause", name: "unpause()", access: "emergency", color: EMERGENCY },
-              { id: "emergencyTransferAll", name: "emergencyTransferAll(...)", access: "emergency", color: EMERGENCY },
+              { id: "emergencyTransferAll", name: "emergencyTransferAll(...)", access: "owner", color: EMERGENCY },
+              { id: "setHourlyWithdrawn", name: "setHourlyWithdrawn(...)", access: "auth", color: WRITE },
               { id: "getHourlyWithdrawn", name: "getHourlyWithdrawn(...)", access: "view", color: READ },
               { id: "incrementHourlyWithdrawn", name: "incrementHourlyWithdrawn(...)", access: "auth", color: WRITE },
+              { id: "setModuleParameter", name: "setModuleParameter(...)", access: "owner", color: WRITE },
+              { id: "getModuleParameter", name: "getModuleParameter(...)", access: "view", color: READ },
             ]
           },
           {
             key: "TokenManager",
             title: "TOKENMANAGER",
-            subtitle: "Registry + Oracle",
+            subtitle: "Registry + Oracle Integration",
             x: 900,
             y: 50,
             functions: [
@@ -413,7 +1534,7 @@
           {
             key: "ValueCalculator",
             title: "VALUECALCULATOR",
-            subtitle: "Valuation + Cache",
+            subtitle: "Valuation Engine + Cache",
             x: 50,
             y: 400,
             functions: [
@@ -429,7 +1550,7 @@
           {
             key: "LiquidityManager",
             title: "LIQUIDITYMANAGER",
-            subtitle: "Deposit/Withdraw",
+            subtitle: "Deposit/Withdraw + Rate Limiting",
             x: 450,
             y: 400,
             functions: [
@@ -444,9 +1565,9 @@
           {
             key: "SwapManager",
             title: "SWAPMANAGER",
-            subtitle: "DEX Integration",
+            subtitle: "DEX Integration + Swap Logic",
             x: 900,
-            y: 400,
+            y: 450,
             functions: [
               { id: "swapTokenForWETH", name: "swapTokenForWETH(...)", access: "public", color: WRITE },
               { id: "getSwapQuote", name: "getSwapQuote(code, amount)", access: "view", color: READ },
@@ -485,9 +1606,9 @@
           {
             key: "External",
             title: "EXTERNAL",
-            subtitle: "Integrations",
+            subtitle: "Integrations + Oracles",
             x: 900,
-            y: 750,
+            y: 850,
             functions: [
               { id: "AggregatorV3.latestRoundData", name: "Chainlink.latestRoundData()", access: "external", color: EXTERNAL },
               { id: "AggregatorV3.decimals", name: "Chainlink.decimals()", access: "external", color: EXTERNAL },
@@ -497,6 +1618,9 @@
               { id: "WETH.withdraw", name: "WETH.withdraw(amount)", access: "external", color: EXTERNAL },
               { id: "WETH.balanceOf", name: "WETH.balanceOf(account)", access: "external", color: EXTERNAL },
               { id: "IERC20.balanceOf", name: "IERC20.balanceOf(account)", access: "external", color: EXTERNAL },
+              { id: "IERC20.transfer", name: "IERC20.transfer(...)", access: "external", color: EXTERNAL },
+              { id: "IERC20.transferFrom", name: "IERC20.transferFrom(...)", access: "external", color: EXTERNAL },
+              { id: "IERC20.approve", name: "IERC20.approve(...)", access: "external", color: EXTERNAL },
             ]
           },
         ];
@@ -769,7 +1893,29 @@
           const [selectedFunction, setSelectedFunction] = useState(null);
           const [viewMode, setViewMode] = useState('outgoing'); // 'outgoing' or 'incoming'
           const [tooltip, setTooltip] = useState(null);
+          const [showDocModal, setShowDocModal] = useState(null);
+          const [docsPopup, setDocsPopup] = useState(null); // For full documentation popup
           const tooltipTimeoutRef = React.useRef(null);
+
+          // Handle ESC key to close popup
+          React.useEffect(() => {
+            const handleKeyDown = (e) => {
+              if (e.key === 'Escape' && docsPopup) {
+                setDocsPopup(null);
+              }
+            };
+            document.addEventListener('keydown', handleKeyDown);
+            return () => document.removeEventListener('keydown', handleKeyDown);
+          }, [docsPopup]);
+
+          const getAccessType = (access) => {
+            if (access.includes('owner') || access.includes('Owner')) return 'owner';
+            if (access.includes('auth') || access.includes('Auth')) return 'auth';
+            if (access.includes('view') || access.includes('View')) return 'view';
+            if (access.includes('emergency') || access.includes('Emergency')) return 'emergency';
+            if (access.includes('public')) return 'public';
+            return 'view'; // default
+          };
 
           const handleFunctionClick = (fullId) => {
             setSelectedFunction(selectedFunction === fullId ? null : fullId);
@@ -937,7 +2083,7 @@
                 )}
               </div>
 
-              <svg width={1300} height={1300} style={{ display: "block", margin: "0 auto" }}>
+              <svg width={1300} height={1400} style={{ display: "block", margin: "0 auto" }}>
                 {/* Draw modules first */}
                 {modules.map(mod => (
                   <ModuleCard 
@@ -1007,23 +2153,134 @@
                   </div>
                   {tooltip.content.docs && (
                     <div style={{ marginTop: "10px", paddingTop: "8px", borderTop: "1px solid #334155" }}>
-                      <a 
-                        href={tooltip.content.docs} 
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setDocsPopup({
+                            functionId: tooltip.functionId,
+                            basicDetails: tooltip.content
+                          });
+                        }}
                         style={{ 
+                          background: "none",
+                          border: "none",
                           color: HIGHLIGHT, 
                           fontSize: "11px", 
                           textDecoration: "none",
                           display: "flex",
                           alignItems: "center",
-                          gap: "5px"
+                          gap: "5px",
+                          cursor: "pointer",
+                          padding: 0
                         }}
                       >
                         📄 View Documentation →
-                      </a>
+                      </button>
                     </div>
                   )}
+                </div>
+              )}
+              
+              {/* Beautiful Documentation Modal - from Old_diagram.html */}
+              {docsPopup && (
+                <div 
+                  className={`docs-overlay ${docsPopup ? 'active' : ''}`}
+                  onClick={(e) => {
+                    if (e.target === e.currentTarget) {
+                      setDocsPopup(null);
+                    }
+                  }}
+                >
+                  <div className="docs-popup">
+                    <div className="docs-header">
+                      <h3 className="docs-title">
+                        🔧 {docsPopup.basicDetails?.signature || docsPopup.functionId}
+                        {docsPopup.basicDetails && (
+                          <span className={`access-badge access-${getAccessType(docsPopup.basicDetails.access)}`}>
+                            {docsPopup.basicDetails.access}
+                          </span>
+                        )}
+                      </h3>
+                      <button 
+                        className="docs-close"
+                        onClick={() => setDocsPopup(null)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className="docs-content">
+                      {docsPopup.basicDetails && (
+                        <>
+                          <div className="docs-signature">
+                            {docsPopup.basicDetails.signature}
+                          </div>
+                          
+                          {docsPopup.basicDetails.description && (
+                            <div className="docs-section">
+                              <h4>📝 Description</h4>
+                              <p>{docsPopup.basicDetails.description}</p>
+                            </div>
+                          )}
+                          
+                          {docsPopup.basicDetails.params && (
+                            <div className="docs-section">
+                              <h4>📋 Parameters</h4>
+                              <p>{docsPopup.basicDetails.params}</p>
+                            </div>
+                          )}
+                          
+                          {docsPopup.basicDetails.returns && (
+                            <div className="docs-section">
+                              <h4>↩️ Returns</h4>
+                              <p>{docsPopup.basicDetails.returns}</p>
+                            </div>
+                          )}
+                          
+                          {docsPopup.basicDetails.access && (
+                            <div className="docs-section">
+                              <h4>� Access Control</h4>
+                              <p><strong>{docsPopup.basicDetails.access}</strong> - Anyone can call this function</p>
+                            </div>
+                          )}
+                          
+                          {docsPopup.basicDetails.docs && (
+                            <div className="docs-section">
+                              <h4>� Documentation Link</h4>
+                              <p style={{ fontSize: '13px', color: '#cbd5e1', marginBottom: '12px' }}>
+                                For detailed implementation notes, usage examples, and parameter descriptions, 
+                                refer to the complete API documentation.
+                              </p>
+                              <a 
+                                href={docsPopup.basicDetails.docs} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                style={{
+                                  color: '#60a5fa',
+                                  textDecoration: 'none',
+                                  fontSize: '14px',
+                                  display: 'inline-block',
+                                  padding: '8px 16px',
+                                  background: 'rgba(96, 165, 250, 0.1)',
+                                  border: '1px solid #60a5fa',
+                                  borderRadius: '6px',
+                                  transition: 'all 0.2s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.target.style.background = 'rgba(96, 165, 250, 0.2)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.target.style.background = 'rgba(96, 165, 250, 0.1)';
+                                }}
+                              >
+                                🔗 Open Full Documentation
+                              </a>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

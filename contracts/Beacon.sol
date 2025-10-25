@@ -345,14 +345,14 @@ contract Beacon {
      * @return frozenModules Numero moduli frozen
      * @return isGlobalFrozen Se freeze globale è attivo
      * @return currentOwner Owner corrente
-     * @return pendingOwner Pending owner (se presente)
+     * @return pendingOwnerAddress Pending owner (se presente)
      */
     function getBeaconStatus() external view returns (
         uint256 totalModules,
         uint256 frozenModules,
         bool isGlobalFrozen,
         address currentOwner,
-        address pendingOwner
+        address pendingOwnerAddress
     ) {
         totalModules = registeredModules.length;
         
@@ -365,9 +365,9 @@ contract Beacon {
         
         isGlobalFrozen = globalFreeze;
         currentOwner = owner;
-        pendingOwner = pendingOwner;
+        pendingOwnerAddress = pendingOwner;
         
-        return (totalModules, frozenModules, isGlobalFrozen, currentOwner, pendingOwner);
+        return (totalModules, frozenModules, isGlobalFrozen, currentOwner, pendingOwnerAddress);
     }
 
     /**

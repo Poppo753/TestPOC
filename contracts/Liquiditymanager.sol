@@ -154,7 +154,6 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
         // VALIDATE SHARE CALCULATION FOR EXISTING SUPPLY
         if (preDepositSupply > 0) {
             // Verifica che il calcolo shares sia consistente
-            uint256 expectedShares = (netDeposit * preDepositSupply) / (preDepositWethBalance + netDeposit);
             require(
                 (shares * preDepositSupply) / (preDepositWethBalance + netDeposit) > 0,
                 "Share calculation error"
@@ -453,7 +452,7 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
      * @dev Implementa accumulo reale degli ultimi 24h invece di semplice validazione (Issue #2 FIX)
      * @param user Indirizzo utente
      * @param amount Quantità da prelevare (in ETH wei)
-     * @return canWithdraw Se può prelevare
+     * @return allowed Se può prelevare
      * @return reason Motivo se non può
      * 
      * @custom:logic-flow
@@ -463,7 +462,7 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
      * 4. Loop ultimi 24 ore per daily usage
      * 5. Valida: hourly + amount <= hourlyLimit && daily + amount <= dailyLimit
      */
-    function checkWithdrawLimits(address user, uint256 amount) public view returns (bool canWithdraw, string memory reason) {
+    function checkWithdrawLimits(address user, uint256 amount) public view returns (bool allowed, string memory reason) {
         // CHECK MIN/MAX PER TRANSAZIONE
         if (amount < withdrawLimits.minWithdraw) {
             return (false, "Below minimum withdraw");
@@ -657,10 +656,10 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
      * @notice Verifica se withdraw è possibile per utente
      * @param user Indirizzo utente
      * @param shares Shares da prelevare
-     * @return canWithdraw Se può prelevare
+     * @return isAllowed Se può prelevare
      * @return errorReason Motivo errore se non può
      */
-    function canWithdraw(address user, uint256 shares) external view returns (bool canWithdraw, string memory errorReason) {
+    function canWithdraw(address user, uint256 shares) external view returns (bool isAllowed, string memory errorReason) {
         // Check if paused
         if (paused) {
             return (false, "Contract is paused");
