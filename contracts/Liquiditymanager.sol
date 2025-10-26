@@ -147,18 +147,29 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
         uint256 preDepositWethBalance = IERC20(wethAddress).balanceOf(proxyGeneral);
         uint256 preDepositSupply = proxy.totalSupply();
         
-        // SHARES CALCULATION (based on net deposit)
-        uint256 shares = netDeposit;
-        require(shares > 0, "No shares to mint");
+        // SHARES CALCULATION - PROPORTIONAL TO POOL VALUE
+        // Formula: shares = (netDeposit * totalSupply) / totalPoolValue
+        // Bootstrap (first deposit): shares = netDeposit (1:1 ratio)
+        uint256 shares;
         
-        // VALIDATE SHARE CALCULATION FOR EXISTING SUPPLY
-        if (preDepositSupply > 0) {
-            // Verifica che il calcolo shares sia consistente
-            require(
-                (shares * preDepositSupply) / (preDepositWethBalance + netDeposit) > 0,
-                "Share calculation error"
-            );
+        if (preDepositSupply == 0) {
+            // Bootstrap deposit: 1:1 ratio
+            shares = netDeposit;
+        } else {
+            // Subsequent deposits: proportional to pool value
+            address valueCalculatorAddr = IBeacon(beacon).getImplementation("ValueCalculator");
+            IValueCalculatorForModules calculator = IValueCalculatorForModules(valueCalculatorAddr);
+            
+            uint256 totalValue = calculator.getTotalPoolValueView();
+            require(totalValue > 0, "Invalid pool state");
+            
+            // Calculate proportional shares
+            shares = (netDeposit * preDepositSupply) / totalValue;
+            
+            require(shares > 0, "Deposit too small for current pool size");
         }
+        
+        require(shares > 0, "No shares to mint");
         
         // WRAP NET DEPOSIT TO WETH AND TRANSFER TO PROXY
         weth.deposit{value: netDeposit}();
@@ -293,19 +304,24 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
         // GET WETH FROM PROXYGENERAL
         IWETH weth = IWETH(wethAddress);
         
-        // TRANSFER WETH TO THIS CONTRACT from ProxyGeneral
-        proxy.withdrawToken("WETH", netWithdraw, address(this));
+        // TRANSFER WETH TO THIS CONTRACT from ProxyGeneral (netWithdraw + fee if applicable)
+        uint256 totalWethNeeded = netWithdraw;
+        if (feeAmount > 0 && feeRecipient != address(0)) {
+            totalWethNeeded += feeAmount;
+        }
+        proxy.withdrawToken("WETH", totalWethNeeded, address(this));
         
-        // UNWRAP WETH TO ETH
-        weth.withdraw(netWithdraw);
+        // UNWRAP WETH TO ETH (all at once)
+        weth.withdraw(totalWethNeeded);
         
         // TRANSFER ETH TO USER
         (bool success, ) = msg.sender.call{value: netWithdraw}("");
         require(success, "ETH transfer failed");
         
-        // TRANSFER FEE TO RECIPIENT IF APPLICABLE
+        // TRANSFER FEE TO RECIPIENT IF APPLICABLE (in ETH)
         if (feeAmount > 0 && feeRecipient != address(0)) {
-            proxy.withdrawToken("WETH", feeAmount, feeRecipient);
+            (bool feeSuccess, ) = feeRecipient.call{value: feeAmount}("");
+            require(feeSuccess, "Fee transfer failed");
         }
         
         // FINAL VALIDATION

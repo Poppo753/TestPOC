@@ -413,18 +413,44 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         }
         
         // CHECK TOKEN VALIDITY
-        if (!tokens.isTokenActive(spendTokenCode)) {
+        // WETH SPECIAL CASE: WETH not in TokenManager, resolved via Beacon
+        bool spendTokenIsWeth = (keccak256(bytes(spendTokenCode)) == keccak256(bytes("WETH")));
+        bool receiveTokenIsWeth = (keccak256(bytes(receiveTokenCode)) == keccak256(bytes("WETH")));
+        
+        // Validate spend token (skip TokenManager check if WETH)
+        if (!spendTokenIsWeth && !tokens.isTokenActive(spendTokenCode)) {
             validation.errorReason = "Spend token is inactive";
             return validation;
         }
-        if (!tokens.isTokenActive(receiveTokenCode)) {
+        
+        // Validate receive token (skip TokenManager check if WETH)
+        if (!receiveTokenIsWeth && !tokens.isTokenActive(receiveTokenCode)) {
             validation.errorReason = "Receive token is inactive";
             return validation;
         }
         
+        // If WETH is involved, verify it's registered in Beacon
+        if (spendTokenIsWeth || receiveTokenIsWeth) {
+            address wethAddress = IBeacon(beacon).getImplementation("WETH");
+            if (wethAddress == address(0)) {
+                validation.errorReason = "WETH not registered in Beacon";
+                return validation;
+            }
+        }
+        
         // GET TOKEN ADDRESSES
-        validation.spendTokenAddress = tokens.getTokenAddress(spendTokenCode);
-        validation.receiveTokenAddress = tokens.getTokenAddress(receiveTokenCode);
+        // WETH special case: get from Beacon instead of TokenManager
+        if (spendTokenIsWeth) {
+            validation.spendTokenAddress = IBeacon(beacon).getImplementation("WETH");
+        } else {
+            validation.spendTokenAddress = tokens.getTokenAddress(spendTokenCode);
+        }
+        
+        if (receiveTokenIsWeth) {
+            validation.receiveTokenAddress = IBeacon(beacon).getImplementation("WETH");
+        } else {
+            validation.receiveTokenAddress = tokens.getTokenAddress(receiveTokenCode);
+        }
         
         if (validation.spendTokenAddress == address(0) || validation.receiveTokenAddress == address(0)) {
             validation.errorReason = "Invalid token addresses";

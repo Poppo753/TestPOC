@@ -75,7 +75,7 @@ describe("SwapManager Contract", function () {
     await beacon.updateImplementation("TokenManager", tokenManager.target);
     await beacon.updateImplementation("SwapManager", swapManager.target);
 
-    // Setup tokens in TokenManager
+    // Setup tokens in TokenManager (WETH is NOT registered - handled via Beacon)
     await tokenManager.manageTokenData(
       "USDC", mockUSDC.target, mockOracle.target, 6, 8, 3600
     );
@@ -420,6 +420,217 @@ describe("SwapManager Contract", function () {
         
         expect(output).to.be.greaterThanOrEqual(0);
       });
+    });
+  });
+
+  describe("🔥 performSwap() - CRITICAL Tests", function () {
+    let mockRouter: any;
+
+    beforeEach(async function () {
+      // Deploy MockSimpleSwap router
+      const MockSimpleSwap = await ethers.getContractFactory("MockSimpleSwap");
+      mockRouter = await MockSimpleSwap.deploy();
+
+      // Configure custody holder (ProxyGeneral) for custody-based swap pattern
+      await mockRouter.setCustodyHolder(proxyGeneral.target);
+
+      // Set router in SwapManager
+      await swapManager.setSimpleSwapRouter(mockRouter.target);
+
+      // Authorize SwapManager in ProxyGeneral
+      await proxyGeneral.authorizeModule(swapManager.target, "SwapManager");
+
+      // Configure swap limits
+      await swapManager.setSwapLimits("USDC", ethers.parseUnits("10", 6), ethers.parseUnits("100000", 6));
+      await swapManager.setSwapLimits("WBTC", ethers.parseUnits("0.001", 8), ethers.parseUnits("10", 8));
+
+      // Mint tokens to router for swaps
+      await mockUSDC.mint(mockRouter.target, ethers.parseUnits("1000000", 6));
+      await mockWBTC.mint(mockRouter.target, ethers.parseUnits("100", 8));
+      await mockWETH.mint(mockRouter.target, ethers.parseEther("1000"));
+
+      // Configure expected outputs in mock router
+      // Direct pairs
+      // USDC → WETH: 1000 USDC → 0.5 ETH (price $2000/ETH)
+      await mockRouter.setExpectedOutput(mockUSDC.target, mockWETH.target, ethers.parseEther("0.5"));
+      // WETH → USDC: 1 ETH → 2000 USDC
+      await mockRouter.setExpectedOutput(mockWETH.target, mockUSDC.target, ethers.parseUnits("2000", 6));
+      // USDC → WBTC: 1000 USDC → 0.02 WBTC (direct routing)
+      await mockRouter.setExpectedOutput(mockUSDC.target, mockWBTC.target, ethers.parseUnits("0.02", 8));
+      // WBTC → USDC: 0.1 WBTC → 5000 USDC
+      await mockRouter.setExpectedOutput(mockWBTC.target, mockUSDC.target, ethers.parseUnits("5000", 6));
+      
+      // Intermediate pairs for multi-hop routing (USDC → WETH → WBTC)
+      // WETH → WBTC: 0.5 ETH → 0.04 WBTC (for USDC→WETH→WBTC path)
+      await mockRouter.setExpectedOutput(mockWETH.target, mockWBTC.target, ethers.parseUnits("0.04", 8));
+      // WBTC → WETH: 0.02 WBTC → 1 ETH
+      await mockRouter.setExpectedOutput(mockWBTC.target, mockWETH.target, ethers.parseEther("1.0"));
+    });
+
+    // SM-SWAP-CRIT-001: Successful swap TokenA → WETH
+    it("SM-SWAP-CRIT-001: should execute successful swap TokenA → WETH", async function () {
+      // Arrange: Mint USDC to ProxyGeneral
+      await mockUSDC.mint(proxyGeneral.target, ethers.parseUnits("10000", 6));
+
+      const swapAmount = ethers.parseUnits("1000", 6); // 1000 USDC
+      const expectedWETH = ethers.parseEther("0.5"); // Expected: 0.5 WETH (from mock setup)
+
+      const wethBalanceBefore = await mockWETH.balanceOf(proxyGeneral.target);
+
+      // Act: Perform swap USDC → WETH
+      await swapManager.performSwap("USDC", "WETH", swapAmount);
+
+      // Assert: Verify WETH received
+      const wethBalanceAfter = await mockWETH.balanceOf(proxyGeneral.target);
+      const wethReceived = wethBalanceAfter - wethBalanceBefore;
+
+      expect(wethReceived).to.equal(expectedWETH);
+    });
+
+    // SM-SWAP-CRIT-002: Successful swap WETH → TokenB
+    it("SM-SWAP-CRIT-002: should execute successful swap WETH → TokenB", async function () {
+      // Arrange: Mint WETH to ProxyGeneral
+      await mockWETH.mint(proxyGeneral.target, ethers.parseEther("10"));
+
+      const swapAmount = ethers.parseEther("1"); // 1 WETH
+      const expectedUSDC = ethers.parseUnits("2000", 6); // Expected: 2000 USDC (from mock setup)
+
+      const usdcBalanceBefore = await mockUSDC.balanceOf(proxyGeneral.target);
+
+      // Act: Perform swap WETH → USDC
+      await swapManager.performSwap("WETH", "USDC", swapAmount);
+
+      // Assert: Verify USDC received
+      const usdcBalanceAfter = await mockUSDC.balanceOf(proxyGeneral.target);
+      const usdcReceived = usdcBalanceAfter - usdcBalanceBefore;
+
+      expect(usdcReceived).to.equal(expectedUSDC);
+    });
+
+    // SM-SWAP-CRIT-003: Successful swap TokenA → TokenB (via WETH)
+    it("SM-SWAP-CRIT-003: should execute successful swap TokenA → TokenB (via WETH)", async function () {
+      // Arrange: Ensure ProxyGeneral has USDC balance
+      await mockUSDC.mint(proxyGeneral.target, ethers.parseUnits("10000", 6));
+
+      const swapAmount = ethers.parseUnits("1000", 6);
+      const expectedWBTC = ethers.parseUnits("0.02", 8);
+
+      const wbtcBalanceBefore = await mockWBTC.balanceOf(proxyGeneral.target);
+
+      // Act: Swap USDC → WBTC via SwapManager
+      const amountReceived = await swapManager.performSwap.staticCall("USDC", "WBTC", swapAmount);
+      await swapManager.performSwap("USDC", "WBTC", swapAmount);
+
+      // Assert
+      const wbtcBalanceAfter = await mockWBTC.balanceOf(proxyGeneral.target);
+      const wbtcReceived = wbtcBalanceAfter - wbtcBalanceBefore;
+
+      expect(wbtcReceived).to.equal(expectedWBTC);
+      expect(amountReceived).to.equal(expectedWBTC);
+    });
+
+    // SM-SWAP-CRIT-004: Slippage protection (revert if exceeded)
+    it("SM-SWAP-CRIT-004: should revert when slippage exceeds maximum", async function () {
+      // Arrange: Configure mock router to return low output (simulate high slippage)
+      await mockRouter.setSimulateLowOutput(true, 8000); // 20% slippage (80% of expected)
+
+      const swapAmount = ethers.parseUnits("1000", 6);
+
+      // Act & Assert: Should revert with slippage error
+      // maxSlippage is 300 bps (3%), but we're simulating 20% slippage
+      await expect(swapManager.performSwap("USDC", "WBTC", swapAmount))
+        .to.be.revertedWith("Slippage exceeds maximum allowed");
+
+      // Cleanup
+      await mockRouter.setSimulateLowOutput(false, 10000);
+    });
+
+    // SM-SWAP-CRIT-005: Swap when swaps disabled (revert)
+    it("SM-SWAP-CRIT-005: should revert when swaps are disabled", async function () {
+      // Arrange: Disable swaps
+      await swapManager.setSwapsEnabled(false);
+
+      const swapAmount = ethers.parseUnits("1000", 6);
+
+      // Act & Assert
+      await expect(swapManager.performSwap("USDC", "WBTC", swapAmount))
+        .to.be.revertedWith("Swaps are disabled");
+
+      // Cleanup
+      await swapManager.setSwapsEnabled(true);
+    });
+
+    // SM-SWAP-CRIT-006: Swap when paused (revert)
+    it.skip("SM-SWAP-CRIT-006: should revert when contract is paused", async function () {
+      // Note: SwapManager doesn't have pause() function in current implementation
+      // It uses whenSwapsEnabled modifier instead
+      // This test is skipped pending pause feature implementation via Beacon
+      // When implemented, test should verify revert with "Pausable: paused"
+    });
+
+    // SM-SWAP-CRIT-007: Insufficient balance (revert)
+    it("SM-SWAP-CRIT-007: should revert when insufficient token balance", async function () {
+      // Arrange: Try to swap more than available
+      const availableBalance = await mockUSDC.balanceOf(proxyGeneral.target);
+      const swapAmount = availableBalance + ethers.parseUnits("1000", 6);
+
+      // Act & Assert
+      await expect(swapManager.performSwap("USDC", "WBTC", swapAmount))
+        .to.be.revertedWith("Insufficient balance in pool");
+    });
+
+    // SM-SWAP-CRIT-008: Zero amount swap (revert)
+    it("SM-SWAP-CRIT-008: should revert when swap amount is zero", async function () {
+      // Act & Assert
+      await expect(swapManager.performSwap("USDC", "WETH", 0))
+        .to.be.revertedWith("Amount must be greater than 0");
+    });
+
+    // SM-SWAP-CRIT-009: Identical from/to tokens (revert)
+    it("SM-SWAP-CRIT-009: should revert when swapping same token", async function () {
+      const swapAmount = ethers.parseUnits("1000", 6);
+
+      // Act & Assert
+      await expect(swapManager.performSwap("USDC", "USDC", swapAmount))
+        .to.be.revertedWith("Cannot swap same token");
+    });
+
+    // SM-SWAP-CRIT-010: Token not registered (revert)
+    it("SM-SWAP-CRIT-010: should revert when token not registered in TokenManager", async function () {
+      const swapAmount = ethers.parseUnits("1000", 6);
+
+      // Act & Assert: Try to swap to unregistered token (DAI not registered)
+      await expect(swapManager.performSwap("USDC", "DAI", swapAmount))
+        .to.be.revertedWith("Receive token is inactive");
+    });
+
+    // SM-SWAP-CRIT-011: Deadline expired (revert)
+    it.skip("SM-SWAP-CRIT-011: should revert when deadline expired", async function () {
+      // Note: performSwap() doesn't have deadline parameter in current implementation
+      // This test is skipped pending deadline feature implementation
+      // When implemented, test should verify revert with "Transaction too old"
+    });
+
+    // SM-SWAP-CRIT-012: Balance verification after swap
+    it("SM-SWAP-CRIT-012: should verify balance changes correctly after swap", async function () {
+      // Arrange: Ensure ProxyGeneral has USDC
+      await mockUSDC.mint(proxyGeneral.target, ethers.parseUnits("10000", 6));
+
+      const swapAmount = ethers.parseUnits("1000", 6);
+      const expectedWBTC = ethers.parseUnits("0.02", 8);
+
+      const usdcBefore = await mockUSDC.balanceOf(proxyGeneral.target);
+      const wbtcBefore = await mockWBTC.balanceOf(proxyGeneral.target);
+
+      // Act
+      await swapManager.performSwap("USDC", "WBTC", swapAmount);
+
+      // Assert: USDC decreased, WBTC increased
+      const usdcAfter = await mockUSDC.balanceOf(proxyGeneral.target);
+      const wbtcAfter = await mockWBTC.balanceOf(proxyGeneral.target);
+
+      expect(usdcBefore - usdcAfter).to.equal(swapAmount);
+      expect(wbtcAfter - wbtcBefore).to.equal(expectedWBTC);
     });
   });
 

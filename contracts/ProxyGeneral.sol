@@ -5,8 +5,10 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./interfaces/IBeacon.sol";
 import "./interfaces/IWETH.sol";
+import "./interfaces/ITokenManagerForModules.sol";
 
 /**
  * @title ProxyGeneral
@@ -15,6 +17,8 @@ import "./interfaces/IWETH.sol";
  * @custom:security-contact security@yourdomain.com
  */
 contract ProxyGeneral is ERC20, Ownable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+    
     /// @notice Indirizzo del contratto Beacon per resolution moduli
     address public immutable beacon;
     
@@ -33,6 +37,24 @@ contract ProxyGeneral is ERC20, Ownable, ReentrancyGuard {
 
     /// @notice Storage opzionale per parametri condivisi cross-modulo
     mapping(string => uint256) public moduleParameters;
+
+    // ==================== RATE LIMITING STORAGE ====================
+
+    /// @notice Rate limit tracking structure
+    struct RateLimit {
+        uint256 hourlyLimit;      // Limite orario in wei
+        uint256 dailyLimit;       // Limite giornaliero in wei
+        uint256 hourlyUsed;       // Consumato nell'ora corrente
+        uint256 dailyUsed;        // Consumato nel giorno corrente
+        uint256 lastHourReset;    // Timestamp ultimo reset orario
+        uint256 lastDayReset;     // Timestamp ultimo reset giornaliero
+    }
+
+    /// @notice Per-user rate limits per operation type
+    mapping(address => mapping(string => RateLimit)) private userRateLimits;
+
+    /// @notice Global rate limits configuration per operation type
+    mapping(string => RateLimit) private globalRateLimits;
 
     // ==================== EVENTS ====================
 
@@ -196,6 +218,125 @@ contract ProxyGeneral is ERC20, Ownable, ReentrancyGuard {
         }
     }
 
+    // ==================== TOKEN CUSTODY OPERATIONS ====================
+
+    /**
+     * @notice Preleva token dal custody ProxyGeneral
+     * @dev Solo moduli autorizzati. Risolve tokenAddress tramite TokenManager.
+     * @param tokenCode Codice token (es: "WETH", "USDC", "WBTC")
+     * @param amount Quantità token in wei/smallest unit
+     * @param to Indirizzo destinatario (user o modulo)
+     * 
+     * @custom:security onlyAuthorizedModule
+     * @custom:validation tokenCode must be active in TokenManager
+     * @custom:validation amount > 0
+     * @custom:validation to != address(0)
+     * @custom:validation sufficient balance in custody
+     * 
+     * @custom:emits TokenWithdrawn
+     * @custom:reverts "Invalid token code" se tokenCode vuoto
+     * @custom:reverts "Invalid amount" se amount == 0
+     * @custom:reverts "Invalid recipient" se to == address(0)
+     * @custom:reverts "Token not active" se token non trovato (da TokenManager)
+     * @custom:reverts "Invalid token address" se resolution fallisce
+     * @custom:reverts "Insufficient token balance" se balance < amount
+     * @custom:reverts SafeERC20 errors se transfer fallisce
+     */
+    function withdrawToken(
+        string memory tokenCode, 
+        uint256 amount, 
+        address to
+    ) external onlyAuthorizedModule whenNotPaused {
+        // VALIDAZIONI INIZIALI
+        require(bytes(tokenCode).length > 0, "Invalid token code");
+        require(amount > 0, "Invalid amount");
+        require(to != address(0), "Invalid recipient");
+        
+        address tokenAddress;
+        
+        // SPECIAL CASE: WETH is resolved via Beacon directly (not in TokenManager)
+        if (keccak256(bytes(tokenCode)) == keccak256(bytes("WETH"))) {
+            tokenAddress = IBeacon(beacon).getImplementation("WETH");
+            require(tokenAddress != address(0), "WETH not found in Beacon");
+        } else {
+            // RESOLVE OTHER TOKENS via TokenManager
+            address tokenManagerAddr = IBeacon(beacon).getImplementation("TokenManager");
+            require(tokenManagerAddr != address(0), "TokenManager not found");
+            
+            ITokenManagerForModules tokenManager = ITokenManagerForModules(tokenManagerAddr);
+            ITokenManagerForModules.TokenInfo memory tokenInfo = tokenManager.getTokenInfo(tokenCode);
+            
+            tokenAddress = tokenInfo.tokenAddress;
+            require(tokenAddress != address(0), "Invalid token address");
+        }
+        
+        // CHECK BALANCE
+        uint256 currentBalance = IERC20(tokenAddress).balanceOf(address(this));
+        require(currentBalance >= amount, "Insufficient token balance");
+        
+        // EXECUTE TRANSFER (SafeERC20 auto-reverts on failure)
+        IERC20(tokenAddress).safeTransfer(to, amount);
+        
+        // EMIT EVENT
+        emit TokenWithdrawn(tokenCode, amount, to);
+    }
+
+    /**
+     * @notice Deposita token nel custody ProxyGeneral
+     * @dev Solo moduli autorizzati. Richiede approval preventiva.
+     * @param tokenCode Codice token (es: "WETH", "USDC", "WBTC")
+     * @param amount Quantità token in wei/smallest unit
+     * @param from Indirizzo mittente (deve aver dato approval)
+     * 
+     * @custom:security onlyAuthorizedModule
+     * @custom:validation tokenCode must be active in TokenManager
+     * @custom:validation amount > 0
+     * @custom:validation from != address(0)
+     * @custom:validation from must have approved ProxyGeneral
+     * 
+     * @custom:emits TokenDeposited
+     * @custom:reverts "Invalid token code" se tokenCode vuoto
+     * @custom:reverts "Invalid amount" se amount == 0
+     * @custom:reverts "Invalid sender" se from == address(0)
+     * @custom:reverts "Token not active" se token non trovato (da TokenManager)
+     * @custom:reverts "Invalid token address" se resolution fallisce
+     * @custom:reverts SafeERC20 errors se transferFrom fallisce o no approval
+     */
+    function depositToken(
+        string memory tokenCode, 
+        uint256 amount, 
+        address from
+    ) external onlyAuthorizedModule whenNotPaused {
+        // VALIDAZIONI INIZIALI
+        require(bytes(tokenCode).length > 0, "Invalid token code");
+        require(amount > 0, "Invalid amount");
+        require(from != address(0), "Invalid sender");
+        
+        address tokenAddress;
+        
+        // SPECIAL CASE: WETH is resolved via Beacon directly (not in TokenManager)
+        if (keccak256(bytes(tokenCode)) == keccak256(bytes("WETH"))) {
+            tokenAddress = IBeacon(beacon).getImplementation("WETH");
+            require(tokenAddress != address(0), "WETH not found in Beacon");
+        } else {
+            // RESOLVE OTHER TOKENS via TokenManager
+            address tokenManagerAddr = IBeacon(beacon).getImplementation("TokenManager");
+            require(tokenManagerAddr != address(0), "TokenManager not found");
+            
+            ITokenManagerForModules tokenManager = ITokenManagerForModules(tokenManagerAddr);
+            ITokenManagerForModules.TokenInfo memory tokenInfo = tokenManager.getTokenInfo(tokenCode);
+            
+            tokenAddress = tokenInfo.tokenAddress;
+            require(tokenAddress != address(0), "Invalid token address");
+        }
+        
+        // EXECUTE TRANSFER FROM (SafeERC20 auto-reverts on failure)
+        IERC20(tokenAddress).safeTransferFrom(from, address(this), amount);
+        
+        // EMIT EVENT
+        emit TokenDeposited(tokenCode, amount, from);
+    }
+
     // ==================== SWAP SUPPORT ====================
 
     /**
@@ -343,6 +484,157 @@ contract ProxyGeneral is ERC20, Ownable, ReentrancyGuard {
     }
 
     // ==================== CROSS-MODULE STATE MANAGEMENT ====================
+
+    // ==================== RATE LIMITING FUNCTIONS ====================
+
+    /**
+     * @notice Configura limiti rate limiting per tipo operazione
+     * @dev Solo owner. Inizializza o aggiorna limiti globali.
+     * @param operationType Tipo operazione ("deposit", "withdraw", etc.)
+     * @param hourlyLimit Limite orario in wei (0 = unlimited)
+     * @param dailyLimit Limite giornaliero in wei (0 = unlimited)
+     */
+    function setRateLimit(
+        string memory operationType, 
+        uint256 hourlyLimit, 
+        uint256 dailyLimit
+    ) external onlyOwner {
+        require(bytes(operationType).length > 0, "Invalid operation type");
+        require(hourlyLimit <= dailyLimit || dailyLimit == 0, "Hourly limit exceeds daily limit");
+        
+        globalRateLimits[operationType] = RateLimit({
+            hourlyLimit: hourlyLimit,
+            dailyLimit: dailyLimit,
+            hourlyUsed: 0,
+            dailyUsed: 0,
+            lastHourReset: block.timestamp,
+            lastDayReset: block.timestamp
+        });
+        
+        emit RateLimitUpdated(operationType, hourlyLimit, dailyLimit);
+    }
+
+    /**
+     * @notice Verifica se operazione è permessa per rate limit
+     * @param user Indirizzo utente
+     * @param operationType Tipo operazione ("deposit", "withdraw", etc.)
+     * @param amount Quantità proposta (in wei)
+     * @return allowed True se operazione permessa
+     * @return remainingHourly Quanto può ancora usare nell'ora corrente
+     * @return remainingDaily Quanto può ancora usare nel giorno corrente
+     */
+    function checkRateLimit(
+        address user, 
+        string memory operationType, 
+        uint256 amount
+    ) external view returns (
+        bool allowed, 
+        uint256 remainingHourly, 
+        uint256 remainingDaily
+    ) {
+        // Get global configuration
+        RateLimit storage globalLimit = globalRateLimits[operationType];
+        
+        // If no limit configured, allow all
+        if (globalLimit.hourlyLimit == 0 && globalLimit.dailyLimit == 0) {
+            return (true, type(uint256).max, type(uint256).max);
+        }
+        
+        // Get user limit
+        RateLimit storage userLimit = userRateLimits[user][operationType];
+        
+        // Calculate effective usage (with expiration check)
+        uint256 effectiveHourlyUsed = userLimit.hourlyUsed;
+        uint256 effectiveDailyUsed = userLimit.dailyUsed;
+        
+        // Check if hour period expired
+        if (userLimit.lastHourReset > 0 && block.timestamp >= userLimit.lastHourReset + 1 hours) {
+            effectiveHourlyUsed = 0;
+        }
+        
+        // Check if day period expired
+        if (userLimit.lastDayReset > 0 && block.timestamp >= userLimit.lastDayReset + 1 days) {
+            effectiveDailyUsed = 0;
+        }
+        
+        // Calculate remaining amounts
+        remainingHourly = globalLimit.hourlyLimit > effectiveHourlyUsed 
+            ? globalLimit.hourlyLimit - effectiveHourlyUsed 
+            : 0;
+            
+        remainingDaily = globalLimit.dailyLimit > effectiveDailyUsed 
+            ? globalLimit.dailyLimit - effectiveDailyUsed 
+            : 0;
+        
+        // Check if operation allowed
+        allowed = (remainingHourly >= amount && remainingDaily >= amount);
+        
+        // If not allowed, emit event for monitoring
+        if (!allowed) {
+            // Note: cannot emit in view function, monitoring must be done via off-chain tools
+        }
+        
+        return (allowed, remainingHourly, remainingDaily);
+    }
+
+    /**
+     * @notice Traccia operazione completata per rate limiting
+     * @dev Solo moduli autorizzati. Chiamare DOPO esecuzione operazione.
+     * @param user Indirizzo utente che ha eseguito operazione
+     * @param operationType Tipo operazione ("deposit", "withdraw", etc.)
+     * @param amount Quantità effettivamente processata (in wei)
+     */
+    function trackOperation(
+        address user, 
+        string memory operationType, 
+        uint256 amount
+    ) external onlyAuthorizedModule {
+        require(amount > 0, "Invalid amount");
+        
+        // Get global configuration
+        RateLimit storage globalLimit = globalRateLimits[operationType];
+        
+        // If no limit configured, no tracking needed
+        if (globalLimit.hourlyLimit == 0 && globalLimit.dailyLimit == 0) {
+            emit OperationTracked(user, operationType, amount, block.timestamp);
+            return;
+        }
+        
+        // Get or initialize user limit
+        RateLimit storage userLimit = userRateLimits[user][operationType];
+        
+        // Initialize on first use
+        if (userLimit.lastHourReset == 0) {
+            userLimit.hourlyLimit = globalLimit.hourlyLimit;
+            userLimit.dailyLimit = globalLimit.dailyLimit;
+            userLimit.lastHourReset = block.timestamp;
+            userLimit.lastDayReset = block.timestamp;
+        }
+        
+        // Reset hourly counter if period expired
+        if (block.timestamp >= userLimit.lastHourReset + 1 hours) {
+            userLimit.hourlyUsed = 0;
+            userLimit.lastHourReset = block.timestamp;
+        }
+        
+        // Reset daily counter if period expired
+        if (block.timestamp >= userLimit.lastDayReset + 1 days) {
+            userLimit.dailyUsed = 0;
+            userLimit.lastDayReset = block.timestamp;
+        }
+        
+        // Check for overflow before incrementing
+        require(userLimit.hourlyUsed + amount >= userLimit.hourlyUsed, "Hourly overflow");
+        require(userLimit.dailyUsed + amount >= userLimit.dailyUsed, "Daily overflow");
+        
+        // Track operation
+        userLimit.hourlyUsed += amount;
+        userLimit.dailyUsed += amount;
+        
+        emit OperationTracked(user, operationType, amount, block.timestamp);
+    }
+
+    // ==================== LEGACY HOURLY TRACKING (BACKWARD COMPATIBILITY) ====================
 
     /**
      * @notice Imposta l'importo prelevato in una specifica ora per un utente
