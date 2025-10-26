@@ -208,12 +208,42 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
     // ==================== WITHDRAW FUNCTION ====================
 
     /**
-     * @notice Preleva ETH dal pool bruciando LP tokens
-     * @dev Con automatic swap se WETH insufficiente + validazioni complete
+     * @notice Preleva ETH dal pool bruciando LP tokens (LEGACY con deadline automatico)
+     * @dev Usa default deadline di 20 minuti per backward compatibility
      * @param _shares Numero di LP tokens da bruciare
      * @return ethAmount ETH effettivamente prelevato
      */
     function withdraw(uint256 _shares) external nonReentrant whenNotPaused whenWithdrawsEnabled returns (uint256 ethAmount) {
+        // Calcola deadline automatico (20 minuti)
+        uint256 deadline = block.timestamp + 20 minutes;
+        
+        // Delega a versione con deadline
+        return _withdrawInternal(_shares, deadline);
+    }
+    
+    /**
+     * @notice Preleva ETH dal pool con deadline esplicito (MEV protected)
+     * @dev Fornisce protezione MEV per swap automatici durante withdraw
+     * @param _shares Numero di LP tokens da bruciare
+     * @param deadline Timestamp massimo per completare operazione (inclusi swap)
+     * @return ethAmount ETH effettivamente prelevato
+     */
+    function withdrawWithDeadline(uint256 _shares, uint256 deadline) external nonReentrant whenNotPaused whenWithdrawsEnabled returns (uint256 ethAmount) {
+        // DEADLINE PRE-CHECK (fail fast)
+        require(block.timestamp <= deadline, "Withdraw deadline expired");
+        
+        // Delega a funzione interna
+        return _withdrawInternal(_shares, deadline);
+    }
+
+    /**
+     * @notice Core withdraw logic (INTERNAL)
+     * @dev Con automatic swap se WETH insufficiente + validazioni complete
+     * @param _shares Numero di LP tokens da bruciare
+     * @param deadline Timestamp massimo per swap (se necessario)
+     * @return ethAmount ETH effettivamente prelevato
+     */
+    function _withdrawInternal(uint256 _shares, uint256 deadline) internal returns (uint256 ethAmount) {
         // INITIAL VALIDATION
         require(_shares > 0, "Invalid shares amount");
         
@@ -276,8 +306,8 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
             validation.requiresSwap = true;
             validation.wethNeeded = netWithdraw - validation.poolEthBalance;
             
-            // EXECUTE AUTOMATIC SWAP
-            _executeAutomaticSwap(validation.wethNeeded, calculator);
+            // EXECUTE AUTOMATIC SWAP CON DEADLINE PROPAGATION
+            _executeAutomaticSwap(validation.wethNeeded, calculator, deadline);
             
             // VERIFY SWAP SUCCESS
             uint256 newWethBalance = IERC20(wethAddress).balanceOf(proxyGeneral);
@@ -343,10 +373,16 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
 
     /**
      * @notice Esegue automatic swap per ottenere WETH necessario
+     * @dev Con deadline propagation per protezione MEV
      * @param wethNeeded Quantità di WETH necessaria
      * @param calculator Reference al ValueCalculator
+     * @param deadline Timestamp massimo per swap
      */
-    function _executeAutomaticSwap(uint256 wethNeeded, IValueCalculatorForModules calculator) internal {
+    function _executeAutomaticSwap(
+        uint256 wethNeeded, 
+        IValueCalculatorForModules calculator,
+        uint256 deadline
+    ) internal {
         // SELEZIONA TOKEN CON PERCENTUALE PIÙ BASSA
         (string memory tokenToSwap, uint256 amountToSwap) = calculator.selectTokenForSwap(wethNeeded);
         
@@ -365,8 +401,8 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
         );
         require(isValid, string(abi.encodePacked("Swap validation failed: ", errorReason)));
         
-        // PERFORM THE SWAP
-        uint256 receivedWeth = swapper.performSwap(tokenToSwap, "WETH", amountToSwap);
+        // PERFORM THE SWAP CON DEADLINE (MEV PROTECTED)
+        uint256 receivedWeth = swapper.performSwap(tokenToSwap, "WETH", amountToSwap, deadline);
         
         // VALIDATE RECEIVED AMOUNT
         require(receivedWeth > 0, "Swap returned zero WETH");

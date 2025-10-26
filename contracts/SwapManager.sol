@@ -43,6 +43,15 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
     
     /// @notice Success tracking per token pairs
     mapping(bytes32 => uint256) private swapSuccesses;
+    
+    /// @notice Default deadline window per swap automatici (secondi)
+    uint256 public defaultDeadlineWindow = 20 minutes; // Industry standard (Uniswap-like)
+    
+    /// @notice Minimum deadline window permesso
+    uint256 public constant MIN_DEADLINE_WINDOW = 1 minutes;
+    
+    /// @notice Maximum deadline window permesso
+    uint256 public constant MAX_DEADLINE_WINDOW = 1 hours;
 
     // ==================== STRUCTS ====================
     
@@ -80,6 +89,35 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         uint256 amountOut,
         uint256 slippageBps,
         address indexed executor
+    );
+    
+    /// @notice Emitted when default deadline window is updated
+    event DefaultDeadlineWindowUpdated(uint256 oldWindow, uint256 newWindow);
+    
+    /// @notice Emitted when swap has tight deadline (< 5 min remaining)
+    event TightDeadlineWarning(
+        address indexed caller,
+        string spendToken,
+        string receiveToken,
+        uint256 deadline,
+        uint256 currentTime
+    );
+    
+    /// @notice Emitted when a swap fails with error details
+    /// @dev Questo evento persiste anche se la transazione reverte
+    /// @param tokenIn Token code being sold (indexed for filtering)
+    /// @param tokenOut Token code being bought (indexed for filtering)
+    /// @param amountIn Amount attempted to swap
+    /// @param reason Error message from failed swap
+    /// @param executor Address that initiated the swap (indexed)
+    /// @param timestamp Block timestamp when error occurred
+    event SwapFailed(
+        string indexed tokenIn,
+        string indexed tokenOut,
+        uint256 amountIn,
+        string reason,
+        address indexed executor,
+        uint256 timestamp
     );
 
     // ==================== MODIFIERS ====================
@@ -130,7 +168,7 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         returns (uint256 amountOut)
     {
         require(block.timestamp <= deadline, "Swap deadline expired");
-        uint256 received = performSwap(tokenCode, "WETH", amountIn);
+        uint256 received = performSwap(tokenCode, "WETH", amountIn, deadline);
         require(received >= minAmountOut, "Insufficient output amount");
         return received;
     }
@@ -156,27 +194,90 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         returns (uint256 tokenAmountOut)
     {
         require(block.timestamp <= deadline, "Swap deadline expired");
-        uint256 received = performSwap("WETH", tokenCode, wethAmountIn);
+        uint256 received = performSwap("WETH", tokenCode, wethAmountIn, deadline);
         require(received >= minTokenOut, "Insufficient output amount");
         return received;
     }
 
     /**
-     * @notice Esegue swap tramite ProxyGeneral custody pattern
+     * @notice Esegue swap con deadline ESPLICITO (MEV protected)
+     * @dev Fornisce protezione MEV via deadline check
      * @param spendTokenCode Token da vendere
      * @param receiveTokenCode Token da ricevere
      * @param amountIn Quantità da swappare
+     * @param deadline Timestamp massimo per esecuzione (unix timestamp)
      * @return amountReceived Quantità effettivamente ricevuta
      */
     function performSwap(
         string memory spendTokenCode,
         string memory receiveTokenCode,
-        uint256 amountIn
+        uint256 amountIn,
+        uint256 deadline
     ) 
         public
         nonReentrant
         onlyAuthorizedCaller
         whenSwapsEnabled
+        returns (uint256 amountReceived)
+    {
+        // DEADLINE VALIDATION
+        require(block.timestamp <= deadline, "Swap deadline expired");
+        
+        // Emetti warning se deadline stretto (< 5 min rimanente)
+        if (deadline - block.timestamp < 5 minutes) {
+            emit TightDeadlineWarning(
+                msg.sender,
+                spendTokenCode,
+                receiveTokenCode,
+                deadline,
+                block.timestamp
+            );
+        }
+        
+        // DELEGA A CORE LOGIC
+        return _performSwapInternal(spendTokenCode, receiveTokenCode, amountIn);
+    }
+    
+    /**
+     * @notice Esegue swap con deadline AUTOMATICO (backward compatibility)
+     * @dev Usa defaultDeadlineWindow per calcolare deadline
+     * @param spendTokenCode Token da vendere
+     * @param receiveTokenCode Token da ricevere
+     * @param amountIn Quantità da swappare
+     * @return amountReceived Quantità effettivamente ricevuta
+     */
+    function performSwapAuto(
+        string memory spendTokenCode,
+        string memory receiveTokenCode,
+        uint256 amountIn
+    ) 
+        public
+        onlyAuthorizedCaller
+        whenSwapsEnabled
+        returns (uint256 amountReceived)
+    {
+        // Calcola deadline automatico
+        uint256 deadline = block.timestamp + defaultDeadlineWindow;
+        
+        // Delega a versione con deadline esplicito (ha già nonReentrant)
+        return performSwap(spendTokenCode, receiveTokenCode, amountIn, deadline);
+    }
+
+    /**
+     * @notice Core swap logic (INTERNAL)
+     * @dev Contiene tutta la logica di swap - NON include deadline check
+     * @dev MUST essere chiamato da wrapper functions con deadline protection
+     * @param spendTokenCode Token da vendere
+     * @param receiveTokenCode Token da ricevere
+     * @param amountIn Quantità da swappare
+     * @return amountReceived Quantità effettivamente ricevuta
+     */
+    function _performSwapInternal(
+        string memory spendTokenCode,
+        string memory receiveTokenCode,
+        uint256 amountIn
+    ) 
+        internal
         returns (uint256 amountReceived)
     {
         // VALIDATE INPUT PARAMETERS
@@ -256,7 +357,12 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             return execution.actualReceived;
             
         } catch Error(string memory reason) {
+            // Emit event FIRST (persists through revert)
+            emit SwapFailed(spendTokenCode, "WETH", amountIn, reason, msg.sender, block.timestamp);
+            
+            // Mantieni chiamata a _handleSwapError per compatibilità
             _handleSwapError(spendTokenCode, "WETH", amountIn, reason);
+            
             revert(reason);
         }
     }
@@ -308,7 +414,12 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             return execution.actualReceived;
             
         } catch Error(string memory reason) {
+            // Emit event FIRST (persists through revert)
+            emit SwapFailed("WETH", receiveTokenCode, amountIn, reason, msg.sender, block.timestamp);
+            
+            // Mantieni chiamata a _handleSwapError per compatibilità
             _handleSwapError("WETH", receiveTokenCode, amountIn, reason);
+            
             revert(reason);
         }
     }
@@ -361,7 +472,12 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             return execution.actualReceived;
             
         } catch Error(string memory reason) {
+            // Emit event FIRST (persists through revert)
+            emit SwapFailed(spendTokenCode, receiveTokenCode, amountIn, reason, msg.sender, block.timestamp);
+            
+            // Mantieni chiamata a _handleSwapError per compatibilità
             _handleSwapError(spendTokenCode, receiveTokenCode, amountIn, reason);
+            
             revert(reason);
         }
     }
@@ -638,6 +754,35 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
     function setSwapsEnabled(bool enabled) external onlyOwner {
         swapsEnabled = enabled;
         emit SwapsEnabledChanged(enabled);
+    }
+    
+    /**
+     * @notice Imposta finestra default per deadline automatico
+     * @dev Solo owner può modificare, range limitato per sicurezza
+     * @param windowSeconds Secondi da aggiungere a block.timestamp
+     */
+    function setDefaultDeadlineWindow(uint256 windowSeconds) external onlyOwner {
+        require(
+            windowSeconds >= MIN_DEADLINE_WINDOW,
+            "Window too short - minimum 1 minute"
+        );
+        require(
+            windowSeconds <= MAX_DEADLINE_WINDOW,
+            "Window too long - maximum 1 hour"
+        );
+        
+        uint256 oldWindow = defaultDeadlineWindow;
+        defaultDeadlineWindow = windowSeconds;
+        
+        emit DefaultDeadlineWindowUpdated(oldWindow, windowSeconds);
+    }
+    
+    /**
+     * @notice Ottiene finestra default deadline corrente
+     * @return windowSeconds Secondi correnti per default deadline
+     */
+    function getDefaultDeadlineWindow() external view returns (uint256 windowSeconds) {
+        return defaultDeadlineWindow;
     }
 
     /**
