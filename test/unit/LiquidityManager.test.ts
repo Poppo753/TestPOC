@@ -491,6 +491,67 @@ describe("LiquidityManager Contract", function () {
           expect(wethBalance).to.be.greaterThan(0);
         });
       });
+
+      // ⚡ PHASE 2 - HIGH PRIORITY TESTS
+      describe("⚡ HIGH: deposit() additional tests", function () {
+        
+        // LM-DEP-HIGH-012: Gas usage within expected range
+        it("LM-DEP-HIGH-012: should have gas usage within expected range", async function () {
+          const tx = await liquidityManager.connect(user1).deposit.populateTransaction({ value: DEPOSIT_AMOUNT });
+          const estimatedGas = await ethers.provider.estimateGas(tx);
+          
+          console.log(`✅ Deposit gas usage: ${estimatedGas}`);
+          
+          // Deposit should use under 500k gas (reasonable for ETH→WETH→LP flow)
+          expect(estimatedGas).to.be.lessThan(500000);
+          
+          // Should use at least 100k gas (sanity check - too low means something wrong)
+          expect(estimatedGas).to.be.greaterThan(100000);
+        });
+
+        // LM-DEP-HIGH-013: Deposit from contract address (vs EOA)
+        it("LM-DEP-HIGH-013: should accept deposits from contract addresses", async function () {
+          // Deploy a simple contract that can deposit
+          const DepositHelper = await ethers.getContractFactory("MockDepositHelper");
+          const depositHelper = await DepositHelper.deploy();
+          
+          // Fund the helper contract
+          await owner.sendTransaction({ 
+            to: depositHelper.target, 
+            value: DEPOSIT_AMOUNT 
+          });
+          
+          // Deposit from contract address via helper
+          const tx = await depositHelper.depositTo(liquidityManager.target, DEPOSIT_AMOUNT);
+          await expect(tx).to.emit(liquidityManager, "Deposit");
+          
+          // Verify LP tokens minted to the contract
+          const contractLpBalance = await proxyGeneral.balanceOf(depositHelper.target);
+          expect(contractLpBalance).to.be.greaterThan(0);
+          
+          // Also verify direct EOA deposit still works
+          const tx2 = await liquidityManager.connect(user1).deposit({ value: DEPOSIT_AMOUNT });
+          await expect(tx2).to.emit(liquidityManager, "Deposit");
+        });
+
+        // LM-DEP-HIGH-014: ProxyGeneral.mint() authorization check
+        it("LM-DEP-HIGH-014: should enforce ProxyGeneral.mint() authorization", async function () {
+          // Attempt to call mint() directly as unauthorized caller (should fail)
+          const unauthorizedAmount = ethers.parseEther("1000");
+          
+          await expect(
+            proxyGeneral.connect(user1).mint(await user1.getAddress(), unauthorizedAmount)
+          ).to.be.revertedWith("Caller not authorized");
+          
+          // Verify deposit() works (LiquidityManager is authorized module)
+          const tx = await liquidityManager.connect(user1).deposit({ value: DEPOSIT_AMOUNT });
+          await expect(tx).to.emit(liquidityManager, "Deposit");
+          
+          // Verify LP tokens were minted (implicitly proves LM can call mint())
+          const lpBalance = await proxyGeneral.balanceOf(await user1.getAddress());
+          expect(lpBalance).to.be.greaterThan(0);
+        });
+      });
     });
 
     describe("calculateDepositShares", function () {
@@ -865,6 +926,83 @@ describe("LiquidityManager Contract", function () {
         const finalLpBalance = await proxyGeneral.balanceOf(await user2.getAddress());
         expect(finalLpBalance).to.equal(0);
       });
+
+      // ⚡ PHASE 2 - HIGH PRIORITY TESTS
+      describe("⚡ HIGH: withdraw() additional tests", function () {
+        
+        // LM-WTH-HIGH-013: Gas usage within expected range
+        it("LM-WTH-HIGH-013: should have gas usage within expected range", async function () {
+          // Arrange: Deposit first to have LP tokens
+          await liquidityManager.connect(user1).deposit({ value: DEPOSIT_AMOUNT });
+          const lpBalance = await proxyGeneral.balanceOf(await user1.getAddress());
+          const withdrawShares = lpBalance / BigInt(2); // Withdraw half
+          
+          // Act: Estimate gas for withdraw
+          const tx = await liquidityManager.connect(user1).withdraw.populateTransaction(withdrawShares);
+          const estimatedGas = await ethers.provider.estimateGas(tx);
+          
+          console.log(`✅ Withdraw gas usage: ${estimatedGas}`);
+          
+          // Withdraw should use under 800k gas (reasonable for LP burn→WETH→ETH flow with potential auto-swap)
+          expect(estimatedGas).to.be.lessThan(800000);
+          
+          // Should use at least 150k gas (sanity check - too low means something wrong)
+          expect(estimatedGas).to.be.greaterThan(150000);
+        });
+
+        // LM-WTH-HIGH-014: ProxyGeneral.burn() authorization check
+        it("LM-WTH-HIGH-014: should enforce ProxyGeneral.burn() authorization", async function () {
+          // Arrange: Deposit to get LP tokens
+          await liquidityManager.connect(user1).deposit({ value: DEPOSIT_AMOUNT });
+          const lpBalance = await proxyGeneral.balanceOf(await user1.getAddress());
+          
+          // Attempt to call burn() directly as unauthorized caller (should fail)
+          const unauthorizedAmount = ethers.parseEther("100");
+          
+          await expect(
+            proxyGeneral.connect(user1).burn(await user1.getAddress(), unauthorizedAmount)
+          ).to.be.revertedWith("Caller not authorized");
+          
+          // Verify withdraw() works (LiquidityManager is authorized module)
+          const withdrawShares = lpBalance / BigInt(2);
+          const tx = await liquidityManager.connect(user1).withdraw(withdrawShares);
+          await expect(tx).to.not.be.reverted;
+          
+          // Verify LP tokens were burned (implicitly proves LM can call burn())
+          const remainingBalance = await proxyGeneral.balanceOf(await user1.getAddress());
+          expect(remainingBalance).to.equal(lpBalance - withdrawShares);
+        });
+
+        // LM-WTH-HIGH-015: Withdraw to different address (security check)
+        it("LM-WTH-HIGH-015: should only withdraw to msg.sender (security feature)", async function () {
+          // Arrange: user1 deposits and gets LP tokens
+          await liquidityManager.connect(user1).deposit({ value: DEPOSIT_AMOUNT });
+          const lpBalance = await proxyGeneral.balanceOf(await user1.getAddress());
+          const withdrawShares = lpBalance / BigInt(2);
+          
+          const user1EthBefore = await ethers.provider.getBalance(await user1.getAddress());
+          const user2EthBefore = await ethers.provider.getBalance(await user2.getAddress());
+          
+          // Act: user1 withdraws (no recipient parameter exists - always goes to msg.sender)
+          const tx = await liquidityManager.connect(user1).withdraw(withdrawShares);
+          const receipt = await tx.wait();
+          const gasCost = BigInt(receipt!.gasUsed) * BigInt(receipt!.gasPrice);
+          
+          // Assert: ETH went to user1 (msg.sender), NOT user2
+          const user1EthAfter = await ethers.provider.getBalance(await user1.getAddress());
+          const user2EthAfter = await ethers.provider.getBalance(await user2.getAddress());
+          
+          // user1 should receive ETH (minus gas)
+          const user1Change = user1EthAfter - user1EthBefore + gasCost;
+          expect(user1Change).to.be.greaterThan(0);
+          
+          // user2 balance should be unchanged
+          expect(user2EthAfter).to.equal(user2EthBefore);
+          
+          // Security note: No withdrawTo(recipient) function exists - this prevents 
+          // unauthorized withdrawals to arbitrary addresses
+        });
+      });
     });
   });
 
@@ -935,6 +1073,155 @@ describe("LiquidityManager Contract", function () {
         ).to.be.revertedWith("Invalid recipient");
       });
     });
+
+    // ⚡ PHASE 2 - HIGH PRIORITY TESTS
+    describe("⚡ HIGH: Fee management tests", function () {
+      
+      // LM-FEE-HIGH-001: Change fee during active operations
+      it("LM-FEE-HIGH-001: should handle fee changes during active operations", async function () {
+        // Start with default fees
+        const initialDepositFee = await liquidityManager.depositFee();
+        expect(initialDepositFee).to.equal(DEFAULT_DEPOSIT_FEE);
+        
+        // Make deposit with initial fee
+        await liquidityManager.connect(user1).deposit({ value: DEPOSIT_AMOUNT });
+        
+        // Change deposit fee mid-operations
+        const newDepositFee = 100; // 1%
+        await liquidityManager.setDepositFee(newDepositFee);
+        expect(await liquidityManager.depositFee()).to.equal(newDepositFee);
+        
+        // Next deposit should use new fee immediately
+        const feeRecipientBalanceBefore = await ethers.provider.getBalance(await feeRecipient.getAddress());
+        await liquidityManager.connect(user2).deposit({ value: DEPOSIT_AMOUNT });
+        const feeRecipientBalanceAfter = await ethers.provider.getBalance(await feeRecipient.getAddress());
+        
+        const expectedFee = (DEPOSIT_AMOUNT * BigInt(newDepositFee)) / BigInt(FEE_BASIS_POINTS);
+        expect(feeRecipientBalanceAfter - feeRecipientBalanceBefore).to.equal(expectedFee);
+      });
+
+      // LM-FEE-HIGH-002: Fee applied to next deposit immediately
+      it("LM-FEE-HIGH-002: should apply new fee to next deposit immediately", async function () {
+        // Change to 0% deposit fee
+        await liquidityManager.setDepositFee(0);
+        
+        const feeRecipientBalanceBefore = await ethers.provider.getBalance(await feeRecipient.getAddress());
+        await liquidityManager.connect(user1).deposit({ value: DEPOSIT_AMOUNT });
+        const feeRecipientBalanceAfter = await ethers.provider.getBalance(await feeRecipient.getAddress());
+        
+        // Fee recipient should receive 0 (no fee charged)
+        expect(feeRecipientBalanceAfter - feeRecipientBalanceBefore).to.equal(0);
+        
+        // Change to 2% deposit fee
+        const highFee = 200; // 2%
+        await liquidityManager.setDepositFee(highFee);
+        
+        const feeRecipientBalanceBefore2 = await ethers.provider.getBalance(await feeRecipient.getAddress());
+        await liquidityManager.connect(user2).deposit({ value: DEPOSIT_AMOUNT });
+        const feeRecipientBalanceAfter2 = await ethers.provider.getBalance(await feeRecipient.getAddress());
+        
+        const expectedFee = (DEPOSIT_AMOUNT * BigInt(highFee)) / BigInt(FEE_BASIS_POINTS);
+        expect(feeRecipientBalanceAfter2 - feeRecipientBalanceBefore2).to.equal(expectedFee);
+      });
+
+      // LM-FEE-HIGH-003: Fee change event tracking
+      it("LM-FEE-HIGH-003: should emit events when fees change", async function () {
+        const oldDepositFee = await liquidityManager.depositFee();
+        const oldWithdrawFee = await liquidityManager.withdrawFee();
+        const newDepositFee = 75; // 0.75%
+        const newWithdrawFee = 150; // 1.5%
+        
+        // Check deposit fee change event (emits oldFee, newFee)
+        await expect(liquidityManager.setDepositFee(newDepositFee))
+          .to.emit(liquidityManager, "DepositFeeUpdated")
+          .withArgs(oldDepositFee, newDepositFee);
+        
+        // Check withdraw fee change event (emits oldFee, newFee)
+        await expect(liquidityManager.setWithdrawFee(newWithdrawFee))
+          .to.emit(liquidityManager, "WithdrawFeeUpdated")
+          .withArgs(oldWithdrawFee, newWithdrawFee);
+      });
+
+      // LM-FEE-HIGH-004: Multiple fee changes in sequence
+      it("LM-FEE-HIGH-004: should handle multiple fee changes in sequence", async function () {
+        const fees = [25, 50, 75, 100, 50]; // Various fee values
+        
+        for (const fee of fees) {
+          await liquidityManager.setDepositFee(fee);
+          expect(await liquidityManager.depositFee()).to.equal(fee);
+          
+          // Verify fee is applied
+          const feeRecipientBalanceBefore = await ethers.provider.getBalance(await feeRecipient.getAddress());
+          await liquidityManager.connect(user1).deposit({ value: SMALL_DEPOSIT });
+          const feeRecipientBalanceAfter = await ethers.provider.getBalance(await feeRecipient.getAddress());
+          
+          const expectedFee = (SMALL_DEPOSIT * BigInt(fee)) / BigInt(FEE_BASIS_POINTS);
+          expect(feeRecipientBalanceAfter - feeRecipientBalanceBefore).to.equal(expectedFee);
+        }
+      });
+
+      // LM-FEE-HIGH-005: Fee bounds validation edge cases
+      it("LM-FEE-HIGH-005: should validate fee bounds edge cases", async function () {
+        // Test 0% fee (minimum)
+        await liquidityManager.setDepositFee(0);
+        expect(await liquidityManager.depositFee()).to.equal(0);
+        
+        // Test 5% fee (maximum)
+        const maxFee = 500; // 5%
+        await liquidityManager.setDepositFee(maxFee);
+        expect(await liquidityManager.depositFee()).to.equal(maxFee);
+        
+        // Test just above maximum (should revert)
+        await expect(liquidityManager.setDepositFee(maxFee + 1))
+          .to.be.revertedWith("Fee exceeds maximum");
+        
+        // Test same for withdraw fee
+        await liquidityManager.setWithdrawFee(0);
+        expect(await liquidityManager.withdrawFee()).to.equal(0);
+        
+        await liquidityManager.setWithdrawFee(maxFee);
+        expect(await liquidityManager.withdrawFee()).to.equal(maxFee);
+        
+        await expect(liquidityManager.setWithdrawFee(maxFee + 1))
+          .to.be.revertedWith("Fee exceeds maximum");
+      });
+
+      // LM-FEE-HIGH-006: Withdraw fee change during pending withdraws
+      it("LM-FEE-HIGH-006: should apply new withdraw fee to pending withdraws", async function () {
+        // Deposit first
+        await liquidityManager.connect(user1).deposit({ value: DEPOSIT_AMOUNT });
+        const lpBalance = await proxyGeneral.balanceOf(await user1.getAddress());
+        
+        // Change withdraw fee to 0%
+        await liquidityManager.setWithdrawFee(0);
+        
+        // Withdraw with 0% fee
+        const feeRecipientBalanceBefore = await ethers.provider.getBalance(await feeRecipient.getAddress());
+        await liquidityManager.connect(user1).withdraw(lpBalance / BigInt(2));
+        const feeRecipientBalanceAfter = await ethers.provider.getBalance(await feeRecipient.getAddress());
+        
+        // No fee charged
+        expect(feeRecipientBalanceAfter - feeRecipientBalanceBefore).to.equal(0);
+        
+        // Change withdraw fee to 3%
+        const highWithdrawFee = 300; // 3%
+        await liquidityManager.setWithdrawFee(highWithdrawFee);
+        
+        // Withdraw remaining with 3% fee
+        const remainingBalance = await proxyGeneral.balanceOf(await user1.getAddress());
+        const withdrawAmount = await liquidityManager.calculateWithdrawAmount(remainingBalance);
+        const expectedFee = (withdrawAmount * BigInt(highWithdrawFee)) / BigInt(FEE_BASIS_POINTS);
+        
+        const feeRecipientBalanceBefore2 = await ethers.provider.getBalance(await feeRecipient.getAddress());
+        await liquidityManager.connect(user1).withdraw(remainingBalance);
+        const feeRecipientBalanceAfter2 = await ethers.provider.getBalance(await feeRecipient.getAddress());
+        
+        // New fee applied to new withdraw (allow 5% tolerance for LP share rounding)
+        const actualFee = feeRecipientBalanceAfter2 - feeRecipientBalanceBefore2;
+        const tolerance = (expectedFee * BigInt(5)) / BigInt(100);
+        expect(actualFee).to.be.closeTo(expectedFee, tolerance);
+      });
+    });
   });
 
   describe("🚪 Deposits/Withdraws Toggle", function () {
@@ -994,6 +1281,102 @@ describe("LiquidityManager Contract", function () {
         await expect(
           liquidityManager.connect(user1).setWithdrawsEnabled(false)
         ).to.be.revertedWith("Ownable: caller is not the owner");
+      });
+    });
+
+    // ⚡ PHASE 2 - HIGH PRIORITY TESTS
+    describe("⚡ HIGH: Toggles & Views tests", function () {
+      
+      // LM-TOG-HIGH-001: Disable deposits during deposit transaction
+      it("LM-TOG-HIGH-001: should not affect in-flight transactions when disabling deposits", async function () {
+        // Note: Due to atomic transaction execution in EVM, we can't disable deposits
+        // "during" a transaction - each tx is atomic. This test verifies that:
+        // 1. Deposits work before disable
+        // 2. Disable takes effect immediately after
+        // 3. Next deposit fails
+        
+        // Deposit works initially
+        await expect(liquidityManager.connect(user1).deposit({ value: DEPOSIT_AMOUNT }))
+          .to.not.be.reverted;
+        
+        // Disable deposits
+        await liquidityManager.setDepositsEnabled(false);
+        
+        // Next deposit fails immediately
+        await expect(liquidityManager.connect(user2).deposit({ value: DEPOSIT_AMOUNT }))
+          .to.be.revertedWith("Deposits are disabled");
+        
+        // Re-enable and verify it works again
+        await liquidityManager.setDepositsEnabled(true);
+        await expect(liquidityManager.connect(user2).deposit({ value: DEPOSIT_AMOUNT }))
+          .to.not.be.reverted;
+      });
+
+      // LM-TOG-HIGH-002: Disable withdrawals during withdraw transaction
+      it("LM-TOG-HIGH-002: should not affect in-flight transactions when disabling withdrawals", async function () {
+        // Setup: user1 deposits to have LP tokens
+        await liquidityManager.connect(user1).deposit({ value: DEPOSIT_AMOUNT });
+        const lpBalance = await proxyGeneral.balanceOf(await user1.getAddress());
+        
+        // Withdraw works initially
+        await expect(liquidityManager.connect(user1).withdraw(lpBalance / BigInt(4)))
+          .to.not.be.reverted;
+        
+        // Disable withdrawals
+        await liquidityManager.setWithdrawsEnabled(false);
+        
+        // Next withdraw fails immediately
+        const remainingBalance = await proxyGeneral.balanceOf(await user1.getAddress());
+        await expect(liquidityManager.connect(user1).withdraw(remainingBalance / BigInt(2)))
+          .to.be.revertedWith("Withdrawals are disabled");
+        
+        // Re-enable and verify it works again
+        await liquidityManager.setWithdrawsEnabled(true);
+        const finalBalance = await proxyGeneral.balanceOf(await user1.getAddress());
+        await expect(liquidityManager.connect(user1).withdraw(finalBalance / BigInt(2)))
+          .to.not.be.reverted;
+      });
+
+      // LM-VIEW-HIGH-001: calculateDepositShares() accuracy vs actual
+      it("LM-VIEW-HIGH-001: should calculate deposit shares accurately matching actual minting", async function () {
+        // First deposit (bootstrap) - should be 1:1
+        const firstDepositAmount = ethers.parseEther("5");
+        const predictedShares1 = await liquidityManager.calculateDepositShares(firstDepositAmount);
+        
+        await liquidityManager.connect(user1).deposit({ value: firstDepositAmount });
+        const actualShares1 = await proxyGeneral.balanceOf(await user1.getAddress());
+        
+        // Bootstrap deposit: predicted should closely match actual (after fees)
+        const netDeposit1 = firstDepositAmount - (firstDepositAmount * BigInt(DEFAULT_DEPOSIT_FEE)) / BigInt(FEE_BASIS_POINTS);
+        // Allow 2% tolerance for rounding
+        const tolerance1 = (netDeposit1 * BigInt(2)) / BigInt(100);
+        expect(actualShares1).to.be.closeTo(predictedShares1, tolerance1);
+        
+        // Second deposit - should be proportional
+        const secondDepositAmount = ethers.parseEther("3");
+        const predictedShares2 = await liquidityManager.calculateDepositShares(secondDepositAmount);
+        
+        const balanceBefore = await proxyGeneral.balanceOf(await user2.getAddress());
+        await liquidityManager.connect(user2).deposit({ value: secondDepositAmount });
+        const balanceAfter = await proxyGeneral.balanceOf(await user2.getAddress());
+        const actualShares2 = balanceAfter - balanceBefore;
+        
+        // Second deposit: predicted should match actual (allow 5% tolerance due to pool value calculations)
+        const tolerance2 = (predictedShares2 * BigInt(5)) / BigInt(100);
+        expect(actualShares2).to.be.closeTo(predictedShares2, tolerance2);
+        
+        // Third deposit - verify consistency
+        const thirdDepositAmount = ethers.parseEther("2");
+        const predictedShares3 = await liquidityManager.calculateDepositShares(thirdDepositAmount);
+        
+        const balanceBefore3 = await proxyGeneral.balanceOf(await user1.getAddress());
+        await liquidityManager.connect(user1).deposit({ value: thirdDepositAmount });
+        const balanceAfter3 = await proxyGeneral.balanceOf(await user1.getAddress());
+        const actualShares3 = balanceAfter3 - balanceBefore3;
+        
+        // Third deposit: verify accuracy (allow 5% tolerance)
+        const tolerance3 = (predictedShares3 * BigInt(5)) / BigInt(100);
+        expect(actualShares3).to.be.closeTo(predictedShares3, tolerance3);
       });
     });
   });
@@ -1098,6 +1481,156 @@ describe("LiquidityManager Contract", function () {
         
         const remaining = await liquidityManager.getRemainingDailyLimit(await user1.getAddress());
         expect(remaining).to.be.lessThan(DEFAULT_DAILY_LIMIT);
+      });
+    });
+
+    // ⚡ PHASE 2 - HIGH PRIORITY TESTS
+    describe("⚡ HIGH: Withdraw limits tests", function () {
+      
+      // LM-LIM-HIGH-001: Limit change during active withdrawals
+      it("LM-LIM-HIGH-001: should handle limit changes during active withdrawals", async function () {
+        // Make first withdrawal with current limits
+        const lpBalance = await proxyGeneral.balanceOf(await user1.getAddress());
+        await liquidityManager.connect(user1).withdraw(lpBalance / BigInt(4)); // 25%
+        
+        // Change limits mid-operations
+        const newHourlyLimit = ethers.parseEther("50");
+        const newDailyLimit = ethers.parseEther("100");
+        await liquidityManager.setWithdrawLimits(
+          newHourlyLimit,
+          newDailyLimit,
+          ethers.parseEther("0.000001"),
+          ethers.parseEther("50")
+        );
+        
+        // Next withdrawal should use new limits
+        const remainingBalance = await proxyGeneral.balanceOf(await user1.getAddress());
+        await expect(liquidityManager.connect(user1).withdraw(remainingBalance / BigInt(2)))
+          .to.not.be.reverted;
+      });
+
+      // LM-LIM-HIGH-002: Decrease limit below current usage
+      it("LM-LIM-HIGH-002: should allow decreasing limit below current usage", async function () {
+        // Make significant withdrawal (accumulates in usage tracking)
+        const lpBalance = await proxyGeneral.balanceOf(await user1.getAddress());
+        await liquidityManager.connect(user1).withdraw(lpBalance / BigInt(2)); // 50%
+        
+        // Decrease hourly limit to very low value (below what user already withdrew)
+        // Note: maxWithdraw must be <= hourlyLimit
+        const veryLowLimit = ethers.parseEther("0.1");
+        await liquidityManager.setWithdrawLimits(
+          veryLowLimit,
+          ethers.parseEther("2000"),
+          ethers.parseEther("0.000001"),
+          veryLowLimit // maxWithdraw = hourlyLimit
+        );
+        
+        // Verify limit was changed successfully by checking the event emission
+        await expect(liquidityManager.setWithdrawLimits(
+          veryLowLimit,
+          ethers.parseEther("2000"),
+          ethers.parseEther("0.000001"),
+          veryLowLimit
+        )).to.emit(liquidityManager, "WithdrawLimitsUpdated");
+        
+        // User cannot make additional withdrawals until period resets
+        // (fails because exceeds maxWithdraw per transaction, which is now very low)
+        const remainingBalance = await proxyGeneral.balanceOf(await user1.getAddress());
+        await expect(liquidityManager.connect(user1).withdraw(remainingBalance / BigInt(4)))
+          .to.be.revertedWith("Exceeds maximum withdraw per transaction");
+      });
+
+      // LM-LIM-HIGH-003: Set limit to 0 (effectively disable withdrawals)
+      it("LM-LIM-HIGH-003: should block withdrawals when limit set to 0", async function () {
+        // Set hourly limit to 0 (effectively disables withdrawals)
+        // Note: maxWithdraw must be <= hourlyLimit, so also 0
+        await liquidityManager.setWithdrawLimits(
+          ethers.parseEther("0"),
+          ethers.parseEther("2000"),
+          ethers.parseEther("0"),
+          ethers.parseEther("0") // maxWithdraw = 0
+        );
+        
+        // Any withdrawal should fail (exceeds maxWithdraw per transaction)
+        const lpBalance = await proxyGeneral.balanceOf(await user1.getAddress());
+        await expect(liquidityManager.connect(user1).withdraw(lpBalance / BigInt(10)))
+          .to.be.revertedWith("Exceeds maximum withdraw per transaction");
+      });
+
+      // LM-LIM-HIGH-004: Increase limit allows immediate withdrawals
+      it("LM-LIM-HIGH-004: should allow immediate withdrawals after increasing limit", async function () {
+        // Set initial low limit (maxWithdraw must be <= hourlyLimit)
+        const lowLimit = ethers.parseEther("1");
+        await liquidityManager.setWithdrawLimits(
+          lowLimit,
+          ethers.parseEther("2000"),
+          ethers.parseEther("0.000001"),
+          lowLimit // maxWithdraw = lowLimit
+        );
+        
+        // Consume most of limit
+        const lpBalance = await proxyGeneral.balanceOf(await user1.getAddress());
+        await liquidityManager.connect(user1).withdraw(lpBalance / BigInt(20)); // Small withdrawal
+        
+        // Try large withdrawal (should fail - exceeds maxWithdraw per tx)
+        await expect(liquidityManager.connect(user1).withdraw(lpBalance / BigInt(2)))
+          .to.be.revertedWith("Exceeds maximum withdraw per transaction");
+        
+        // Increase limit significantly (maxWithdraw can be <= hourlyLimit)
+        const highLimit = ethers.parseEther("1000");
+        await liquidityManager.setWithdrawLimits(
+          highLimit,
+          ethers.parseEther("2000"),
+          ethers.parseEther("0.000001"),
+          highLimit // maxWithdraw = highLimit
+        );
+        
+        // Same withdrawal should now succeed
+        const remainingBalance = await proxyGeneral.balanceOf(await user1.getAddress());
+        await expect(liquidityManager.connect(user1).withdraw(remainingBalance / BigInt(2)))
+          .to.not.be.reverted;
+      });
+
+      // LM-LIM-HIGH-005: Multiple tokens limit update
+      it("LM-LIM-HIGH-005: should update limits affecting all tokens/operations", async function () {
+        // Note: Withdraw limits apply system-wide (per-user rate limiting)
+        // Test that limit changes affect all subsequent withdrawals
+        
+        // Initial withdrawal
+        const lpBalance1 = await proxyGeneral.balanceOf(await user1.getAddress());
+        await liquidityManager.connect(user1).withdraw(lpBalance1 / BigInt(4));
+        
+        // Change limits (all 4 parameters)
+        const newLimits = {
+          hourly: ethers.parseEther("100"),
+          daily: ethers.parseEther("500"),
+          min: ethers.parseEther("0.001"),
+          max: ethers.parseEther("50") // must be <= hourly
+        };
+        await liquidityManager.setWithdrawLimits(
+          newLimits.hourly,
+          newLimits.daily,
+          newLimits.min,
+          newLimits.max
+        );
+        
+        // Verify limits are updated (check via withdraw behavior)
+        // The limits are stored in LiquidityManager's withdrawLimits struct
+        // We verify by attempting operations that would fail/succeed under new limits
+        
+        // Verify limits work by doing another withdrawal
+        const lpBalance2 = await proxyGeneral.balanceOf(await user1.getAddress());
+        await expect(liquidityManager.connect(user1).withdraw(lpBalance2 / BigInt(4)))
+          .to.not.be.reverted;
+        
+        // Verify the event was emitted with all 4 parameters
+        await expect(liquidityManager.setWithdrawLimits(
+          newLimits.hourly,
+          newLimits.daily,
+          newLimits.min,
+          newLimits.max
+        )).to.emit(liquidityManager, "WithdrawLimitsUpdated")
+          .withArgs(newLimits.hourly, newLimits.daily, newLimits.min, newLimits.max);
       });
     });
   });

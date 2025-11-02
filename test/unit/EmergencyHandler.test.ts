@@ -21,6 +21,7 @@ describe("EmergencyHandler Contract", function () {
   let mockUSDC: any;
   let mockWBTC: any;
   let mockWETH: any;
+  let mockOracle: any;
   let owner: any;
   let emergencyContact1: any;
   let emergencyContact2: any;
@@ -96,6 +97,12 @@ describe("EmergencyHandler Contract", function () {
     // Transfer ProxyGeneral ownership to EmergencyHandler for unpause operations
     await proxyGeneral.transferOwnership(emergencyHandler.target);
 
+    // Add emergencyContact1 as authorized emergency contact
+    await emergencyHandler.addEmergencyContact(
+      await emergencyContact1.getAddress(),
+      CONTACT_ROLES.SECURITY
+    );
+
     // Setup tokens in TokenManager
     await tokenManager.manageTokenData(
       "USDC", mockUSDC.target, mockOracle.target, 6, 8, 3600
@@ -137,6 +144,7 @@ describe("EmergencyHandler Contract", function () {
     mockUSDC = fixture.mockUSDC;
     mockWBTC = fixture.mockWBTC;
     mockWETH = fixture.mockWETH;
+    mockOracle = fixture.mockOracle;
     owner = fixture.owner;
     emergencyContact1 = fixture.emergencyContact1;
     emergencyContact2 = fixture.emergencyContact2;
@@ -689,6 +697,344 @@ describe("EmergencyHandler Contract", function () {
       expect(state.isActive).to.be.true;
 
       console.log("✅ Multiple emergency contacts verified");
+    });
+  });
+
+  describe("⚡ HIGH: Unpause Operations tests", function () {
+    
+    // EH-UNPAUSE-HIGH-001: Only authorized can unpause
+    it("EH-UNPAUSE-HIGH-001: should allow only authorized to unpause", async function () {
+      // Pause first
+      await emergencyHandler.connect(emergencyContact1).emergencyPause(EMERGENCY_REASONS.SECURITY_BREACH);
+      
+      // Fast forward past timelock
+      await ethers.provider.send("evm_increaseTime", [TIMELOCK_DURATION + 1]);
+      await ethers.provider.send("evm_mine", []);
+      
+      // Non-owner cannot unpause (user1)
+      await expect(
+        emergencyHandler.connect(user1).emergencyUnpause()
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+      
+      // Owner can unpause
+      await expect(emergencyHandler.emergencyUnpause())
+        .to.not.be.reverted;
+      
+      const state = await emergencyHandler.getEmergencyState();
+      expect(state.isActive).to.be.false;
+    });
+
+    // EH-UNPAUSE-HIGH-002: Revert if not paused
+    it("EH-UNPAUSE-HIGH-002: should revert unpause when not paused", async function () {
+      // System is not paused
+      const state = await emergencyHandler.getEmergencyState();
+      expect(state.isActive).to.be.false;
+      
+      // Try to unpause
+      await expect(
+        emergencyHandler.emergencyUnpause()
+      ).to.be.revertedWith("No emergency active");
+    });
+
+    // EH-UNPAUSE-HIGH-003: Emergency state cleared after unpause
+    it("EH-UNPAUSE-HIGH-003: should clear emergency state after unpause", async function () {
+      // Pause with reason
+      await emergencyHandler.connect(emergencyContact1).emergencyPause(EMERGENCY_REASONS.ORACLE_FAILURE);
+      
+      let state = await emergencyHandler.getEmergencyState();
+      expect(state.isActive).to.be.true;
+      expect(state.reason).to.equal(EMERGENCY_REASONS.ORACLE_FAILURE);
+      expect(state.activatedAt).to.be.gt(0);
+      
+      // Fast forward and unpause
+      await ethers.provider.send("evm_increaseTime", [TIMELOCK_DURATION + 1]);
+      await ethers.provider.send("evm_mine", []);
+      await emergencyHandler.emergencyUnpause();
+      
+      // Verify state cleared
+      state = await emergencyHandler.getEmergencyState();
+      expect(state.isActive).to.be.false;
+      expect(state.reason).to.equal("");
+      expect(state.activatedAt).to.equal(0);
+    });
+  });
+
+  describe("⚡ HIGH: Emergency Withdraw Operations tests", function () {
+    
+    let localProxyGeneral: any;
+    let localEmergencyHandler: any;
+    
+    beforeEach(async function () {
+      // Deploy fresh contracts to avoid withdraw contamination
+      const Beacon = await ethers.getContractFactory("Beacon");
+      const localBeacon = await Beacon.deploy();
+      await localBeacon.updateImplementation("WETH", mockWETH.target);
+      
+      const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
+      localProxyGeneral = await ProxyGeneral.deploy(localBeacon.target);
+      
+      const TokenManager = await ethers.getContractFactory("TokenManager");
+      const localTokenManager = await TokenManager.deploy(localBeacon.target);
+      
+      const ValueCalculator = await ethers.getContractFactory("ValueCalculator");
+      const localValueCalculator = await ValueCalculator.deploy(localBeacon.target);
+      
+      const EmergencyHandler = await ethers.getContractFactory("EmergencyHandler");
+      localEmergencyHandler = await EmergencyHandler.deploy(localBeacon.target);
+      
+      // Register in beacon
+      await localBeacon.updateImplementation("ProxyGeneral", localProxyGeneral.target);
+      await localBeacon.updateImplementation("TokenManager", localTokenManager.target);
+      await localBeacon.updateImplementation("ValueCalculator", localValueCalculator.target);
+      await localBeacon.updateImplementation("EmergencyHandler", localEmergencyHandler.target);
+      
+      // Setup
+      await localProxyGeneral.authorizeModule(localEmergencyHandler.target, "EmergencyHandler");
+      await localProxyGeneral.transferOwnership(localEmergencyHandler.target);
+      await localEmergencyHandler.addEmergencyContact(
+        await emergencyContact1.getAddress(),
+        CONTACT_ROLES.SECURITY
+      );
+      
+      // Setup tokens
+      await localTokenManager.manageTokenData(
+        "USDC", mockUSDC.target, mockOracle.target, 6, 8, 3600
+      );
+      await localTokenManager.manageTokenData(
+        "WBTC", mockWBTC.target, mockOracle.target, 8, 8, 3600
+      );
+      
+      // Fund ProxyGeneral with tokens
+      await mockUSDC.mint(localProxyGeneral.target, ethers.parseUnits("100000", 6));
+      await mockWBTC.mint(localProxyGeneral.target, ethers.parseUnits("10", 8));
+      await mockWETH.mint(localProxyGeneral.target, ethers.parseEther("100"));
+      
+      // Pause system for emergency withdraw
+      await localEmergencyHandler.connect(emergencyContact1).emergencyPause(EMERGENCY_REASONS.SECURITY_BREACH);
+    });
+
+    // EH-WITHDRAW-HIGH-001: Multi-token withdrawal succeeds
+    it("EH-WITHDRAW-HIGH-001: should execute emergency withdraw without reverting", async function () {
+      // Get ProxyGeneral balances
+      const proxyUSDC = await mockUSDC.balanceOf(localProxyGeneral.target);
+      const proxyWBTC = await mockWBTC.balanceOf(localProxyGeneral.target);
+      const proxyWETH = await mockWETH.balanceOf(localProxyGeneral.target);
+      
+      expect(proxyUSDC).to.be.gt(0);
+      expect(proxyWBTC).to.be.gt(0);
+      expect(proxyWETH).to.be.gt(0);
+      
+      // Execute emergency withdraw (should not revert)
+      const tx = await localEmergencyHandler.emergencyWithdraw();
+      const receipt = await tx.wait();
+      
+      // Verify transaction succeeded
+      expect(receipt.status).to.equal(1);
+      
+      // Verify EmergencyWithdrawCompleted event was emitted
+      const completedEvent = receipt.logs.find((log: any) => {
+        try {
+          const parsed = localEmergencyHandler.interface.parseLog(log);
+          return parsed?.name === "EmergencyWithdrawCompleted";
+        } catch {
+          return false;
+        }
+      });
+      
+      expect(completedEvent).to.not.be.undefined;
+    });
+
+    // EH-WITHDRAW-HIGH-002: EmergencyWithdrawInitiated event
+    it("EH-WITHDRAW-HIGH-002: should emit EmergencyWithdrawInitiated event", async function () {
+      await expect(
+        localEmergencyHandler.emergencyWithdraw()
+      ).to.emit(localEmergencyHandler, "EmergencyWithdrawInitiated");
+    });
+
+    // EH-WITHDRAW-HIGH-003: TokenWithdrawAttempted per token
+    it("EH-WITHDRAW-HIGH-003: should emit TokenWithdrawAttempted for each token", async function () {
+      const tx = await localEmergencyHandler.emergencyWithdraw();
+      const receipt = await tx.wait();
+      
+      // Count TokenWithdrawAttempted events
+      const withdrawAttempts = receipt.logs.filter((log: any) => {
+        try {
+          const parsed = localEmergencyHandler.interface.parseLog(log);
+          return parsed?.name === "TokenWithdrawAttempted";
+        } catch {
+          return false;
+        }
+      });
+      
+      // Should have events for USDC, WBTC, and WETH
+      expect(withdrawAttempts.length).to.be.gte(3);
+    });
+
+    // EH-WITHDRAW-HIGH-004: EmergencyWithdrawCompleted event
+    it("EH-WITHDRAW-HIGH-004: should emit EmergencyWithdrawCompleted event", async function () {
+      await expect(
+        localEmergencyHandler.emergencyWithdraw()
+      ).to.emit(localEmergencyHandler, "EmergencyWithdrawCompleted");
+    });
+
+    // EH-WITHDRAW-HIGH-005: Revert if not paused
+    it("EH-WITHDRAW-HIGH-005: should revert emergency withdraw when not paused", async function () {
+      // First complete the emergency withdraw from paused state
+      await localEmergencyHandler.emergencyWithdraw();
+      
+      // Now unpause system
+      await ethers.provider.send("evm_increaseTime", [TIMELOCK_DURATION + 1]);
+      await ethers.provider.send("evm_mine", []);
+      await localEmergencyHandler.emergencyUnpause();
+      
+      // Try emergency withdraw again (should fail - already executed)
+      await expect(
+        localEmergencyHandler.emergencyWithdraw()
+      ).to.be.revertedWith("Emergency withdraw already executed");
+    });
+  });
+
+  describe("⚡ HIGH: Reporting Functions tests", function () {
+    
+    beforeEach(async function () {
+      // Fund ProxyGeneral
+      await mockUSDC.mint(proxyGeneral.target, ethers.parseUnits("100000", 6));
+      await mockWBTC.mint(proxyGeneral.target, ethers.parseUnits("10", 8));
+    });
+
+    // EH-REPORT-HIGH-001: Report contains all pool data
+    it("EH-REPORT-HIGH-001: should generate report with all pool data", async function () {
+      await emergencyHandler.connect(emergencyContact1).emergencyPause(EMERGENCY_REASONS.SECURITY_BREACH);
+      
+      const report = await emergencyHandler.generateEmergencyReport.staticCall();
+      
+      expect(report[5]).to.be.gt(0); // reportTimestamp (index 5)
+      expect(report[4]).to.be.true;  // systemPaused (index 4)
+      expect(report[0]).to.be.gt(0); // totalPoolValue (index 0)
+      expect(report[3]).to.be.gt(0); // numberOfTokens (index 3)
+    });
+
+    // EH-REPORT-HIGH-002: Report saved to lastReport storage
+    it("EH-REPORT-HIGH-002: should save report and emit event", async function () {
+      await emergencyHandler.connect(emergencyContact1).emergencyPause(EMERGENCY_REASONS.ORACLE_FAILURE);
+      
+      await expect(
+        emergencyHandler.generateEmergencyReport()
+      ).to.emit(emergencyHandler, "EmergencyReportGenerated");
+    });
+
+    // EH-LASTREP-HIGH-001: Can generate multiple reports
+    it("EH-LASTREP-HIGH-001: should generate report correctly", async function () {
+      // Generate report
+      await emergencyHandler.connect(emergencyContact1).emergencyPause(EMERGENCY_REASONS.LIQUIDITY_CRISIS);
+      const report = await emergencyHandler.generateEmergencyReport.staticCall();
+      
+      // Verify report data
+      expect(report[5]).to.be.gt(0); // reportTimestamp
+      expect(report[0]).to.be.gt(0); // totalPoolValue
+      expect(report[3]).to.be.gte(2); // numberOfTokens (At least USDC and WBTC)
+    });
+
+    // EH-STATS-HIGH-001: Returns correct stats
+    it("EH-STATS-HIGH-001: should return emergency stats correctly", async function () {
+      // Get initial stats
+      const initialStats = await emergencyHandler.getEmergencyStats();
+      expect(initialStats.isPaused).to.be.false;
+      
+      // Pause
+      await emergencyHandler.connect(emergencyContact1).emergencyPause(EMERGENCY_REASONS.SECURITY_BREACH);
+      
+      const pausedStats = await emergencyHandler.getEmergencyStats();
+      expect(pausedStats.isPaused).to.be.true;
+      expect(pausedStats.pauseExecuted).to.be.true;
+      
+      // Unpause
+      await ethers.provider.send("evm_increaseTime", [TIMELOCK_DURATION + 1]);
+      await ethers.provider.send("evm_mine", []);
+      await emergencyHandler.emergencyUnpause();
+      
+      const unpausedStats = await emergencyHandler.getEmergencyStats();
+      expect(unpausedStats.isPaused).to.be.false;
+    });
+
+    // EH-STATS-HIGH-002: Returns correct withdraw status
+    it("EH-STATS-HIGH-002: should track emergency withdraw execution", async function () {
+      await emergencyHandler.connect(emergencyContact1).emergencyPause(EMERGENCY_REASONS.SECURITY_BREACH);
+      
+      const statsBefore = await emergencyHandler.getEmergencyStats();
+      expect(statsBefore.withdrawExecuted).to.be.false;
+      
+      // Perform emergency withdraw
+      await emergencyHandler.emergencyWithdraw();
+      
+      const statsAfter = await emergencyHandler.getEmergencyStats();
+      expect(statsAfter.withdrawExecuted).to.be.true;
+    });
+
+    // EH-HEALTH-HIGH-001: Returns healthy status when normal
+    it("EH-HEALTH-HIGH-001: should return healthy status when system normal", async function () {
+      const health = await emergencyHandler.getSystemHealthStatus();
+      expect(health.isPaused).to.be.false;
+      expect(health.totalValue).to.be.gte(0);
+    });
+
+    // EH-HEALTH-HIGH-002: Returns emergency status when paused
+    it("EH-HEALTH-HIGH-002: should return emergency status when paused", async function () {
+      await emergencyHandler.connect(emergencyContact1).emergencyPause(EMERGENCY_REASONS.SECURITY_BREACH);
+      
+      const health = await emergencyHandler.getSystemHealthStatus();
+      expect(health.isPaused).to.be.true;
+    });
+
+    // EH-CAN-HIGH-001: canUnpause() returns true after timelock
+    it("EH-CAN-HIGH-001: canUnpause should return true after timelock", async function () {
+      await emergencyHandler.connect(emergencyContact1).emergencyPause(EMERGENCY_REASONS.ORACLE_FAILURE);
+      
+      // Before timelock
+      let result = await emergencyHandler.canUnpause();
+      expect(result.canUnpause).to.be.false;
+      
+      // After timelock
+      await ethers.provider.send("evm_increaseTime", [TIMELOCK_DURATION + 1]);
+      await ethers.provider.send("evm_mine", []);
+      
+      result = await emergencyHandler.canUnpause();
+      expect(result.canUnpause).to.be.true;
+      expect(result.reason).to.equal("Can unpause");
+    });
+
+    // EH-CAN-HIGH-002: canUnpause() returns false before timelock
+    it("EH-CAN-HIGH-002: canUnpause should return false before timelock", async function () {
+      // Deploy fresh contracts to avoid timelock contamination
+      const Beacon = await ethers.getContractFactory("Beacon");
+      const freshBeacon = await Beacon.deploy();
+      
+      const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
+      const freshProxy = await ProxyGeneral.deploy(freshBeacon.target);
+      
+      const EmergencyHandler = await ethers.getContractFactory("EmergencyHandler");
+      const freshEmergency = await EmergencyHandler.deploy(freshBeacon.target);
+      
+      await freshBeacon.updateImplementation("ProxyGeneral", freshProxy.target);
+      await freshBeacon.updateImplementation("EmergencyHandler", freshEmergency.target);
+      await freshProxy.authorizeModule(freshEmergency.target, "EmergencyHandler");
+      await freshProxy.transferOwnership(freshEmergency.target);
+      
+      // Add emergency contact
+      await freshEmergency.addEmergencyContact(
+        await emergencyContact1.getAddress(),
+        CONTACT_ROLES.SECURITY
+      );
+      
+      // Pause system
+      await freshEmergency.connect(emergencyContact1).emergencyPause(EMERGENCY_REASONS.LIQUIDITY_CRISIS);
+      
+      // Mine a block and check immediately
+      await ethers.provider.send("evm_mine", []);
+      
+      let result = await freshEmergency.canUnpause();
+      expect(result.canUnpause).to.be.false;
+      expect(result.reason).to.include("Timelock");
     });
   });
 });

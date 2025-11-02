@@ -510,4 +510,58 @@ describe("TokenManager Contract", function () {
       console.log("✅ Edge cases handled properly");
     });
   });
+
+  describe("⚡ HIGH: TokenManager Edge Cases", function () {
+    beforeEach(async function () {
+      // Register USDC token for edge case tests
+      await tokenManager.manageTokenData(
+        TOKEN_CODES.USDC,
+        await mockToken.getAddress(),
+        await mockOracle.getAddress(),
+        6,  // USDC has 6 decimals
+        8,  // Oracle price decimals
+        3600 // heartbeat
+      );
+    });
+
+    it("TM-EDGE-HIGH-001: should handle oracle errors gracefully", async function () {
+      await expect(tokenManager.getTokenPrice("NONEXISTENT")).to.be.revertedWith("Token not active");
+    });
+
+    it("TM-EDGE-HIGH-002: should handle multiple price updates", async function () {
+      await mockOracle.updatePrice(ethers.parseUnits("2100", 8));
+      const [price1] = await tokenManager.getTokenPrice(TOKEN_CODES.USDC);
+      await mockOracle.updatePrice(ethers.parseUnits("2300", 8));
+      const [price2] = await tokenManager.getTokenPrice(TOKEN_CODES.USDC);
+      expect(price2).to.be.gt(price1);
+    });
+
+    it("TM-EDGE-HIGH-003: should handle token removal correctly", async function () {
+      expect(await tokenManager.isTokenActive(TOKEN_CODES.USDC)).to.be.true;
+      await tokenManager.removeToken(TOKEN_CODES.USDC);
+      expect(await tokenManager.isTokenActive(TOKEN_CODES.USDC)).to.be.false;
+      await expect(tokenManager.getTokenPrice(TOKEN_CODES.USDC)).to.be.revertedWith("Token not active");
+    });
+
+    it("TM-EDGE-HIGH-004: should handle multiple active tokens", async function () {
+      const activeTokens = await tokenManager.getActiveTokens();
+      expect(activeTokens.length).to.be.gte(1);
+      expect(activeTokens.length).to.be.lte(10);
+    });
+
+    it("TM-EDGE-HIGH-005: should handle heartbeat = 0", async function () {
+      // Contract validates heartbeat > 0, so we test the validation
+      await expect(
+        tokenManager.updateHeartbeat(TOKEN_CODES.USDC, 0)
+      ).to.be.revertedWith("Invalid heartbeat");
+    });
+
+    it("TM-EDGE-HIGH-006: should handle large price values", async function () {
+      const largePrice = ethers.parseUnits("99999999", 8);
+      await mockOracle.updatePrice(largePrice);
+      const [price] = await tokenManager.getTokenPrice(TOKEN_CODES.USDC);
+      expect(price).to.be.gt(0);
+      expect(price).to.be.lte(ethers.MaxUint256);
+    });
+  });
 });

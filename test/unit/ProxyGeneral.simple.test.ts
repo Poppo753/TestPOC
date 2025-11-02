@@ -452,4 +452,91 @@ describe("ProxyGeneral Contract - Core Tests", function () {
       console.log("✅ Address validation working");
     });
   });
+
+  describe("⚡ HIGH: Edge Cases", function () {
+    // EDGE-PG-HIGH-001: Mint/burn atomicity during pause
+    it("EDGE-PG-HIGH-001: should handle mint/burn atomicity during pause correctly", async function () {
+      await proxyGeneral.connect(owner).authorizeModule(owner.address, "TestModule");
+      
+      // Mint tokens
+      const amount = ethers.parseEther("100");
+      await proxyGeneral.mint(user1.address, amount);
+      expect(await proxyGeneral.balanceOf(user1.address)).to.equal(amount);
+      
+      // Pause contract
+      await proxyGeneral.pause();
+      
+      // Verify mint and burn are blocked during pause
+      await expect(
+        proxyGeneral.mint(user1.address, amount)
+      ).to.be.revertedWith("Contract is paused");
+      
+      await expect(
+        proxyGeneral.burn(user1.address, amount / 2n)
+      ).to.be.revertedWith("Contract is paused");
+      
+      // Unpause and verify operations work again
+      await proxyGeneral.unpause();
+      
+      await proxyGeneral.burn(user1.address, amount / 2n);
+      expect(await proxyGeneral.balanceOf(user1.address)).to.equal(amount / 2n);
+    });
+
+    // EDGE-PG-HIGH-002: Approve MAX_UINT256 and spend
+    it("EDGE-PG-HIGH-002: should handle MAX_UINT256 approval correctly", async function () {
+      await proxyGeneral.connect(owner).authorizeModule(owner.address, "TestModule");
+      
+      const maxAmount = ethers.MaxUint256;
+      
+      // Approve MAX_UINT256
+      await proxyGeneral.approveSpender(mockUSDC.target, user1.address, maxAmount);
+      
+      // Verify allowance is set
+      const allowance = await mockUSDC.allowance(proxyGeneral.target, user1.address);
+      expect(allowance).to.equal(maxAmount);
+      
+      // User1 can spend part of allowance
+      const spendAmount = ethers.parseUnits("500", 6);
+      await mockUSDC.connect(user1).transferFrom(proxyGeneral.target, user2.address, spendAmount);
+      
+      // Verify transfer succeeded
+      expect(await mockUSDC.balanceOf(user2.address)).to.equal(spendAmount);
+    });
+
+    // EDGE-PG-HIGH-003: Multiple modules access custody
+    it("EDGE-PG-HIGH-003: should handle multiple authorized modules accessing custody", async function () {
+      // Authorize multiple modules
+      const module1 = user1.address;
+      const module2 = user2.address;
+      
+      await proxyGeneral.authorizeModule(module1, "Module1");
+      await proxyGeneral.authorizeModule(module2, "Module2");
+      
+      expect(await proxyGeneral.isAuthorizedModule(module1)).to.be.true;
+      expect(await proxyGeneral.isAuthorizedModule(module2)).to.be.true;
+      
+      // Module1 mints tokens
+      const amount1 = ethers.parseEther("50");
+      await proxyGeneral.connect(user1).mint(owner.address, amount1);
+      
+      // Module2 mints different amount
+      const amount2 = ethers.parseEther("30");
+      await proxyGeneral.connect(user2).mint(owner.address, amount2);
+      
+      // Verify total supply is sum of both
+      expect(await proxyGeneral.balanceOf(owner.address)).to.equal(amount1 + amount2);
+      expect(await proxyGeneral.totalSupply()).to.equal(amount1 + amount2);
+      
+      // Module1 can transfer funds
+      const initialOwnerUSDC = await mockUSDC.balanceOf(owner.address);
+      const transferAmount = ethers.parseUnits("100", 6);
+      await proxyGeneral.connect(user1).transferFunds(owner.address, mockUSDC.target, transferAmount);
+      expect(await mockUSDC.balanceOf(owner.address)).to.equal(initialOwnerUSDC + transferAmount);
+      
+      // Module2 can also transfer funds
+      const transferAmount2 = ethers.parseUnits("50", 6);
+      await proxyGeneral.connect(user2).transferFunds(user2.address, mockUSDC.target, transferAmount2);
+      expect(await mockUSDC.balanceOf(user2.address)).to.equal(transferAmount2);
+    });
+  });
 });
