@@ -426,24 +426,24 @@ describe("Integration: Liquidity Flow Management", function () {
             // Initial setup with existing LP tokens
             console.log("\n💼 INITIAL STATE:");
             const user = owner; // Use owner instead of signers[1]
-            const initialETH = await user.provider!.getBalance(user.address);
+            const initialETH = await user.provider.getBalance(user.address);
             console.log(`   👤 User ETH Balance: ${ethers.formatEther(initialETH)} ETH`);
             console.log("   🎫 Simulated LP Token Balance: 5.0 LP");
 
             // Step 1: TokenManager processing
             console.log("\n🔄 STEP 1: TOKEN MANAGER PROCESSING");
             console.log("   📞 Calling TokenManager withdraw with 5.0 LP tokens...");
-            const tokenManagerAddr = await beacon.getModuleAddress("TokenManager");
-            console.log(`   ✅ TokenManager found ValueCalculator: ${await beacon.getModuleAddress("ValueCalculator")}`);
-            console.log(`   ✅ TokenManager found LiquidityManager: ${await beacon.getModuleAddress("LiquidityManager")}`);
-            console.log(`   ✅ TokenManager found ProxyGeneral: ${await beacon.getModuleAddress("ProxyGeneral")}`);
+            const tokenManagerAddr = await beacon.getImplementation("TokenManager");
+            console.log(`   ✅ TokenManager found ValueCalculator: ${await beacon.getImplementation("ValueCalculator")}`);
+            console.log(`   ✅ TokenManager found LiquidityManager: ${await beacon.getImplementation("LiquidityManager")}`);
+            console.log(`   ✅ TokenManager found ProxyGeneral: ${await beacon.getImplementation("ProxyGeneral")}`);
 
             // Step 2: Value Calculator processing
             console.log("\n📊 STEP 2: VALUE CALCULATOR PROCESSING");
             console.log("   📞 ValueCalculator determining withdrawal rates...");
-            const valueCalculatorAddr = await beacon.getModuleAddress("ValueCalculator");
+            const valueCalculatorAddr = await beacon.getImplementation("ValueCalculator");
             console.log(`   ✅ ValueCalculator found TokenManager: ${tokenManagerAddr}`);
-            console.log(`   ✅ ValueCalculator found ParameterManager: ${await beacon.getModuleAddress("ParameterManager")}`);
+            console.log(`   ✅ ValueCalculator found ParameterManager: ${await beacon.getImplementation("ParameterManager")}`);
             
             const withdrawalFeeRate = ethers.parseEther("0.5"); // 0.5% withdrawal fee
             const withdrawAmount = ethers.parseEther("5.0");
@@ -457,7 +457,7 @@ describe("Integration: Liquidity Flow Management", function () {
             // Step 3: Proxy General custody release
             console.log("\n🏛️ STEP 3: PROXY GENERAL CUSTODY RELEASE");
             console.log("   📞 ProxyGeneral releasing asset custody...");
-            console.log(`   ✅ ProxyGeneral found EmergencyHandler: ${await beacon.getModuleAddress("EmergencyHandler")}`);
+            console.log(`   ✅ ProxyGeneral found EmergencyHandler: ${await beacon.getImplementation("EmergencyHandler")}`);
             console.log("   🔓 Assets will be released from ProxyGeneral custody");
             console.log(`   💰 Release Amount: ${ethers.formatEther(netAmount)} WETH`);
 
@@ -473,13 +473,13 @@ describe("Integration: Liquidity Flow Management", function () {
             console.log("\n🔍 STEP 5: CROSS-MODULE STATE VERIFICATION");
             const moduleCount = 7;
             console.log(`   📊 Total registered modules: ${moduleCount}`);
-            console.log(`   ✅ TokenManager: ${await beacon.getModuleAddress("TokenManager")}`);
-            console.log(`   ✅ ParameterManager: ${await beacon.getModuleAddress("ParameterManager")}`);
-            console.log(`   ✅ ValueCalculator: ${await beacon.getModuleAddress("ValueCalculator")}`);
-            console.log(`   ✅ ProxyGeneral: ${await beacon.getModuleAddress("ProxyGeneral")}`);
-            console.log(`   ✅ LiquidityManager: ${await beacon.getModuleAddress("LiquidityManager")}`);
-            console.log(`   ✅ SwapManager: ${await beacon.getModuleAddress("SwapManager")}`);
-            console.log(`   ✅ EmergencyHandler: ${await beacon.getModuleAddress("EmergencyHandler")}`);
+            console.log(`   ✅ TokenManager: ${await beacon.getImplementation("TokenManager")}`);
+            console.log(`   ✅ ParameterManager: ${await beacon.getImplementation("ParameterManager")}`);
+            console.log(`   ✅ ValueCalculator: ${await beacon.getImplementation("ValueCalculator")}`);
+            console.log(`   ✅ ProxyGeneral: ${await beacon.getImplementation("ProxyGeneral")}`);
+            console.log(`   ✅ LiquidityManager: ${await beacon.getImplementation("LiquidityManager")}`);
+            console.log(`   ✅ SwapManager: ${await beacon.getImplementation("SwapManager")}`);
+            console.log(`   ✅ EmergencyHandler: ${await beacon.getImplementation("EmergencyHandler")}`);
             console.log("   🏥 System Health: HEALTHY");
 
             console.log("\n✅ COMPLETE WITHDRAW FLOW VERIFICATION SUCCESSFUL:");
@@ -494,7 +494,7 @@ describe("Integration: Liquidity Flow Management", function () {
             console.log("   📋 Testing complete fee flow: User → Protocol → FeeRecipient");
             
             const user = owner;
-            const feeRecipient = otherAccount;
+            // Using feeRecipient defined in beforeEach
             const withdrawAmount = ethers.parseEther("8.0");
             
             console.log(`   💰 Withdraw: ${ethers.formatEther(withdrawAmount)} LP`);
@@ -503,18 +503,18 @@ describe("Integration: Liquidity Flow Management", function () {
 
             // Initial balances
             console.log("\n💼 INITIAL BALANCES:");
-            const userInitialETH = await user.provider!.getBalance(user.address);
-            const feeRecipientInitialETH = await feeRecipient.provider!.getBalance(feeRecipient.address);
+            const userInitialETH = await user.provider.getBalance(user.address);
+            const feeRecipientInitialETH = await feeRecipient.provider.getBalance(feeRecipient.address);
             console.log(`   👤 User ETH: ${ethers.formatEther(userInitialETH)} ETH`);
             console.log(`   🏦 Fee Recipient ETH: ${ethers.formatEther(feeRecipientInitialETH)} ETH`);
 
             // Simulating complete withdraw coordination
             console.log("\n🔄 SIMULATING COMPLETE WITHDRAW COORDINATION:");
             console.log("   🔍 Validating module accessibility...");
-            console.log(`   ✅ TokenManager: Available at ${await beacon.getModuleAddress("TokenManager")}`);
-            console.log(`   ✅ ValueCalculator: Available at ${await beacon.getModuleAddress("ValueCalculator")}`);
-            console.log(`   ✅ LiquidityManager: Available at ${await beacon.getModuleAddress("LiquidityManager")}`);
-            console.log(`   ✅ ProxyGeneral: Available at ${await beacon.getModuleAddress("ProxyGeneral")}`);
+            console.log(`   ✅ TokenManager: Available at ${await beacon.getImplementation("TokenManager")}`);
+            console.log(`   ✅ ValueCalculator: Available at ${await beacon.getImplementation("ValueCalculator")}`);
+            console.log(`   ✅ LiquidityManager: Available at ${await beacon.getImplementation("LiquidityManager")}`);
+            console.log(`   ✅ ProxyGeneral: Available at ${await beacon.getImplementation("ProxyGeneral")}`);
 
             // Fee calculation simulation
             console.log("\n💸 FEE CALCULATION SIMULATION:");
@@ -539,10 +539,10 @@ describe("Integration: Liquidity Flow Management", function () {
 
             // Cross-module dependency verification
             console.log("\n🔗 CROSS-MODULE DEPENDENCY VERIFICATION:");
-            console.log(`   ✅ TokenManager → ValueCalculator: ${await beacon.getModuleAddress("ValueCalculator")}`);
-            console.log(`   ✅ ValueCalculator → ParameterManager: ${await beacon.getModuleAddress("ParameterManager")}`);
-            console.log(`   ✅ LiquidityManager → TokenManager: ${await beacon.getModuleAddress("TokenManager")}`);
-            console.log(`   ✅ ProxyGeneral → EmergencyHandler: ${await beacon.getModuleAddress("EmergencyHandler")}`);
+            console.log(`   ✅ TokenManager → ValueCalculator: ${await beacon.getImplementation("ValueCalculator")}`);
+            console.log(`   ✅ ValueCalculator → ParameterManager: ${await beacon.getImplementation("ParameterManager")}`);
+            console.log(`   ✅ LiquidityManager → TokenManager: ${await beacon.getImplementation("TokenManager")}`);
+            console.log(`   ✅ ProxyGeneral → EmergencyHandler: ${await beacon.getImplementation("EmergencyHandler")}`);
 
             // Transaction flow summary
             console.log("\n📋 TRANSACTION FLOW SUMMARY:");
@@ -606,7 +606,7 @@ describe("Integration: Liquidity Flow Management", function () {
             console.log("\n💸 STATE TRANSITION 2: FEE PROCESSING STATE");
             console.log("   📊 ValueCalculator determining withdrawal fee parameters...");
             const withdrawalFeeRate = ethers.parseEther("0.5"); // 0.5%
-            const feeRecipient = otherAccount;
+            // Using feeRecipient defined in beforeEach
             const minimumWithdraw = ethers.parseEther("0.01");
             
             console.log("   ⚙️ Withdrawal Fee Rate: 0.5%");
@@ -636,7 +636,7 @@ describe("Integration: Liquidity Flow Management", function () {
             console.log("\n🏛️ STATE TRANSITION 5: CUSTODY RELEASE STATE");
             console.log("   🔓 ProxyGeneral preparing asset release...");
             console.log(`   💰 Assets to release: ${ethers.formatEther(netWithdrawAmount)} WETH`);
-            console.log(`   🏦 Custody contract: ${await beacon.getModuleAddress("ProxyGeneral")}`);
+            console.log(`   🏦 Custody contract: ${await beacon.getImplementation("ProxyGeneral")}`);
             console.log("   ✅ Release parameters validated");
 
             // Final state transition verification
@@ -658,32 +658,32 @@ describe("Integration: Liquidity Flow Management", function () {
             console.log("🚀 COMPLETE DEPOSIT-WITHDRAW CYCLE INTEGRATION TEST:");
             console.log("   📋 Full Cycle: ETH → LP → ETH with consistency validation");
 
-            const user = signers[1];
-            const initialETH = await user.getBalance();
-            const cycleAmount = ethers.utils.parseEther("5.0");
+            const user = user1;
+            const initialETH = await ethers.provider.getBalance(user.address);
+            const cycleAmount = ethers.parseEther("5.0");
 
             console.log("\n💼 INITIAL STATE:");
-            console.log(`   👤 User ETH Balance: ${ethers.utils.formatEther(initialETH)} ETH`);
-            console.log(`   💰 Cycle Amount: ${ethers.utils.formatEther(cycleAmount)} ETH`);
+            console.log(`   👤 User ETH Balance: ${ethers.formatEther(initialETH)} ETH`);
+            console.log(`   💰 Cycle Amount: ${ethers.formatEther(cycleAmount)} ETH`);
 
             // Phase 1: Deposit Flow
             console.log("\n🔄 PHASE 1: DEPOSIT FLOW");
             console.log("   📞 Initiating deposit flow...");
             
-            const depositFeeRate = ethers.utils.parseEther("1"); // 1%
-            const depositFee = cycleAmount.mul(depositFeeRate).div(ethers.utils.parseEther("100"));
-            const netDepositAmount = cycleAmount.sub(depositFee);
+            const depositFeeRate = 1n; // 1%
+            const depositFee = (cycleAmount * depositFeeRate) / 100n;
+            const netDepositAmount = cycleAmount - depositFee;
             
-            console.log(`   💸 Deposit Fee (1%): ${ethers.utils.formatEther(depositFee)} ETH`);
-            console.log(`   💰 Net Deposit: ${ethers.utils.formatEther(netDepositAmount)} ETH`);
-            console.log(`   🎫 LP Tokens Minted: ${ethers.utils.formatEther(netDepositAmount)} LP`);
+            console.log(`   💸 Deposit Fee (1%): ${ethers.formatEther(depositFee)} ETH`);
+            console.log(`   💰 Net Deposit: ${ethers.formatEther(netDepositAmount)} ETH`);
+            console.log(`   🎫 LP Tokens Minted: ${ethers.formatEther(netDepositAmount)} LP`);
 
             // Intermediate state verification
             console.log("\n📊 INTERMEDIATE STATE VERIFICATION:");
             console.log("   🔍 Validating post-deposit state...");
-            console.log(`   ✅ TokenManager: ${await beacon.getModule("TokenManager")}`);
-            console.log(`   ✅ LiquidityManager: ${await beacon.getModule("LiquidityManager")}`);
-            console.log(`   ✅ ProxyGeneral: ${await beacon.getModule("ProxyGeneral")}`);
+            console.log(`   ✅ TokenManager: ${await beacon.getImplementation("TokenManager")}`);
+            console.log(`   ✅ LiquidityManager: ${await beacon.getImplementation("LiquidityManager")}`);
+            console.log(`   ✅ ProxyGeneral: ${await beacon.getImplementation("ProxyGeneral")}`);
             console.log("   🏥 System State: HEALTHY");
 
             // Phase 2: Wait and State Persistence
@@ -697,7 +697,7 @@ describe("Integration: Liquidity Flow Management", function () {
             ];
             
             for (const moduleName of persistenceChecks) {
-                const moduleAddr = await beacon.getModule(moduleName);
+                const moduleAddr = await beacon.getImplementation(moduleName);
                 console.log(`   ✅ ${moduleName}: ${moduleAddr} (persistent)`);
             }
 
@@ -705,27 +705,27 @@ describe("Integration: Liquidity Flow Management", function () {
             console.log("\n🔄 PHASE 3: WITHDRAW FLOW");
             console.log("   📞 Initiating withdraw flow...");
             
-            const withdrawFeeRate = ethers.utils.parseEther("0.5"); // 0.5%
-            const withdrawFee = netDepositAmount.mul(withdrawFeeRate).div(ethers.utils.parseEther("100"));
-            const netWithdrawAmount = netDepositAmount.sub(withdrawFee);
+            const withdrawFeeRate = ethers.parseEther("0.5"); // 0.5%
+            const withdrawFee = netDepositAmount * withdrawFeeRate / 100n;
+            const netWithdrawAmount = netDepositAmount - withdrawFee;
             
-            console.log(`   🔥 LP Tokens Burned: ${ethers.utils.formatEther(netDepositAmount)} LP`);
-            console.log(`   💸 Withdraw Fee (0.5%): ${ethers.utils.formatEther(withdrawFee)} ETH`);
-            console.log(`   💰 Net Withdrawal: ${ethers.utils.formatEther(netWithdrawAmount)} ETH`);
+            console.log(`   🔥 LP Tokens Burned: ${ethers.formatEther(netDepositAmount)} LP`);
+            console.log(`   💸 Withdraw Fee (0.5%): ${ethers.formatEther(withdrawFee)} ETH`);
+            console.log(`   💰 Net Withdrawal: ${ethers.formatEther(netWithdrawAmount)} ETH`);
 
             // Final consistency validation
             console.log("\n🎯 FINAL CONSISTENCY VALIDATION:");
             console.log("   📊 Cycle Impact Analysis:");
             
-            const totalFees = depositFee.add(withdrawFee);
+            const totalFees = depositFee + withdrawFee;
             const finalUserAmount = netWithdrawAmount;
-            const cycleLoss = cycleAmount.sub(finalUserAmount);
+            const cycleLoss = cycleAmount - finalUserAmount;
             
-            console.log(`   💰 Original Amount: ${ethers.utils.formatEther(cycleAmount)} ETH`);
-            console.log(`   💰 Final Amount: ${ethers.utils.formatEther(finalUserAmount)} ETH`);
-            console.log(`   💸 Total Fees: ${ethers.utils.formatEther(totalFees)} ETH`);
-            console.log(`   📊 Cycle Loss: ${ethers.utils.formatEther(cycleLoss)} ETH`);
-            console.log(`   ✅ Loss equals total fees: ${cycleLoss.eq(totalFees)}`);
+            console.log(`   💰 Original Amount: ${ethers.formatEther(cycleAmount)} ETH`);
+            console.log(`   💰 Final Amount: ${ethers.formatEther(finalUserAmount)} ETH`);
+            console.log(`   💸 Total Fees: ${ethers.formatEther(totalFees)} ETH`);
+            console.log(`   📊 Cycle Loss: ${ethers.formatEther(cycleLoss)} ETH`);
+            console.log(`   ✅ Loss equals total fees: ${cycleLoss === totalFees}`);
 
             console.log("\n✅ DEPOSIT-WITHDRAW CYCLE COMPLETE:");
             console.log("   🔄 Full cycle executed successfully");
@@ -739,25 +739,25 @@ describe("Integration: Liquidity Flow Management", function () {
             console.log("\n🔄 MULTIPLE CONSECUTIVE CYCLES TEST:");
             console.log("   📋 Testing 3 consecutive deposit-withdraw cycles");
 
-            const user = signers[1];
-            const cycleAmount = ethers.utils.parseEther("2.0");
+            const user = user1;
+            const cycleAmount = ethers.parseEther("2.0");
             const numCycles = 3;
 
             console.log(`   👤 User: ${user.address}`);
-            console.log(`   💰 Amount per cycle: ${ethers.utils.formatEther(cycleAmount)} ETH`);
+            console.log(`   💰 Amount per cycle: ${ethers.formatEther(cycleAmount)} ETH`);
             console.log(`   🔄 Number of cycles: ${numCycles}`);
 
-            let totalFeesPaid = ethers.utils.parseEther("0");
+            let totalFeesPaid = 0n;
 
             for (let i = 1; i <= numCycles; i++) {
                 console.log(`\n🔄 CYCLE ${i}/${numCycles}:`);
                 
                 // Deposit phase
                 console.log(`   📥 Deposit Phase ${i}:`);
-                const depositFee = cycleAmount.mul(ethers.utils.parseEther("1")).div(ethers.utils.parseEther("100")); // 1%
-                const netDeposit = cycleAmount.sub(depositFee);
-                console.log(`     💸 Fee: ${ethers.utils.formatEther(depositFee)} ETH`);
-                console.log(`     🎫 LP Minted: ${ethers.utils.formatEther(netDeposit)} LP`);
+                const depositFee = cycleAmount * ethers.parseEther("1") / ethers.parseEther("100"); // 1%
+                const netDeposit = cycleAmount - depositFee;
+                console.log(`     💸 Fee: ${ethers.formatEther(depositFee)} ETH`);
+                console.log(`     🎫 LP Minted: ${ethers.formatEther(netDeposit)} LP`);
                 
                 // State validation mid-cycle
                 console.log(`   📊 Mid-Cycle State Check ${i}:`);
@@ -767,38 +767,38 @@ describe("Integration: Liquidity Flow Management", function () {
                 
                 // Withdraw phase
                 console.log(`   📤 Withdraw Phase ${i}:`);
-                const withdrawFee = netDeposit.mul(ethers.utils.parseEther("0.5")).div(ethers.utils.parseEther("100")); // 0.5%
-                const netWithdraw = netDeposit.sub(withdrawFee);
-                console.log(`     🔥 LP Burned: ${ethers.utils.formatEther(netDeposit)} LP`);
-                console.log(`     💸 Fee: ${ethers.utils.formatEther(withdrawFee)} ETH`);
-                console.log(`     💰 ETH Received: ${ethers.utils.formatEther(netWithdraw)} ETH`);
+                const withdrawFee = netDeposit * ethers.parseEther("0.5") / ethers.parseEther("100"); // 0.5%
+                const netWithdraw = netDeposit - withdrawFee;
+                console.log(`     🔥 LP Burned: ${ethers.formatEther(netDeposit)} LP`);
+                console.log(`     💸 Fee: ${ethers.formatEther(withdrawFee)} ETH`);
+                console.log(`     💰 ETH Received: ${ethers.formatEther(netWithdraw)} ETH`);
                 
                 // Accumulate fees
-                const cycleFees = depositFee.add(withdrawFee);
-                totalFeesPaid = totalFeesPaid.add(cycleFees);
+                const cycleFees = depositFee + withdrawFee;
+                totalFeesPaid = totalFeesPaid + cycleFees;
                 
                 console.log(`   📊 Cycle ${i} Summary:`);
-                console.log(`     💸 Cycle Fees: ${ethers.utils.formatEther(cycleFees)} ETH`);
-                console.log(`     💸 Cumulative Fees: ${ethers.utils.formatEther(totalFeesPaid)} ETH`);
+                console.log(`     💸 Cycle Fees: ${ethers.formatEther(cycleFees)} ETH`);
+                console.log(`     💸 Cumulative Fees: ${ethers.formatEther(totalFeesPaid)} ETH`);
                 
                 // Inter-cycle state verification
                 if (i < numCycles) {
                     console.log(`   🔍 Inter-Cycle State Verification ${i}-${i+1}:`);
-                    console.log(`     ✅ TokenManager: ${await beacon.getModule("TokenManager")}`);
-                    console.log(`     ✅ LiquidityManager: ${await beacon.getModule("LiquidityManager")}`);
-                    console.log(`     ✅ ValueCalculator: ${await beacon.getModule("ValueCalculator")}`);
+                    console.log(`     ✅ TokenManager: ${await beacon.getImplementation("TokenManager")}`);
+                    console.log(`     ✅ LiquidityManager: ${await beacon.getImplementation("LiquidityManager")}`);
+                    console.log(`     ✅ ValueCalculator: ${await beacon.getImplementation("ValueCalculator")}`);
                     console.log("     🔗 All modules remain accessible");
                 }
             }
 
             // Final multi-cycle analysis
             console.log("\n🎯 MULTI-CYCLE ANALYSIS:");
-            const totalProcessed = cycleAmount.mul(numCycles);
-            const averageFeePerCycle = totalFeesPaid.div(numCycles);
+            const totalProcessed = cycleAmount * BigInt(numCycles);
+            const averageFeePerCycle = totalFeesPaid / BigInt(numCycles);
             
-            console.log(`   📊 Total Amount Processed: ${ethers.utils.formatEther(totalProcessed)} ETH`);
-            console.log(`   💸 Total Fees Paid: ${ethers.utils.formatEther(totalFeesPaid)} ETH`);
-            console.log(`   📊 Average Fee per Cycle: ${ethers.utils.formatEther(averageFeePerCycle)} ETH`);
+            console.log(`   📊 Total Amount Processed: ${ethers.formatEther(totalProcessed)} ETH`);
+            console.log(`   💸 Total Fees Paid: ${ethers.formatEther(totalFeesPaid)} ETH`);
+            console.log(`   📊 Average Fee per Cycle: ${ethers.formatEther(averageFeePerCycle)} ETH`);
             console.log(`   🔄 Cycles Completed: ${numCycles}/${numCycles}`);
 
             console.log("\n✅ MULTIPLE CONSECUTIVE CYCLES COMPLETE:");
@@ -816,17 +816,17 @@ describe("Integration: Liquidity Flow Management", function () {
             console.log("🚀 CONCURRENT DEPOSIT OPERATIONS TEST:");
             console.log("   📋 Testing simultaneous deposits from 3 users");
 
-            const users = [signers[1], signers[2], signers[3]];
+            const users = [user1, user2, owner];
             const depositAmounts = [
-                ethers.utils.parseEther("3.0"),
-                ethers.utils.parseEther("5.0"),
-                ethers.utils.parseEther("2.5")
+                ethers.parseEther("3.0"),
+                ethers.parseEther("5.0"),
+                ethers.parseEther("2.5")
             ];
 
             console.log("\n👥 CONCURRENT USERS SETUP:");
             for (let i = 0; i < users.length; i++) {
                 console.log(`   👤 User ${i+1}: ${users[i].address}`);
-                console.log(`   💰 Deposit Amount: ${ethers.utils.formatEther(depositAmounts[i])} ETH`);
+                console.log(`   💰 Deposit Amount: ${ethers.formatEther(depositAmounts[i])} ETH`);
             }
 
             // Pre-concurrent state capture
@@ -845,19 +845,19 @@ describe("Integration: Liquidity Flow Management", function () {
                 console.log(`\n   🔄 Processing User ${i+1} Deposit:`);
                 
                 // Fee calculation for each user
-                const feeRate = ethers.utils.parseEther("1"); // 1%
-                const feeAmount = depositAmounts[i].mul(feeRate).div(ethers.utils.parseEther("100"));
-                const netAmount = depositAmounts[i].sub(feeAmount);
+                const feeRate = ethers.parseEther("1"); // 1%
+                const feeAmount = depositAmounts[i] * feeRate / 100n;
+                const netAmount = depositAmounts[i] - feeAmount;
                 
-                console.log(`     💸 Fee: ${ethers.utils.formatEther(feeAmount)} ETH`);
-                console.log(`     💰 Net Deposit: ${ethers.utils.formatEther(netAmount)} ETH`);
-                console.log(`     🎫 LP Tokens: ${ethers.utils.formatEther(netAmount)} LP`);
+                console.log(`     💸 Fee: ${ethers.formatEther(feeAmount)} ETH`);
+                console.log(`     💰 Net Deposit: ${ethers.formatEther(netAmount)} ETH`);
+                console.log(`     🎫 LP Tokens: ${ethers.formatEther(netAmount)} LP`);
                 
                 // Module access verification for each user
                 console.log("     🔗 Module Access Verification:");
-                console.log(`       ✅ TokenManager: ${await beacon.getModule("TokenManager")}`);
-                console.log(`       ✅ ValueCalculator: ${await beacon.getModule("ValueCalculator")}`);
-                console.log(`       ✅ LiquidityManager: ${await beacon.getModule("LiquidityManager")}`);
+                console.log(`       ✅ TokenManager: ${await beacon.getImplementation("TokenManager")}`);
+                console.log(`       ✅ ValueCalculator: ${await beacon.getImplementation("ValueCalculator")}`);
+                console.log(`       ✅ LiquidityManager: ${await beacon.getImplementation("LiquidityManager")}`);
                 
                 depositResults.push({
                     user: users[i].address,
@@ -872,19 +872,19 @@ describe("Integration: Liquidity Flow Management", function () {
             console.log("\n🔍 CROSS-USER STATE VERIFICATION:");
             console.log("   📊 Validating system state consistency across concurrent operations...");
             
-            let totalDeposited = ethers.utils.parseEther("0");
-            let totalFees = ethers.utils.parseEther("0");
-            let totalLPTokens = ethers.utils.parseEther("0");
+            let totalDeposited = 0n;
+            let totalFees = 0n;
+            let totalLPTokens = 0n;
             
             for (const result of depositResults) {
-                totalDeposited = totalDeposited.add(result.depositAmount);
-                totalFees = totalFees.add(result.feeAmount);
-                totalLPTokens = totalLPTokens.add(result.lpTokens);
+                totalDeposited = totalDeposited + result.depositAmount;
+                totalFees = totalFees + result.feeAmount;
+                totalLPTokens = totalLPTokens + result.lpTokens;
             }
             
-            console.log(`   💰 Total Deposited: ${ethers.utils.formatEther(totalDeposited)} ETH`);
-            console.log(`   💸 Total Fees: ${ethers.utils.formatEther(totalFees)} ETH`);
-            console.log(`   🎫 Total LP Tokens: ${ethers.utils.formatEther(totalLPTokens)} LP`);
+            console.log(`   💰 Total Deposited: ${ethers.formatEther(totalDeposited)} ETH`);
+            console.log(`   💸 Total Fees: ${ethers.formatEther(totalFees)} ETH`);
+            console.log(`   🎫 Total LP Tokens: ${ethers.formatEther(totalLPTokens)} LP`);
 
             // Resource contention analysis
             console.log("\n🔒 RESOURCE CONTENTION ANALYSIS:");
@@ -912,28 +912,28 @@ describe("Integration: Liquidity Flow Management", function () {
             console.log("\n⚡ MIXED CONCURRENT OPERATIONS TEST:");
             console.log("   📋 Testing simultaneous deposits and withdraws");
 
-            const depositUsers = [signers[1], signers[2]];
-            const withdrawUsers = [signers[3], signers[4]];
+            const depositUsers = [user1, user2];
+            const withdrawUsers = [owner, feeRecipient];
             
             const depositAmounts = [
-                ethers.utils.parseEther("4.0"),
-                ethers.utils.parseEther("3.5")
+                ethers.parseEther("4.0"),
+                ethers.parseEther("3.5")
             ];
             
             const withdrawAmounts = [
-                ethers.utils.parseEther("2.0"),
-                ethers.utils.parseEther("1.5")
+                ethers.parseEther("2.0"),
+                ethers.parseEther("1.5")
             ];
 
             console.log("\n👥 MIXED OPERATIONS SETUP:");
             console.log("   📥 Concurrent Deposits:");
             for (let i = 0; i < depositUsers.length; i++) {
-                console.log(`     👤 User ${i+1}: ${depositUsers[i].address} → ${ethers.utils.formatEther(depositAmounts[i])} ETH`);
+                console.log(`     👤 User ${i+1}: ${depositUsers[i].address} → ${ethers.formatEther(depositAmounts[i])} ETH`);
             }
             
             console.log("   📤 Concurrent Withdraws:");
             for (let i = 0; i < withdrawUsers.length; i++) {
-                console.log(`     👤 User ${i+1}: ${withdrawUsers[i].address} → ${ethers.utils.formatEther(withdrawAmounts[i])} LP`);
+                console.log(`     👤 User ${i+1}: ${withdrawUsers[i].address} → ${ethers.formatEther(withdrawAmounts[i])} LP`);
             }
 
             // Pre-mixed operations state
@@ -950,14 +950,14 @@ describe("Integration: Liquidity Flow Management", function () {
             for (let i = 0; i < depositUsers.length; i++) {
                 console.log(`\n   🔄 Deposit Operation ${i+1}:`);
                 
-                const feeRate = ethers.utils.parseEther("1"); // 1%
-                const feeAmount = depositAmounts[i].mul(feeRate).div(ethers.utils.parseEther("100"));
-                const netDeposit = depositAmounts[i].sub(feeAmount);
+                const feeRate = ethers.parseEther("1"); // 1%
+                const feeAmount = depositAmounts[i] * feeRate / 100n;
+                const netDeposit = depositAmounts[i] - feeAmount;
                 
                 console.log(`     👤 User: ${depositUsers[i].address}`);
-                console.log(`     💰 Amount: ${ethers.utils.formatEther(depositAmounts[i])} ETH`);
-                console.log(`     💸 Fee: ${ethers.utils.formatEther(feeAmount)} ETH`);
-                console.log(`     🎫 LP Tokens: ${ethers.utils.formatEther(netDeposit)} LP`);
+                console.log(`     💰 Amount: ${ethers.formatEther(depositAmounts[i])} ETH`);
+                console.log(`     💸 Fee: ${ethers.formatEther(feeAmount)} ETH`);
+                console.log(`     🎫 LP Tokens: ${ethers.formatEther(netDeposit)} LP`);
                 
                 // Verify module access during deposit
                 console.log("     🔗 Module Access Check:");
@@ -975,14 +975,14 @@ describe("Integration: Liquidity Flow Management", function () {
             for (let i = 0; i < withdrawUsers.length; i++) {
                 console.log(`\n   🔄 Withdraw Operation ${i+1}:`);
                 
-                const withdrawFeeRate = ethers.utils.parseEther("0.5"); // 0.5%
-                const feeAmount = withdrawAmounts[i].mul(withdrawFeeRate).div(ethers.utils.parseEther("100"));
-                const netWithdraw = withdrawAmounts[i].sub(feeAmount);
+                const withdrawFeeRate = ethers.parseEther("0.5"); // 0.5%
+                const feeAmount = withdrawAmounts[i] * withdrawFeeRate / 100n;
+                const netWithdraw = withdrawAmounts[i] - feeAmount;
                 
                 console.log(`     👤 User: ${withdrawUsers[i].address}`);
-                console.log(`     🔥 LP Burned: ${ethers.utils.formatEther(withdrawAmounts[i])} LP`);
-                console.log(`     💸 Fee: ${ethers.utils.formatEther(feeAmount)} WETH`);
-                console.log(`     💰 ETH Received: ${ethers.utils.formatEther(netWithdraw)} ETH`);
+                console.log(`     🔥 LP Burned: ${ethers.formatEther(withdrawAmounts[i])} LP`);
+                console.log(`     💸 Fee: ${ethers.formatEther(feeAmount)} WETH`);
+                console.log(`     💰 ETH Received: ${ethers.formatEther(netWithdraw)} ETH`);
                 
                 // Verify module access during withdraw
                 console.log("     🔗 Module Access Check:");
@@ -996,16 +996,16 @@ describe("Integration: Liquidity Flow Management", function () {
             // Cross-operation impact analysis
             console.log("\n📊 CROSS-OPERATION IMPACT ANALYSIS:");
             
-            const totalDepositFees = depositResults.reduce((sum, r) => sum.add(r.feeAmount), ethers.utils.parseEther("0"));
-            const totalWithdrawFees = withdrawResults.reduce((sum, r) => sum.add(r.feeAmount), ethers.utils.parseEther("0"));
-            const totalLPMinted = depositResults.reduce((sum, r) => sum.add(r.netDeposit), ethers.utils.parseEther("0"));
-            const totalLPBurned = withdrawAmounts.reduce((sum, amount) => sum.add(amount), ethers.utils.parseEther("0"));
+            const totalDepositFees = depositResults.reduce((sum, r) => sum + r.feeAmount, 0n);
+            const totalWithdrawFees = withdrawResults.reduce((sum, r) => sum + r.feeAmount, 0n);
+            const totalLPMinted = depositResults.reduce((sum, r) => sum + r.netDeposit, 0n);
+            const totalLPBurned = withdrawAmounts.reduce((sum, amount) => sum + amount, 0n);
             
-            console.log(`   📥 Total LP Minted: ${ethers.utils.formatEther(totalLPMinted)} LP`);
-            console.log(`   📤 Total LP Burned: ${ethers.utils.formatEther(totalLPBurned)} LP`);
-            console.log(`   📊 Net LP Change: ${ethers.utils.formatEther(totalLPMinted.sub(totalLPBurned))} LP`);
-            console.log(`   💸 Total Deposit Fees: ${ethers.utils.formatEther(totalDepositFees)} ETH`);
-            console.log(`   💸 Total Withdraw Fees: ${ethers.utils.formatEther(totalWithdrawFees)} WETH`);
+            console.log(`   📥 Total LP Minted: ${ethers.formatEther(totalLPMinted)} LP`);
+            console.log(`   📤 Total LP Burned: ${ethers.formatEther(totalLPBurned)} LP`);
+            console.log(`   📊 Net LP Change: ${ethers.formatEther(totalLPMinted - totalLPBurned)} LP`);
+            console.log(`   💸 Total Deposit Fees: ${ethers.formatEther(totalDepositFees)} ETH`);
+            console.log(`   💸 Total Withdraw Fees: ${ethers.formatEther(totalWithdrawFees)} WETH`);
 
             // System consistency validation
             console.log("\n🎯 SYSTEM CONSISTENCY VALIDATION:");
@@ -1031,12 +1031,12 @@ describe("Integration: Liquidity Flow Management", function () {
             console.log("🚀 HIGH-VOLUME RAPID DEPOSIT STRESS TEST:");
             console.log("   📋 Testing 10 rapid consecutive deposits");
 
-            const user = signers[1];
-            const depositAmount = ethers.utils.parseEther("1.0");
+            const user = user1;
+            const depositAmount = ethers.parseEther("1.0");
             const numDeposits = 10;
 
             console.log(`   👤 Stress Test User: ${user.address}`);
-            console.log(`   💰 Amount per deposit: ${ethers.utils.formatEther(depositAmount)} ETH`);
+            console.log(`   💰 Amount per deposit: ${ethers.formatEther(depositAmount)} ETH`);
             console.log(`   🔄 Number of deposits: ${numDeposits}`);
 
             // Pre-stress system state
@@ -1049,9 +1049,9 @@ describe("Integration: Liquidity Flow Management", function () {
             // Execute rapid deposit sequence
             console.log("\n⚡ EXECUTING RAPID DEPOSIT SEQUENCE:");
             
-            let totalProcessed = ethers.utils.parseEther("0");
-            let totalFees = ethers.utils.parseEther("0");
-            let totalLPMinted = ethers.utils.parseEther("0");
+            let totalProcessed = 0n;
+            let totalFees = 0n;
+            let totalLPMinted = 0n;
             
             const startTime = Date.now();
             
@@ -1059,22 +1059,22 @@ describe("Integration: Liquidity Flow Management", function () {
                 console.log(`\n   🔄 Rapid Deposit ${i}/${numDeposits}:`);
                 
                 // Fee calculation
-                const feeRate = ethers.utils.parseEther("1"); // 1%
-                const feeAmount = depositAmount.mul(feeRate).div(ethers.utils.parseEther("100"));
-                const netAmount = depositAmount.sub(feeAmount);
+                const feeRate = 1n; // 1%
+                const feeAmount = (depositAmount * feeRate) / 100n;
+                const netAmount = depositAmount - feeAmount;
                 
-                console.log(`     💸 Fee: ${ethers.utils.formatEther(feeAmount)} ETH`);
-                console.log(`     🎫 LP Minted: ${ethers.utils.formatEther(netAmount)} LP`);
+                console.log(`     💸 Fee: ${ethers.formatEther(feeAmount)} ETH`);
+                console.log(`     🎫 LP Minted: ${ethers.formatEther(netAmount)} LP`);
                 
                 // Accumulate totals
-                totalProcessed = totalProcessed.add(depositAmount);
-                totalFees = totalFees.add(feeAmount);
-                totalLPMinted = totalLPMinted.add(netAmount);
+                totalProcessed = totalProcessed + depositAmount;
+                totalFees = totalFees + feeAmount;
+                totalLPMinted = totalLPMinted + netAmount;
                 
                 // System health check every 3 deposits
                 if (i % 3 === 0) {
                     console.log(`     🏥 Health Check (${i}/${numDeposits}): HEALTHY`);
-                    console.log(`     📡 Modules: ${await beacon.getModule("TokenManager") ? "✅" : "❌"} All accessible`);
+                    console.log(`     📡 Modules: ${await beacon.getImplementation("TokenManager") ? "✅" : "❌"} All accessible`);
                 }
                 
                 // Performance metrics
@@ -1090,9 +1090,9 @@ describe("Integration: Liquidity Flow Management", function () {
             console.log("\n📊 STRESS TEST RESULTS ANALYSIS:");
             console.log(`   ⏱️ Total Execution Time: ${totalTime}ms`);
             console.log(`   ⚡ Average Time per Deposit: ${(totalTime / numDeposits).toFixed(2)}ms`);
-            console.log(`   💰 Total Volume Processed: ${ethers.utils.formatEther(totalProcessed)} ETH`);
-            console.log(`   💸 Total Fees Collected: ${ethers.utils.formatEther(totalFees)} ETH`);
-            console.log(`   🎫 Total LP Tokens Minted: ${ethers.utils.formatEther(totalLPMinted)} LP`);
+            console.log(`   💰 Total Volume Processed: ${ethers.formatEther(totalProcessed)} ETH`);
+            console.log(`   💸 Total Fees Collected: ${ethers.formatEther(totalFees)} ETH`);
+            console.log(`   🎫 Total LP Tokens Minted: ${ethers.formatEther(totalLPMinted)} LP`);
             console.log(`   📊 Success Rate: ${numDeposits}/${numDeposits} (100%)`);
 
             // System performance validation
@@ -1124,16 +1124,16 @@ describe("Integration: Liquidity Flow Management", function () {
             console.log("\n🔥 COMPLEX MIXED OPERATION STRESS TEST:");
             console.log("   📋 Testing complex patterns: deposits, withdraws, and cycles");
 
-            const users = [signers[1], signers[2], signers[3], signers[4]];
+            const users = [user1, user2, owner, feeRecipient];
             const operations = [
-                { type: 'deposit', user: 0, amount: ethers.utils.parseEther("2.0") },
-                { type: 'withdraw', user: 1, amount: ethers.utils.parseEther("1.0") },
-                { type: 'deposit', user: 2, amount: ethers.utils.parseEther("3.0") },
-                { type: 'cycle', user: 3, amount: ethers.utils.parseEther("1.5") },
-                { type: 'deposit', user: 0, amount: ethers.utils.parseEther("1.0") },
-                { type: 'withdraw', user: 2, amount: ethers.utils.parseEther("2.0") },
-                { type: 'cycle', user: 1, amount: ethers.utils.parseEther("0.8") },
-                { type: 'deposit', user: 3, amount: ethers.utils.parseEther("2.5") },
+                { type: 'deposit', user: 0, amount: ethers.parseEther("2.0") },
+                { type: 'withdraw', user: 1, amount: ethers.parseEther("1.0") },
+                { type: 'deposit', user: 2, amount: ethers.parseEther("3.0") },
+                { type: 'cycle', user: 3, amount: ethers.parseEther("1.5") },
+                { type: 'deposit', user: 0, amount: ethers.parseEther("1.0") },
+                { type: 'withdraw', user: 2, amount: ethers.parseEther("2.0") },
+                { type: 'cycle', user: 1, amount: ethers.parseEther("0.8") },
+                { type: 'deposit', user: 3, amount: ethers.parseEther("2.5") },
             ];
 
             console.log(`   👥 Stress Users: ${users.length}`);
@@ -1160,44 +1160,44 @@ describe("Integration: Liquidity Flow Management", function () {
                 
                 console.log(`\n   🔄 Operation ${i+1}/${operations.length} (${op.type.toUpperCase()}):`);
                 console.log(`     👤 User: ${user.address}`);
-                console.log(`     💰 Amount: ${ethers.utils.formatEther(op.amount)} ${op.type === 'withdraw' ? 'LP' : 'ETH'}`);
+                console.log(`     💰 Amount: ${ethers.formatEther(op.amount)} ${op.type === 'withdraw' ? 'LP' : 'ETH'}`);
                 
                 let result = { type: op.type, user: user.address, amount: op.amount };
                 
                 if (op.type === 'deposit') {
-                    const feeRate = ethers.utils.parseEther("1"); // 1%
-                    const feeAmount = op.amount.mul(feeRate).div(ethers.utils.parseEther("100"));
-                    const netAmount = op.amount.sub(feeAmount);
+                    const feeRate = ethers.parseEther("1"); // 1%
+                    const feeAmount = op.amount * feeRate / 100n;
+                    const netAmount = op.amount - feeAmount;
                     
-                    console.log(`     💸 Deposit Fee: ${ethers.utils.formatEther(feeAmount)} ETH`);
-                    console.log(`     🎫 LP Minted: ${ethers.utils.formatEther(netAmount)} LP`);
+                    console.log(`     💸 Deposit Fee: ${ethers.formatEther(feeAmount)} ETH`);
+                    console.log(`     🎫 LP Minted: ${ethers.formatEther(netAmount)} LP`);
                     
                     result.fee = feeAmount;
                     result.netAmount = netAmount;
                     
                 } else if (op.type === 'withdraw') {
-                    const withdrawFeeRate = ethers.utils.parseEther("0.5"); // 0.5%
-                    const feeAmount = op.amount.mul(withdrawFeeRate).div(ethers.utils.parseEther("100"));
-                    const netAmount = op.amount.sub(feeAmount);
+                    const withdrawFeeRate = ethers.parseEther("0.5"); // 0.5%
+                    const feeAmount = op.amount * withdrawFeeRate / 100n;
+                    const netAmount = op.amount - feeAmount;
                     
-                    console.log(`     🔥 LP Burned: ${ethers.utils.formatEther(op.amount)} LP`);
-                    console.log(`     💸 Withdraw Fee: ${ethers.utils.formatEther(feeAmount)} WETH`);
-                    console.log(`     💰 ETH Received: ${ethers.utils.formatEther(netAmount)} ETH`);
+                    console.log(`     🔥 LP Burned: ${ethers.formatEther(op.amount)} LP`);
+                    console.log(`     💸 Withdraw Fee: ${ethers.formatEther(feeAmount)} WETH`);
+                    console.log(`     💰 ETH Received: ${ethers.formatEther(netAmount)} ETH`);
                     
                     result.fee = feeAmount;
                     result.netAmount = netAmount;
                     
                 } else if (op.type === 'cycle') {
                     // Deposit + Withdraw cycle
-                    const depositFee = op.amount.mul(ethers.utils.parseEther("1")).div(ethers.utils.parseEther("100"));
-                    const netDeposit = op.amount.sub(depositFee);
-                    const withdrawFee = netDeposit.mul(ethers.utils.parseEther("0.5")).div(ethers.utils.parseEther("100"));
-                    const finalAmount = netDeposit.sub(withdrawFee);
-                    const totalFees = depositFee.add(withdrawFee);
+                    const depositFee = op.amount * ethers.parseEther("1") / ethers.parseEther("100");
+                    const netDeposit = op.amount - depositFee;
+                    const withdrawFee = netDeposit * ethers.parseEther("0.5") / ethers.parseEther("100");
+                    const finalAmount = netDeposit - withdrawFee;
+                    const totalFees = depositFee + withdrawFee;
                     
                     console.log(`     🔄 Cycle: ETH → LP → ETH`);
-                    console.log(`     💸 Total Fees: ${ethers.utils.formatEther(totalFees)} ETH`);
-                    console.log(`     💰 Final Amount: ${ethers.utils.formatEther(finalAmount)} ETH`);
+                    console.log(`     💸 Total Fees: ${ethers.formatEther(totalFees)} ETH`);
+                    console.log(`     💰 Final Amount: ${ethers.formatEther(finalAmount)} ETH`);
                     
                     result.totalFees = totalFees;
                     result.finalAmount = finalAmount;
