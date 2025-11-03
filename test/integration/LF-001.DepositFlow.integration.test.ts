@@ -151,7 +151,7 @@ describe("LF-001: Complete Deposit Flow (ETH → WETH → LP tokens)", function 
             // Step 3: Proxy General custody management
             console.log("\n🏛️ STEP 3: PROXY GENERAL CUSTODY MANAGEMENT");
             console.log("   📞 ProxyGeneral managing asset custody...");
-            console.log(`   ✅ ProxyGeneral found EmergencyHandler: ${await beacon.getModuleAddress("EmergencyHandler")}`);
+            console.log(`   ✅ ProxyGeneral found EmergencyHandler: ${await beacon.getImplementation("EmergencyHandler")}`);
             console.log("   🔒 Assets will be held in ProxyGeneral custody");
             console.log(`   💰 Custody Amount: ${ethers.formatEther(netAmount)} WETH equivalent`);
 
@@ -167,13 +167,13 @@ describe("LF-001: Complete Deposit Flow (ETH → WETH → LP tokens)", function 
             console.log("\n🔍 STEP 5: CROSS-MODULE STATE VERIFICATION");
             const moduleCount = 7;
             console.log(`   📊 Total registered modules: ${moduleCount}`);
-            console.log(`   ✅ TokenManager: ${await beacon.getModuleAddress("TokenManager")}`);
-            console.log(`   ✅ ParameterManager: ${await beacon.getModuleAddress("ParameterManager")}`);
-            console.log(`   ✅ ValueCalculator: ${await beacon.getModuleAddress("ValueCalculator")}`);
-            console.log(`   ✅ ProxyGeneral: ${await beacon.getModuleAddress("ProxyGeneral")}`);
-            console.log(`   ✅ LiquidityManager: ${await beacon.getModuleAddress("LiquidityManager")}`);
-            console.log(`   ✅ SwapManager: ${await beacon.getModuleAddress("SwapManager")}`);
-            console.log(`   ✅ EmergencyHandler: ${await beacon.getModuleAddress("EmergencyHandler")}`);
+            console.log(`   ✅ TokenManager: ${await beacon.getImplementation("TokenManager")}`);
+            console.log(`   ✅ ParameterManager: ${await beacon.getImplementation("ParameterManager")}`);
+            console.log(`   ✅ ValueCalculator: ${await beacon.getImplementation("ValueCalculator")}`);
+            console.log(`   ✅ ProxyGeneral: ${await beacon.getImplementation("ProxyGeneral")}`);
+            console.log(`   ✅ LiquidityManager: ${await beacon.getImplementation("LiquidityManager")}`);
+            console.log(`   ✅ SwapManager: ${await beacon.getImplementation("SwapManager")}`);
+            console.log(`   ✅ EmergencyHandler: ${await beacon.getImplementation("EmergencyHandler")}`);
             console.log("   🏥 System Health: HEALTHY");
 
             console.log("\n✅ COMPLETE DEPOSIT FLOW VERIFICATION SUCCESSFUL:");
@@ -205,10 +205,10 @@ describe("LF-001: Complete Deposit Flow (ETH → WETH → LP tokens)", function 
             // Simulating complete deposit coordination
             console.log("\n🔄 SIMULATING COMPLETE DEPOSIT COORDINATION:");
             console.log("   🔍 Validating module accessibility...");
-            console.log(`   ✅ TokenManager: Available at ${await beacon.getModuleAddress("TokenManager")}`);
-            console.log(`   ✅ ValueCalculator: Available at ${await beacon.getModuleAddress("ValueCalculator")}`);
-            console.log(`   ✅ LiquidityManager: Available at ${await beacon.getModuleAddress("LiquidityManager")}`);
-            console.log(`   ✅ ProxyGeneral: Available at ${await beacon.getModuleAddress("ProxyGeneral")}`);
+            console.log(`   ✅ TokenManager: Available at ${await beacon.getImplementation("TokenManager")}`);
+            console.log(`   ✅ ValueCalculator: Available at ${await beacon.getImplementation("ValueCalculator")}`);
+            console.log(`   ✅ LiquidityManager: Available at ${await beacon.getImplementation("LiquidityManager")}`);
+            console.log(`   ✅ ProxyGeneral: Available at ${await beacon.getImplementation("ProxyGeneral")}`);
 
             // Fee calculation simulation
             console.log("\n💸 FEE CALCULATION SIMULATION:");
@@ -233,10 +233,10 @@ describe("LF-001: Complete Deposit Flow (ETH → WETH → LP tokens)", function 
 
             // Cross-module dependency verification
             console.log("\n🔗 CROSS-MODULE DEPENDENCY VERIFICATION:");
-            console.log(`   ✅ TokenManager → ValueCalculator: ${await beacon.getModuleAddress("ValueCalculator")}`);
-            console.log(`   ✅ ValueCalculator → ParameterManager: ${await beacon.getModuleAddress("ParameterManager")}`);
-            console.log(`   ✅ LiquidityManager → TokenManager: ${await beacon.getModuleAddress("TokenManager")}`);
-            console.log(`   ✅ ProxyGeneral → EmergencyHandler: ${await beacon.getModuleAddress("EmergencyHandler")}`);
+            console.log(`   ✅ TokenManager → ValueCalculator: ${await beacon.getImplementation("ValueCalculator")}`);
+            console.log(`   ✅ ValueCalculator → ParameterManager: ${await beacon.getImplementation("ParameterManager")}`);
+            console.log(`   ✅ LiquidityManager → TokenManager: ${await beacon.getImplementation("TokenManager")}`);
+            console.log(`   ✅ ProxyGeneral → EmergencyHandler: ${await beacon.getImplementation("EmergencyHandler")}`);
 
             // Transaction flow summary
             console.log("\n📋 TRANSACTION FLOW SUMMARY:");
@@ -331,7 +331,7 @@ describe("LF-001: Complete Deposit Flow (ETH → WETH → LP tokens)", function 
             console.log("\n🏛️ STATE TRANSITION 5: CUSTODY TRANSFER STATE");
             console.log("   🔒 ProxyGeneral preparing asset custody...");
             console.log(`   💰 Assets to custody: ${ethers.formatEther(targetWETH)} WETH`);
-            console.log(`   🏦 Custody contract: ${await beacon.getModuleAddress("ProxyGeneral")}`);
+            console.log(`   🏦 Custody contract: ${await beacon.getImplementation("ProxyGeneral")}`);
             console.log("   ✅ Custody parameters validated");
 
             // Final state transition verification
@@ -448,7 +448,7 @@ describe("LF-001: Complete Deposit Flow (ETH → WETH → LP tokens)", function 
             ];
 
             for (const moduleName of requiredModules) {
-                const moduleAddress = await beacon.getModuleAddress(moduleName);
+                const moduleAddress = await beacon.getImplementation(moduleName);
                 console.log(`   ✅ ${moduleName}: ${moduleAddress} (accessible)`);
             }
 

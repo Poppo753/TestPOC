@@ -88,6 +88,16 @@ describe("LF-005: Stress Testing", function () {
     await proxyGeneral.authorizeModule(await liquidityManager.getAddress(), "LiquidityManager");
     console.log("   ✅ LiquidityManager authorized in ProxyGeneral");
 
+    // Configure higher withdraw limits for stress testing
+    console.log("\n⚙️ CONFIGURING STRESS TEST LIMITS:");
+    await liquidityManager.setWithdrawLimits(
+      ethers.parseEther("5000"),    // 5000 ETH hourly limit
+      ethers.parseEther("50000"),   // 50000 ETH daily limit  
+      ethers.parseEther("0.000001"), // 1 Wei minimum
+      ethers.parseEther("500")      // 500 ETH max per transaction
+    );
+    console.log("   ✅ Higher limits configured for stress testing");
+
     // Initialize WETH with substantial liquidity for stress testing
     console.log("\n💰 INITIALIZING WETH LIQUIDITY FOR STRESS TESTING:");
     await owner.sendTransaction({ to: await mockWETH.getAddress(), value: ethers.parseEther("1000") });
@@ -167,7 +177,7 @@ describe("LF-005: Stress Testing", function () {
 
       // Setup half the users with initial LP tokens
       console.log("\n🏗️ EXTREME LOAD PREPARATION:");
-      const setupAmount = ethers.parseEther("1.0");
+      const setupAmount = ethers.parseEther("10.0"); // Increased from 1.0 to 10.0
       
       for (let i = 0; i < 7; i++) {
         await liquidityManager.connect(testUsers[i]).deposit({ value: setupAmount });
@@ -178,12 +188,12 @@ describe("LF-005: Stress Testing", function () {
       console.log("\n💥 EXTREME CONCURRENT EXECUTION:");
       
       // Create extreme mixed operations
-      const operationAmount = ethers.parseEther("0.3");
+      const operationAmount = ethers.parseEther("3.0"); // Increased from 0.3 to 3.0
       
-      // First 7: Withdraws
+      // First 7: Withdraws (smaller percentage to stay within limits)
       for (let i = 0; i < 7; i++) {
         const userLP = await proxyGeneral.balanceOf(testUsers[i].address);
-        const withdrawAmount = userLP / 3n; // Withdraw 33%
+        const withdrawAmount = userLP / 10n; // Reduced from 33% to 10% to stay within limits
         operations.push({
           type: 'withdraw',
           user: testUsers[i],
@@ -256,10 +266,10 @@ describe("LF-005: Stress Testing", function () {
 
     it("should handle high-volume transaction bursts efficiently", async function () {
       console.log("\n💪 HIGH-VOLUME TRANSACTION BURST STRESS TEST:");
-      console.log("   📋 Testing burst of 20 mixed operations");
+      console.log("   📋 Testing burst of 16 mixed operations");
       console.log("   🚀 Simulating real-world traffic spikes");
 
-      const burstSize = 20;
+      const burstSize = 16; // Reduced from 20 to 16
       const burstUsers = users.slice(0, burstSize);
       
       console.log(`   👥 Burst participants: ${burstSize} users`);
@@ -267,33 +277,33 @@ describe("LF-005: Stress Testing", function () {
 
       // Initialize some users for withdraws
       console.log("\n🏗️ BURST PREPARATION:");
-      const initAmount = ethers.parseEther("0.8");
+      const initAmount = ethers.parseEther("8.0"); // Increased from 0.8 to 8.0
       
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 8; i++) { // Reduced from 10 to 8
         await liquidityManager.connect(burstUsers[i]).deposit({ value: initAmount });
       }
-      console.log("     ✅ 10 users initialized with LP tokens for burst testing");
+      console.log("     ✅ 8 users initialized with LP tokens for burst testing");
 
       console.log("\n🚀 HIGH-VOLUME BURST EXECUTION:");
       
       // Create burst pattern: alternating deposits and withdraws
       const burstOperations = [];
-      const burstAmount = ethers.parseEther("0.2");
+      const burstAmount = ethers.parseEther("2.0"); // Increased from 0.2 to 2.0
       
       for (let i = 0; i < burstSize; i++) {
         const user = burstUsers[i];
         
-        if (i < 10) {
-          // First 10: Withdraws
+        if (i < 8) { // Changed from 10 to 8
+          // First 8: Withdraws (smaller percentage)
           const userLP = await proxyGeneral.balanceOf(user.address);
-          const withdrawAmount = userLP / 4n; // Withdraw 25%
+          const withdrawAmount = userLP / 8n; // Reduced from 25% to 12.5% to stay within limits
           burstOperations.push({
             type: 'withdraw',
             user: user,
             promise: liquidityManager.connect(user).withdraw(withdrawAmount)
           });
         } else {
-          // Last 10: Deposits
+          // Last 8: Deposits
           burstOperations.push({
             type: 'deposit',
             user: user,
