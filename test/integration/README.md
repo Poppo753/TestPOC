@@ -1,5 +1,9 @@
 # 🔗 Integration Tests
 
+## to test:
+
+npx hardhat test test/integration/PG-001.ParameterUpdates.integration.test.ts test/integration/PG-002.GovernanceVoting.integration.test.ts test/integration/PG-003.AdminControls.integration.test.ts test/integration/PG-004.CrossModuleSync.integration.test.ts test/integration/PG-005.GovernanceEmergency.integration.test.ts test/integration/LF-001.DepositFlow.integration.test.ts test/integration/LF-002.WithdrawFlow.integration.test.ts test/integration/LF-003.CycleTesting.integration.test.ts test/integration/LF-004.ConcurrentOps.integration.test.ts test/integration/LF-005.StressTesting.integration.test.ts test/integration/SF-001.SwapOperations.integration.test.ts test/integration/SF-002.RoutingOptimization.integration.test.ts test/integration/SF-003.SlippageProtection.integration.test.ts test/integration/SF-004.MultiHopSwaps.integration.test.ts test/integration/SF-005.SwapEmergency.integration.test.ts test/integration/BeaconModules.integration.test.ts test/integration/LiquidityFlow.integration.test.ts test/integration/Deposit.integration.test.ts test/integration/Withdraw.integration.test.ts test/integration/Emergency.integration.test.ts
+
 ## Scopo
 Test di interazione tra 2-3 moduli del sistema per verificare il funzionamento coordinato.
 

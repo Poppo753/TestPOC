@@ -1162,7 +1162,7 @@ describe("Integration: Liquidity Flow Management", function () {
                 console.log(`     👤 User: ${user.address}`);
                 console.log(`     💰 Amount: ${ethers.formatEther(op.amount)} ${op.type === 'withdraw' ? 'LP' : 'ETH'}`);
                 
-                let result = { type: op.type, user: user.address, amount: op.amount };
+                let result: any = { type: op.type, user: user.address, amount: op.amount };
                 
                 if (op.type === 'deposit') {
                     const feeRate = ethers.parseEther("1"); // 1%

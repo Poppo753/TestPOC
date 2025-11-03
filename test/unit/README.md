@@ -1,5 +1,9 @@
 # 🧪 Unit Tests
 
+## to run all unit test:
+
+npx hardhat test test/unit/Beacon.test.ts test/unit/TokenManager.test.ts test/unit/ParameterManager.test.ts test/unit/ValueCalculator.test.ts test/unit/ProxyGeneral.simple.test.ts test/unit/LiquidityManager.test.ts test/unit/LiquidityManager.simple.test.ts test/unit/SwapManager.test.ts test/unit/SwapManager.simple.test.ts test/unit/EmergencyHandler.test.ts test/unit/EmergencyHandler.simple.test.ts  
+
 ## Scopo
 Test unitari per ogni singola funzione di ogni modulo del sistema.
 
