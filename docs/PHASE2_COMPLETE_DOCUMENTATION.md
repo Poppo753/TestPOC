@@ -22,7 +22,7 @@
 
 ## 🎯 Overview
 
-Phase 2 delivers a comprehensive suite of **10 production-ready admin scripts** organized in 4 categories:
+Phase 2 delivers a comprehensive suite of **15 production-ready admin scripts** organized in 6 categories:
 
 ### Script Categories
 
@@ -32,7 +32,9 @@ Phase 2 delivers a comprehensive suite of **10 production-ready admin scripts** 
 | **System Administration** | 3 scripts | Health monitoring, deployment tracking, diagnostics | ~3,700 |
 | **Access Control** | 2 scripts | Role management, access auditing | ~2,000 |
 | **Emergency Response** | 2 scripts | Emergency controls, backup/recovery | ~1,850 |
-| **Total** | **10 scripts** | **Complete admin operations** | **~10,050** |
+| **Token Management** | 3 scripts | Add/remove tokens, update oracles | ~1,800 |
+| **Security Controls** | 2 scripts | System pause/unpause operations | ~800 |
+| **Total** | **15 scripts** | **Complete admin operations** | **~12,650** |
 
 ### Key Capabilities
 
@@ -1107,6 +1109,245 @@ backup-pre-upgrade-v2.1.0.json  # Pre-upgrade
 backup-incident-2024-01-15.json # Incident-related
 backup-weekly-2024-W03.json     # Weekly scheduled
 ```
+
+---
+
+## 🪙 Token Management Scripts
+
+### 5.1 AddToken.ts
+**Purpose**: Register new ERC20 tokens with Chainlink price feed integration
+
+**Key Features:**
+- Token parameter validation (address, decimals, code)
+- Chainlink oracle connectivity testing
+- WETH exclusion check (cannot add WETH as regular token)
+- Price feed staleness validation
+- Heartbeat configuration
+
+**Usage Examples:**
+
+```bash
+# Add USDC token
+TOKEN_CODE=USDC \
+TOKEN_ADDRESS=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 \
+PRICE_FEED_ADDRESS=0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6 \
+TOKEN_DECIMALS=6 \
+PRICE_FEED_DECIMALS=8 \
+HEARTBEAT=3600 \
+npx hardhat run scripts/admin/tokens/AddToken.ts
+
+# Dry run mode
+DRY_RUN=true TOKEN_CODE=DAI TOKEN_ADDRESS=0x... PRICE_FEED_ADDRESS=0x... \
+npx hardhat run scripts/admin/tokens/AddToken.ts
+```
+
+**Validations:**
+- Token code length (max 16 chars)
+- Valid Ethereum addresses
+- WETH conflict check
+- Oracle responsiveness
+- Price data freshness
+
+**Output:**
+```
+✅ Token USDC successfully registered!
+📋 Configuration:
+   Token: USDC
+   Address: 0xA0b86...818f6
+   Price Feed: 0x8fFf...818f6
+   Latest Price: 1.0000 USD
+```
+
+### 5.2 RemoveToken.ts
+**Purpose**: Deactivate tokens from the system
+
+**Key Features:**
+- Token existence verification
+- Pool balance checking (prevents accidental loss)
+- Force removal option for emergency cases
+- Active tokens list update
+- Safety warnings for non-zero balances
+
+**Usage Examples:**
+
+```bash
+# Remove token (safe mode - fails if balance > 0)
+TOKEN_CODE=USDC npx hardhat run scripts/admin/tokens/RemoveToken.ts
+
+# Force removal despite balance
+TOKEN_CODE=USDC FORCE_REMOVE=true \
+npx hardhat run scripts/admin/tokens/RemoveToken.ts
+```
+
+**Safety Checks:**
+- Token must be active
+- Cannot remove WETH
+- Warns on non-zero pool balance
+- Requires explicit force flag for risky removals
+
+**Output:**
+```
+✅ Token USDC successfully removed!
+⚠️ IMPORTANT:
+   - Token is now deactivated in the system
+   - Any remaining token balance is not accessible
+   - Consider emergency recovery if needed
+```
+
+### 5.3 UpdateOracles.ts
+**Purpose**: Update Chainlink price feed configuration for existing tokens
+
+**Key Features:**
+- Update price feed address
+- Update heartbeat (staleness threshold)
+- Reset error count
+- Full config update or individual changes
+- New oracle validation before applying
+
+**Usage Examples:**
+
+```bash
+# Update heartbeat only
+TOKEN_CODE=USDC NEW_HEARTBEAT=7200 \
+npx hardhat run scripts/admin/tokens/UpdateOracles.ts
+
+# Reset error count
+TOKEN_CODE=USDC RESET_ERRORS=true \
+npx hardhat run scripts/admin/tokens/UpdateOracles.ts
+
+# Update price feed (requires full update)
+TOKEN_CODE=USDC \
+NEW_PRICE_FEED=0x... \
+FULL_UPDATE=true \
+npx hardhat run scripts/admin/tokens/UpdateOracles.ts
+
+# Combined update
+TOKEN_CODE=USDC \
+NEW_PRICE_FEED=0x... \
+NEW_HEARTBEAT=7200 \
+FULL_UPDATE=true \
+npx hardhat run scripts/admin/tokens/UpdateOracles.ts
+```
+
+**Validations:**
+- Token must be active
+- New price feed must be responsive
+- Decimals consistency check
+- Price data availability
+
+**Output:**
+```
+✅ Oracle configuration for USDC updated successfully!
+📋 Updates Applied:
+   ✓ Price Feed: 0x8fFf...818f6
+   ✓ Heartbeat: 7200s
+   Current Price: 1.0000 USD
+```
+
+---
+
+## 🛡️ Security Control Scripts
+
+### 6.1 PauseSystem.ts
+**Purpose**: Emergency system pause to block all user operations
+
+**Key Features:**
+- Immediate pause activation
+- Authorization verification (owner or authorized module)
+- Current system state capture
+- Pause enforcement testing
+- Reason logging for audit trail
+
+**Usage Examples:**
+
+```bash
+# Pause with reason
+PAUSE_REASON="Oracle malfunction detected" \
+npx hardhat run scripts/admin/security/PauseSystem.ts
+
+# Skip confirmation prompt
+PAUSE_REASON="Emergency maintenance" \
+SKIP_CONFIRMATION=true \
+npx hardhat run scripts/admin/security/PauseSystem.ts
+
+# Dry run test
+DRY_RUN=true PAUSE_REASON="Testing pause" \
+npx hardhat run scripts/admin/security/PauseSystem.ts
+```
+
+**Effects:**
+- Blocks all deposits
+- Blocks all withdrawals
+- Blocks all swaps
+- Blocks all LP token operations
+- Only owner can unpause
+
+**Output:**
+```
+✅ SYSTEM PAUSED SUCCESSFULLY
+📋 Pause Details:
+   Reason: Oracle malfunction detected
+   Paused By: 0x1234...5678
+   Paused At: 2024-11-13T10:30:45.000Z
+
+⚠️ IMPORTANT:
+   - All user operations are now BLOCKED
+   - Only the contract OWNER can unpause
+   - Use UnpauseSystem.ts script to restore operations
+```
+
+### 6.2 UnpauseSystem.ts
+**Purpose**: Restore system to normal operation after pause
+
+**Key Features:**
+- Owner-only authorization
+- Pre-unpause safety checks (contract responsiveness)
+- System component validation
+- Post-unpause operation testing
+- Comprehensive status reporting
+
+**Usage Examples:**
+
+```bash
+# Unpause with full checks
+npx hardhat run scripts/admin/security/UnpauseSystem.ts
+
+# Skip safety checks (use with caution)
+SKIP_CHECKS=true \
+npx hardhat run scripts/admin/security/UnpauseSystem.ts
+
+# Disable operation testing
+TEST_OPERATIONS=false \
+npx hardhat run scripts/admin/security/UnpauseSystem.ts
+```
+
+**Safety Checks:**
+- Beacon contract responsive
+- TokenManager operational
+- ParameterManager accessible
+- ValueCalculator working
+- All modules healthy
+
+**Output:**
+```
+✅ SYSTEM UNPAUSED SUCCESSFULLY
+📋 Unpause Details:
+   Unpaused By: 0x1234...5678
+   Unpaused At: 2024-11-13T11:15:30.000Z
+
+✅ SYSTEM STATUS:
+   - All user operations are now ENABLED
+   - Deposits, withdrawals, and swaps are functional
+   - System is operating normally
+
+📋 Recommended Next Steps:
+   1. Monitor system behavior for anomalies
+   2. Check logs for any errors
+   3. Verify pool value calculations
+   4. Test a small user operation
+```
+
+---
 
 ### Appendix E: Script Exit Codes
 

@@ -69,49 +69,87 @@ contract SwapManager {
 
 ## 🧩 **CORE COMPONENTS**
 
-### **1. Plugin Registry**
+### **1. Beacon Integration (Updated Architecture)**
+
+⚠️ **ARCHITETTURA AGGIORNATA**: I plugin sono ora registrati nel **Beacon** come tutti gli altri moduli, per consistenza architetturale.
+
 ```solidity
-contract PluginRegistry {
-    struct PluginInfo {
+contract Beacon {
+    
+    // Categorie di moduli
+    enum ModuleCategory {
+        CORE,           // LiquidityManager, ValueCalculator, SwapManager, ecc.
+        SWAP_PLUGIN,    // UniswapV3Plugin, PendlePlugin, OdosPlugin, 1inchPlugin
+        STRATEGY,       // ETHDepositStrategy, USDCDepositStrategy (per Strategy Pattern)
+        UTILITY         // Altri moduli ausiliari
+    }
+    
+    struct ModuleInfo {
         address implementation;
         string name;
         string version;
-        bool enabled;
-        uint256 addedAt;
-        address addedBy;
+        ModuleCategory category;
+        bool active;
+        uint256 registeredAt;
     }
     
-    mapping(bytes32 => PluginInfo) private plugins;
-    mapping(address => bool) private authorizedImplementations;
-    bytes32[] private pluginKeys;
+    // Mapping unificato per TUTTI i moduli
+    mapping(bytes32 => ModuleInfo) public modules;
+    mapping(ModuleCategory => bytes32[]) public modulesByCategory;
     
-    function registerPlugin(
+    // Registra qualsiasi tipo di modulo (core, plugin, strategy)
+    function registerModule(
         string memory name,
         address implementation,
+        ModuleCategory category,
         string memory version
     ) external onlyOwner {
-        bytes32 key = keccak256(bytes(name));
-        require(plugins[key].implementation == address(0), "Plugin already exists");
-        require(authorizedImplementations[implementation], "Implementation not authorized");
+        bytes32 moduleId = keccak256(abi.encodePacked(category, name));
+        require(modules[moduleId].implementation == address(0), "Module already exists");
         
-        plugins[key] = PluginInfo({
+        modules[moduleId] = ModuleInfo({
             implementation: implementation,
             name: name,
             version: version,
-            enabled: true,
-            addedAt: block.timestamp,
-            addedBy: msg.sender
+            category: category,
+            active: true,
+            registeredAt: block.timestamp
         });
         
-        pluginKeys.push(key);
-        emit PluginRegistered(name, implementation, version);
+        modulesByCategory[category].push(moduleId);
+        emit ModuleRegistered(moduleId, name, category, implementation);
     }
     
-    function getPlugin(string memory name) external view returns (address) {
-        bytes32 key = keccak256(bytes(name));
-        PluginInfo memory info = plugins[key];
-        require(info.enabled, "Plugin disabled");
+    // Get module by name and category
+    function getModule(string memory name, ModuleCategory category) 
+        public view returns (address) 
+    {
+        bytes32 moduleId = keccak256(abi.encodePacked(category, name));
+        ModuleInfo memory info = modules[moduleId];
+        require(info.active, "Module not active");
         return info.implementation;
+    }
+    
+    // Get all swap plugins
+    function getAllSwapPlugins() external view returns (ModuleInfo[] memory) {
+        bytes32[] memory pluginIds = modulesByCategory[ModuleCategory.SWAP_PLUGIN];
+        ModuleInfo[] memory plugins = new ModuleInfo[](pluginIds.length);
+        
+        for (uint i = 0; i < pluginIds.length; i++) {
+            plugins[i] = modules[pluginIds[i]];
+        }
+        
+        return plugins;
+    }
+    
+    // Enable/disable specific module
+    function setModuleActive(string memory name, ModuleCategory category, bool active) 
+        external onlyOwner 
+    {
+        bytes32 moduleId = keccak256(abi.encodePacked(category, name));
+        require(modules[moduleId].implementation != address(0), "Module not found");
+        modules[moduleId].active = active;
+        emit ModuleActiveStatusChanged(moduleId, active);
     }
 }
 ```
@@ -146,12 +184,17 @@ abstract contract BaseSwapPlugin is ISwapPlugin {
 }
 ```
 
-### **3. Enhanced SwapManager**
+### **3. Enhanced SwapManager (Updated)**
+
 ```solidity
 contract SwapManager is ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
     
-    PluginRegistry public immutable pluginRegistry;
+    // ⚠️ UPDATED: Usa Beacon invece di PluginRegistry separato
+    Beacon public immutable beacon;
+    
+    // Autorizzazioni per chiamanti (solo moduli del protocollo)
+    mapping(address => bool) public authorizedCallers;
     
     struct SwapExecution {
         string pluginName;
@@ -159,55 +202,247 @@ contract SwapManager is ReentrancyGuard, Ownable {
         uint256 amountOut;
         uint256 gasUsed;
         bool success;
+        uint256 timestamp;
     }
     
-    mapping(address => SwapExecution[]) private userSwapHistory;
+    // History per caller (LiquidityManager, ecc.)
+    mapping(address => SwapExecution[]) private callerSwapHistory;
     
-    constructor(address _pluginRegistry) {
-        pluginRegistry = PluginRegistry(_pluginRegistry);
+    modifier onlyAuthorized() {
+        require(authorizedCallers[msg.sender], "SwapManager: Caller not authorized");
+        _;
     }
     
+    constructor(address _beacon) {
+        beacon = Beacon(_beacon);
+    }
+    
+    // ==================== AUTHORIZATION MANAGEMENT ====================
+    
+    function authorizeCaller(address caller) external onlyOwner {
+        require(caller != address(0), "Invalid caller");
+        authorizedCallers[caller] = true;
+        emit CallerAuthorized(caller);
+    }
+    
+    function revokeCaller(address caller) external onlyOwner {
+        authorizedCallers[caller] = false;
+        emit CallerRevoked(caller);
+    }
+    
+    // ==================== SWAP EXECUTION ====================
+    
+    /**
+     * @notice Esegue swap con plugin specifico
+     * @dev Solo moduli autorizzati (es: LiquidityManager) possono chiamare
+     */
     function swapViaPlugin(
         string memory pluginName,
         SwapParams memory params
-    ) external nonReentrant returns (uint256 amountOut) {
-        // Get plugin from registry
-        address pluginAddress = pluginRegistry.getPlugin(pluginName);
+    ) external onlyAuthorized nonReentrant returns (uint256 amountOut) {
+        // Get plugin dal Beacon (non più da registry separato)
+        address pluginAddress = beacon.getModule(pluginName, Beacon.ModuleCategory.SWAP_PLUGIN);
+        require(pluginAddress != address(0), "Plugin not found in Beacon");
+        
         ISwapPlugin plugin = ISwapPlugin(pluginAddress);
         
         // Pre-swap validations
         _validateSwapParams(params);
-        _transferTokensToPlugin(pluginAddress, params.tokenIn, params.amountIn);
+        
+        // Transfer tokens from caller to plugin
+        IERC20(params.tokenIn).safeTransferFrom(msg.sender, pluginAddress, params.amountIn);
         
         // Execute swap
         uint256 gasStart = gasleft();
         amountOut = plugin.swap(params);
         uint256 gasUsed = gasStart - gasleft();
         
-        // Post-swap processing
-        _recordSwapExecution(pluginName, params, amountOut, gasUsed, true);
-        _handleSwapResult(params, amountOut);
+        // Verify plugin returned tokens to caller
+        require(
+            IERC20(params.tokenOut).balanceOf(msg.sender) >= params.minAmountOut,
+            "Insufficient output received"
+        );
         
-        emit SwapExecuted(pluginName, params.tokenIn, params.tokenOut, params.amountIn, amountOut);
+        // Record execution
+        _recordSwapExecution(msg.sender, pluginName, params, amountOut, gasUsed);
+        
+        emit SwapExecuted(msg.sender, pluginName, params.tokenIn, params.tokenOut, params.amountIn, amountOut);
     }
     
+    /**
+     * @notice Esegue swap con il plugin che offre miglior prezzo
+     * @dev Automaticamente trova e usa il plugin ottimale
+     */
+    function swapWithBestPlugin(
+        SwapParams memory params
+    ) external onlyAuthorized nonReentrant returns (uint256 amountOut) {
+        // Get tutti i plugin dal Beacon
+        Beacon.ModuleInfo[] memory plugins = beacon.getAllSwapPlugins();
+        require(plugins.length > 0, "No plugins available");
+        
+        uint256 bestQuote = 0;
+        address bestPluginAddress;
+        string memory bestPluginName;
+        
+        // Query tutti i plugin per trovare miglior prezzo
+        for (uint i = 0; i < plugins.length; i++) {
+            if (!plugins[i].active) continue;
+            
+            try ISwapPlugin(plugins[i].implementation).getQuote(QuoteParams({
+                tokenIn: params.tokenIn,
+                tokenOut: params.tokenOut,
+                amountIn: params.amountIn,
+                extraData: params.extraData
+            })) returns (Quote memory quote) {
+                if (quote.isValid && quote.amountOut > bestQuote) {
+                    bestQuote = quote.amountOut;
+                    bestPluginAddress = plugins[i].implementation;
+                    bestPluginName = plugins[i].name;
+                }
+            } catch {
+                // Plugin failed to quote, skip
+                continue;
+            }
+        }
+        
+        require(bestPluginAddress != address(0), "No suitable plugin found");
+        require(bestQuote >= params.minAmountOut, "Best quote below minimum");
+        
+        // Transfer tokens to best plugin
+        IERC20(params.tokenIn).safeTransferFrom(msg.sender, bestPluginAddress, params.amountIn);
+        
+        // Execute swap with best plugin
+        uint256 gasStart = gasleft();
+        amountOut = ISwapPlugin(bestPluginAddress).swap(params);
+        uint256 gasUsed = gasStart - gasleft();
+        
+        // Record execution
+        _recordSwapExecution(msg.sender, bestPluginName, params, amountOut, gasUsed);
+        
+        emit BestPluginSelected(bestPluginName, bestQuote);
+        emit SwapExecuted(msg.sender, bestPluginName, params.tokenIn, params.tokenOut, params.amountIn, amountOut);
+    }
+    
+    // ==================== VIEW FUNCTIONS ====================
+    
+    /**
+     * @notice Ottiene quotazioni da tutti i plugin
+     */
+    function getAllQuotes(
+        QuoteParams memory params
+    ) external view returns (Quote[] memory quotes, string[] memory pluginNames) {
+        Beacon.ModuleInfo[] memory plugins = beacon.getAllSwapPlugins();
+        
+        quotes = new Quote[](plugins.length);
+        pluginNames = new string[](plugins.length);
+        
+        for (uint i = 0; i < plugins.length; i++) {
+            pluginNames[i] = plugins[i].name;
+            
+            if (!plugins[i].active) {
+                quotes[i] = Quote({
+                    amountOut: 0,
+                    slippageBps: 0,
+                    gasEstimate: 0,
+                    priceImpact: 0,
+                    isValid: false,
+                    reason: "Plugin inactive"
+                });
+                continue;
+            }
+            
+            try ISwapPlugin(plugins[i].implementation).getQuote(params) returns (Quote memory quote) {
+                quotes[i] = quote;
+            } catch {
+                quotes[i] = Quote({
+                    amountOut: 0,
+                    slippageBps: 0,
+                    gasEstimate: 0,
+                    priceImpact: 0,
+                    isValid: false,
+                    reason: "Query failed"
+                });
+            }
+        }
+    }
+    
+    /**
+     * @notice Trova plugin con miglior quotazione
+     */
     function getBestQuote(
         QuoteParams memory params
     ) external view returns (string memory bestPlugin, uint256 bestQuote) {
-        string[] memory activePlugins = pluginRegistry.getActivePlugins();
+        Beacon.ModuleInfo[] memory plugins = beacon.getAllSwapPlugins();
         
-        for (uint i = 0; i < activePlugins.length; i++) {
-            try ISwapPlugin(pluginRegistry.getPlugin(activePlugins[i])).getQuote(params) returns (Quote memory quote) {
-                if (quote.amountOut > bestQuote) {
+        for (uint i = 0; i < plugins.length; i++) {
+            if (!plugins[i].active) continue;
+            
+            try ISwapPlugin(plugins[i].implementation).getQuote(params) returns (Quote memory quote) {
+                if (quote.isValid && quote.amountOut > bestQuote) {
                     bestQuote = quote.amountOut;
-                    bestPlugin = activePlugins[i];
+                    bestPlugin = plugins[i].name;
                 }
             } catch {
-                // Plugin failed, skip
                 continue;
             }
         }
     }
+    
+    /**
+     * @notice Lista plugin disponibili
+     */
+    function getAvailablePlugins() external view returns (string[] memory pluginNames, bool[] memory statuses) {
+        Beacon.ModuleInfo[] memory plugins = beacon.getAllSwapPlugins();
+        
+        pluginNames = new string[](plugins.length);
+        statuses = new bool[](plugins.length);
+        
+        for (uint i = 0; i < plugins.length; i++) {
+            pluginNames[i] = plugins[i].name;
+            statuses[i] = plugins[i].active;
+        }
+    }
+    
+    // ==================== INTERNAL FUNCTIONS ====================
+    
+    function _recordSwapExecution(
+        address caller,
+        string memory pluginName,
+        SwapParams memory params,
+        uint256 amountOut,
+        uint256 gasUsed
+    ) internal {
+        callerSwapHistory[caller].push(SwapExecution({
+            pluginName: pluginName,
+            amountIn: params.amountIn,
+            amountOut: amountOut,
+            gasUsed: gasUsed,
+            success: true,
+            timestamp: block.timestamp
+        }));
+    }
+    
+    function _validateSwapParams(SwapParams memory params) internal view {
+        require(params.tokenIn != address(0), "Invalid tokenIn");
+        require(params.tokenOut != address(0), "Invalid tokenOut");
+        require(params.tokenIn != params.tokenOut, "Same token");
+        require(params.amountIn > 0, "Amount zero");
+        require(params.deadline >= block.timestamp, "Deadline expired");
+    }
+    
+    // ==================== EVENTS ====================
+    
+    event CallerAuthorized(address indexed caller);
+    event CallerRevoked(address indexed caller);
+    event SwapExecuted(
+        address indexed caller,
+        string pluginName,
+        address indexed tokenIn,
+        address indexed tokenOut,
+        uint256 amountIn,
+        uint256 amountOut
+    );
+    event BestPluginSelected(string pluginName, uint256 quote);
 }
 ```
 
