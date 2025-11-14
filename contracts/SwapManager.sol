@@ -27,6 +27,8 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
     uint256 public maxSlippage = 300; // 3% default
     
     /// @notice SimpleSwap router address
+    /// @dev DEPRECATED: Use activeSwapPlugin + Beacon resolution instead
+    /// Maintained for backward compatibility and fallback
     address public simpleSwapRouter;
     
     /// @notice Swaps enabled flag
@@ -52,6 +54,12 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
     
     /// @notice Maximum deadline window permesso
     uint256 public constant MAX_DEADLINE_WINDOW = 1 hours;
+    
+    // ==================== NEW STORAGE (Phase 1A) ====================
+    
+    /// @notice Active swap plugin name for Beacon resolution
+    /// @dev Default: "UniswapV3Plugin" (reusing existing SimpleSwap deployed)
+    string public activeSwapPlugin = "UniswapV3Plugin";
 
     // ==================== STRUCTS ====================
     
@@ -118,6 +126,22 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         string reason,
         address indexed executor,
         uint256 timestamp
+    );
+    
+    // ==================== NEW EVENTS (Phase 1A) ====================
+    
+    /// @notice Emitted when active swap plugin is changed
+    event SwapPluginChanged(
+        string indexed oldPlugin,
+        string indexed newPlugin,
+        address newPluginAddress
+    );
+    
+    /// @notice Emitted when deprecated function is called
+    /// @dev Used for migration tracking and alerting
+    event DeprecationWarning(
+        string functionName,
+        string message
     );
 
     // ==================== MODIFIERS ====================
@@ -234,7 +258,6 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             keccak256(bytes(spendTokenCode)) != keccak256(bytes(receiveTokenCode)),
             "Cannot swap same token"
         );
-        require(simpleSwapRouter != address(0), "SimpleSwap router not set");
         
         // PRE-SWAP VALIDATION
         SwapValidation memory validation = _validateSwapParameters(spendTokenCode, receiveTokenCode, amountIn);
@@ -244,7 +267,7 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
         
         IProxyGeneral proxy = IProxyGeneral(proxyGeneral);
-        ISimpleSwap swapper = ISimpleSwap(simpleSwapRouter);
+        ISimpleSwap swapper = _getActivePlugin(); // PHASE 1A.4: Use plugin resolution instead of hardcoded
         
         // SPECIAL HANDLING FOR WETH
         if (keccak256(bytes(receiveTokenCode)) == keccak256(bytes("WETH"))) {
@@ -447,6 +470,44 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
     ) external view returns (bool isValid, string memory errorReason) {
         SwapValidation memory validation = _validateSwapParameters(spendTokenCode, receiveTokenCode, amountIn);
         return (validation.isValid, validation.errorReason);
+    }
+
+    // ==================== INTERNAL PLUGIN RESOLUTION (Phase 1A.3) ====================
+    
+    /**
+     * @notice Resolves active swap plugin with fallback
+     * @dev Tries Beacon resolution first, falls back to deprecated simpleSwapRouter
+     * @return plugin ISimpleSwap implementation address
+     * 
+     * RESOLUTION LOGIC:
+     * 1. Try: Beacon.getImplementation(activeSwapPlugin)
+     * 2. Fallback: Use simpleSwapRouter (deprecated but maintained)
+     * 3. Revert if both fail
+     * 
+     * BACKWARD COMPATIBILITY:
+     * - If Beacon resolution fails → simpleSwapRouter used (old system works)
+     * - If activeSwapPlugin empty → simpleSwapRouter used
+     * - If both fail → revert with clear error
+     */
+    function _getActivePlugin() internal view returns (ISimpleSwap plugin) {
+        // TRY NEW SYSTEM: Beacon resolution
+        if (bytes(activeSwapPlugin).length > 0) {
+            try IBeacon(beacon).getImplementation(activeSwapPlugin) returns (address pluginAddr) {
+                if (pluginAddr != address(0) && pluginAddr.code.length > 0) {
+                    return ISimpleSwap(pluginAddr);
+                }
+            } catch {
+                // Beacon resolution failed, will fallback
+            }
+        }
+        
+        // FALLBACK TO OLD SYSTEM: simpleSwapRouter (deprecated)
+        if (simpleSwapRouter != address(0)) {
+            return ISimpleSwap(simpleSwapRouter);
+        }
+        
+        // BOTH FAILED: No plugin configured
+        revert("No swap plugin configured");
     }
 
     /**
@@ -683,9 +744,16 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
 
     /**
      * @notice Imposta SimpleSwap router address
+     * @dev DEPRECATED: Use setActiveSwapPlugin() instead
+     *      Maintained for backward compatibility only
      * @param newRouter Nuovo router address
      */
     function setSimpleSwapRouter(address newRouter) external onlyOwner {
+        emit DeprecationWarning(
+            "setSimpleSwapRouter",
+            "DEPRECATED: Use setActiveSwapPlugin() instead. This function maintained for backward compatibility only."
+        );
+        
         require(newRouter != address(0), "Invalid router address");
         require(newRouter.code.length > 0, "Router must be a contract");
         
@@ -693,6 +761,25 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         simpleSwapRouter = newRouter;
         
         emit SimpleSwapRouterUpdated(oldRouter, newRouter);
+    }
+    
+    /**
+     * @notice Set active swap plugin by name (NEW - Phase 1A.3)
+     * @dev Plugin must be registered in Beacon before calling
+     * @param pluginName Plugin name (e.g., "UniswapV3Plugin", "CamelotPlugin")
+     */
+    function setActiveSwapPlugin(string memory pluginName) external onlyOwner {
+        require(bytes(pluginName).length > 0, "Invalid plugin name");
+        
+        // Verify plugin exists in Beacon
+        address pluginAddr = IBeacon(beacon).getImplementation(pluginName);
+        require(pluginAddr != address(0), "Plugin not registered in Beacon");
+        require(pluginAddr.code.length > 0, "Plugin address is not a contract");
+        
+        string memory oldPlugin = activeSwapPlugin;
+        activeSwapPlugin = pluginName;
+        
+        emit SwapPluginChanged(oldPlugin, pluginName, pluginAddr);
     }
 
     /**

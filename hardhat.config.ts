@@ -3,6 +3,7 @@ import "@nomicfoundation/hardhat-toolbox";
 import "dotenv/config";
 import "@typechain/hardhat";
 import "@nomicfoundation/hardhat-toolbox";
+import "hardhat-gas-reporter";
 
 
 
@@ -26,6 +27,21 @@ const config: HardhatUserConfig = {
       url: process.env.ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
     },
+    hardhat: {
+      forking: {
+        url: process.env.ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc",
+        enabled: process.env.FORK_ENABLED === "true",
+        blockNumber: process.env.FORK_BLOCK_NUMBER ? parseInt(process.env.FORK_BLOCK_NUMBER) : undefined,
+      },
+      chainId: 42161, // Arbitrum mainnet chain ID
+    },
+  },
+  gasReporter: {
+    enabled: process.env.REPORT_GAS === "true",
+    currency: "USD",
+    coinmarketcap: process.env.COINMARKETCAP_API_KEY || "",
+    outputFile: "gas-report.txt",
+    noColors: true,
   },
   etherscan: {
     apiKey: process.env.ARBITRUM_ETHERSCAN_API_KEY || "",
