@@ -4,6 +4,36 @@
  * Purpose: Test complex multi-hop swap execution
  * Focus: Testing 3+ hop swaps, path optimization, and complex routing
  * Coverage: Extended routing chains, gas optimization, and execution efficiency
+ * 
+ * ⚠️ CURRENT LIMITATION - PHASE A DOCUMENTATION:
+ * ========================================================================
+ * NOTE: These integration tests currently SIMULATE multi-hop swap operations
+ * using direct token transfers instead of calling SwapManager.performSwap().
+ * 
+ * Current Approach (Simulated):
+ * - Direct transfers simulate results of complex routing chains
+ * - Multi-hop execution (WETH → USDC → WBTC → DAI) is NOT real
+ * - Path optimization and gas costs NOT measured in actual execution
+ * 
+ * Coverage Status:
+ * ✅ Multi-hop routing logic: TESTED (functional)
+ * ✅ Path selection algorithms: TESTED (unit level)
+ * ❌ Real multi-hop swap execution: NOT TESTED
+ * ❌ Intermediate swap failures: NOT TESTED E2E
+ * ❌ Gas cost optimization: NOT VERIFIED
+ * ❌ Complex path state management: NOT TESTED THROUGH REAL ROUTER
+ * 
+ * Reason: MockSimpleSwap implementation pending (Phase B)
+ * 
+ * TODO - Phase B: Test multi-hop swaps with real SwapManager calls
+ * - Configure MockSimpleSwap for 3+ hop scenarios
+ * - Execute real multi-hop swaps through SwapManager
+ * - Verify intermediate token handling
+ * - Measure actual gas costs for complex paths
+ * - Test failure scenarios at each hop
+ * 
+ * Expected Coverage Improvement: Path logic → Full E2E multi-hop execution
+ * ========================================================================
  */
 
 import { expect } from "chai";

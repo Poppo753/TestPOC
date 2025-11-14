@@ -363,7 +363,7 @@ export class SystemDiagnostics extends BaseScript {
                 if (componentName === 'Beacon') {
                     await this.beacon.getAddress();
                 } else {
-                    const moduleAddress = await this.beacon.getModule(componentName);
+                    const moduleAddress = await this.beacon.getImplementation(componentName);
                     const contract = await ethers.getContractAt(componentName, moduleAddress);
                     
                     // Try to call a view function
@@ -485,7 +485,7 @@ export class SystemDiagnostics extends BaseScript {
         // Check beacon module registrations
         for (const moduleName of this.COMPONENTS.slice(1)) {
             try {
-                const moduleAddress = await this.beacon.getModule(moduleName);
+                const moduleAddress = await this.beacon.getImplementation(moduleName);
                 
                 if (!moduleAddress || moduleAddress === ethers.ZeroAddress) {
                     Logger.error(`❌ ${moduleName} not registered in Beacon`);

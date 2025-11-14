@@ -299,7 +299,7 @@ export class DeploymentMonitor extends BaseScript {
             if (componentName === 'Beacon') {
                 address = await this.beacon.getAddress();
             } else {
-                address = await this.beacon.getModule(componentName);
+                address = await this.beacon.getImplementation(componentName);
             }
 
             if (address && address !== ethers.ZeroAddress) {
@@ -381,7 +381,7 @@ export class DeploymentMonitor extends BaseScript {
         // 4. Check integration with Beacon
         if (componentName !== 'Beacon') {
             try {
-                const registeredAddress = await this.beacon.getModule(componentName);
+                const registeredAddress = await this.beacon.getImplementation(componentName);
                 if (registeredAddress === address) {
                     integrated = true;
                     checks.push({
@@ -599,7 +599,7 @@ export class DeploymentMonitor extends BaseScript {
         // Test 1: Beacon -> All Modules
         for (const moduleName of this.COMPONENTS.slice(1)) {
             try {
-                const moduleAddress = await this.beacon.getModule(moduleName);
+                const moduleAddress = await this.beacon.getImplementation(moduleName);
                 
                 this.integrationTests.push({
                     from: 'Beacon',

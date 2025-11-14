@@ -354,8 +354,10 @@ describe("SwapManager Contract", function () {
         );
         
         expect(validation.isValid).to.be.false;
-        // Error could be either "maximum" or "Insufficient balance" depending on implementation
+        // Validation should fail with error reason explaining limit exceeded
+        // Note: Specific error message will be standardized in Phase C (custom errors)
         expect(validation.errorReason.length).to.be.greaterThan(0);
+        expect(validation.errorReason).to.match(/maximum|limit|exceed/i);
       });
 
       it("should reject swapping same token", async function () {
@@ -366,8 +368,10 @@ describe("SwapManager Contract", function () {
         );
         
         expect(validation.isValid).to.be.false;
-        // Error could be "same" or "Expected output is zero" depending on implementation  
+        // Validation should fail with error reason about identical tokens
+        // Note: Specific error message will be standardized in Phase C (custom errors)
         expect(validation.errorReason.length).to.be.greaterThan(0);
+        expect(validation.errorReason).to.match(/same|identical|equal/i);
       });
     });
   });
@@ -1348,7 +1352,9 @@ describe("SwapManager Contract", function () {
         0, 
         300
       );
-      expect(zeroOutput).to.be.greaterThanOrEqual(0); // Can be 0 or positive depending on router
+      // Zero input amount should return zero or minimal output
+      // Exact behavior depends on router implementation but should not revert
+      expect(zeroOutput).to.be.greaterThanOrEqual(0);
       
       const maxSlippageCalc = await swapManager.calculateMinAmountOut(
         "USDC",

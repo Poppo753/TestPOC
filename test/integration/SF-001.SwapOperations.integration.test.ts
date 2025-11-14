@@ -10,6 +10,33 @@
  * - Swap routing and optimization
  * - Slippage protection and fee calculation
  * - Complete swap flow validation
+ * 
+ * ⚠️ CURRENT LIMITATION - PHASE A DOCUMENTATION:
+ * ========================================================================
+ * NOTE: These integration tests currently SIMULATE swap operations using
+ * direct token transfers instead of calling SwapManager.performSwap().
+ * 
+ * Current Approach (Simulated):
+ * - Direct WETH/USDC/WBTC transfers to simulate swap results
+ * - SwapManager.performSwap() is NOT actually invoked
+ * - SimpleSwap router interaction is NOT tested E2E
+ * 
+ * Coverage Status:
+ * ✅ Functional flow and state management: TESTED
+ * ❌ Real SwapManager integration: NOT TESTED
+ * ❌ Router interaction and slippage: NOT TESTED E2E
+ * ❌ Event emissions from performSwap(): NOT VERIFIED
+ * 
+ * Reason: MockSimpleSwap implementation pending (Phase B)
+ * 
+ * TODO - Phase B: Replace simulated swaps with real SwapManager calls
+ * - Implement MockSimpleSwap.sol contract
+ * - Update tests to call swapManager.performSwap()
+ * - Verify complete E2E integration flow
+ * - Validate event emissions and state changes
+ * 
+ * Expected Coverage Improvement: ~77% → ~100% (real integration)
+ * ========================================================================
  */
 
 import { expect } from "chai";

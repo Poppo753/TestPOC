@@ -10,6 +10,33 @@
  * - Multi-hop route comparison
  * - Liquidity depth analysis for routing
  * - Route efficiency optimization
+ * 
+ * ⚠️ CURRENT LIMITATION - PHASE A DOCUMENTATION:
+ * ========================================================================
+ * NOTE: These integration tests currently SIMULATE swap operations using
+ * direct token transfers instead of calling SwapManager.performSwap().
+ * 
+ * Current Approach (Simulated):
+ * - Direct token transfers to simulate routing results
+ * - Routing optimization logic NOT tested through actual SwapManager
+ * - Multi-hop path execution is SIMULATED, not real
+ * 
+ * Coverage Status:
+ * ✅ Routing logic and path selection: TESTED (functional)
+ * ❌ Real multi-hop swap execution: NOT TESTED
+ * ❌ Router path optimization E2E: NOT TESTED
+ * ❌ Actual gas costs per route: NOT MEASURED
+ * 
+ * Reason: MockSimpleSwap implementation pending (Phase B)
+ * 
+ * TODO - Phase B: Replace simulated routing with real SwapManager calls
+ * - Configure MockSimpleSwap for multi-hop scenarios
+ * - Update tests to execute real routing decisions
+ * - Measure actual gas costs and route efficiency
+ * - Verify optimal path selection E2E
+ * 
+ * Expected Coverage Improvement: Routing simulation → Real execution
+ * ========================================================================
  */
 
 import { expect } from "chai";

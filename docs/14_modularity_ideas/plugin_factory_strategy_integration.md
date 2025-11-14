@@ -1,50 +1,70 @@
-# 🎯 INTEGRATION: Plugin Factory + Strategy Pattern
+# 🎯 INTEGRATION: Plugin Factory + Three Separate Ecosystems
 
-**Versione**: 1.0  
-**Data**: 13 Novembre 2025  
-**Target**: Come i due sistemi di modularità si integrano insieme  
-
----
-
-## 📋 **OVERVIEW**
-
-Questo documento spiega come **Plugin Factory System** (per swap routers) e **Strategy Pattern** (per deposit/withdraw/value logic) lavorano insieme in un'architettura unificata basata su **Beacon**.
+**Versione**: 1.1 (Corrected)  
+**Data**: 13 Novembre 2025 (Updated)  
+**Target**: Come Plugin Factory (swap modulari) si integra con i 3 ecosistemi separati (ETH/USDC/WBTC)  
 
 ---
 
-## 🏗️ **ARCHITETTURA UNIFICATA**
+## ⚠️ **CHIARIMENTO TERMINOLOGICO IMPORTANTE**
 
-### **Beacon come Registry Centrale per TUTTO**
+Questo documento usa il termine **"Strategy Pattern"** in modo confuso. In realtà **NON implementiamo il Strategy Pattern** (design pattern GoF con strategie intercambiabili).
+
+**ARCHITETTURA REALE**:
+- ✅ **TRE DEPLOYMENT SEPARATI**: LiquidityManager-ETH.sol, LiquidityManager-USDC.sol, LiquidityManager-WBTC.sol
+- ✅ **Logica hardcoded** in ogni contratto per il proprio token base
+- ❌ **NON strategie intercambiabili** registrate in Beacon
+
+Quando leggi "ETHDepositStrategy", "USDCDepositStrategy" in questo documento, intendi:
+- **Logiche di deposit diverse per token diversi**, hardcoded nei rispettivi LiquidityManager
+- **NON contratti separati** che implementano IDepositStrategy e sono swappabili a runtime
+
+---
+
+## 📋 **OVERVIEW (Corrected)**
+
+Questo documento spiega come **Plugin Factory System** (per swap routers) si integra con i **3 ecosistemi separati** (ETH, USDC, WBTC) in un'architettura basata su **Beacon**.
+
+---
+
+## 🏗️ **ARCHITETTURA UNIFICATA (Corrected)**
+
+### **Beacon come Registry Centrale + 3 Ecosistemi Separati**
 
 ```
-BEACON (Registry Unico)
+BEACON (Registry Unico per Plugin e Utility Condivisi)
 │
-├── CORE MODULES (Moduli principali)
-│   ├── LiquidityManager    → Usa Strategy Pattern
-│   ├── ValueCalculator      → Usa Strategy Pattern
-│   ├── SwapManager         → Usa Plugin Factory
-│   ├── TokenManager
+├── CORE MODULES (Registrati quando deployed - 3 set separati!)
+│   ├── LiquidityManager-ETH    → Contratto dedicato ETH con logica hardcoded
+│   ├── LiquidityManager-USDC   → Contratto dedicato USDC con logica hardcoded
+│   ├── LiquidityManager-WBTC   → Contratto dedicato WBTC con logica hardcoded
+│   ├── ValueCalculator-ETH     → Calcoli per ETH (18 decimals)
+│   ├── ValueCalculator-USDC    → Calcoli per USDC (6 decimals)
+│   ├── ValueCalculator-WBTC    → Calcoli per WBTC (8 decimals)
+│   ├── SwapManager             → Condiviso da tutti gli ecosistemi
+│   ├── TokenManager-ETH/USDC/WBTC
 │   ├── ParameterManager
 │   └── EmergencyHandler
 │
-├── SWAP PLUGINS (Plugin Factory)
-│   ├── UniswapV3Plugin     → Per swap durante rebalancing
-│   ├── PendlePlugin        → Per yield token swaps
-│   ├── OdosPlugin          → Per MEV-protected swaps
-│   └── 1inchPlugin         → Per aggregated swaps
+├── SWAP PLUGINS (Plugin Factory - Condivisi tra tutti gli ecosistemi!)
+│   ├── UniswapV3Plugin     → Usato da tutti i LiquidityManager-*
+│   ├── PendlePlugin        → Usato da tutti i LiquidityManager-*
+│   ├── OdosPlugin          → Usato da tutti i LiquidityManager-*
+│   └── 1inchPlugin         → Usato da tutti i LiquidityManager-*
 │
-├── STRATEGIES (Strategy Pattern)
-│   ├── ETHDepositStrategy    → Per ETH ecosystem
-│   ├── USDCDepositStrategy   → Per USDC ecosystem
-│   ├── WBTCDepositStrategy   → Per WBTC ecosystem
-│   ├── ETHValueStrategy
-│   ├── USDCValueStrategy
-│   └── WBTCValueStrategy
-│
-└── UTILITIES (Helper modules)
+└── UTILITIES (Helper modules - Condivisi)
     ├── OracleManager
     ├── FeeCalculator
     └── RebalanceBot
+
+⚠️ NOTA: "STRATEGIES" CATEGORIA RIMOSSA dal Beacon!
+Le logiche di deposit/withdraw per ETH/USDC/WBTC sono HARDCODED
+nei rispettivi LiquidityManager-*.sol, NON sono contratti separati!
+
+DEPLOYMENT STRUCTURE:
+├── ETH Ecosystem: LiquidityManager-ETH.sol, ValueCalculator-ETH.sol, TokenManager-ETH.sol
+├── USDC Ecosystem: LiquidityManager-USDC.sol, ValueCalculator-USDC.sol, TokenManager-USDC.sol
+└── WBTC Ecosystem: LiquidityManager-WBTC.sol, ValueCalculator-WBTC.sol, TokenManager-WBTC.sol
 ```
 
 ---
@@ -55,7 +75,8 @@ BEACON (Registry Unico)
 
 **Scopo**: Gestire **swap routers** (DEX) per operazioni di swap  
 **Usato da**: SwapManager durante rebalancing  
-**Chiamato da**: LiquidityManager → SwapManager → Plugin
+**Chiamato da**: LiquidityManager-ETH/USDC/WBTC → SwapManager → Plugin  
+**⚠️ Condivisi**: Tutti gli ecosistemi (ETH/USDC/WBTC) usano gli stessi plugin swap!
 
 ```solidity
 // LiquidityManager ha excess ETH, vuole swappare in USDC
@@ -82,36 +103,60 @@ function rebalance() external onlyOwner {
 
 ---
 
-### **Strategy Pattern (Deposit/Withdraw/Value Strategies)** 🎯
+### **❌ "Strategy Pattern" (NAMING CONFUSO - Correzione)** 🎯
+
+**⚠️ CORREZIONE**: Non usiamo Strategy Pattern con contratti intercambiabili!
+
+**Architettura Reale**:
+- **3 LiquidityManager separati**: LiquidityManager-ETH.sol, LiquidityManager-USDC.sol, LiquidityManager-WBTC.sol
+- **Logica hardcoded** in ogni contratto per il proprio token base
+- **Differenze**: Gestione decimals (ETH 18, USDC 6, WBTC 8), wrapping ETH, transfer logic
 
 **Scopo**: Gestire **logiche diverse** per ETH/USDC/WBTC ecosystems  
-**Usato da**: LiquidityManager, ValueCalculator  
-**Chiamato da**: User deposits → LiquidityManager → DepositStrategy
+**Implementazione**: Contratti separati con logica hardcoded, NON strategie intercambiabili  
+**Chiamato da**: User deposits → LiquidityManager-ETH/USDC/WBTC (logica interna)
 
 ```solidity
-// User deposita in ETH ecosystem
+// ⚠️ CODICE CORRETTO: NON deleghiamo a strategy, logica è INTERNA!
+
+// ===== LiquidityManager-ETH.sol (contratto separato per ETH) =====
 function deposit(uint256 amount) external payable {
-    // LiquidityManager delega a ETHDepositStrategy
-    uint256 shares = depositStrategy.execute(amount, msg.sender);
-    // ETHDepositStrategy:
-    // - Wrap ETH → WETH
-    // - Calcola shares (18 decimals native)
-    // - Minta LP tokens
+    // Logica ETH HARDCODED in questo contratto:
+    require(msg.value == amount, "Invalid ETH amount");
+    
+    // Wrap ETH → WETH (logica interna, non delegata)
+    IWETH(WETH).deposit{value: amount}();
+    
+    // Calcola shares (18 decimals native)
+    uint256 shares = _calculateShares(amount, 18);
+    
+    // Minta LP-ETH tokens
+    _mint(msg.sender, shares);
 }
 
-// User deposita in USDC ecosystem
+// ===== LiquidityManager-USDC.sol (contratto separato per USDC) =====
 function deposit(uint256 amount) external {
-    // LiquidityManager delega a USDCDepositStrategy
-    uint256 shares = depositStrategy.execute(amount, msg.sender);
-    // USDCDepositStrategy:
-    // - Transfer USDC from user
-    // - Scale 6 decimals → 18 decimals
-    // - Calcola shares con scaling
-    // - Minta LP tokens
+    // Logica USDC HARDCODED in questo contratto:
+    // Transfer USDC from user
+    IERC20(USDC).transferFrom(msg.sender, address(this), amount);
+    
+    // Scale 6 decimals → 18 decimals (logica interna)
+    uint256 scaledAmount = amount * 10**12;
+    
+    // Calcola shares con scaling
+    uint256 shares = _calculateShares(scaledAmount, 6);
+    
+    // Minta LP-USDC tokens
+    _mint(msg.sender, shares);
 }
+
+// ⚠️ NON esiste IDepositStrategy interface con .execute()!
+// Ogni LiquidityManager-*.sol ha la sua logica interna!
 ```
 
-**Modularity Benefit**: Aggiungi DAI ecosystem → scrivi DAIDepositStrategy → deploy in 1-2 giorni
+**Modularity Benefit (Corrected)**: Aggiungi DAI ecosystem → scrivi **LiquidityManager-DAI.sol** con logica hardcoded → deploy nuovo set contratti in 1-2 giorni
+
+⚠️ Non scrivi "DAIDepositStrategy" come contratto separato - la logica deposit è interna a LiquidityManager-DAI.sol!
 
 ---
 
@@ -170,103 +215,125 @@ User riceve USDC
 
 ---
 
-## 📊 **CONFRONTO: Plugin Factory vs Strategy Pattern**
+## 📊 **CONFRONTO: Plugin Factory vs Separate Ecosystems (Corrected)**
 
-| Aspetto | Plugin Factory | Strategy Pattern |
-|---------|---------------|------------------|
-| **Scopo** | Swap routers modulari | Logiche ecosystem modulari |
+| Aspetto | Plugin Factory ✅ | Separate Ecosystems ✅ (NON Strategy Pattern!) |
+|---------|------------------|------------------------------------------------|
+| **Scopo** | Swap routers modulari | Logiche ecosystem separate per token diversi |
 | **Usato per** | Scegliere DEX (Uniswap, Pendle, ecc.) | Gestire token diversi (ETH, USDC, WBTC) |
-| **Chiamato da** | SwapManager | LiquidityManager, ValueCalculator |
-| **Quando** | Durante rebalancing | Durante deposit/withdraw/value calc |
-| **Modularity** | Aggiungi nuovi DEX | Aggiungi nuovi token ecosystems |
-| **Esempio** | UniswapV3Plugin, OdosPlugin | ETHDepositStrategy, USDCDepositStrategy |
-| **Storage** | Beacon (ModuleCategory.SWAP_PLUGIN) | Beacon (ModuleCategory.STRATEGY) |
-| **Cambio** | SwapManager sceglie miglior plugin | Owner setta strategy per ecosystem |
+| **Implementazione** | Contratti plugin separati che implementano ISwapPlugin | **Contratti LiquidityManager-*.sol separati con logica hardcoded** |
+| **Chiamato da** | SwapManager | User → direttamente il LiquidityManager-ETH/USDC/WBTC |
+| **Quando** | Durante rebalancing/swap operations | Durante deposit/withdraw/value calc |
+| **Modularity** | Aggiungi nuovi DEX come plugin | Deploy nuovo set contratti (LiquidityManager-DAI.sol, ecc.) |
+| **Esempio** | UniswapV3Plugin, OdosPlugin | ~~ETHDepositStrategy~~, LiquidityManager-ETH.sol, LiquidityManager-USDC.sol |
+| **Storage in Beacon** | Beacon (ModuleCategory.SWAP_PLUGIN) | ~~Beacon (ModuleCategory.STRATEGY)~~ Beacon (ModuleCategory.CORE) |
+| **Condivisione** | Condivisi tra tutti gli ecosistemi | Ogni ecosistema ha i suoi contratti dedicati |
+| **Runtime flexibility** | SwapManager sceglie miglior plugin a runtime | ❌ NO runtime change - deploy separati fissi |
 
 ---
 
 ## 🎯 **BENEFICI ARCHITETTURA UNIFICATA**
 
-### **1. Beacon come Single Source of Truth**
+### **1. Beacon come Single Source of Truth (Corrected)**
 
 ```solidity
-// Tutto registrato nel Beacon
+// ✅ REGISTRAZIONE CORRETTA nel Beacon
+
+// Plugin swap (condivisi tra tutti gli ecosistemi)
 beacon.registerModule("uniswap", uniswapPlugin, ModuleCategory.SWAP_PLUGIN, "1.0");
-beacon.registerModule("ETHDeposit", ethDepositStrategy, ModuleCategory.STRATEGY, "1.0");
-beacon.registerModule("LiquidityManager", liquidityManager, ModuleCategory.CORE, "1.0");
+beacon.registerModule("pendle", pendlePlugin, ModuleCategory.SWAP_PLUGIN, "1.0");
+
+// Moduli CORE di ogni ecosistema (deployment separati)
+beacon.registerModule("LiquidityManager-ETH", liquidityManagerETH, ModuleCategory.CORE, "1.0");
+beacon.registerModule("LiquidityManager-USDC", liquidityManagerUSDC, ModuleCategory.CORE, "1.0");
+beacon.registerModule("LiquidityManager-WBTC", liquidityManagerWBTC, ModuleCategory.CORE, "1.0");
+
+// ❌ NON registriamo "ETHDeposit", "USDCDeposit" come strategie!
+// La logica deposit è interna ai rispettivi LiquidityManager-*.sol
 
 // Query unificata
 address uniswap = beacon.getModule("uniswap", ModuleCategory.SWAP_PLUGIN);
-address ethDeposit = beacon.getModule("ETHDeposit", ModuleCategory.STRATEGY);
+address lmETH = beacon.getModule("LiquidityManager-ETH", ModuleCategory.CORE);
+// ❌ NON esiste: beacon.getModule("ETHDeposit", ModuleCategory.STRATEGY);
 ```
 
-### **2. Upgrade Centralizzato**
+### **2. Upgrade Centralizzato (Corrected)**
 
 ```solidity
-// Upgrade Uniswap plugin
+// ✅ Upgrade Uniswap plugin (condiviso tra tutti gli ecosistemi)
 beacon.registerModule("uniswap", newUniswapPluginV2, ModuleCategory.SWAP_PLUGIN, "2.0");
 
-// Upgrade ETH deposit strategy
-beacon.registerModule("ETHDeposit", newETHDepositStrategyV2, ModuleCategory.STRATEGY, "2.0");
+// ✅ Upgrade LiquidityManager-ETH (contratto dedicato per ETH)
+beacon.registerModule("LiquidityManager-ETH", newLiquidityManagerETHV2, ModuleCategory.CORE, "2.0");
 
-// Tutto gestito in 1 posto!
+// ❌ NON esiste "ETHDeposit" strategy separata!
+// beacon.registerModule("ETHDeposit", newETHDepositStrategyV2, ModuleCategory.STRATEGY, "2.0");
+
+// Tutto gestito in 1 posto (Beacon), ma logiche deposit sono hardcoded nei LiquidityManager!
 ```
 
-### **3. Monitoring Unificato**
+### **3. Monitoring Unificato (Corrected)**
 
 ```typescript
 // Get tutti i moduli di tutte le categorie
 const coreModules = await beacon.getAllModules(ModuleCategory.CORE);
 const swapPlugins = await beacon.getAllModules(ModuleCategory.SWAP_PLUGIN);
-const strategies = await beacon.getAllModules(ModuleCategory.STRATEGY);
+const utilities = await beacon.getAllModules(ModuleCategory.UTILITY);
+// ❌ NON esiste: await beacon.getAllModules(ModuleCategory.STRATEGY);
 
 // Monitoring dashboard mostra tutto insieme:
-console.log("Core Modules:", coreModules.length);
-console.log("Swap Plugins:", swapPlugins.length);
-console.log("Strategies:", strategies.length);
+console.log("Core Modules (ETH/USDC/WBTC ecosystems):", coreModules.length);
+console.log("Swap Plugins (shared):", swapPlugins.length);
+console.log("Utilities (shared):", utilities.length);
+
+// ⚠️ "Strategies" rimossa - logiche deposit/withdraw sono interne ai LiquidityManager-*.sol
 ```
 
 ---
 
-## 🚀 **ROADMAP INTEGRATA**
+## 🚀 **ROADMAP INTEGRATA (Corrected)**
 
 ### **Q1 2026: Foundation**
-- ✅ Implementare Beacon con 4 categorie (CORE, SWAP_PLUGIN, STRATEGY, UTILITY)
+- ✅ Implementare Beacon con 3 categorie (CORE, SWAP_PLUGIN, UTILITY) - ~~STRATEGY rimossa~~
 - ✅ Refactoring SwapManager per usare Beacon
-- ✅ Refactoring LiquidityManager per Strategy Pattern
+- ~~✅ Refactoring LiquidityManager per Strategy Pattern~~ → Deploy contratti separati (LiquidityManager-ETH.sol, ecc.)
 - 🔵 Deploy UniswapV3Plugin
-- 🎯 Deploy ETHDepositStrategy, USDCDepositStrategy, WBTCDepositStrategy
+- ~~🎯 Deploy ETHDepositStrategy, USDCDepositStrategy, WBTCDepositStrategy~~ → Deploy **LiquidityManager-ETH.sol, LiquidityManager-USDC.sol, LiquidityManager-WBTC.sol**
 
 ### **Q2 2026: Expansion**
 - 🟣 Deploy PendlePlugin (yield tokens)
-- 🎯 Deploy DAIDepositStrategy (4° ecosystem)
+- ~~🎯 Deploy DAIDepositStrategy (4° ecosystem)~~ → Deploy **set completo contratti DAI** (LiquidityManager-DAI.sol, ValueCalculator-DAI.sol, ecc.)
 - 📊 Monitoring e analytics unificati
 
 ### **Q3 2026: Advanced Features**
 - 🟡 Deploy OdosPlugin (MEV protection)
-- 🎯 Deploy USTDepositStrategy (5° ecosystem)
+- ~~🎯 Deploy USTDepositStrategy (5° ecosystem)~~ → Deploy **set completo contratti UST**
 - ⚡ Ottimizzazioni gas cross-moduli
 
 ### **Q4 2026: Aggregation**
 - 🔴 Deploy 1inchPlugin (multi-DEX aggregation)
-- 🎯 Deploy FRAXDepositStrategy (6° ecosystem)
+- ~~🎯 Deploy FRAXDepositStrategy (6° ecosystem)~~ → Deploy **set completo contratti FRAX**
 - 🤖 Rebalancing automatico bot
 
 ---
 
 ## 💡 **BEST PRACTICES**
 
-### **1. Naming Convention**
+### **1. Naming Convention (Corrected)**
 
 ```solidity
 // Swap Plugins: [Protocol]Plugin
 UniswapV3Plugin, PendlePlugin, OdosPlugin
 
-// Strategies: [Token][Action]Strategy
-ETHDepositStrategy, USDCWithdrawStrategy, WBTCValueStrategy
+// ❌ NON esiste: ETHDepositStrategy, USDCWithdrawStrategy come contratti separati!
 
-// Core Modules: [Function]Manager
-LiquidityManager, SwapManager, TokenManager
+// Core Modules: [Function]Manager-[Token] (contratti separati per ogni ecosystem)
+LiquidityManager-ETH, LiquidityManager-USDC, LiquidityManager-WBTC
+ValueCalculator-ETH, ValueCalculator-USDC, ValueCalculator-WBTC
+TokenManager-ETH, TokenManager-USDC, TokenManager-WBTC
+
+// Shared Modules: [Function]Manager (nessun suffisso token)
+SwapManager, ParameterManager, EmergencyHandler
 ```
 
 ### **2. Registration Pattern**
@@ -284,43 +351,65 @@ await beacon.registerModule(
 );
 ```
 
-### **3. Query Pattern**
+### **3. Query Pattern (Corrected)**
 
 ```solidity
 // Query con categoria specifica
 address plugin = beacon.getModule("uniswap", ModuleCategory.SWAP_PLUGIN);
-address strategy = beacon.getModule("ETHDeposit", ModuleCategory.STRATEGY);
+address lmETH = beacon.getModule("LiquidityManager-ETH", ModuleCategory.CORE);
+// ❌ NON esiste: beacon.getModule("ETHDeposit", ModuleCategory.STRATEGY);
 
 // Get all per categoria
 ModuleInfo[] memory plugins = beacon.getAllSwapPlugins();
-ModuleInfo[] memory strategies = beacon.getAllStrategies(); // TODO: add helper
+ModuleInfo[] memory coreModules = beacon.getModulesByCategory(ModuleCategory.CORE);
+// ❌ NON esiste: beacon.getAllStrategies();
 ```
 
 ---
 
-## ✅ **SUMMARY**
+## ✅ **SUMMARY (Corrected)**
 
-### **Plugin Factory (Swap Plugins)**
+### **Plugin Factory (Swap Plugins)** ✅
 - 🎯 **Scopo**: Modulare swap routers (Uniswap, Pendle, Odos)
 - 📍 **Dove**: Beacon → ModuleCategory.SWAP_PLUGIN
 - 🔧 **Usato da**: SwapManager durante rebalancing
+- 🌐 **Condivisione**: Condivisi tra TUTTI gli ecosistemi (ETH/USDC/WBTC)
 - ⚡ **Benefit**: Aggiungi nuovi DEX senza modificare SwapManager
 
-### **Strategy Pattern**
-- 🎯 **Scopo**: Modulare logiche per ecosystems diversi (ETH, USDC, WBTC)
-- 📍 **Dove**: Beacon → ModuleCategory.STRATEGY
-- 🔧 **Usato da**: LiquidityManager, ValueCalculator durante deposit/withdraw
-- ⚡ **Benefit**: Aggiungi nuovi token ecosystems in 1-2 giorni
+### **~~Strategy Pattern~~ Three Separate Ecosystems** ✅ (Corrected)
+- 🎯 **Scopo**: ~~Modulare logiche per ecosystems diversi~~ → **Deployment separati per ogni token (ETH, USDC, WBTC)**
+- 📍 **Dove**: ~~Beacon → ModuleCategory.STRATEGY~~ → **Beacon → ModuleCategory.CORE (LiquidityManager-ETH.sol, ecc.)**
+- 🔧 **Implementazione**: ~~LiquidityManager delega a strategie~~ → **LiquidityManager-*.sol con logica hardcoded interna**
+- ⚡ **Benefit**: Aggiungi nuovo ecosystem → **deploy nuovo set contratti** (LiquidityManager-DAI.sol, ValueCalculator-DAI.sol, ecc.)
 
-### **Architettura Unificata**
+### **Architettura Unificata (Corrected)**
 - ✅ Beacon è l'unico registry
-- ✅ Tutti i moduli (core + plugins + strategies) in 1 posto
+- ✅ Tutti i moduli (core + plugins + utilities) in 1 posto
+- ~~✅ Tutti i moduli (core + plugins + strategies) in 1 posto~~ → **"strategies" rimossa, non esiste**
 - ✅ Query unificate e semplificate
 - ✅ Upgrade centralizzato
 - ✅ Monitoring unificato
+- ⚠️ **3 deployment separati** per ETH/USDC/WBTC, NON strategie intercambiabili!
 
 ---
 
-**🔄 Ultimo Aggiornamento**: 13 Novembre 2025  
+## 📌 **NOTA FINALE: Perché la Confusione?**
+
+Questo documento originalmente usava il termine **"Strategy Pattern"** in modo confuso:
+
+| Termine Usato | Cosa Significa Realmente | Perché Confuso |
+|---------------|--------------------------|----------------|
+| "Strategy Pattern" | 3 deployment separati (ETH/USDC/WBTC) con logica hardcoded | Fa pensare al design pattern GoF con strategie intercambiabili |
+| "ETHDepositStrategy" | Logica deposit in LiquidityManager-ETH.sol | Suona come contratto separato che implementa IDepositStrategy |
+| "ModuleCategory.STRATEGY" | ~~Categoria Beacon per strategie~~ | Non serve - i 3 ecosistemi sono CORE modules, non strategies |
+
+**ARCHITETTURA REALE**:
+- ✅ Plugin Factory per swap: ISwapPlugin interface, contratti separati, runtime selection
+- ✅ Tre Ecosistemi per token: LiquidityManager-*.sol, logica hardcoded, deployment separati
+- ❌ Strategy Pattern per deposit/withdraw: NON implementato, era solo un'idea
+
+---
+
+**🔄 Ultimo Aggiornamento**: 13 Novembre 2025 (Corrected)  
 **✍️ Autore**: Development Team  
-**📋 Status**: Integration Documentation Complete
+**📋 Status**: Integration Documentation - Corrected v1.1 (Fixed Strategy Pattern Confusion)

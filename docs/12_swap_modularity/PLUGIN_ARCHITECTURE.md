@@ -73,6 +73,20 @@ contract SwapManager {
 
 ⚠️ **ARCHITETTURA AGGIORNATA**: I plugin sono ora registrati nel **Beacon** come tutti gli altri moduli, per consistenza architetturale.
 
+📌 **IMPORTANTE - TRE ECOSISTEMI SEPARATI**: 
+Questo progetto implementa **3 deployment completamente separati**:
+- **ETH Ecosystem**: LiquidityManager-ETH.sol, ValueCalculator-ETH.sol, TokenManager-ETH.sol, ecc.
+- **USDC Ecosystem**: LiquidityManager-USDC.sol, ValueCalculator-USDC.sol, TokenManager-USDC.sol, ecc.  
+- **WBTC Ecosystem**: LiquidityManager-WBTC.sol, ValueCalculator-WBTC.sol, TokenManager-WBTC.sol, ecc.
+
+Ogni ecosistema è un **set di contratti indipendente** con logica hardcoded per il proprio token base.  
+**NON utilizziamo Strategy Pattern con strategie intercambiabili** - quella era solo un'idea non implementata.
+
+Il **Beacon** registra:
+- **CORE**: Moduli principali di ogni ecosistema (quando deployed)
+- **SWAP_PLUGIN**: Plugin swap condivisi tra tutti gli ecosistemi (Uniswap, Pendle, Odos, 1inch)
+- **UTILITY**: Moduli ausiliari condivisi (OracleManager, FeeCalculator, ecc.)
+
 ```solidity
 contract Beacon {
     
@@ -80,8 +94,11 @@ contract Beacon {
     enum ModuleCategory {
         CORE,           // LiquidityManager, ValueCalculator, SwapManager, ecc.
         SWAP_PLUGIN,    // UniswapV3Plugin, PendlePlugin, OdosPlugin, 1inchPlugin
-        STRATEGY,       // ETHDepositStrategy, USDCDepositStrategy (per Strategy Pattern)
-        UTILITY         // Altri moduli ausiliari
+        // ⚠️ RIMOSSA CATEGORIA "STRATEGY" - Non necessaria perché i 3 ecosistemi (ETH, USDC, WBTC)
+        // sono DEPLOYMENT SEPARATI (LiquidityManager-ETH.sol, LiquidityManager-USDC.sol, ecc.),
+        // NON strategie intercambiabili registrate in un unico Beacon.
+        // Ogni ecosistema avrà la sua logica hardcoded nei propri contratti.
+        UTILITY         // Altri moduli ausiliari (OracleManager, FeeCalculator, ecc.)
     }
     
     struct ModuleInfo {
@@ -97,7 +114,8 @@ contract Beacon {
     mapping(bytes32 => ModuleInfo) public modules;
     mapping(ModuleCategory => bytes32[]) public modulesByCategory;
     
-    // Registra qualsiasi tipo di modulo (core, plugin, strategy)
+    // Registra qualsiasi tipo di modulo (core, plugin, utility)
+    // ⚠️ NOTA: Ogni ecosistema (ETH/USDC/WBTC) registra i propri moduli CORE separatamente
     function registerModule(
         string memory name,
         address implementation,
@@ -130,7 +148,7 @@ contract Beacon {
         return info.implementation;
     }
     
-    // Get all swap plugins
+    // Get all swap plugins (condivisi tra tutti gli ecosistemi ETH/USDC/WBTC)
     function getAllSwapPlugins() external view returns (ModuleInfo[] memory) {
         bytes32[] memory pluginIds = modulesByCategory[ModuleCategory.SWAP_PLUGIN];
         ModuleInfo[] memory plugins = new ModuleInfo[](pluginIds.length);
@@ -140,6 +158,18 @@ contract Beacon {
         }
         
         return plugins;
+    }
+    
+    // Get all modules by category (generico per CORE, UTILITY, ecc.)
+    function getModulesByCategory(ModuleCategory category) external view returns (ModuleInfo[] memory) {
+        bytes32[] memory moduleIds = modulesByCategory[category];
+        ModuleInfo[] memory categoryModules = new ModuleInfo[](moduleIds.length);
+        
+        for (uint i = 0; i < moduleIds.length; i++) {
+            categoryModules[i] = modules[moduleIds[i]];
+        }
+        
+        return categoryModules;
     }
     
     // Enable/disable specific module
@@ -648,6 +678,55 @@ function checkPluginHealth(string memory pluginName) external view returns (bool
 
 ---
 
-**🔄 Ultimo Aggiornamento**: 3 Novembre 2025  
+## 📝 **NOTE ARCHITETTURALI IMPORTANTI**
+
+### **Tre Ecosistemi Separati vs Strategy Pattern**
+
+⚠️ **CHIARIMENTO FONDAMENTALE**: 
+
+Questo progetto implementa **TRE DEPLOYMENT COMPLETAMENTE SEPARATI**, non un sistema con strategie intercambiabili:
+
+| Aspetto | Architettura Scelta ✅ | Strategy Pattern (NON Implementato) ❌ |
+|---------|------------------------|----------------------------------------|
+| **Struttura** | 3 deployment separati (ETH, USDC, WBTC) | Singolo deployment con strategie swappabili |
+| **Contratti** | LiquidityManager-ETH.sol, LiquidityManager-USDC.sol, ecc. | Singolo LiquidityManager.sol + IDepositStrategy interface |
+| **Logica Token** | Hardcoded in ogni contratto (18 decimals ETH, 6 decimals USDC, ecc.) | Delegata a strategy intercambiabili |
+| **Beacon Usage** | Registra moduli CORE di ogni ecosistema + SWAP_PLUGIN condivisi | Registrerebbe anche ModuleCategory.STRATEGY |
+| **Espandibilità** | Deploy nuovo set contratti per DAI, FRAX, ecc. | Scrivi nuova strategy, registra nel Beacon |
+| **Vantaggi** | Isolamento totale, sicurezza, nessuna complessità runtime | Flessibilità, single deployment, upgrade facili |
+| **Status** | ✅ **SCELTA IMPLEMENTATA** | ❌ Solo idea documentata (docs/14_modularity_ideas/) |
+
+### **Perché NON abbiamo ModuleCategory.STRATEGY nel Beacon**
+
+La categoria `STRATEGY` è stata **rimossa** perché:
+
+1. **Non serve**: Ogni ecosistema ha contratti separati con logica hardcoded
+2. **Confondente**: Il nome "Strategy Pattern" fa pensare al design pattern GoF, ma qui significa solo "logiche diverse per token diversi"
+3. **Architettura diversa**: Con 3 deployment separati, non c'è bisogno di registrare "strategie" in un registry centrale
+
+### **Cosa Registriamo nel Beacon**
+
+```solidity
+// ✅ MODULI CORE (uno per ogni ecosistema quando deployed)
+beacon.registerModule("LiquidityManager-ETH", address(...), ModuleCategory.CORE, "1.0");
+beacon.registerModule("LiquidityManager-USDC", address(...), ModuleCategory.CORE, "1.0");
+beacon.registerModule("ValueCalculator-ETH", address(...), ModuleCategory.CORE, "1.0");
+
+// ✅ SWAP PLUGINS (condivisi tra tutti gli ecosistemi)
+beacon.registerModule("uniswap", address(...), ModuleCategory.SWAP_PLUGIN, "1.0");
+beacon.registerModule("pendle", address(...), ModuleCategory.SWAP_PLUGIN, "1.0");
+beacon.registerModule("odos", address(...), ModuleCategory.SWAP_PLUGIN, "1.0");
+
+// ✅ UTILITY (condivisi)
+beacon.registerModule("OracleManager", address(...), ModuleCategory.UTILITY, "1.0");
+beacon.registerModule("FeeCalculator", address(...), ModuleCategory.UTILITY, "1.0");
+
+// ❌ NON registriamo "ETHDepositStrategy", "USDCDepositStrategy" - non esistono come contratti separati!
+// La logica di deposit per ETH è hardcoded in LiquidityManager-ETH.sol
+```
+
+---
+
+**🔄 Ultimo Aggiornamento**: 13 Novembre 2025 (Corretto architettura Beacon)  
 **✍️ Autore**: Development Team  
-**📋 Status**: Architecture Draft v1.0
+**📋 Status**: Architecture Documentation - Corrected v1.1
