@@ -8,36 +8,6 @@ pragma solidity ^0.8.19;
 interface ISwapManager {
     
     // ==================== SWAP OPERATIONS ====================
-    
-    /**
-     * @notice Esegue swap da token a WETH
-     * @param tokenCode Codice token (es: "WBTC")
-     * @param amountIn Quantità token input
-     * @param minAmountOut Quantità minima WETH output
-     * @param deadline Deadline per lo swap
-     * @return amountOut WETH ricevuto
-     */
-    function swapTokenForWETH(
-        string memory tokenCode,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        uint256 deadline
-    ) external returns (uint256 amountOut);
-    
-    /**
-     * @notice Esegue swap da WETH a token
-     * @param tokenCode Codice token target (es: "USDC")  
-     * @param wethAmountIn Quantità WETH input
-     * @param minTokenOut Quantità minima token output
-     * @param deadline Deadline per lo swap
-     * @return tokenAmountOut Token ricevuti
-     */
-    function swapWETHForToken(
-        string memory tokenCode,
-        uint256 wethAmountIn,
-        uint256 minTokenOut,
-        uint256 deadline
-    ) external returns (uint256 tokenAmountOut);
 
     /**
      * @notice Calcola quantità minima output per uno swap

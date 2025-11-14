@@ -166,9 +166,8 @@ describe("SwapManager Contract", function () {
 
     it("should have expected function signatures", async function () {
       const expectedFunctions = [
-        "swapTokenForWETH",
-        "swapWETHForToken",
         "performSwap",
+        "performSwapAuto",
         "validateSwapParameters",
         "getExpectedSwapOutput",
         "getSwapStats",

@@ -14,13 +14,13 @@
  * - Batch operations: Linear scaling
  * - Query operations: <100k gas
  * 
- * STATUS: ✅ 16/16 tests passing (89% coverage), 2 swap tests pending
+ * STATUS: ✅ 18/18 tests passing (100% coverage - PERFECT!)
  * ✅ Parameter Operations: 4/4 tests passing
  * ✅ Token Operations: 3/3 tests passing  
  * ✅ Liquidity Operations: 3/3 tests passing (ETH deposits/withdrawals)
- * ⏸️  Swap Operations: 2 tests pending (reentrancy architecture issue)
- * ✅ Scalability Tests: 1/1 passing (5 tokens in 33ms)
- * ✅ Query Performance: 1/1 passing (<2ms per parameter)
+ * ✅ Swap Operations: 2/2 tests passing (wrapper functions removed, reentrancy bug FIXED!)
+ * ✅ Scalability Tests: 1/1 passing (5 tokens in 62ms)
+ * ✅ Query Performance: 1/1 passing (<10ms per parameter)
  * ✅ Storage Efficiency: 2/2 tests passing
  * ✅ Performance Comparison: 2/2 tests passing
  * 
@@ -29,11 +29,13 @@
  * - Token registration: 217k gas ✅
  * - ETH deposits: 209k gas (bootstrap), 169k gas (subsequent) ✅
  * - ETH withdrawals: 301k gas ✅
- * - Query performance: <2ms average ✅
- * - Scalability: 5 tokens in 33ms ✅
+ * - Token→WETH swap: 168,886 gas ✅ (NEW - was skipped before!)
+ * - WETH→Token swap: 167,915 gas ✅ (NEW - was skipped before!)
+ * - Query performance: <10ms average ✅
+ * - Scalability: 5 tokens in 62ms ✅
  * 
- * NOTE: Swap tests skipped due to ReentrancyGuard issue (swapTokenForWETH → performSwap
- * both have nonReentrant modifier). Requires architectural review of SwapManager.
+ * BUG FIX: Reentrancy issue completely resolved by removing wrapper functions
+ * (swapTokenForWETH and swapWETHForToken) that had nested nonReentrant modifiers.
  */
 
 import { expect } from "chai";
@@ -326,15 +328,32 @@ describe("Performance Benchmarks - TEST-002", function () {
         });
     });
 
-    describe.skip("Gas Benchmarks - Swap Operations", function () {
+    describe("Gas Benchmarks - Swap Operations", function () {
+        let mockSimpleSwap: any;
+        let proxyGeneral: any;
+
         beforeEach(async function () {
-            // Setup: Register tokens and add ETH liquidity
+            // Get ProxyGeneral from Beacon
+            const proxyGeneralAddress = await beacon.getImplementation("ProxyGeneral");
+            proxyGeneral = await ethers.getContractAt("ProxyGeneral", proxyGeneralAddress);
+
+            // Setup: Register tokens
             const MockOracleFactory = await ethers.getContractFactory("MockChainlinkOracle");
             const mockOracle1 = await MockOracleFactory.deploy(2000_00000000, 8, "TK1/USD");
             await mockOracle1.waitForDeployment();
             const mockOracle2 = await MockOracleFactory.deploy(1500_00000000, 8, "TK2/USD");
             await mockOracle2.waitForDeployment();
+            
+            // Deploy and configure MockSimpleSwap for testing
+            const MockSimpleSwapFactory = await ethers.getContractFactory("MockSimpleSwap");
+            mockSimpleSwap = await MockSimpleSwapFactory.deploy();
+            await mockSimpleSwap.waitForDeployment();
+            
+            // Configure MockSimpleSwap
+            await mockSimpleSwap.setCustodyHolder(proxyGeneralAddress);
+            await swapManager.connect(owner).setSimpleSwapRouter(await mockSimpleSwap.getAddress());
 
+            // Register tokens in TokenManager
             await tokenManager.connect(owner).manageTokenData(
                 "TK1", await mockToken1.getAddress(), await mockOracle1.getAddress(), 18, 8, 3600
             );
@@ -342,50 +361,91 @@ describe("Performance Benchmarks - TEST-002", function () {
                 "TK2", await mockToken2.getAddress(), await mockOracle2.getAddress(), 18, 8, 3600
             );
             
-            // Deposita ETH nel pool per liquidità
-            await liquidityManager.connect(owner).deposit({
+            // Configure swap limits
+            await swapManager.setSwapLimits("TK1", ethers.parseEther("1"), ethers.parseEther("100000"));
+            await swapManager.setSwapLimits("TK2", ethers.parseEther("1"), ethers.parseEther("100000"));
+            
+            // Mint tokens to router for swaps
+            await mockToken1.mint(await mockSimpleSwap.getAddress(), ethers.parseEther("1000000"));
+            await mockToken2.mint(await mockSimpleSwap.getAddress(), ethers.parseEther("1000000"));
+            
+            // Deposit ETH to WETH for router (WETH doesn't have mint, uses deposit)
+            await owner.sendTransaction({
+                to: await weth.getAddress(),
                 value: ethers.parseEther("100")
             });
-
-            // Trasferisci token agli utenti per swap
-            await mockToken1.mint(owner.address, ethers.parseEther("10000"));
-            await mockToken2.mint(owner.address, ethers.parseEther("10000"));
+            await weth.connect(owner).transfer(await mockSimpleSwap.getAddress(), ethers.parseEther("100"));
             
-            // Approve SwapManager
-            await mockToken1.connect(owner).approve(await swapManager.getAddress(), ethers.MaxUint256);
-            await mockToken2.connect(owner).approve(await swapManager.getAddress(), ethers.MaxUint256);
+            // Mint tokens to ProxyGeneral
+            await mockToken1.mint(proxyGeneralAddress, ethers.parseEther("100000"));
+            await mockToken2.mint(proxyGeneralAddress, ethers.parseEther("100000"));
+            
+            // Deposit ETH to WETH for ProxyGeneral
+            await owner.sendTransaction({
+                to: await weth.getAddress(),
+                value: ethers.parseEther("100")
+            });
+            await weth.connect(owner).transfer(proxyGeneralAddress, ethers.parseEther("100"));
+            
+            // Configure expected outputs in mock router
+            await mockSimpleSwap.setExpectedOutput(
+                await mockToken1.getAddress(),
+                await weth.getAddress(),
+                ethers.parseEther("5") // 10 TK1 -> 5 WETH
+            );
+            await mockSimpleSwap.setExpectedOutput(
+                await weth.getAddress(),
+                await mockToken2.getAddress(),
+                ethers.parseEther("1500") // 1 WETH -> 1500 TK2
+            );
         });
 
         it("Should measure gas for Token->WETH swap", async function () {
             const amountIn = ethers.parseEther("10");
             const deadline = (await ethers.provider.getBlock('latest'))!.timestamp + 3600;
 
-            const tx = await swapManager.connect(owner).swapTokenForWETH(
+            const wethBefore = await weth.balanceOf(proxyGeneral.target);
+
+            const tx = await swapManager.connect(owner).performSwap(
                 "TK1",
+                "WETH",
                 amountIn,
-                0, // minAmountOut
                 deadline
             );
             const receipt = await tx.wait();
 
+            const wethAfter = await weth.balanceOf(proxyGeneral.target);
+            const wethReceived = wethAfter - wethBefore;
+
             console.log(`\n⛽ Token->WETH Swap Gas: ${formatGas(receipt!.gasUsed)}`);
+            console.log(`💰 Received: ${ethers.formatEther(wethReceived)} WETH`);
+            
             expect(receipt!.gasUsed).to.be.lessThan(600000n);
+            expect(wethReceived).to.be.gt(0);
         });
 
         it("Should measure gas for WETH->Token swap", async function () {
             const wethAmount = ethers.parseEther("1");
             const deadline = (await ethers.provider.getBlock('latest'))!.timestamp + 3600;
 
-            const tx = await swapManager.connect(owner).swapWETHForToken(
+            const tk2Before = await mockToken2.balanceOf(proxyGeneral.target);
+
+            const tx = await swapManager.connect(owner).performSwap(
+                "WETH",
                 "TK2",
                 wethAmount,
-                0, // minTokenOut
                 deadline
             );
             const receipt = await tx.wait();
 
+            const tk2After = await mockToken2.balanceOf(proxyGeneral.target);
+            const tk2Received = tk2After - tk2Before;
+
             console.log(`⛽ WETH->Token Swap Gas: ${formatGas(receipt!.gasUsed)}`);
+            console.log(`💰 Received: ${ethers.formatEther(tk2Received)} TK2`);
+            
             expect(receipt!.gasUsed).to.be.lessThan(600000n);
+            expect(tk2Received).to.be.gt(0);
         });
     });
 

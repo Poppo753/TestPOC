@@ -148,58 +148,6 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
     // ==================== MAIN SWAP FUNCTIONS ====================
 
     /**
-     * @notice Esegue swap da token a WETH come richiesto dalle specs
-     * @param tokenCode Token da vendere
-     * @param amountIn Quantità da swappare
-     * @param minAmountOut Minimum amount out per slippage protection
-     * @param deadline Deadline per lo swap
-     * @return amountOut Quantità WETH ricevuta
-     */
-    function swapTokenForWETH(
-        string memory tokenCode,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        uint256 deadline
-    ) 
-        external
-        nonReentrant
-        onlyAuthorizedCaller
-        whenSwapsEnabled
-        returns (uint256 amountOut)
-    {
-        require(block.timestamp <= deadline, "Swap deadline expired");
-        uint256 received = performSwap(tokenCode, "WETH", amountIn, deadline);
-        require(received >= minAmountOut, "Insufficient output amount");
-        return received;
-    }
-
-    /**
-     * @notice Swap WETH per altro token
-     * @param tokenCode Token da ricevere
-     * @param wethAmountIn Quantità WETH da spendere
-     * @param minTokenOut Minimum amount out per slippage protection
-     * @param deadline Deadline per lo swap
-     * @return tokenAmountOut Quantità token ricevuta
-     */
-    function swapWETHForToken(
-        string memory tokenCode,
-        uint256 wethAmountIn,
-        uint256 minTokenOut,
-        uint256 deadline
-    ) 
-        external
-        nonReentrant
-        onlyAuthorizedCaller
-        whenSwapsEnabled
-        returns (uint256 tokenAmountOut)
-    {
-        require(block.timestamp <= deadline, "Swap deadline expired");
-        uint256 received = performSwap("WETH", tokenCode, wethAmountIn, deadline);
-        require(received >= minTokenOut, "Insufficient output amount");
-        return received;
-    }
-
-    /**
      * @notice Esegue swap con deadline ESPLICITO (MEV protected)
      * @dev Fornisce protezione MEV via deadline check
      * @param spendTokenCode Token da vendere

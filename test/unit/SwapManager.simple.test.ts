@@ -118,9 +118,8 @@ describe("SwapManager Contract - Core Tests", function () {
 
     it("should have expected function signatures", async function () {
       const expectedFunctions = [
-        "swapTokenForWETH",
-        "swapWETHForToken",
         "performSwap",
+        "performSwapAuto",
         "getExpectedSwapOutput",
         "getSwapStats",
         "setSwapLimits",
