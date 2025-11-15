@@ -651,15 +651,15 @@ describe("TokenManager Contract", function () {
         // Simulate oracle failure by marking price as stale
         await mockOracleAdapter.setStale(TOKEN_CODES.USDC);
         
-        // Should still return price but with isStale=true (no revert with MockOracleAdapter)
-        const [price1, , isStale1] = await tokenManager.getTokenPrice(TOKEN_CODES.USDC);
-        expect(price1).to.be.gt(0); // Price still available
-        expect(isStale1).to.be.true; // But marked as stale
+        // NEW BEHAVIOR: TokenManager now REVERTS when oracle returns isValid=false
+        await expect(tokenManager.getTokenPrice(TOKEN_CODES.USDC))
+          .to.be.revertedWithCustomError(tokenManager, "StalePrice");
         
         // Reset oracle to valid state and verify recovery
         await mockOracleAdapter.setValid(TOKEN_CODES.USDC);
         await mockOracleAdapter.setPrice(TOKEN_CODES.USDC, ethers.parseUnits("1", 8));
         
+        // After recovery, should work normally
         const [price2, , isStale2] = await tokenManager.getTokenPrice(TOKEN_CODES.USDC);
         expect(price2).to.be.gt(0);
         expect(isStale2).to.be.false; // No longer stale
@@ -841,16 +841,17 @@ describe("TokenManager Contract", function () {
         await mockOracleAdapter.setStale(TOKEN_CODES.USDC);
         await mockOracleAdapter.setStale("WBTC");
         
-        // Prices still accessible but marked as stale (no revert with MockOracleAdapter)
-        const [price1, , isStale1] = await tokenManager.getTokenPrice(TOKEN_CODES.USDC);
-        const [price2, , isStale2] = await tokenManager.getTokenPrice("WBTC");
-        expect(isStale1).to.be.true;
-        expect(isStale2).to.be.true;
+        // NEW BEHAVIOR: TokenManager now REVERTS when oracle returns isValid=false
+        await expect(tokenManager.getTokenPrice(TOKEN_CODES.USDC))
+          .to.be.revertedWithCustomError(tokenManager, "StalePrice");
+        await expect(tokenManager.getTokenPrice("WBTC"))
+          .to.be.revertedWithCustomError(tokenManager, "StalePrice");
         
         // Recovery scenario - restore validity
         await mockOracleAdapter.setValid(TOKEN_CODES.USDC);
         await mockOracleAdapter.setPrice(TOKEN_CODES.USDC, ethers.parseUnits("1", 8));
         
+        // After recovery, should work normally
         const [recoveredPrice, , isStaleRecovered] = await tokenManager.getTokenPrice(TOKEN_CODES.USDC);
         expect(recoveredPrice).to.be.gt(0);
         expect(isStaleRecovered).to.be.false;

@@ -52,9 +52,6 @@ export class AddTokenScript extends BaseScript {
     if (!ethers.isAddress(this.addOptions.tokenAddress)) {
       throw new Error("Invalid token address");
     }
-    if (!ethers.isAddress(this.addOptions.priceFeedAddress)) {
-      throw new Error("Invalid price feed address");
-    }
     
     // Check if WETH (cannot add WETH as regular token)
     const wethAddress = await this.contracts.beacon.getImplementation("WETH");
@@ -64,9 +61,7 @@ export class AddTokenScript extends BaseScript {
     
     Logger.info(`Token Code: ${this.addOptions.tokenCode}`);
     Logger.info(`Token Address: ${this.addOptions.tokenAddress}`);
-    Logger.info(`Price Feed: ${this.addOptions.priceFeedAddress}`);
     Logger.info(`Token Decimals: ${this.addOptions.tokenDecimals}`);
-    Logger.info(`Price Feed Decimals: ${this.addOptions.priceFeedDecimals}`);
     Logger.info(`Heartbeat: ${this.addOptions.heartbeat} seconds`);
     
     // Check if token already exists
@@ -80,31 +75,31 @@ export class AddTokenScript extends BaseScript {
       Logger.info("Token not yet registered (this is normal for new tokens)");
     }
     
-    // Validate price feed connectivity
-    Logger.info("🔗 Testing price feed connectivity...");
+    // Get OracleAdapter and verify token support
+    Logger.info("🔗 Verifying OracleAdapter configuration...");
+    const oracleAdapterAddress = await this.contracts.tokenManager.oracleAdapter();
+    const oracleAdapter = await ethers.getContractAt("IOracleAdapter", oracleAdapterAddress);
+    
+    const isSupported = await oracleAdapter.supportsToken(this.addOptions.tokenCode);
+    if (!isSupported) {
+        Logger.warn(`⚠️ Token ${this.addOptions.tokenCode} not configured in OracleAdapter`);
+        throw new Error("Token not supported by OracleAdapter - configure it first using oracleAdapter.setupToken()");
+    }
+    
+    // Test price retrieval from adapter
+    Logger.info("🔗 Testing OracleAdapter price retrieval...");
     try {
-      const priceFeed = await ethers.getContractAt(
-        "AggregatorV3Interface",
-        this.addOptions.priceFeedAddress
-      );
-      
-      const [roundId, price, startedAt, updatedAt, answeredInRound] = 
-        await priceFeed.latestRoundData();
-      
-      Logger.info(`Latest Price: ${ethers.formatUnits(price, this.addOptions.priceFeedDecimals!)}`);
-      Logger.info(`Last Updated: ${new Date(Number(updatedAt) * 1000).toISOString()}`);
-      
-      // Check staleness
-      const now = Math.floor(Date.now() / 1000);
-      const age = now - Number(updatedAt);
-      if (age > this.addOptions.heartbeat!) {
-        Logger.warn(`⚠️ Price feed data is stale (${age}s old, heartbeat: ${this.addOptions.heartbeat}s)`);
+      const [price, timestamp, isValid] = await oracleAdapter.getPrice(this.addOptions.tokenCode);
+      const decimals = await oracleAdapter.getPriceDecimals(this.addOptions.tokenCode);
+      Logger.info(`Latest Price: ${ethers.formatUnits(price, decimals)}`);
+      Logger.info(`Last Updated: ${new Date(Number(timestamp) * 1000).toISOString()}`);
+      if (!isValid) {
+        Logger.warn("⚠️ Price marked as stale by OracleAdapter");
       } else {
-        Logger.success("Price feed is fresh and working");
+        Logger.success("OracleAdapter price is fresh and working");
       }
-      
     } catch (error: any) {
-      throw new Error(`Price feed validation failed: ${error.message}`);
+      throw new Error(`OracleAdapter validation failed: ${error.message}`);
     }
   }
 
@@ -115,9 +110,7 @@ export class AddTokenScript extends BaseScript {
       this.contracts.tokenManager.manageTokenData(
         this.addOptions.tokenCode,
         this.addOptions.tokenAddress,
-        this.addOptions.priceFeedAddress,
         this.addOptions.tokenDecimals!,
-        this.addOptions.priceFeedDecimals!,
         this.addOptions.heartbeat!
       ),
       `Add Token ${this.addOptions.tokenCode}`
@@ -127,9 +120,7 @@ export class AddTokenScript extends BaseScript {
       result.data = {
         tokenCode: this.addOptions.tokenCode,
         tokenAddress: this.addOptions.tokenAddress,
-        priceFeedAddress: this.addOptions.priceFeedAddress,
         tokenDecimals: this.addOptions.tokenDecimals,
-        priceFeedDecimals: this.addOptions.priceFeedDecimals,
         heartbeat: this.addOptions.heartbeat
       };
     }
@@ -152,18 +143,19 @@ export class AddTokenScript extends BaseScript {
     Logger.info("\n📊 Token Info:");
     Logger.info(`   Token Address: ${tokenInfo.tokenAddress}`);
     Logger.info(`   Token Decimals: ${tokenInfo.tokenDecimals}`);
-    Logger.info(`   Price Feed: ${tokenInfo.priceFeed}`);
-    Logger.info(`   Price Feed Decimals: ${tokenInfo.priceFeedDecimals}`);
     Logger.info(`   Heartbeat: ${tokenInfo.heartbeat}s`);
     Logger.info(`   Is Active: ${tokenInfo.isActive}`);
     Logger.info(`   Error Count: ${tokenInfo.errorCount}`);
     
-    // Test price retrieval
+    // Test price via OracleAdapter
     try {
-      const [price, updatedAt, isStale] = await this.contracts.tokenManager.getTokenPrice(this.addOptions.tokenCode);
-      Logger.info(`   Current Price: ${ethers.formatUnits(price, this.addOptions.priceFeedDecimals!)} USD`);
-      if (isStale) {
-        Logger.warn("   Price data is stale");
+      const oracleAdapterAddress = await this.contracts.tokenManager.oracleAdapter();
+      const oracleAdapter = await ethers.getContractAt("IOracleAdapter", oracleAdapterAddress);
+      const [price, , isValid] = await oracleAdapter.getPrice(this.addOptions.tokenCode);
+      const decimals = await oracleAdapter.getPriceDecimals(this.addOptions.tokenCode);
+      Logger.info(`   Current Price from Oracle: ${ethers.formatUnits(price, decimals)} USD`);
+      if (!isValid) {
+        Logger.warn("   Price marked as stale by OracleAdapter");
       }
     } catch (error) {
       Logger.warn("   Price retrieval test failed (may require time to settle)");
@@ -181,7 +173,6 @@ export class AddTokenScript extends BaseScript {
       Logger.info(`\n📋 Configuration:`);
       Logger.info(`   Token: ${this.addOptions.tokenCode}`);
       Logger.info(`   Address: ${this.addOptions.tokenAddress}`);
-      Logger.info(`   Price Feed: ${this.addOptions.priceFeedAddress}`);
       Logger.info(`   Transaction: ${result.transactionHash}`);
       Logger.info(`   Gas Used: ${result.gasUsed?.toString()}`);
     } else {
@@ -197,28 +188,26 @@ async function main() {
   // Get parameters from environment or use defaults
   const tokenCode = process.env.TOKEN_CODE || "USDC";
   const tokenAddress = process.env.TOKEN_ADDRESS || "";
-  const priceFeedAddress = process.env.PRICE_FEED_ADDRESS || "";
   const tokenDecimals = process.env.TOKEN_DECIMALS ? parseInt(process.env.TOKEN_DECIMALS) : 6;
-  const priceFeedDecimals = process.env.PRICE_FEED_DECIMALS ? parseInt(process.env.PRICE_FEED_DECIMALS) : 8;
   const heartbeat = process.env.HEARTBEAT ? parseInt(process.env.HEARTBEAT) : 3600;
 
-  if (!tokenAddress || !priceFeedAddress) {
-    console.error("❌ ERROR: TOKEN_ADDRESS and PRICE_FEED_ADDRESS must be provided");
+  if (!tokenAddress) {
+    console.error("❌ ERROR: TOKEN_ADDRESS must be provided");
     console.error("\nUsage:");
-    console.error("  TOKEN_CODE=USDC TOKEN_ADDRESS=0x... PRICE_FEED_ADDRESS=0x... npx hardhat run scripts/admin/tokens/AddToken.ts");
+    console.error("  TOKEN_CODE=USDC TOKEN_ADDRESS=0x... npx hardhat run scripts/admin/tokens/AddToken.ts");
     console.error("\nOptional parameters:");
     console.error("  TOKEN_DECIMALS=6 (default: 18)");
-    console.error("  PRICE_FEED_DECIMALS=8 (default: 8)");
     console.error("  HEARTBEAT=3600 (default: 3600 seconds)");
+    console.error("\nPREREQUISITE:");
+    console.error("  Token MUST be configured in OracleAdapter BEFORE running this script.");
+    console.error("  Use: oracleAdapter.setupToken(tokenCode, price, decimals, true)");
     process.exit(1);
   }
 
   const script = new AddTokenScript({
     tokenCode,
     tokenAddress,
-    priceFeedAddress,
     tokenDecimals,
-    priceFeedDecimals,
     heartbeat,
     verbose: process.env.VERBOSE_LOGGING === "true",
     dryRun: process.env.DRY_RUN === "true"

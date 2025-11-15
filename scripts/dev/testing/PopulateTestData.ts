@@ -3,13 +3,13 @@
  * 
  * Script per generazione ambiente di test completo con:
  * - Deploy mock tokens (USDC, WBTC, WETH)
- * - Setup Chainlink oracles
- * - Registrazione token in TokenManager
+ * - Setup MockOracleAdapter (IOracleAdapter interface)
+ * - Registrazione token in TokenManager (4 parametri)
  * - Mint balances test per utenti
  * - Configurazione fee e parametri
  * 
- * Basato su: test/unit/LiquidityManager.test.ts lines 47-120 (deployLiquidityManagerFixture)
- * Pattern: Replica esatta del fixture setup dei test
+ * Basato su: test/unit/SwapManager.Phase1B.test.ts lines 28-35 (MockOracleAdapter pattern)
+ * Pattern: OracleAdapter setup PRIMA di TokenManager registration
  */
 
 import { ethers } from "hardhat";
@@ -29,7 +29,7 @@ interface TestDataResult {
     WBTC: string;
     WETH: string;
   };
-  mockOracle: string;
+  mockOracle: string;  // MockOracleAdapter address (IOracleAdapter interface)
   testUsers: string[];
   balancesMinted: {
     [address: string]: string;
@@ -110,17 +110,36 @@ export class PopulateTestDataScript extends BaseScript {
       result.mockTokens.WETH = await mockWETH.getAddress();
       Logger.success(`MockWETH deployed: ${result.mockTokens.WETH}`);
 
-      // Deploy MockChainlinkOracle (pattern from test line 59-63)
-      Logger.section("🔗 Deploying Mock Oracle");
-      const MockChainlinkOracle = await ethers.getContractFactory("MockChainlinkOracle");
-      const mockOracle = await MockChainlinkOracle.deploy(
-        ethers.parseUnits("2000", 8), // $2000 ETH price
-        8, // decimals
-        "ETH/USD"
+      // Deploy MockOracleAdapter (pattern from test: SwapManager.Phase1B.test.ts lines 28-35)
+      Logger.section("🔗 Deploying Mock Oracle Adapter");
+      const MockOracleAdapter = await ethers.getContractFactory("MockOracleAdapter");
+      const mockOracleAdapter = await MockOracleAdapter.deploy();
+      await mockOracleAdapter.waitForDeployment();
+      result.mockOracle = await mockOracleAdapter.getAddress();
+      Logger.success(`MockOracleAdapter deployed: ${result.mockOracle}`);
+      
+      // Setup tokens in OracleAdapter BEFORE registering in TokenManager
+      Logger.section("🔧 Configuring Tokens in OracleAdapter");
+      
+      // USDC: $1.00 (8 decimals)
+      Logger.info("Setting up USDC in OracleAdapter...");
+      await mockOracleAdapter.setupToken(
+        "USDC",
+        ethers.parseUnits("1", 8),  // $1.00
+        8,                           // price decimals
+        true                         // isValid
       );
-      await mockOracle.waitForDeployment();
-      result.mockOracle = await mockOracle.getAddress();
-      Logger.success(`MockChainlinkOracle deployed: ${result.mockOracle}`);
+      
+      // WBTC: $42000.00 (8 decimals)
+      Logger.info("Setting up WBTC in OracleAdapter...");
+      await mockOracleAdapter.setupToken(
+        "WBTC",
+        ethers.parseUnits("42000", 8),  // $42000.00
+        8,                               // price decimals
+        true                             // isValid
+      );
+      
+      Logger.success("✅ OracleAdapter configured with token prices");
       
       // Update beacon WETH implementation (pattern from test line 68)
       Logger.section("🎯 Updating Beacon");
@@ -129,7 +148,7 @@ export class PopulateTestDataScript extends BaseScript {
       await tx1.wait();
       Logger.success("✅ WETH registered in Beacon");
 
-      // Setup tokens in TokenManager (pattern from test line 105-110)
+      // Setup tokens in TokenManager (pattern from test: 4 parameters)
       if (!this.testOptions.skipTokenSetup) {
         Logger.section("🪙 Registering Tokens in TokenManager");
         
@@ -137,10 +156,8 @@ export class PopulateTestDataScript extends BaseScript {
         const tx2 = await this.contracts.tokenManager.manageTokenData(
           "USDC",
           result.mockTokens.USDC,
-          result.mockOracle,
-          6,  // token decimals
-          8,  // price feed decimals
-          3600  // heartbeat (1 hour)
+          6,      // token decimals
+          3600    // heartbeat (1 hour)
         );
         await tx2.wait();
         Logger.success("✅ USDC registered");
@@ -149,10 +166,8 @@ export class PopulateTestDataScript extends BaseScript {
         const tx3 = await this.contracts.tokenManager.manageTokenData(
           "WBTC",
           result.mockTokens.WBTC,
-          result.mockOracle,
-          8,  // token decimals
-          8,  // price feed decimals
-          3600  // heartbeat (1 hour)
+          8,      // token decimals
+          3600    // heartbeat (1 hour)
         );
         await tx3.wait();
         Logger.success("✅ WBTC registered");
@@ -247,8 +262,8 @@ export class PopulateTestDataScript extends BaseScript {
 
 /**
  * Main execution
- * Pattern verified: deployLiquidityManagerFixture from test
- * Test reference: LiquidityManager.test.ts lines 47-120
+ * Pattern verified: MockOracleAdapter setup from SwapManager.Phase1B.test.ts
+ * Test reference: Uses 4-parameter manageTokenData() API
  */
 async function main() {
   // Parse command line arguments

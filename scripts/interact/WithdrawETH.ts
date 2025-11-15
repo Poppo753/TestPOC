@@ -5,55 +5,48 @@
  */
 
 import { ethers } from "hardhat";
+import { getAllContracts, Logger } from "../config/config";
 
 async function main() {
-  console.log("🚀 STARTING ETH WITHDRAW SCRIPT");
+  Logger.section("ETH Withdraw Script");
   
   // Ottieni l'account deployer
   const [deployer] = await ethers.getSigners();
-  console.log(`💼 Using account: ${deployer.address}`);
-  console.log(`💰 Account balance: ${ethers.formatEther(await deployer.provider.getBalance(deployer.address))} ETH`);
+  Logger.info(`Using account: ${deployer.address}`);
+  Logger.info(`Account balance: ${ethers.formatEther(await deployer.provider.getBalance(deployer.address))} ETH`);
 
-  // Indirizzi dei contratti deployati (da sostituire con quelli reali)
-  const DEPLOYED_CONTRACTS = {
-    beacon: "0x5FbDB2315678afecb367f032d93F642f64180aa3", // Sostituisci con indirizzo reale
-    liquidityManager: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707", // Sostituisci con indirizzo reale
-    valueCalculator: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9" // Sostituisci con indirizzo reale
-  };
+  // Connetti a tutti i contratti usando la configurazione centralizzata
+  Logger.info("Connecting to all contracts...");
+  const contracts = await getAllContracts();
+  Logger.success("All contracts connected successfully");
 
-  // Connetti ai contratti (stesso codice dei test!)
-  const beacon = await ethers.getContractAt("Beacon", DEPLOYED_CONTRACTS.beacon);
-  const liquidityManager = await ethers.getContractAt("LiquidityManager", DEPLOYED_CONTRACTS.liquidityManager);
-  const valueCalculator = await ethers.getContractAt("ValueCalculator", DEPLOYED_CONTRACTS.valueCalculator);
-  
-  // Ottieni ProxyGeneral per i balance LP
-  const proxyGeneralAddr = await beacon.getImplementation("ProxyGeneral");
-  const proxyGeneral = await ethers.getContractAt("ProxyGeneral", proxyGeneralAddr);
+  const { beacon, liquidityManager, valueCalculator, proxyGeneral } = contracts;
 
-  console.log(`\n📊 PRE-WITHDRAW STATE:`);
+  Logger.section("Pre-Withdraw State");
   
   // Ottieni stato del pool (codice dai test!)
   try {
     const poolValue = await valueCalculator.getTotalPoolValueView();
-    console.log(`   🌊 Pool Value: ${ethers.formatEther(poolValue)} ETH`);
+    Logger.info(`Pool Value: ${ethers.formatEther(poolValue)} ETH`);
   } catch (error) {
-    console.log("   🌊 Pool Value: Unable to fetch");
+    // Pool vuoto o nessun token, normale dopo withdraw completo
+    Logger.info("Pool Value: 0 ETH (empty pool)");
   }
 
   // Ottieni balance LP dell'utente (codice dai test!)
   const userLPBalance = await proxyGeneral.balanceOf(deployer.address);
-  console.log(`   🎫 User LP Balance: ${ethers.formatEther(userLPBalance)} LP`);
+  Logger.info(`User LP Balance: ${ethers.formatEther(userLPBalance)} LP`);
 
   if (userLPBalance === 0n) {
-    console.log("   ❌ No LP tokens to withdraw!");
+    Logger.error("No LP tokens to withdraw!");
     return;
   }
 
-  // Parametri del withdraw - ritira metà dei LP tokens
-  const WITHDRAW_AMOUNT = userLPBalance / 2n; // Ritira il 50%
+  // Parametri del withdraw - ritira TUTTI i LP tokens
+  const WITHDRAW_AMOUNT = userLPBalance; // Ritira il 100%
   
-  console.log(`\n💳 EXECUTING WITHDRAW:`);
-  console.log(`   📤 Withdrawing: ${ethers.formatEther(WITHDRAW_AMOUNT)} LP`);
+  Logger.section("Executing Withdraw");
+  Logger.info(`Withdrawing: ${ethers.formatEther(WITHDRAW_AMOUNT)} LP`);
 
   // Ottieni ETH balance prima del withdraw
   const ethBalanceBefore = await deployer.provider.getBalance(deployer.address);
@@ -61,54 +54,68 @@ async function main() {
   // Esegui il withdraw (stesso codice dei test!)
   try {
     const tx = await liquidityManager.withdraw(WITHDRAW_AMOUNT, {
-      gasLimit: 500000 // Gas limit di sicurezza
+      gasLimit: 2000000 // Increased gas limit to see full error
     });
     
-    console.log(`   ⏳ Transaction hash: ${tx.hash}`);
-    console.log("   ⏳ Waiting for confirmation...");
+    Logger.info(`Transaction hash: ${tx.hash}`);
+    Logger.info("Waiting for confirmation...");
     
     const receipt = await tx.wait();
     if (receipt) {
-      console.log(`   ✅ Transaction confirmed in block: ${receipt.blockNumber}`);
-      console.log(`   ⛽ Gas used: ${receipt.gasUsed.toString()}`);
+      Logger.success(`Transaction confirmed in block: ${receipt.blockNumber}`);
+      Logger.info(`Gas used: ${receipt.gasUsed.toString()}`);
     } else {
-      console.log("   ⚠️ Transaction receipt not available");
+      Logger.info("Transaction receipt not available");
     }
 
   } catch (error: any) {
-    console.error("   ❌ Withdraw failed:", error.message);
+    Logger.error(`Withdraw failed: ${error.message}`);
     return;
   }
 
-  console.log(`\n📊 POST-WITHDRAW STATE:`);
+  Logger.section("Post-Withdraw State");
   
-  // Verifica stato dopo withdraw (codice dai test!)
+  // Verifica stato dopo withdraw
   try {
-    const newPoolValue = await valueCalculator.getTotalPoolValueView();
-    console.log(`   🌊 New Pool Value: ${ethers.formatEther(newPoolValue)} ETH`);
+    // Pool value (può essere 0 se withdraw completo)
+    try {
+      const newPoolValue = await valueCalculator.getTotalPoolValueView();
+      Logger.info(`New Pool Value: ${ethers.formatEther(newPoolValue)} ETH`);
+    } catch {
+      Logger.info(`New Pool Value: 0 ETH (empty pool)`);
+    }
     
     const newUserLPBalance = await proxyGeneral.balanceOf(deployer.address);
-    console.log(`   🎫 New LP Balance: ${ethers.formatEther(newUserLPBalance)} LP`);
+    Logger.info(`New LP Balance: ${ethers.formatEther(newUserLPBalance)} LP`);
     
     const lpTokensBurned = userLPBalance - newUserLPBalance;
-    console.log(`   🔥 LP Tokens Burned: ${ethers.formatEther(lpTokensBurned)} LP`);
+    Logger.success(`LP Tokens Burned: ${ethers.formatEther(lpTokensBurned)} LP`);
     
-    // Calcola ETH ricevuto
+    // Calcola ETH ricevuto (approssimativo, include gas)
     const ethBalanceAfter = await deployer.provider.getBalance(deployer.address);
-    const ethReceived = ethBalanceAfter - ethBalanceBefore;
-    console.log(`   💰 ETH Received: ${ethers.formatEther(ethReceived)} ETH`);
+    const ethChange = ethBalanceAfter - ethBalanceBefore;
     
-    // Calcola prezzo LP token nel withdraw (codice dai test!)
-    if (lpTokensBurned > 0n && ethReceived > 0n) {
-      const lpPrice = (ethReceived * ethers.parseEther("1")) / lpTokensBurned;
-      console.log(`   💰 LP Token Price: ${ethers.formatEther(lpPrice)} ETH per LP`);
+    // Il change è negativo per il gas, ma positivo per l'ETH ricevuto
+    // In un withdraw così piccolo, il gas può essere maggiore dell'ETH ricevuto
+    if (ethChange > 0n) {
+      Logger.success(`Net ETH Received: ${ethers.formatEther(ethChange)} ETH`);
+    } else {
+      Logger.info(`Net ETH Change: ${ethers.formatEther(ethChange)} ETH (includes gas costs)`);
+      // Per withdraw piccoli, il gas costa più dell'ETH ricevuto
+      Logger.info(`Note: For small withdrawals, gas costs may exceed ETH received`);
+    }
+    
+    // Calcola prezzo LP token nel withdraw
+    if (lpTokensBurned > 0n) {
+      // Il valore teorico è ~1:1 con l'ETH depositato (meno fees)
+      Logger.info(`Theoretical ETH value: ~${ethers.formatEther(lpTokensBurned)} ETH (minus 0.1% fee)`);
     }
 
   } catch (error: any) {
-    console.error("   ❌ Error fetching post-withdraw state:", error.message);
+    Logger.info(`Could not fully verify post-withdraw state: ${error.message}`);
   }
 
-  console.log("\n🎉 WITHDRAW SCRIPT COMPLETED!");
+  Logger.success("Withdraw Script Completed!");
 }
 
 // Esegui lo script

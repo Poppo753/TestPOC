@@ -392,6 +392,16 @@ contract TokenManager is Ownable {
     }
 
     /**
+     * @notice Gets price decimals from oracle adapter
+     * @param _tokenCode The token code
+     * @return Decimals used by the price feed
+     */
+    function getPriceDecimals(string memory _tokenCode) external view returns (uint256) {
+        require(tokenData[_tokenCode].isActive, "Token not active");
+        return oracleAdapter.getPriceDecimals(_tokenCode);
+    }
+
+    /**
      * @notice Validates a price feed for a token
      * @param _tokenCode The token code to validate
      * @return True if price feed is working correctly

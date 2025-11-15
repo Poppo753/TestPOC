@@ -28,13 +28,9 @@ describe("ProxyGeneral Contract - Core Tests", function () {
     mockWBTC = await MockERC20.deploy("Wrapped Bitcoin", "WBTC", 8);
     mockWETH = await MockERC20.deploy("Wrapped Ether", "WETH", 18);
 
-    // Deploy MockChainlinkOracle
-    const MockChainlinkOracle = await ethers.getContractFactory("MockChainlinkOracle");
-    mockOracle = await MockChainlinkOracle.deploy(
-      ethers.parseUnits("2000", 8),
-      8,
-      "ETH/USD"
-    );
+    // Deploy MockOracleAdapter for TokenManager
+    const MockOracleAdapter = await ethers.getContractFactory("MockOracleAdapter");
+    const mockOracleAdapter = await MockOracleAdapter.deploy();
 
     // Deploy Beacon
     const Beacon = await ethers.getContractFactory("Beacon");
@@ -47,7 +43,7 @@ describe("ProxyGeneral Contract - Core Tests", function () {
 
     // Deploy TokenManager
     const TokenManager = await ethers.getContractFactory("TokenManager");
-    tokenManager = await TokenManager.deploy(beacon.target);
+    tokenManager = await TokenManager.deploy(beacon.target, mockOracleAdapter.target);
 
     // Authorize TokenManager
     await proxyGeneral.authorizeModule(tokenManager.target, "TokenManager");

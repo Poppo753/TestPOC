@@ -1,10 +1,11 @@
 import { ethers } from "hardhat";
 
 async function main() {
-    // Replace this with your Beacon contract address
-    const beaconAddress = "YOUR_BEACON_ADDRESS";
+    // Get Beacon address from environment or use default for hardhat
+    const beaconAddress = process.env.BEACON_ADDRESS || "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 
     console.log("Deploying modules...");
+    console.log(`Using Beacon address: ${beaconAddress}`);
 
     // Deploy MockOracleAdapter FIRST
     console.log("Deploying MockOracleAdapter...");
@@ -25,7 +26,7 @@ async function main() {
     const TokenManager = await ethers.getContractFactory("TokenManager");
     const tokenManager = await TokenManager.deploy(
         beaconAddress,
-        await oracleAdapter.getAddress()
+        oracleAdapter.target
     );
     await tokenManager.waitForDeployment();
     console.log(`TokenManager deployed at: ${tokenManager.target}`);

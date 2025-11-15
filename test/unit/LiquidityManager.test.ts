@@ -22,7 +22,7 @@ describe("LiquidityManager Contract", function () {
   let mockUSDC: any;
   let mockWBTC: any;
   let mockWETH: any;
-  let mockOracle: any;
+  let mockOracleAdapter: any;
   let owner: any;
   let user1: any;
   let user2: any;
@@ -54,13 +54,9 @@ describe("LiquidityManager Contract", function () {
     const MockWETH = await ethers.getContractFactory("MockWETH");
     const mockWETH = await MockWETH.deploy();
 
-    // Deploy MockChainlinkOracle
-    const MockChainlinkOracle = await ethers.getContractFactory("MockChainlinkOracle");
-    const mockOracle = await MockChainlinkOracle.deploy(
-      ethers.parseUnits("2000", 8), // $2000
-      8,
-      "ETH/USD"
-    );
+    // Deploy MockOracleAdapter for TokenManager
+    const MockOracleAdapter = await ethers.getContractFactory("MockOracleAdapter");
+    const mockOracleAdapter = await MockOracleAdapter.deploy();
 
     // Deploy Beacon
     const Beacon = await ethers.getContractFactory("Beacon");
@@ -72,7 +68,7 @@ describe("LiquidityManager Contract", function () {
     const proxyGeneral = await ProxyGeneral.deploy(beacon.target);
 
     const TokenManager = await ethers.getContractFactory("TokenManager");
-    const tokenManager = await TokenManager.deploy(beacon.target);
+    const tokenManager = await TokenManager.deploy(beacon.target, mockOracleAdapter.target);
 
     const ValueCalculator = await ethers.getContractFactory("ValueCalculator");
     const valueCalculator = await ValueCalculator.deploy(beacon.target);
@@ -95,13 +91,13 @@ describe("LiquidityManager Contract", function () {
     await beacon.updateImplementation("ParameterManager", parameterManager.target);
     await beacon.updateImplementation("LiquidityManager", liquidityManager.target);
 
-    // Setup tokens in TokenManager
-    await tokenManager.manageTokenData(
-      "USDC", mockUSDC.target, mockOracle.target, 6, 8, 3600
-    );
-    await tokenManager.manageTokenData(
-      "WBTC", mockWBTC.target, mockOracle.target, 8, 8, 3600
-    );
+    // Setup tokens in MockOracleAdapter
+    await mockOracleAdapter.setupToken("USDC", ethers.parseUnits("1", 8), 8, true);
+    await mockOracleAdapter.setupToken("WBTC", ethers.parseUnits("30000", 8), 8, true);
+
+    // Setup tokens in TokenManager (NEW SIGNATURE: 4 params)
+    await tokenManager.manageTokenData("USDC", mockUSDC.target, 6, 3600);
+    await tokenManager.manageTokenData("WBTC", mockWBTC.target, 8, 3600);
     // Note: WETH is NOT registered in TokenManager - it's handled separately via Beacon
 
     // Initialize parameters in ParameterManager with correct function
@@ -149,7 +145,7 @@ describe("LiquidityManager Contract", function () {
       mockUSDC,
       mockWBTC,
       mockWETH,
-      mockOracle,
+      mockOracleAdapter,
       owner,
       user1,
       user2,
@@ -169,7 +165,7 @@ describe("LiquidityManager Contract", function () {
     mockUSDC = fixture.mockUSDC;
     mockWBTC = fixture.mockWBTC;
     mockWETH = fixture.mockWETH;
-    mockOracle = fixture.mockOracle;
+    mockOracleAdapter = fixture.mockOracleAdapter;
     owner = fixture.owner;
     user1 = fixture.user1;
     user2 = fixture.user2;

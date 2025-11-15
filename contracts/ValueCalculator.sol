@@ -107,11 +107,11 @@ contract ValueCalculator is Ownable {
             address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
             uint256 tokenBalance = IERC20(tokenAddress).balanceOf(proxyGeneral);
             
-            // GET TOKEN INFO FOR DECIMALS
-            ITokenManagerForModules.TokenInfo memory tokenInfo = tokenManager.getTokenInfo(_tokenCode);
+            // GET PRICE DECIMALS FROM TokenManager (which queries oracle adapter)
+            uint256 priceDecimals = tokenManager.getPriceDecimals(_tokenCode);
             
             // CALCULATE VALUE (normalize by price feed decimals)
-            uint256 value = (tokenBalance * price) / (10 ** tokenInfo.priceFeedDecimals);
+            uint256 value = (tokenBalance * price) / (10 ** priceDecimals);
             
             // UPDATE CACHE
             tokenValueCache[_tokenCode] = TokenValueCache({
@@ -165,8 +165,9 @@ contract ValueCalculator is Ownable {
         address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
         uint256 tokenBalance = IERC20(tokenAddress).balanceOf(proxyGeneral);
         
-        ITokenManagerForModules.TokenInfo memory tokenInfo = tokenManager.getTokenInfo(_tokenCode);
-        return (tokenBalance * price) / (10 ** tokenInfo.priceFeedDecimals);
+        // GET PRICE DECIMALS FROM TokenManager
+        uint256 priceDecimals = tokenManager.getPriceDecimals(_tokenCode);
+        return (tokenBalance * price) / (10 ** priceDecimals);
     }
 
     /**
@@ -391,9 +392,9 @@ contract ValueCalculator is Ownable {
                 continue; // Skip tokens with stale/invalid prices
             }
             
-            // CALCULATE VALUE
-            ITokenManagerForModules.TokenInfo memory tokenInfo = tokenManager.getTokenInfo(currentToken);
-            uint256 tokenValue = (tokenBalance * price) / (10 ** tokenInfo.priceFeedDecimals);
+            // CALCULATE VALUE using price decimals from oracle
+            uint256 priceDecimals = tokenManager.getPriceDecimals(currentToken);
+            uint256 tokenValue = (tokenBalance * price) / (10 ** priceDecimals);
             
             // CALCULATE PERCENTAGE (basis points: 10000 = 100%)
             uint256 percentage = (tokenValue * 10000) / totalPoolValue;
@@ -429,11 +430,11 @@ contract ValueCalculator is Ownable {
             TokenValueInfo memory candidateToken = tokenInfos[i];
             
             // CALCULATE REQUIRED AMOUNT WITH 10% BUFFER
-            // Formula: amount = (targetValue * 1.1 * 10^priceFeedDecimals) / price
+            // Formula: amount = (targetValue * 1.1 * 10^priceDecimals) / price
             uint256 targetWithBuffer = (targetValue * 110) / 100; // +10% buffer
             
-            ITokenManagerForModules.TokenInfo memory tokenInfo = tokenManager.getTokenInfo(candidateToken.tokenCode);
-            uint256 requiredAmount = (targetWithBuffer * (10 ** tokenInfo.priceFeedDecimals)) / candidateToken.pricePerToken;
+            uint256 priceDecimals = tokenManager.getPriceDecimals(candidateToken.tokenCode);
+            uint256 requiredAmount = (targetWithBuffer * (10 ** priceDecimals)) / candidateToken.pricePerToken;
             
             // CHECK IF TOKEN HAS SUFFICIENT BALANCE
             if (requiredAmount <= candidateToken.balance) {

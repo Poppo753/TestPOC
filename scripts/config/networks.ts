@@ -52,7 +52,7 @@ export const ARBITRUM_SEPOLIA_CONFIG: NetworkConfig = {
 export const ARBITRUM_MAINNET_CONFIG: NetworkConfig = {
   name: "arbitrum-one",
   chainId: 42161,
-  rpcUrl: process.env.ARBITRUM_MAINNET_RPC_URL || "https://arb1.arbitrum.io/rpc",
+  rpcUrl: process.env.ARBITRUM_RPC_URL || process.env.ARBITRUM_MAINNET_RPC_URL || "https://arb1.arbitrum.io/rpc",
   gasLimit: 1000000,
   gasPrice: "0.1", // 0.1 Gwei
   confirmations: 2,
@@ -68,7 +68,8 @@ export const ARBITRUM_MAINNET_CONFIG: NetworkConfig = {
 export const NETWORK_CONFIGS = {
   localhost: LOCALHOST_CONFIG,
   "arbitrum-sepolia": ARBITRUM_SEPOLIA_CONFIG,
-  "arbitrum-one": ARBITRUM_MAINNET_CONFIG
+  "arbitrum-one": ARBITRUM_MAINNET_CONFIG,
+  "arbitrum": ARBITRUM_MAINNET_CONFIG, // Alias per arbitrum-one
 } as const;
 
 // 🎯 Tipo per i nomi delle reti

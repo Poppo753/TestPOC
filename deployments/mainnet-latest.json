@@ -1,0 +1,19 @@
+{
+  "timestamp": "2025-11-15T00:00:00.787Z",
+  "network": "arbitrum-mainnet",
+  "chainId": 42161,
+  "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+  "contracts": {
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+    "proxyGeneral": "0x8750344c6cf493f4F5d13F52b7F7Bf1d285978e1",
+    "chainlinkAdapter": "0x16a5201814Ba08E8a7c8C1f59f83E0409206761c",
+    "tokenManager": "0xc4c8581a7Cbb4e046adB6A6e9008375F38441517",
+    "swapManager": "0x01269d496E957A54e02cdcd5888957baf317A947",
+    "valueCalculator": "0xE06882B8a0Bb46dE28a4aa4694d41822C255457B",
+    "parameterManager": "0xe5401565c77B41A5206e3E1b6A2b7F54E93bED5e",
+    "emergencyHandler": "0xcaf7DD1cA3A5857893D97BA3A9C029986A5CAc66",
+    "liquidityManager": "0x545b79254F74Ba33958290BB73F2a338509c975d",
+    "uniswapV3Plugin": "0x7ec91aEc1bD85E63D671b23E5deC8157D1f8aE01"
+  },
+  "status": "✅ ALL DEPLOYED SUCCESSFULLY"
+}

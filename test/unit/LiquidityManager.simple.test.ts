@@ -39,13 +39,9 @@ describe("LiquidityManager Contract - Core Tests", function () {
     const mockUSDC = await MockERC20.deploy("USD Coin", "USDC", 6);
     const mockWETH = await MockERC20.deploy("Wrapped Ether", "WETH", 18);
 
-    // Deploy MockChainlinkOracle
-    const MockChainlinkOracle = await ethers.getContractFactory("MockChainlinkOracle");
-    const mockOracle = await MockChainlinkOracle.deploy(
-      ethers.parseUnits("2000", 8), // $2000
-      8,
-      "ETH/USD"
-    );
+    // Deploy MockOracleAdapter for TokenManager
+    const MockOracleAdapter = await ethers.getContractFactory("MockOracleAdapter");
+    const mockOracleAdapter = await MockOracleAdapter.deploy();
 
     // Deploy Beacon
     const Beacon = await ethers.getContractFactory("Beacon");
@@ -57,7 +53,7 @@ describe("LiquidityManager Contract - Core Tests", function () {
     const proxyGeneral = await ProxyGeneral.deploy(beacon.target);
 
     const TokenManager = await ethers.getContractFactory("TokenManager");
-    const tokenManager = await TokenManager.deploy(beacon.target);
+    const tokenManager = await TokenManager.deploy(beacon.target, mockOracleAdapter.target);
 
     const ValueCalculator = await ethers.getContractFactory("ValueCalculator");
     const valueCalculator = await ValueCalculator.deploy(beacon.target);
@@ -80,10 +76,11 @@ describe("LiquidityManager Contract - Core Tests", function () {
     await beacon.updateImplementation("ParameterManager", parameterManager.target);
     await beacon.updateImplementation("LiquidityManager", liquidityManager.target);
 
-    // Setup tokens in TokenManager
-    await tokenManager.manageTokenData(
-      "USDC", mockUSDC.target, mockOracle.target, 6, 8, 3600
-    );
+    // Setup tokens in MockOracleAdapter
+    await mockOracleAdapter.setupToken("USDC", ethers.parseUnits("1", 8), 8, true);
+
+    // Setup tokens in TokenManager (NEW SIGNATURE: 4 params)
+    await tokenManager.manageTokenData("USDC", mockUSDC.target, 6, 3600);
 
     // Set fee recipient
     await liquidityManager.setFeeRecipient(await feeRecipient.getAddress());
@@ -102,7 +99,7 @@ describe("LiquidityManager Contract - Core Tests", function () {
       parameterManager,
       mockUSDC,
       mockWETH,
-      mockOracle,
+      mockOracleAdapter,
       owner,
       user1,
       user2,
