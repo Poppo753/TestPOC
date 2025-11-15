@@ -34,7 +34,23 @@ describe("LF-004: Concurrent Operations Testing", function () {
 
     // Deploy all modules
     const TokenManagerFactory = await ethers.getContractFactory("TokenManager");
-    tokenManager = await TokenManagerFactory.deploy(await beacon.getAddress());
+    // Deploy MockOracleAdapter for TokenManager
+
+    const MockOracleAdapterFactory = await ethers.getContractFactory("MockOracleAdapter");
+
+    const mockOracleAdapter = await MockOracleAdapterFactory.deploy();
+
+    await mockOracleAdapter.waitForDeployment();
+
+    
+
+    tokenManager = await TokenManagerFactory.deploy(
+
+      await beacon.getAddress(),
+
+      await mockOracleAdapter.getAddress()
+
+    );
     await tokenManager.waitForDeployment();
     console.log(`🪙 TokenManager deployed: ${await tokenManager.getAddress()}`);
 

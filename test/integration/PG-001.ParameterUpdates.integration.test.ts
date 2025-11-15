@@ -39,7 +39,23 @@ describe("PG-001: Parameter Updates (Governance Integration)", function () {
 
     // Deploy TokenManager
     const TokenManagerFactory = await ethers.getContractFactory("TokenManager");
-    tokenManager = await TokenManagerFactory.deploy(beacon.target);
+    // Deploy MockOracleAdapter for TokenManager
+
+    const MockOracleAdapterFactory = await ethers.getContractFactory("MockOracleAdapter");
+
+    const mockOracleAdapter = await MockOracleAdapterFactory.deploy();
+
+    await mockOracleAdapter.waitForDeployment();
+
+    
+
+    tokenManager = await TokenManagerFactory.deploy(
+
+      beacon.target,
+
+      await mockOracleAdapter.getAddress()
+
+    );
     console.log(`🪙 TokenManager deployed: ${tokenManager.target}`);
 
     // Deploy SwapManager

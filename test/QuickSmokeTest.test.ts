@@ -64,7 +64,23 @@ describe("⚡ QUICK SMOKE TEST - System Sanity Check", function () {
             console.log("\n📦 Deploying TokenManager...");
             const TokenManagerFactory = await ethers.getContractFactory("TokenManager");
             const beaconAddress = await beacon.getAddress();
-            const tokenManager = await TokenManagerFactory.deploy(beaconAddress);
+            // Deploy MockOracleAdapter for TokenManager
+
+            const MockOracleAdapterFactory = await ethers.getContractFactory("MockOracleAdapter");
+
+            const mockOracleAdapter = await MockOracleAdapterFactory.deploy();
+
+            await mockOracleAdapter.waitForDeployment();
+
+            
+
+            const tokenManager = await TokenManagerFactory.deploy(
+
+              beaconAddress,
+
+              await mockOracleAdapter.getAddress()
+
+            );
             await tokenManager.waitForDeployment();
             const address = await tokenManager.getAddress();
             
@@ -177,7 +193,23 @@ describe("⚡ QUICK SMOKE TEST - System Sanity Check", function () {
             
             // Deploy TokenManager
             const TokenManagerFactory = await ethers.getContractFactory("TokenManager");
-            tokenManager = await TokenManagerFactory.deploy(beaconAddress);
+            // Deploy MockOracleAdapter for TokenManager
+
+            const MockOracleAdapterFactory = await ethers.getContractFactory("MockOracleAdapter");
+
+            const mockOracleAdapter = await MockOracleAdapterFactory.deploy();
+
+            await mockOracleAdapter.waitForDeployment();
+
+            
+
+            tokenManager = await TokenManagerFactory.deploy(
+
+              beaconAddress,
+
+              await mockOracleAdapter.getAddress()
+
+            );
             await tokenManager.waitForDeployment();
             
             // Register in Beacon
@@ -249,7 +281,23 @@ describe("⚡ QUICK SMOKE TEST - System Sanity Check", function () {
         it("✅ Should manage token data in TokenManager", async function () {
             const TokenManagerFactory = await ethers.getContractFactory("TokenManager");
             const beaconAddress = await beacon.getAddress();
-            const tokenManager = await TokenManagerFactory.deploy(beaconAddress);
+            // Deploy MockOracleAdapter for TokenManager
+
+            const MockOracleAdapterFactory = await ethers.getContractFactory("MockOracleAdapter");
+
+            const mockOracleAdapter = await MockOracleAdapterFactory.deploy();
+
+            await mockOracleAdapter.waitForDeployment();
+
+            
+
+            const tokenManager = await TokenManagerFactory.deploy(
+
+              beaconAddress,
+
+              await mockOracleAdapter.getAddress()
+
+            );
             await tokenManager.waitForDeployment();
             
             // Register WETH in Beacon (required for manageTokenData)

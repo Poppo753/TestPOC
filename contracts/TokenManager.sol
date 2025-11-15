@@ -2,14 +2,15 @@
 pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/IBeacon.sol";
 import "./interfaces/IParameterManagerForModules.sol";
+import "./interfaces/IOracleAdapter.sol";
 
 /**
  * @title TokenManager
- * @dev Gestione token registry e Chainlink price feeds per il sistema DeFi modulare
+ * @dev Gestione token registry con oracle modularity tramite IOracleAdapter
+ * @notice Refactored per supportare oracle providers plug & play (Chainlink, Pyth, etc.)
  * @custom:security-contact security@yourdomain.com
  */
 contract TokenManager is Ownable {
@@ -17,14 +18,15 @@ contract TokenManager is Ownable {
         address tokenAddress;
         uint8 tokenDecimals;
         string tokenCode;
-        address priceFeed;
-        uint8 priceFeedDecimals;
         bool isActive;
         uint256 lastPriceTimestamp;
         uint256 lastPrice;
         uint256 heartbeat;
         uint256 errorCount;
     }
+
+    /// @notice Oracle adapter for price feeds (pluggable)
+    IOracleAdapter public oracleAdapter;
 
     /// @notice Mapping dei token data per token code
     mapping(string => TokenInfo) private tokenData;
@@ -49,48 +51,69 @@ contract TokenManager is Ownable {
 
     // ==================== EVENTS ====================
     
-    event TokenAdded(string indexed tokenCode, address tokenAddress, address priceFeed);
+    event TokenAdded(string indexed tokenCode, address tokenAddress, address oracleAdapter);
     event TokenRemoved(string indexed tokenCode);
     event HeartbeatUpdated(string indexed tokenCode, uint256 newHeartbeat);
     event TokenError(string indexed tokenCode, string errorMessage);
     event PriceStale(string indexed tokenCode, uint256 lastUpdateTime);
     event ErrorThresholdReached(string indexed tokenCode);
     event TokenErrorsReset(string indexed tokenCode);
+    event OracleAdapterUpdated(address indexed oldAdapter, address indexed newAdapter);
 
     // ==================== CONSTRUCTOR ====================
 
     /**
-     * @dev Constructor che imposta il Beacon address
+     * @dev Constructor che imposta Beacon e OracleAdapter iniziale
      * @param _beacon Indirizzo del contratto Beacon
+     * @param _oracleAdapter Indirizzo del contratto OracleAdapter iniziale
      */
-    constructor(address _beacon) Ownable() {
+    constructor(address _beacon, address _oracleAdapter) Ownable() {
         require(_beacon != address(0), "Invalid beacon address");
+        require(_oracleAdapter != address(0), "Invalid oracle adapter");
         beacon = _beacon;
+        oracleAdapter = IOracleAdapter(_oracleAdapter);
         tokenCodesCount = 0;
     }
 
+    // ==================== ORACLE ADAPTER MANAGEMENT ====================
+
     /**
-     * @notice Adds or updates a token in the pool
+     * @notice Update oracle adapter to a new implementation
+     * @dev Owner only - allows switching between oracle providers (Chainlink, Pyth, etc.)
+     * @param _newAdapter Address of new IOracleAdapter implementation
+     */
+    function setOracleAdapter(address _newAdapter) external onlyOwner {
+        require(_newAdapter != address(0), "Invalid adapter address");
+        
+        address oldAdapter = address(oracleAdapter);
+        oracleAdapter = IOracleAdapter(_newAdapter);
+        
+        emit OracleAdapterUpdated(oldAdapter, _newAdapter);
+    }
+
+    // ==================== TOKEN MANAGEMENT ====================
+
+    /**
+     * @notice Adds or updates a token in the pool (REFACTORED for oracle modularity)
+     * @dev Oracle adapter must support token BEFORE calling this
      * @param _tokenCode Unique identifier for the token
      * @param _tokenAddress Address of the ERC20 token contract
-     * @param _priceFeed Address of the Chainlink price feed
      * @param _tokenDecimals Number of decimals for the token
-     * @param _priceFeedDecimals Number of decimals in price feed
      * @param _heartbeat Maximum time between price updates
      */
     function manageTokenData(
         string memory _tokenCode,
         address _tokenAddress,
-        address _priceFeed,
         uint8 _tokenDecimals,
-        uint8 _priceFeedDecimals,
         uint256 _heartbeat
     ) external onlyOwner {
         // VALIDAZIONI CRITICHE
         require(bytes(_tokenCode).length > 0 && bytes(_tokenCode).length <= 16, "Invalid token code");
         require(_tokenAddress != address(0), "Invalid token address");
-        require(_priceFeed != address(0), "Invalid price feed address");
         require(_heartbeat > 0, "Invalid heartbeat");
+        
+        // VERIFY ORACLE SUPPORTS TOKEN (NEW VALIDATION)
+        require(oracleAdapter.supportsToken(_tokenCode), "Token not supported by oracle");
         
         // WETH EXCLUSION CHECK (CRITICO)
         address wethAddress = IBeacon(beacon).getImplementation("WETH");
@@ -103,28 +126,11 @@ contract TokenManager is Ownable {
             tokenCodesCount++;
         }
         
-        // VALIDAZIONE PRICE FEED CHAINLINK COMPLETA
-        try AggregatorV3Interface(_priceFeed).latestRoundData() returns (
-            uint80 roundId,
-            int256 price,
-            uint256,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        ) {
-            require(price > 0, "Invalid price feed");
-            require(updatedAt > 0, "Round not complete");  // VALIDAZIONE MANCANTE
-            require(answeredInRound >= roundId, "Stale price feed");  // VALIDAZIONE CRITICA MANCANTE
-        } catch {
-            revert("Price feed validation failed");
-        }
-        
-        // AGGIORNA TOKEN DATA
+        // AGGIORNA TOKEN DATA (REMOVED price feed params)
         tokenData[_tokenCode] = TokenInfo({
             tokenAddress: _tokenAddress,
             tokenDecimals: _tokenDecimals,
             tokenCode: _tokenCode,
-            priceFeed: _priceFeed,
-            priceFeedDecimals: _priceFeedDecimals,
             isActive: true,
             lastPriceTimestamp: 0,
             lastPrice: 0,
@@ -135,7 +141,60 @@ contract TokenManager is Ownable {
         // Reset error count se token esistente
         tokenErrors[_tokenCode] = 0;
         
-        emit TokenAdded(_tokenCode, _tokenAddress, _priceFeed);
+        emit TokenAdded(_tokenCode, _tokenAddress, address(oracleAdapter));
+    }
+
+    /**
+     * @notice Adds or updates a token in the pool (LEGACY - backward compatibility)
+     * @dev Kept for backward compatibility - ignores price feed params
+     * @param _tokenCode Unique identifier for the token
+     * @param _tokenAddress Address of the ERC20 token contract
+     * @param _tokenDecimals Number of decimals for the token
+     * @param _heartbeat Maximum time between price updates
+     */
+    function manageTokenData(
+        string memory _tokenCode,
+        address _tokenAddress,
+        address /* _priceFeed */,
+        uint8 _tokenDecimals,
+        uint8 /* _priceFeedDecimals */,
+        uint256 _heartbeat
+    ) external onlyOwner {
+        // LEGACY FUNCTION - duplicates logic for backward compatibility
+        // Price feed params are IGNORED (oracle adapter handles price feeds now)
+        
+        // VALIDAZIONI CRITICHE
+        require(bytes(_tokenCode).length > 0 && bytes(_tokenCode).length <= 16, "Invalid token code");
+        require(_tokenAddress != address(0), "Invalid token address");
+        require(_heartbeat > 0, "Invalid heartbeat");
+        
+        // VERIFY ORACLE SUPPORTS TOKEN
+        require(oracleAdapter.supportsToken(_tokenCode), "Token not supported by oracle");
+        
+        // WETH EXCLUSION CHECK (CRITICO)
+        address wethAddress = IBeacon(beacon).getImplementation("WETH");
+        require(_tokenAddress != wethAddress, "Cannot add WETH as token");
+        
+        // MAX TOKENS LIMIT CHECK
+        if (!tokenData[_tokenCode].isActive) {
+            require(tokenCodesCount < maxTokensPerOperation, "Too many tokens");
+            tokenCodes.push(_tokenCode);
+            tokenCodesCount++;
+        }
+
+        // UPDATE/ADD TOKEN INFO
+        tokenData[_tokenCode] = TokenInfo({
+            tokenAddress: _tokenAddress,
+            tokenDecimals: _tokenDecimals,
+            tokenCode: _tokenCode,
+            isActive: true,
+            lastPriceTimestamp: 0,
+            lastPrice: 0,
+            heartbeat: _heartbeat,
+            errorCount: 0
+        });
+
+        emit TokenAdded(_tokenCode, _tokenAddress, address(oracleAdapter));
     }
 
     /**
@@ -179,14 +238,8 @@ contract TokenManager is Ownable {
     }
 
     /**
-     * @notice Gets the latest price for a token from Chainlink without events
-     * @param _tokenCode The token to get the price for
-     * @return price The current price
-     * @return updatedAt The timestamp of the price
-     * @return isStale Whether the price is considered stale
-     */
-    /**
-     * @notice Gets the latest price for a token from Chainlink with complete validations
+     * @notice Gets the latest price for a token via oracle adapter
+     * @dev CRITICAL: Interface remains IDENTICAL for backward compatibility
      * @param _tokenCode The token to get the price for
      * @return price The current price
      * @return updatedAt The timestamp of the price
@@ -204,28 +257,18 @@ contract TokenManager is Ownable {
         // VALIDAZIONI
         require(tokenData[_tokenCode].isActive, "Token not active");
 
-        TokenInfo memory token = tokenData[_tokenCode];
-        AggregatorV3Interface priceFeed = AggregatorV3Interface(token.priceFeed);
+        // DELEGATE TO ORACLE ADAPTER (NEW LOGIC)
+        (uint256 adapterPrice, uint256 timestamp, bool isValid) = oracleAdapter.getPrice(_tokenCode);
         
-        // LOGICA CHAINLINK CON VALIDAZIONI COMPLETE
-        (
-            uint80 roundId,
-            int256 rawPrice,
-            ,
-            uint256 timestamp,
-            uint80 answeredInRound
-        ) = priceFeed.latestRoundData();
-
-        // VALIDAZIONI CHAINLINK COMPLETE
-        require(rawPrice > 0, "Invalid price");
-        require(timestamp > 0, "Round not complete");  // VALIDAZIONE MANCANTE AGGIUNTA
-        require(answeredInRound >= roundId, "Stale price");  // VALIDAZIONE CRITICA AGGIUNTA
-
-        return (
-            uint256(rawPrice),
-            timestamp,
-            block.timestamp - timestamp > token.heartbeat
-        );
+        // Revert if oracle returns stale/invalid price
+        if (!isValid) {
+            revert IOracleAdapter.StalePrice(timestamp, 0);
+        }
+        
+        // Convert isValid to isStale (always false here since we reverted if invalid)
+        bool priceIsStale = false;
+        
+        return (adapterPrice, timestamp, priceIsStale);
     }
 
     /**

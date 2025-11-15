@@ -83,7 +83,23 @@ describe("Performance Benchmarks - TEST-002", function () {
         await parameterManager.waitForDeployment();
 
         const TokenManagerFactory = await ethers.getContractFactory("TokenManager");
-        tokenManager = await TokenManagerFactory.deploy(await beacon.getAddress());
+        // Deploy MockOracleAdapter for TokenManager
+
+        const MockOracleAdapterFactory = await ethers.getContractFactory("MockOracleAdapter");
+
+        const mockOracleAdapter = await MockOracleAdapterFactory.deploy();
+
+        await mockOracleAdapter.waitForDeployment();
+
+        
+
+        tokenManager = await TokenManagerFactory.deploy(
+
+          await beacon.getAddress(),
+
+          await mockOracleAdapter.getAddress()
+
+        );
         await tokenManager.waitForDeployment();
 
         const LiquidityManagerFactory = await ethers.getContractFactory("LiquidityManager");

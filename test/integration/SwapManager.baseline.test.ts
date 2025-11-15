@@ -87,10 +87,15 @@ describe("SwapManager - Baseline Measurements (Phase 0.4)", function () {
         });
         
         it("Should deploy TokenManager", async function () {
+            // Deploy MockOracleAdapter for TokenManager
+            const MockOracleAdapterFactory = await ethers.getContractFactory("MockOracleAdapter");
+            const mockOracleAdapter = await MockOracleAdapterFactory.deploy();
+            await mockOracleAdapter.waitForDeployment();
+            
             const TokenManagerFactory = await ethers.getContractFactory("TokenManager");
             tokenManager = await TokenManagerFactory.deploy(
                 await beacon.getAddress(),
-                await proxyGeneral.getAddress()
+                await mockOracleAdapter.getAddress()
             );
             await tokenManager.waitForDeployment();
             

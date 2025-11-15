@@ -17,9 +17,7 @@ import { Logger } from "../../config/config";
 interface AddTokenOptions extends ScriptOptions {
   tokenCode: string;
   tokenAddress: string;
-  priceFeedAddress: string;
   tokenDecimals?: number;
-  priceFeedDecimals?: number;
   heartbeat?: number;
 }
 
@@ -30,7 +28,6 @@ export class AddTokenScript extends BaseScript {
     super(options);
     this.addOptions = {
       tokenDecimals: 18,
-      priceFeedDecimals: 8,
       heartbeat: 3600, // 1 hour default
       ...options
     };

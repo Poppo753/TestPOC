@@ -4,6 +4,7 @@ pragma solidity ^0.8.19;
 /**
  * 🎭 MOCK CHAINLINK ORACLE
  * Mock implementazione di Chainlink AggregatorV3Interface per test
+ * Enhanced version con supporto completo per testing ChainlinkAdapter
  */
 contract MockChainlinkOracle {
     int256 private _price;
@@ -11,6 +12,7 @@ contract MockChainlinkOracle {
     string private _description;
     uint256 private _updatedAt;
     uint80 private _roundId;
+    uint80 private _answeredInRound;
     bool private _shouldFail;
 
     event AnswerUpdated(int256 indexed current, uint256 indexed roundId, uint256 updatedAt);
@@ -25,6 +27,7 @@ contract MockChainlinkOracle {
         _description = description_;
         _updatedAt = block.timestamp;
         _roundId = 1;
+        _answeredInRound = 1;  // Initialize to match roundId
         _shouldFail = false;
     }
 
@@ -35,7 +38,22 @@ contract MockChainlinkOracle {
         _price = newPrice;
         _updatedAt = block.timestamp;
         _roundId++;
+        _answeredInRound = _roundId;  // Keep in sync
         emit AnswerUpdated(newPrice, _roundId, _updatedAt);
+    }
+
+    /**
+     * @notice Set custom answeredInRound (for testing stale data)
+     */
+    function setAnsweredInRound(uint80 answeredInRound) external {
+        _answeredInRound = answeredInRound;
+    }
+
+    /**
+     * @notice Set custom updatedAt timestamp (for testing staleness)
+     */
+    function setUpdatedAt(uint256 timestamp) external {
+        _updatedAt = timestamp;
     }
 
     /**
@@ -73,7 +91,7 @@ contract MockChainlinkOracle {
             _price,
             _updatedAt - 100, // startedAt
             _updatedAt,
-            _roundId
+            _answeredInRound  // Use stored value (can be different from roundId for testing)
         );
     }
 
