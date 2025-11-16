@@ -7,7 +7,7 @@ describe("ValueCalculator Contract", function () {
   let beacon: any;
   let tokenManager: any;
   let proxyGeneral: any;
-  let mockOracle: any;
+  let mockOracleAdapter: any;
   let mockUSDC: any;
   let mockWBTC: any;
   let owner: Signer;
@@ -44,14 +44,6 @@ describe("ValueCalculator Contract", function () {
     mockUSDC = await MockERC20.deploy("USD Coin", "USDC", 6);
     mockWBTC = await MockERC20.deploy("Wrapped Bitcoin", "WBTC", 8);
 
-    // Deploy MockChainlinkOracle
-    const MockChainlinkOracle = await ethers.getContractFactory("MockChainlinkOracle");
-    mockOracle = await MockChainlinkOracle.deploy(
-      MOCK_PRICES.USDC,  // price
-      8,                 // decimals
-      "USDC/USD"        // description
-    );
-
     // Deploy Beacon
     const Beacon = await ethers.getContractFactory("Beacon");
     beacon = await Beacon.deploy();
@@ -66,7 +58,7 @@ describe("ValueCalculator Contract", function () {
 
     // Deploy MockOracleAdapter for TokenManager
     const MockOracleAdapter = await ethers.getContractFactory("MockOracleAdapter");
-    const mockOracleAdapter = await MockOracleAdapter.deploy();
+    mockOracleAdapter = await MockOracleAdapter.deploy();
 
     // Deploy TokenManager
     const TokenManager = await ethers.getContractFactory("TokenManager");
@@ -381,7 +373,8 @@ describe("ValueCalculator Contract", function () {
 
       it("should detect validation issues", async function () {
         // Simulate oracle failure for all tokens
-        await mockOracle.setShouldFail(true);
+        await mockOracleAdapter.setStale(TOKEN_CODES.USDC);
+        await mockOracleAdapter.setStale(TOKEN_CODES.WBTC);
         
         const [isValid, errorReason] = await valueCalculator.validatePoolValue();
         

@@ -329,8 +329,8 @@ describe("SwapManager Contract - Core Tests", function () {
       const estimatedGas = await ethers.provider.estimateGas(deployTx);
       console.log(`✅ SwapManager deployment gas usage: ${estimatedGas}`);
       
-      // Should deploy under 5M gas
-      expect(estimatedGas).to.be.lessThan(5000000);
+      // Should deploy under 5.1M gas (updated after oracle modularity)
+      expect(estimatedGas).to.be.lessThan(5100000);
     });
 
     it("should have reasonable gas for admin operations", async function () {
