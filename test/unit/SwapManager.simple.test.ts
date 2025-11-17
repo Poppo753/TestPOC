@@ -65,8 +65,8 @@ describe("SwapManager Contract - Core Tests", function () {
     await mockOracleAdapter.setupToken("WBTC", ethers.parseUnits("30000", 8), 8, true);
 
     // Setup tokens in TokenManager (NEW SIGNATURE: 4 params)
-    await tokenManager.manageTokenData("USDC", mockUSDC.target, 6, 3600);
-    await tokenManager.manageTokenData("WBTC", mockWBTC.target, 8, 3600);
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"]("USDC", mockUSDC.target, 6, 3600);
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"]("WBTC", mockWBTC.target, 8, 3600);
 
     // Set router address to a contract (use mockUSDC as mock router)
     await swapManager.setSimpleSwapRouter(mockUSDC.target);
@@ -105,11 +105,22 @@ describe("SwapManager Contract - Core Tests", function () {
 
   describe("📋 Deployment & Basic Functions", function () {
     it("should deploy with correct initial state", async function () {
-      expect(await swapManager.beacon()).to.equal(beacon.target);
-      expect(await swapManager.owner()).to.equal(await owner.getAddress());
-      expect(await swapManager.maxSlippage()).to.equal(DEFAULT_MAX_SLIPPAGE);
-      expect(await swapManager.swapsEnabled()).to.be.true;
-      expect(await swapManager.simpleSwapRouter()).to.equal(mockUSDC.target);
+      const smAddress = await swapManager.getAddress();
+      const beaconAddress = await swapManager.beacon();
+      const ownerAddress = await swapManager.owner();
+      const maxSlippage = await swapManager.maxSlippage();
+      const swapsEnabled = await swapManager.swapsEnabled();
+      const routerAddress = await swapManager.simpleSwapRouter();
+      
+      expect(beaconAddress).to.equal(beacon.target);
+      expect(ownerAddress).to.equal(await owner.getAddress());
+      expect(maxSlippage).to.equal(DEFAULT_MAX_SLIPPAGE);
+      expect(swapsEnabled).to.be.true;
+      expect(routerAddress).to.equal(mockUSDC.target);
+      
+      if (this.test) {
+        this.test.title += ` [Address: ${smAddress.slice(0, 10)}...${smAddress.slice(-8)} | Slippage: ${Number(maxSlippage)/100}% | Enabled: ${swapsEnabled}]`;
+      }
     });
 
     it("should have expected function signatures", async function () {

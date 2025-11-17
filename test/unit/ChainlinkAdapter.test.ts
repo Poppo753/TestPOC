@@ -44,21 +44,29 @@ describe("ChainlinkAdapter - Unit Tests", function () {
     describe("Configuration", function () {
         
         it("Should add price feed correctly", async function () {
+            const oracleAddress = await mockOracle.getAddress();
+            const tokenCode = "USDC";
+            const heartbeat = 3600;
+            
             await adapter.setPriceFeed(
-                "USDC",
-                await mockOracle.getAddress(),
+                tokenCode,
+                oracleAddress,
                 8,
-                3600 // 1 hour heartbeat
+                heartbeat // 1 hour heartbeat
             );
 
-            expect(await adapter.supportsToken("USDC")).to.be.true;
+            expect(await adapter.supportsToken(tokenCode)).to.be.true;
             
-            const config = await adapter.getFeedConfig("USDC");
-            expect(config.feedAddress).to.equal(await mockOracle.getAddress());
+            const config = await adapter.getFeedConfig(tokenCode);
+            expect(config.feedAddress).to.equal(oracleAddress);
             expect(config.decimals).to.equal(8);
-            expect(config.heartbeat).to.equal(3600);
+            expect(config.heartbeat).to.equal(heartbeat);
             expect(config.isActive).to.be.true;
             expect(config.errorCount).to.equal(0);
+            
+            if (this.test) {
+                this.test.title += ` [Token: ${tokenCode} | Oracle: ${oracleAddress.slice(0, 6)}...${oracleAddress.slice(-4)} | Heartbeat: ${heartbeat/3600}h | Active: ${config.isActive}]`;
+            }
         });
 
         it("Should emit PriceFeedAdded event", async function () {

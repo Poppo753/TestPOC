@@ -110,12 +110,21 @@ describe("TokenManager Contract", function () {
 
   describe("📋 Deployment", function () {
     it("should deploy with correct initial state", async function () {
-      expect(await tokenManager.getAddress()).to.be.properAddress;
-      expect(await tokenManager.owner()).to.equal(owner.address);
+      const tmAddress = await tokenManager.getAddress();
+      const ownerAddr = await tokenManager.owner();
+      const maxErrors = await tokenManager.maxErrors();
+      const maxTokens = await tokenManager.maxTokensPerOperation();
+      
+      expect(tmAddress).to.be.properAddress;
+      expect(ownerAddr).to.equal(owner.address);
       expect(await tokenManager.beacon()).to.equal(await beacon.getAddress());
       expect(await tokenManager.tokenCodesCount()).to.equal(0);
-      expect(await tokenManager.maxErrors()).to.equal(3);
-      expect(await tokenManager.maxTokensPerOperation()).to.equal(10);
+      expect(maxErrors).to.equal(3);
+      expect(maxTokens).to.equal(10);
+      
+      if (this.test) {
+        this.test.title += ` [Address: ${tmAddress.slice(0, 10)}...${tmAddress.slice(-8)} | MaxErrors: ${maxErrors} | MaxTokens: ${maxTokens}]`;
+      }
     });
 
     it("should have expected function signatures", async function () {
@@ -249,9 +258,19 @@ describe("TokenManager Contract", function () {
     describe("getTokenPrice", function () {
       it("should return current token price", async function () {
         const [price, updatedAt, isStale] = await tokenManager.getTokenPrice(TOKEN_CODES.USDC);
+        
+        console.log(`    💵 Token: ${TOKEN_CODES.USDC}`);
+        console.log(`    💰 Price: $${ethers.formatUnits(price, 8)}`);
+        console.log(`    🕒 Updated: ${new Date(Number(updatedAt) * 1000).toISOString()}`);
+        console.log(`    ✅ Stale: ${isStale}`);
+        
         expect(price.toString()).to.equal(MOCK_PRICES.WETH.toString()); // Compare as strings to avoid BigInt serialization
         expect(updatedAt).to.be.greaterThan(0);
         expect(isStale).to.be.false;
+        
+        if (this.test) {
+          this.test.title += ` [Token: ${TOKEN_CODES.USDC} | Price: $${ethers.formatUnits(price, 8)} | Stale: ${isStale}]`;
+        }
       });
 
       it("should revert for inactive token", async function () {

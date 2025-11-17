@@ -80,8 +80,8 @@ describe("SwapManager Contract", function () {
     await mockOracleAdapter.setupToken("WBTC", ethers.parseUnits("30000", 8), 8, true);
 
     // Setup tokens in TokenManager (NEW SIGNATURE: 4 params)
-    await tokenManager.manageTokenData("USDC", mockUSDC.target, 6, 3600);
-    await tokenManager.manageTokenData("WBTC", mockWBTC.target, 8, 3600);
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"]("USDC", mockUSDC.target, 6, 3600);
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"]("WBTC", mockWBTC.target, 8, 3600);
 
     // Set router address to MockSimpleSwap
     await swapManager.setSimpleSwapRouter(mockSimpleSwap.target);
@@ -152,12 +152,18 @@ describe("SwapManager Contract", function () {
 
   describe("📋 Deployment & Basic Functions", function () {
     it("should deploy with correct initial state", async function () {
+      const smAddress = await swapManager.getAddress();
+      const maxSlippage = await swapManager.maxSlippage();
+      const swapsEnabled = await swapManager.swapsEnabled();
+      
       expect(await swapManager.beacon()).to.equal(beacon.target);
       expect(await swapManager.owner()).to.equal(await owner.getAddress());
-      expect(await swapManager.maxSlippage()).to.equal(DEFAULT_MAX_SLIPPAGE);
-      expect(await swapManager.swapsEnabled()).to.be.true;
-      // Note: simpleSwapRouter should be mockSimpleSwap.target but we don't have it in scope here
-      // expect(await swapManager.simpleSwapRouter()).to.equal(mockSimpleSwap.target);
+      expect(maxSlippage).to.equal(DEFAULT_MAX_SLIPPAGE);
+      expect(swapsEnabled).to.be.true;
+      
+      if (this.test) {
+        this.test.title += ` [Address: ${smAddress.slice(0, 10)}...${smAddress.slice(-8)} | Slippage: ${Number(maxSlippage)/100}% | Enabled: ${swapsEnabled}]`;
+      }
     });
 
     it("should have expected function signatures", async function () {
@@ -193,10 +199,15 @@ describe("SwapManager Contract", function () {
   describe("🔧 Administrative Functions", function () {
     describe("setMaxSlippage", function () {
       it("should allow owner to update max slippage", async function () {
+        const oldSlippage = await swapManager.maxSlippage();
         const newSlippage = 500; // 5%
+        
+        console.log(`    🔄 Updating slippage: ${Number(oldSlippage) / 100}% → ${newSlippage / 100}%`);
         
         await swapManager.setMaxSlippage(newSlippage);
         expect(await swapManager.maxSlippage()).to.equal(newSlippage);
+        
+        console.log(`    ✅ Slippage updated successfully`);
       });
 
       it("should prevent non-owner from updating slippage", async function () {
@@ -1438,7 +1449,7 @@ describe("SwapManager Contract", function () {
       ).to.be.revertedWith("Receive token is inactive");
       
       // Restore WBTC
-      await tokenManager.manageTokenData(
+      await tokenManager["manageTokenData(string,address,uint8,uint256)"](
         "WBTC", mockWBTC.target, 8, 3600
       );
       

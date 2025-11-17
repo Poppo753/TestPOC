@@ -244,14 +244,14 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
         await oracleAdapterMock.setDecimals("WBTC", 8);
         
         // Register tokens in TokenManager (NEW API with 4 params)
-        await tokenManager.manageTokenData(
+        await tokenManager["manageTokenData(string,address,uint8,uint256)"](
             "USDC",
             await usdc.getAddress(),
             6, // decimals
             3600 // heartbeat
         );
         
-        await tokenManager.manageTokenData(
+        await tokenManager["manageTokenData(string,address,uint8,uint256)"](
             "WBTC",
             await wbtc.getAddress(),
             8, // decimals

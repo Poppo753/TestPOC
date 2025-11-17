@@ -80,7 +80,7 @@ describe("EmergencyHandler Contract - Core Tests", function () {
     await mockOracleAdapter.setupToken("USDC", ethers.parseUnits("1", 8), 8, true);
 
     // Setup tokens in TokenManager (NEW SIGNATURE: 4 params)
-    await tokenManager.manageTokenData("USDC", mockUSDC.target, 6, 3600);
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"]("USDC", mockUSDC.target, 6, 3600);
 
     // Mint some tokens to ProxyGeneral for testing
     await mockUSDC.mint(proxyGeneral.target, ethers.parseUnits("10000", 6));
@@ -117,13 +117,22 @@ describe("EmergencyHandler Contract - Core Tests", function () {
 
   describe("📋 Deployment & Basic Functions", function () {
     it("should deploy with correct initial state", async function () {
-      expect(await emergencyHandler.beacon()).to.equal(beacon.target);
-      expect(await emergencyHandler.owner()).to.equal(await owner.getAddress());
-      expect(await emergencyHandler.unpauseTimelock()).to.equal(TIMELOCK_DURATION);
+      const ehAddress = await emergencyHandler.getAddress();
+      const beaconAddress = await emergencyHandler.beacon();
+      const ownerAddress = await emergencyHandler.owner();
+      const unpauseTimelock = await emergencyHandler.unpauseTimelock();
+      
+      expect(beaconAddress).to.equal(beacon.target);
+      expect(ownerAddress).to.equal(await owner.getAddress());
+      expect(unpauseTimelock).to.equal(TIMELOCK_DURATION);
       
       const state = await emergencyHandler.getEmergencyState();
       expect(state.isActive).to.be.false;
       expect(state.activatedAt).to.equal(0);
+      
+      if (this.test) {
+        this.test.title += ` [Address: ${ehAddress.slice(0, 10)}...${ehAddress.slice(-8)} | Paused: ${state.isActive} | Timelock: ${Number(unpauseTimelock)/3600}h]`;
+      }
     });
 
     it("should have expected function signatures", async function () {

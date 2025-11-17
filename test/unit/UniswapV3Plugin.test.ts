@@ -54,7 +54,15 @@ describe("UniswapV3Plugin", function () {
         it("Should deploy with correct simpleSwap address", async function () {
             const { plugin, simpleSwap } = await deployFixture();
             
-            expect(await plugin.simpleSwap()).to.equal(await simpleSwap.getAddress());
+            const pluginAddress = await plugin.getAddress();
+            const simpleSwapAddress = await simpleSwap.getAddress();
+            const configuredSwap = await plugin.simpleSwap();
+            
+            expect(configuredSwap).to.equal(simpleSwapAddress);
+            
+            if (this.test) {
+                this.test.title += ` [Plugin: ${pluginAddress.slice(0, 10)}...${pluginAddress.slice(-8)} | SimpleSwap: ${simpleSwapAddress.slice(0, 6)}...${simpleSwapAddress.slice(-4)}]`;
+            }
         });
         
         it("Should revert if simpleSwap is zero address", async function () {

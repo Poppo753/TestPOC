@@ -52,6 +52,11 @@ describe("PG-005: Governance Emergency (Crisis Management)", function () {
     beacon = await BeaconFactory.deploy();
     console.log(`📡 Beacon deployed: ${beacon.target}`);
 
+    // Deploy ChainlinkAdapter
+    const ChainlinkAdapterFactory = await ethers.getContractFactory("ChainlinkAdapter");
+    const chainlinkAdapter = await ChainlinkAdapterFactory.deploy();
+    console.log(`🔗 ChainlinkAdapter deployed: ${chainlinkAdapter.target}`);
+
     // Deploy ParameterManager
     const ParameterManagerFactory = await ethers.getContractFactory("ParameterManager");
     parameterManager = await ParameterManagerFactory.deploy(beacon.target);
@@ -59,7 +64,7 @@ describe("PG-005: Governance Emergency (Crisis Management)", function () {
 
     // Deploy TokenManager
     const TokenManagerFactory = await ethers.getContractFactory("TokenManager");
-    tokenManager = await TokenManagerFactory.deploy(beacon.target);
+    tokenManager = await TokenManagerFactory.deploy(beacon.target, chainlinkAdapter.target);
     console.log(`🪙 TokenManager deployed: ${tokenManager.target}`);
 
     // Deploy SwapManager

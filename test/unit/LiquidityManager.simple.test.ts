@@ -80,7 +80,7 @@ describe("LiquidityManager Contract - Core Tests", function () {
     await mockOracleAdapter.setupToken("USDC", ethers.parseUnits("1", 8), 8, true);
 
     // Setup tokens in TokenManager (NEW SIGNATURE: 4 params)
-    await tokenManager.manageTokenData("USDC", mockUSDC.target, 6, 3600);
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"]("USDC", mockUSDC.target, 6, 3600);
 
     // Set fee recipient
     await liquidityManager.setFeeRecipient(await feeRecipient.getAddress());
@@ -126,11 +126,22 @@ describe("LiquidityManager Contract - Core Tests", function () {
 
   describe("📋 Deployment & Basic Functions", function () {
     it("should deploy with correct initial state", async function () {
-      expect(await liquidityManager.beacon()).to.equal(beacon.target);
-      expect(await liquidityManager.owner()).to.equal(await owner.getAddress());
-      expect(await liquidityManager.depositFee()).to.equal(0); // Default is 0
-      expect(await liquidityManager.withdrawFee()).to.equal(0); // Default is 0
-      expect(await liquidityManager.feeRecipient()).to.equal(await feeRecipient.getAddress());
+      const lmAddress = await liquidityManager.getAddress();
+      const beaconAddress = await liquidityManager.beacon();
+      const ownerAddress = await liquidityManager.owner();
+      const depositFee = await liquidityManager.depositFee();
+      const withdrawFee = await liquidityManager.withdrawFee();
+      const feeRecipientAddress = await liquidityManager.feeRecipient();
+      
+      expect(beaconAddress).to.equal(beacon.target);
+      expect(ownerAddress).to.equal(await owner.getAddress());
+      expect(depositFee).to.equal(0); // Default is 0
+      expect(withdrawFee).to.equal(0); // Default is 0
+      expect(feeRecipientAddress).to.equal(await feeRecipient.getAddress());
+      
+      if (this.test) {
+        this.test.title += ` [Address: ${lmAddress.slice(0, 10)}...${lmAddress.slice(-8)} | DepositFee: ${Number(depositFee)/100}% | WithdrawFee: ${Number(withdrawFee)/100}%]`;
+      }
     });
 
     it("should have expected function signatures", async function () {

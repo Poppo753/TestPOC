@@ -73,9 +73,15 @@ describe("SF-001: Complete Swap Operations (Token A → Token B)", function () {
     await beacon.waitForDeployment();
     console.log(`📡 Beacon deployed: ${await beacon.getAddress()}`);
 
+    // Deploy MockOracleAdapter
+    const MockOracleAdapterFactory = await ethers.getContractFactory("MockOracleAdapter");
+    const mockOracleAdapter = await MockOracleAdapterFactory.deploy();
+    await mockOracleAdapter.waitForDeployment();
+    console.log(`🔗 MockOracleAdapter deployed: ${await mockOracleAdapter.getAddress()}`);
+
     // Deploy all modules
     const TokenManagerFactory = await ethers.getContractFactory("TokenManager");
-    tokenManager = await TokenManagerFactory.deploy(await beacon.getAddress());
+    tokenManager = await TokenManagerFactory.deploy(await beacon.getAddress(), await mockOracleAdapter.getAddress());
     await tokenManager.waitForDeployment();
     console.log(`🪙 TokenManager deployed: ${await tokenManager.getAddress()}`);
 

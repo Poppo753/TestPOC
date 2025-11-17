@@ -91,7 +91,7 @@ describe("🔗 Oracle Adapter - Integration Tests", function () {
         );
 
         // Add token to TokenManager
-        await tokenManager.manageTokenData(TOKEN_CODES.USDC, await mockToken.getAddress(), 18, 3600);
+        await tokenManager["manageTokenData(string,address,uint8,uint256)"](TOKEN_CODES.USDC, await mockToken.getAddress(), 18, 3600);
     });
 
     // ==================== ORACLE ADAPTER SWITCHING ====================
@@ -176,8 +176,8 @@ describe("🔗 Oracle Adapter - Integration Tests", function () {
             const wbtcToken = await (await ethers.getContractFactory("MockERC20")).deploy("Wrapped Bitcoin", "WBTC", 8);
             const wethToken = await (await ethers.getContractFactory("MockERC20")).deploy("Wrapped Ether", "WETH", 18);
             
-            await tokenManager.manageTokenData(TOKEN_CODES.WBTC, await wbtcToken.getAddress(), 8, 3600);
-            await tokenManager.manageTokenData(TOKEN_CODES.WETH, await wethToken.getAddress(), 18, 3600);
+            await tokenManager["manageTokenData(string,address,uint8,uint256)"](TOKEN_CODES.WBTC, await wbtcToken.getAddress(), 8, 3600);
+            await tokenManager["manageTokenData(string,address,uint8,uint256)"](TOKEN_CODES.WETH, await wethToken.getAddress(), 18, 3600);
         });
 
         it("Should get prices for multiple tokens from same adapter", async function () {
@@ -248,10 +248,10 @@ describe("🔗 Oracle Adapter - Integration Tests", function () {
         it("Should detect stale prices through adapter", async function () {
             await mockOracleAdapter.setStale(TOKEN_CODES.USDC);
             
-            const [price, , isStale] = await tokenManager.getTokenPrice(TOKEN_CODES.USDC);
-            
-            expect(price).to.be.gt(0); // Price still returned
-            expect(isStale).to.be.true; // But marked as stale
+            // TokenManager reverts when adapter returns isValid=false
+            await expect(
+                tokenManager.getTokenPrice(TOKEN_CODES.USDC)
+            ).to.be.revertedWithCustomError(tokenManager, "StalePrice");
         });
 
         it("Should handle token not supported by adapter", async function () {
@@ -286,30 +286,35 @@ describe("🔗 Oracle Adapter - Integration Tests", function () {
             await mockOracleAdapter.setStale(TOKEN_CODES.USDC);
             await mockOracleAdapter.setStale(TOKEN_CODES.WBTC);
             
-            const [, , isStale] = await tokenManager.getTokenPrice(TOKEN_CODES.USDC);
-            expect(isStale).to.be.true;
+            // Should revert with stale price
+            await expect(
+                tokenManager.getTokenPrice(TOKEN_CODES.USDC)
+            ).to.be.revertedWithCustomError(tokenManager, "StalePrice");
             
             // Emergency replacement with ChainlinkAdapter
             await tokenManager.setOracleAdapter(await chainlinkAdapter.getAddress());
             
-            const [, , isStaleAfter] = await tokenManager.getTokenPrice(TOKEN_CODES.USDC);
-            expect(isStaleAfter).to.be.false; // Now using fresh Chainlink data
+            // Now should work with fresh Chainlink data
+            const [price, , ] = await tokenManager.getTokenPrice(TOKEN_CODES.USDC);
+            expect(price).to.equal(PRICES.USDC);
         });
 
         it("Should continue operating if one token's oracle fails", async function () {
             // Add WBTC token first
             const wbtcToken = await (await ethers.getContractFactory("MockERC20")).deploy("Wrapped Bitcoin", "WBTC", 8);
-            await tokenManager.manageTokenData(TOKEN_CODES.WBTC, await wbtcToken.getAddress(), 8, 3600);
+            await tokenManager["manageTokenData(string,address,uint8,uint256)"](TOKEN_CODES.WBTC, await wbtcToken.getAddress(), 8, 3600);
             
             // Mark USDC as stale but keep WBTC valid
             await mockOracleAdapter.setStale(TOKEN_CODES.USDC);
             
-            const [usdcPrice, , usdcStale] = await tokenManager.getTokenPrice(TOKEN_CODES.USDC);
-            const [wbtcPrice, , wbtcStale] = await tokenManager.getTokenPrice(TOKEN_CODES.WBTC);
+            // USDC should revert with StalePrice
+            await expect(
+                tokenManager.getTokenPrice(TOKEN_CODES.USDC)
+            ).to.be.revertedWithCustomError(tokenManager, "StalePrice");
             
-            expect(usdcStale).to.be.true;  // USDC stale
-            expect(wbtcStale).to.be.false; // WBTC still valid
-            expect(usdcPrice).to.be.gt(0);
+            // WBTC should still work (not marked stale)
+            const [wbtcPrice, , ] = await tokenManager.getTokenPrice(TOKEN_CODES.WBTC);
+            expect(wbtcPrice).to.be.gt(0);
             expect(wbtcPrice).to.equal(PRICES.WBTC);
         });
     });
@@ -330,7 +335,7 @@ describe("🔗 Oracle Adapter - Integration Tests", function () {
             await mockOracleAdapter.setupToken("LEGACY", ethers.parseUnits("3000", 8), 8, true);
 
             // Call legacy 6-param function (should still work)
-            await tokenManager.manageTokenData(
+            await tokenManager["manageTokenData(string,address,address,uint8,uint8,uint256)"](
                 "LEGACY",
                 await mockToken.getAddress(),
                 await legacyOracle.getAddress(),
@@ -351,7 +356,7 @@ describe("🔗 Oracle Adapter - Integration Tests", function () {
             await mockOracleAdapter.setupToken("LEGACY2", ethers.parseUnits("1500", 8), 8, true);
             
             // Add token via legacy function
-            await tokenManager.manageTokenData(
+            await tokenManager["manageTokenData(string,address,address,uint8,uint8,uint256)"](
                 "LEGACY2",
                 await mockToken.getAddress(),
                 await (await ethers.getContractFactory("MockChainlinkOracle")).deploy(

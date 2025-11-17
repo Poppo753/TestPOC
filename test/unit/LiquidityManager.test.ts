@@ -96,8 +96,8 @@ describe("LiquidityManager Contract", function () {
     await mockOracleAdapter.setupToken("WBTC", ethers.parseUnits("30000", 8), 8, true);
 
     // Setup tokens in TokenManager (NEW SIGNATURE: 4 params)
-    await tokenManager.manageTokenData("USDC", mockUSDC.target, 6, 3600);
-    await tokenManager.manageTokenData("WBTC", mockWBTC.target, 8, 3600);
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"]("USDC", mockUSDC.target, 6, 3600);
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"]("WBTC", mockWBTC.target, 8, 3600);
     // Note: WETH is NOT registered in TokenManager - it's handled separately via Beacon
 
     // Initialize parameters in ParameterManager with correct function
@@ -210,11 +210,20 @@ describe("LiquidityManager Contract", function () {
 
   describe("📋 Deployment", function () {
     it("should deploy with correct initial state", async function () {
+      const lmAddress = await liquidityManager.getAddress();
+      const depositFee = await liquidityManager.depositFee();
+      const withdrawFee = await liquidityManager.withdrawFee();
+      const feeRecipientAddr = await liquidityManager.feeRecipient();
+      
       expect(await liquidityManager.beacon()).to.equal(beacon.target);
       expect(await liquidityManager.owner()).to.equal(await owner.getAddress());
-      expect(await liquidityManager.depositFee()).to.equal(DEFAULT_DEPOSIT_FEE);
-      expect(await liquidityManager.withdrawFee()).to.equal(DEFAULT_WITHDRAW_FEE);
-      expect(await liquidityManager.feeRecipient()).to.equal(await feeRecipient.getAddress());
+      expect(depositFee).to.equal(DEFAULT_DEPOSIT_FEE);
+      expect(withdrawFee).to.equal(DEFAULT_WITHDRAW_FEE);
+      expect(feeRecipientAddr).to.equal(await feeRecipient.getAddress());
+      
+      if (this.test) {
+        this.test.title += ` [Address: ${lmAddress.slice(0, 10)}...${lmAddress.slice(-8)} | DepositFee: ${Number(depositFee)/100}% | WithdrawFee: ${Number(withdrawFee)/100}%]`;
+      }
     });
 
     it("should have expected function signatures", async function () {
@@ -259,6 +268,10 @@ describe("LiquidityManager Contract", function () {
 
         // Check ETH was transferred
         const user1BalanceAfter = await ethers.provider.getBalance(await user1.getAddress());
+        
+        if (this.test) {
+          this.test.title += ` [Deposited: ${ethers.formatEther(DEPOSIT_AMOUNT)} ETH | LP Shares: ${ethers.formatEther(totalSupply)}]`;
+        }
         expect(user1BalanceBefore - user1BalanceAfter).to.be.greaterThan(DEPOSIT_AMOUNT);
       });
 
