@@ -18,14 +18,14 @@ export class StatDisplay {
     this.decimals = config.decimals ?? 6;
     this.suffix = config.suffix || '';
     
-    // Create AnimatedNumber instance if animation is enabled
-    if (this.animated) {
+    // Create AnimatedNumber instance if animation is enabled and not loading
+    if (this.animated && !this.loading) {
       this.animatedNumber = new AnimatedNumber({
-        value: this.value,
+        value: 0, // Start from 0
         decimals: this.decimals,
         suffix: this.suffix,
         className: `text-3xl font-bold ${this.getVariantClasses()}`,
-        duration: 800,
+        duration: 1200, // Longer duration for smooth effect
       });
     }
   }
@@ -43,6 +43,7 @@ export class StatDisplay {
   render() {
     const container = document.createElement('div');
     container.className = 'flex flex-col space-y-2';
+    this.element = container; // Store reference
 
     // Label with optional icon
     const labelWrapper = document.createElement('div');
@@ -73,10 +74,16 @@ export class StatDisplay {
 
       // Use AnimatedNumber if enabled, otherwise regular text
       if (this.animated && this.animatedNumber) {
-        valueWrapper.appendChild(this.animatedNumber.render());
+        const animatedElement = this.animatedNumber.render();
+        valueWrapper.appendChild(animatedElement);
+        
+        // Start animation to target value after render
+        setTimeout(() => {
+          this.animatedNumber.animateTo(parseFloat(this.value) || 0);
+        }, 100);
       } else {
         const value = document.createElement('span');
-        value.className = `text-3xl font-bold ${this.getVariantClasses()}`;
+        value.className = `text-3xl font-bold ${this.getVariantClasses()} stat-value`;
         value.textContent = this.suffix ? `${this.value} ${this.suffix}` : this.value;
         valueWrapper.appendChild(value);
       }
@@ -105,6 +112,18 @@ export class StatDisplay {
     // Animate the change if AnimatedNumber is enabled
     if (this.animated && this.animatedNumber) {
       this.animatedNumber.setValue(newValue);
+    } else {
+      // If not using animation, update the DOM directly
+      this.updateDOM();
+    }
+  }
+  
+  updateDOM() {
+    if (!this.element) return;
+    
+    const valueElement = this.element.querySelector('.stat-value');
+    if (valueElement) {
+      valueElement.textContent = this.suffix ? `${this.value} ${this.suffix}` : this.value;
     }
   }
 

@@ -52,6 +52,7 @@ export class StatsGrid {
       },
     ];
     this.loading = true;
+    this.statDisplays = {}; // Keep references to StatDisplay instances
   }
 
   async updateStats() {
@@ -69,15 +70,15 @@ export class StatsGrid {
         web3Manager.getPoolValue(),
       ]);
 
-      // Update stat values as numbers (not strings)
-      this.stats[0].value = parseFloat(lpBalance) || 0;
-      this.stats[1].value = parseFloat(poolValue) || 0;
-      
-      // Calculate user's value (simplified - would need total supply in real scenario)
-      const userValue = parseFloat(lpBalance) > 0 ? (parseFloat(lpBalance) * parseFloat(poolValue) / 100) : 0;
-      this.stats[2].value = userValue;
-      
-      // APY would come from backend/oracle in real scenario
+      // Calculate new values
+      const newLpBalance = parseFloat(lpBalance) || 0;
+      const newPoolValue = parseFloat(poolValue) || 0;
+      const newUserValue = newLpBalance > 0 ? (newLpBalance * newPoolValue / 100) : 0;
+
+      // Update stats data
+      this.stats[0].value = newLpBalance;
+      this.stats[1].value = newPoolValue;
+      this.stats[2].value = newUserValue;
       this.stats[3].value = 8.5;
 
       this.loading = false;
@@ -101,6 +102,9 @@ export class StatsGrid {
       loading: this.loading,
       animated: stat.animated,
     });
+    
+    // Store reference to StatDisplay for updates
+    this.statDisplays[stat.id] = statDisplay;
 
     const card = new Card({
       content: statDisplay.render(),
