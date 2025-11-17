@@ -1,0 +1,220 @@
+{
+  "description": "Function call dependencies for DeFi system architecture diagram",
+  "version": "3.0",
+  "lastUpdated": "2025-11-17",
+  "dependencies": [
+    {
+      "from": "LiquidityManager.deposit",
+      "to": [
+        "ProxyGeneral.mint",
+        "ValueCalculator.getTotalPoolValue",
+        "TokenManager.getTokenPrice",
+        "ProxyGeneral.checkRateLimit"
+      ]
+    },
+    {
+      "from": "LiquidityManager.withdraw",
+      "to": [
+        "ProxyGeneral.burn",
+        "ValueCalculator.getTotalPoolValue",
+        "ValueCalculator.selectTokenForSwap",
+        "SwapManager.performSwap",
+        "ProxyGeneral.checkRateLimit"
+      ]
+    },
+    {
+      "from": "LiquidityManager.withdrawWithDeadline",
+      "to": [
+        "ProxyGeneral.burn",
+        "ValueCalculator.getTotalPoolValue",
+        "ValueCalculator.selectTokenForSwap",
+        "SwapManager.performSwap",
+        "ProxyGeneral.checkRateLimit"
+      ]
+    },
+    {
+      "from": "SwapManager.performSwap",
+      "to": [
+        "Beacon.getImplementation",
+        "TokenManager.getTokenAddress",
+        "ProxyGeneral.approveSpender",
+        "ProxyGeneral.transferFunds",
+        "TokenManager.isTokenActive"
+      ]
+    },
+    {
+      "from": "SwapManager.performSwapAuto",
+      "to": [
+        "SwapManager.performSwap"
+      ]
+    },
+    {
+      "from": "SwapManager.swapWithBestPlugin",
+      "to": [
+        "SwapManager.getAllQuotes",
+        "Beacon.getImplementation",
+        "ProxyGeneral.approveSpender",
+        "ProxyGeneral.transferFunds"
+      ]
+    },
+    {
+      "from": "SwapManager.getAllQuotes",
+      "to": [
+        "Beacon.getImplementation",
+        "TokenManager.getTokenAddress"
+      ]
+    },
+    {
+      "from": "SwapManager.getExpectedSwapOutput",
+      "to": [
+        "Beacon.getImplementation",
+        "TokenManager.getTokenAddress"
+      ]
+    },
+    {
+      "from": "ValueCalculator.getTotalPoolValue",
+      "to": [
+        "ValueCalculator.calculateTokenValue",
+        "TokenManager.getActiveTokens",
+        "ProxyGeneral.getAssetBalance"
+      ]
+    },
+    {
+      "from": "ValueCalculator.calculateTokenValue",
+      "to": [
+        "TokenManager.getTokenPrice",
+        "TokenManager.getTokenAddress",
+        "ProxyGeneral.getAssetBalance"
+      ]
+    },
+    {
+      "from": "ValueCalculator.selectTokenForSwap",
+      "to": [
+        "ValueCalculator.calculateTokenValue",
+        "TokenManager.getActiveTokens"
+      ]
+    },
+    {
+      "from": "TokenManager.getTokenPrice",
+      "to": [
+        "Beacon.getImplementation",
+        "External.chainlinkLatestRoundData"
+      ]
+    },
+    {
+      "from": "TokenManager.setOracleAdapter",
+      "to": [
+        "Beacon.updateImplementation"
+      ]
+    },
+    {
+      "from": "ProxyGeneral.authorizeModule",
+      "to": [
+        "Beacon.checkModuleExists"
+      ]
+    },
+    {
+      "from": "ProxyGeneral.mint",
+      "to": [
+        "Beacon.getImplementation"
+      ]
+    },
+    {
+      "from": "ProxyGeneral.burn",
+      "to": [
+        "Beacon.getImplementation"
+      ]
+    },
+    {
+      "from": "ProxyGeneral.checkRateLimit",
+      "to": [
+        "ParameterManager.getCurrentParameterValue"
+      ]
+    },
+    {
+      "from": "EmergencyHandler.emergencyPause",
+      "to": [
+        "Beacon.getImplementation",
+        "ProxyGeneral.pause"
+      ]
+    },
+    {
+      "from": "EmergencyHandler.emergencyUnpause",
+      "to": [
+        "Beacon.getImplementation",
+        "ProxyGeneral.unpause"
+      ]
+    },
+    {
+      "from": "EmergencyHandler.emergencyWithdraw",
+      "to": [
+        "Beacon.getImplementation",
+        "TokenManager.getActiveTokens",
+        "TokenManager.getTokenAddress",
+        "ProxyGeneral.emergencyTransfer",
+        "ValueCalculator.getTotalPoolValueView"
+      ]
+    },
+    {
+      "from": "EmergencyHandler.generateEmergencyReport",
+      "to": [
+        "Beacon.getImplementation",
+        "ProxyGeneral.paused",
+        "TokenManager.getActiveTokens",
+        "ValueCalculator.getTotalPoolValueView"
+      ]
+    },
+    {
+      "from": "EmergencyHandler.createAssetSnapshot",
+      "to": [
+        "Beacon.getImplementation",
+        "TokenManager.getActiveTokens",
+        "TokenManager.getTokenAddress",
+        "ProxyGeneral.getAssetBalance",
+        "ValueCalculator.getTotalPoolValueView"
+      ]
+    },
+    {
+      "from": "EmergencyHandler.validateSystemHealth",
+      "to": [
+        "Beacon.getImplementation",
+        "ValueCalculator.validatePoolValue"
+      ]
+    },
+    {
+      "from": "ParameterManager.proposeParameterChange",
+      "to": [
+        "Beacon.getImplementation"
+      ]
+    },
+    {
+      "from": "ParameterManager.emergencySetParameter",
+      "to": [
+        "Beacon.getImplementation",
+        "ProxyGeneral.paused"
+      ]
+    },
+    {
+      "from": "Beacon.updateImplementation",
+      "to": []
+    },
+    {
+      "from": "Beacon.getImplementation",
+      "to": []
+    }
+  ],
+  "moduleGroups": {
+    "core": ["Beacon", "ProxyGeneral"],
+    "pricing": ["TokenManager", "ValueCalculator"],
+    "liquidity": ["LiquidityManager"],
+    "swap": ["SwapManager"],
+    "governance": ["ParameterManager", "EmergencyHandler"],
+    "external": ["External"]
+  },
+  "colorCoding": {
+    "view": "#60a5fa",
+    "write": "#f59e0b",
+    "emergency": "#ef4444",
+    "external": "#8b5cf6"
+  }
+}

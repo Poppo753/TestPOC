@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeFi System - Dynamic Architecture Diagram</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0b1020 0%, #1a1f35 100%);
+            color: #e5e7eb;
+            overflow-x: auto;
+        }
+        #root {
+            width: 100%;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            font-size: 24px;
+            color: #60a5fa;
+        }
+        .error {
+            color: #ef4444;
+            padding: 20px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 2px solid #ef4444;
+            border-radius: 8px;
+            margin: 20px;
+        }
+        .controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: rgba(30, 41, 59, 0.95);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid #60a5fa;
+            backdrop-filter: blur(10px);
+        }
+        .controls button {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .controls button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        }
+        .stats {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(30, 41, 59, 0.95);
+            padding: 15px 20px;
+            border-radius: 12px;
+            border: 1px solid #60a5fa;
+            backdrop-filter: blur(10px);
+            min-width: 250px;
+        }
+        .stats h3 {
+            margin-bottom: 10px;
+            color: #60a5fa;
+            font-size: 16px;
+        }
+        .stats-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            font-size: 14px;
+        }
+        .stats-item span:last-child {
+            color: #10b981;
+            font-weight: 600;
+        }
+        .module-card {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            border: 2px solid #60a5fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 15px;
+            min-width: 350px;
+            max-width: 400px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s;
+        }
+        .module-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 48px rgba(96, 165, 250, 0.2);
+        }
+        .module-header {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(96, 165, 250, 0.3);
+        }
+        .module-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #60a5fa;
+            margin-bottom: 5px;
+        }
+        .module-subtitle {
+            font-size: 13px;
+            color: #94a3b8;
+        }
+        .function-list {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .function-item {
+            padding: 10px;
+            margin: 6px 0;
+            border-radius: 6px;
+            background: rgba(100, 116, 139, 0.1);
+            cursor: pointer;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+        .function-item:hover {
+            background: rgba(100, 116, 139, 0.2);
+            transform: translateX(4px);
+        }
+        .function-item.view {
+            border-left-color: #60a5fa;
+        }
+        .function-item.write {
+            border-left-color: #f59e0b;
+        }
+        .function-item.emergency {
+            border-left-color: #ef4444;
+        }
+        .function-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #e5e7eb;
+            font-family: 'Fira Code', monospace;
+        }
+        .function-access {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-top: 3px;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+        }
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            border: 2px solid #60a5fa;
+            border-radius: 16px;
+            max-width: 90vw;
+            max-height: 90vh;
+            width: 900px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+            transform: scale(0.9);
+            transition: all 0.3s;
+        }
+        .modal-overlay.active .modal-content {
+            transform: scale(1);
+        }
+        .modal-header {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            padding: 20px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px 10px;
+        }
+        .modal-body {
+            padding: 24px;
+            max-height: calc(90vh - 80px);
+            overflow-y: auto;
+        }
+        .function-signature {
+            background: rgba(15, 23, 42, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #60a5fa;
+            margin: 15px 0;
+            font-family: 'Fira Code', monospace;
+            font-size: 14px;
+            color: #60a5fa;
+            overflow-x: auto;
+        }
+        .function-description {
+            margin: 15px 0;
+            line-height: 1.6;
+            color: #cbd5e1;
+        }
+        .param-table {
+            width: 100%;
+            margin: 15px 0;
+            border-collapse: collapse;
+        }
+        .param-table th {
+            background: rgba(59, 130, 246, 0.1);
+            padding: 10px;
+            text-align: left;
+            color: #60a5fa;
+            font-size: 13px;
+            border-bottom: 2px solid #60a5fa;
+        }
+        .param-table td {
+            padding: 10px;
+            border-bottom: 1px solid rgba(100, 116, 139, 0.2);
+            font-size: 13px;
+        }
+        .param-table code {
+            background: rgba(59, 130, 246, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #60a5fa;
+            font-family: 'Fira Code', monospace;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #60a5fa;
+            margin: 20px 0 10px 0;
+            padding-bottom: 5px;
+            border-bottom: 1px solid rgba(96, 165, 250, 0.3);
+        }
+        .gas-badge {
+            display: inline-block;
+            background: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .access-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+        .access-badge.view {
+            background: rgba(96, 165, 250, 0.1);
+            color: #60a5fa;
+        }
+        .access-badge.write {
+            background: rgba(245, 158, 11, 0.1);
+            color: #f59e0b;
+        }
+        .access-badge.emergency {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
+        .modules-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+        @media (max-width: 768px) {
+            .modules-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Main App Component
+        function App() {
+            const [modules, setModules] = useState([]);
+            const [dependencies, setDependencies] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [selectedFunction, setSelectedFunction] = useState(null);
+            const [stats, setStats] = useState({});
+
+            useEffect(() => {
+                loadData();
+            }, []);
+
+            const loadData = async () => {
+                try {
+                    setLoading(true);
+                    
+                    // Load markdown content
+                    const mdResponse = await fetch('API_Reference_v3.0_DRAFT.md');
+                    if (!mdResponse.ok) throw new Error('Failed to load API Reference');
+                    const mdContent = await mdResponse.text();
+                    
+                    // Load dependencies
+                    const depsResponse = await fetch('function_dependencies.json');
+                    if (!depsResponse.ok) throw new Error('Failed to load dependencies');
+                    const depsData = await depsResponse.json();
+                    
+                    // Parse markdown
+                    const parsedData = parseMarkdown(mdContent);
+                    
+                    setModules(parsedData.modules);
+                    setDependencies(depsData.dependencies);
+                    setStats({
+                        totalModules: parsedData.modules.length,
+                        totalFunctions: parsedData.modules.reduce((sum, m) => sum + m.functions.length, 0),
+                        viewFunctions: parsedData.modules.reduce((sum, m) => 
+                            sum + m.functions.filter(f => f.color === 'view').length, 0),
+                        writeFunctions: parsedData.modules.reduce((sum, m) => 
+                            sum + m.functions.filter(f => f.color === 'write').length, 0),
+                        emergencyFunctions: parsedData.modules.reduce((sum, m) => 
+                            sum + m.functions.filter(f => f.color === 'emergency').length, 0)
+                    });
+                    
+                    setLoading(false);
+                } catch (err) {
+                    console.error('Error loading data:', err);
+                    setError(err.message);
+                    setLoading(false);
+                }
+            };
+
+            const parseMarkdown = (content) => {
+                const modules = [];
+                const lines = content.split('\n');
+                let currentModule = null;
+                let currentFunction = null;
+
+                console.log('🔍 Starting markdown parsing...');
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+
+                    // Detect module: ## 🔹 ModuleName {#modulename}
+                    if (line.match(/^## .+ \{#[a-z]+\}/)) {
+                        if (currentModule) {
+                            console.log(`✅ Module parsed: ${currentModule.name} - ${currentModule.functions.length} functions`);
+                            modules.push(currentModule);
+                        }
+                        const match = line.match(/^##\s+\S+\s+(\w+)\s+\{#(\w+)\}/);
+                        if (match) {
+                            console.log(`📦 Found module: ${match[1]} (${match[2]}) at line ${i+1}`);
+                            currentModule = {
+                                name: match[1],
+                                id: match[2],
+                                functions: []
+                            };
+                        } else {
+                            console.warn(`⚠️ Module detection failed for line ${i+1}: ${line}`);
+                        }
+                    }
+
+                    // Detect function: ### functionName {#module-functionname}
+                    if (line.match(/^### \w+/) && currentModule) {
+                        if (currentFunction) currentModule.functions.push(currentFunction);
+                        const match = line.match(/^### (\w+) \{#([\w-]+)\}/);
+                        if (match) {
+                            currentFunction = {
+                                name: match[1],
+                                id: match[2],
+                                description: '',
+                                signature: '',
+                                access: 'public',
+                                gas: 'N/A',
+                                color: 'view',
+                                parameters: [],
+                                returns: [],
+                                validations: [],
+                                events: '',
+                                usageExample: '',
+                                calledBy: '',
+                                securityNotes: [],
+                                inCodeBlock: false,
+                                inSignature: false,
+                                inUsageExample: false
+                            };
+                        }
+                    }
+
+                    // Extract function details
+                    if (currentFunction) {
+                        // Code block detection
+                        if (line.startsWith('```solidity')) {
+                            if (!currentFunction.signature) {
+                                currentFunction.inSignature = true;
+                            } else if (line.includes('Example') || i > 0 && lines[i-1].includes('Example')) {
+                                currentFunction.inUsageExample = true;
+                            }
+                        } else if (line.startsWith('```') && !line.startsWith('````')) {
+                            currentFunction.inSignature = false;
+                            currentFunction.inUsageExample = false;
+                        }
+
+                        // Signature extraction
+                        if (currentFunction.inSignature && line.startsWith('function ')) {
+                            let sig = line.trim();
+                            // Multi-line signature
+                            for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+                                if (lines[j].includes('```')) break;
+                                sig += ' ' + lines[j].trim();
+                                if (lines[j].includes(')')) break;
+                            }
+                            currentFunction.signature = sig;
+                        }
+
+                        // Usage example extraction
+                        if (currentFunction.inUsageExample && !line.startsWith('```')) {
+                            currentFunction.usageExample += line + '\n';
+                        }
+
+                        // Description (first line after header)
+                        if (!currentFunction.description && line.trim() && 
+                            !line.startsWith('**') && !line.startsWith('|') && 
+                            !line.startsWith('```') && !line.startsWith('#') &&
+                            !line.startsWith('-')) {
+                            currentFunction.description = line.trim();
+                        }
+
+                        // Access control
+                        if (line.includes('**Access Control:**')) {
+                            currentFunction.access = line.replace('**Access Control:**', '').replace(/`/g, '').trim();
+                            if (currentFunction.access.includes('owner')) currentFunction.color = 'write';
+                            if (currentFunction.access.includes('emergency')) currentFunction.color = 'emergency';
+                        }
+
+                        // Gas cost
+                        if (line.includes('**Gas Cost:**')) {
+                            currentFunction.gas = line.replace('**Gas Cost:**', '').replace(/~/g, '').trim();
+                        }
+
+                        // Validations
+                        if (line.match(/^- [✅❌]/)) {
+                            currentFunction.validations.push(line.trim());
+                        }
+
+                        // Events
+                        if (line.includes('**Events Emitted:**')) {
+                            currentFunction.events = line.replace('**Events Emitted:**', '').trim();
+                        }
+
+                        // Called By
+                        if (line.includes('**Called By:**')) {
+                            currentFunction.calledBy = line.replace('**Called By:**', '').trim();
+                        }
+
+                        // Security Notes
+                        if (i > 0 && lines[i-1].includes('**Security Notes:**') && line.startsWith('-')) {
+                            currentFunction.securityNotes.push(line.replace(/^- /, '').trim());
+                        }
+
+                        // Parameters table parsing
+                        if (i > 0 && lines[i-1].includes('**Parameters:**') && line.startsWith('|') && !line.includes('Name')) {
+                            const parts = line.split('|').map(p => p.trim()).filter(p => p);
+                            if (parts.length >= 3) {
+                                currentFunction.parameters.push({
+                                    name: parts[0].replace(/`/g, ''),
+                                    type: parts[1].replace(/`/g, ''),
+                                    description: parts[2]
+                                });
+                            }
+                        }
+
+                        // Returns table parsing
+                        if (i > 0 && lines[i-1].includes('**Returns:**') && line.startsWith('|') && !line.includes('Type')) {
+                            const parts = line.split('|').map(p => p.trim()).filter(p => p);
+                            if (parts.length >= 2) {
+                                currentFunction.returns.push({
+                                    type: parts[0].replace(/`/g, ''),
+                                    description: parts[1]
+                                });
+                            }
+                        }
+                    }
+                }
+
+                if (currentFunction && currentModule) {
+                    currentModule.functions.push(currentFunction);
+                }
+                if (currentModule) {
+                    console.log(`✅ Module parsed: ${currentModule.name} - ${currentModule.functions.length} functions`);
+                    modules.push(currentModule);
+                }
+
+                console.log(`\n🎉 Parsing complete: ${modules.length} modules, ${modules.reduce((sum, m) => sum + m.functions.length, 0)} functions`);
+                
+                return { modules };
+            };
+
+            if (loading) {
+                return <div className="loading">Loading API Documentation...</div>;
+            }
+
+            if (error) {
+                return <div className="error">Error: {error}</div>;
+            }
+
+            return (
+                <>
+                    <div className="controls">
+                        <h3 style={{marginBottom: '10px', fontSize: '16px'}}>Controls</h3>
+                        <button onClick={() => window.location.href = 'API_Reference_v3.0_DRAFT.md'}>
+                            📖 Full Docs
+                        </button>
+                        <button onClick={() => window.location.href = 'function_dependencies.json'}>
+                            🔗 Dependencies
+                        </button>
+                        <button onClick={loadData}>🔄 Reload</button>
+                    </div>
+
+                    <div className="stats">
+                        <h3>System Statistics</h3>
+                        <div className="stats-item">
+                            <span>Total Modules:</span>
+                            <span>{stats.totalModules}</span>
+                        </div>
+                        <div className="stats-item">
+                            <span>Total Functions:</span>
+                            <span>{stats.totalFunctions}</span>
+                        </div>
+                        <div className="stats-item">
+                            <span>View Functions:</span>
+                            <span style={{color: '#60a5fa'}}>{stats.viewFunctions}</span>
+                        </div>
+                        <div className="stats-item">
+                            <span>Write Functions:</span>
+                            <span style={{color: '#f59e0b'}}>{stats.writeFunctions}</span>
+                        </div>
+                        <div className="stats-item">
+                            <span>Emergency Functions:</span>
+                            <span style={{color: '#ef4444'}}>{stats.emergencyFunctions}</span>
+                        </div>
+                    </div>
+
+                    <div className="modules-grid">
+                        {modules.map(module => (
+                            <ModuleCard 
+                                key={module.id} 
+                                module={module} 
+                                onFunctionClick={setSelectedFunction}
+                            />
+                        ))}
+                    </div>
+
+                    {selectedFunction && (
+                        <FunctionModal 
+                            func={selectedFunction} 
+                            onClose={() => setSelectedFunction(null)}
+                            dependencies={dependencies.filter(d => 
+                                d.from.includes(selectedFunction.name)
+                            )}
+                        />
+                    )}
+                </>
+            );
+        }
+
+        function ModuleCard({ module, onFunctionClick }) {
+            return (
+                <div className="module-card">
+                    <div className="module-header">
+                        <div className="module-title">{module.name}</div>
+                        <div className="module-subtitle">{module.functions.length} functions</div>
+                    </div>
+                    <div className="function-list">
+                        {module.functions.map(func => (
+                            <div 
+                                key={func.id} 
+                                className={`function-item ${func.color}`}
+                                onClick={() => onFunctionClick(func)}
+                            >
+                                <div className="function-name">{func.name}()</div>
+                                <div className="function-access">{func.access}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        function FunctionModal({ func, onClose, dependencies }) {
+            return (
+                <div className="modal-overlay active" onClick={onClose}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <div className="modal-title">{func.name}()</div>
+                            <button className="modal-close" onClick={onClose}>×</button>
+                        </div>
+                        <div className="modal-body">
+                            <div>
+                                <span className={`access-badge ${func.color}`}>{func.access}</span>
+                                <span className="gas-badge">⛽ {func.gas}</span>
+                            </div>
+
+                            {func.description && (
+                                <div className="function-description">
+                                    {func.description}
+                                </div>
+                            )}
+
+                            {func.signature && (
+                                <>
+                                    <div className="section-title">Signature</div>
+                                    <div className="function-signature">
+                                        {func.signature}
+                                    </div>
+                                </>
+                            )}
+
+                            {func.parameters && func.parameters.length > 0 && (
+                                <>
+                                    <div className="section-title">Parameters</div>
+                                    <table className="param-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Type</th>
+                                                <th>Description</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {func.parameters.map((param, i) => (
+                                                <tr key={i}>
+                                                    <td><code>{param.name}</code></td>
+                                                    <td><code>{param.type}</code></td>
+                                                    <td>{param.description}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </>
+                            )}
+
+                            {func.returns && func.returns.length > 0 && (
+                                <>
+                                    <div className="section-title">Returns</div>
+                                    <table className="param-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Type</th>
+                                                <th>Description</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {func.returns.map((ret, i) => (
+                                                <tr key={i}>
+                                                    <td><code>{ret.type}</code></td>
+                                                    <td>{ret.description}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </>
+                            )}
+
+                            {func.validations && func.validations.length > 0 && (
+                                <>
+                                    <div className="section-title">Validations</div>
+                                    <ul style={{listStyle: 'none', padding: 0, color: '#cbd5e1'}}>
+                                        {func.validations.map((val, i) => (
+                                            <li key={i} style={{marginBottom: '8px', lineHeight: '1.5'}}>{val}</li>
+                                        ))}
+                                    </ul>
+                                </>
+                            )}
+
+                            {func.events && (
+                                <>
+                                    <div className="section-title">Events Emitted</div>
+                                    <div style={{padding: '10px', background: 'rgba(96, 165, 250, 0.1)', borderRadius: '6px', color: '#cbd5e1'}}>
+                                        {func.events}
+                                    </div>
+                                </>
+                            )}
+
+                            {func.calledBy && (
+                                <>
+                                    <div className="section-title">Called By</div>
+                                    <div style={{padding: '10px', background: 'rgba(96, 165, 250, 0.1)', borderRadius: '6px', color: '#cbd5e1'}}>
+                                        {func.calledBy}
+                                    </div>
+                                </>
+                            )}
+
+                            {func.securityNotes && func.securityNotes.length > 0 && (
+                                <>
+                                    <div className="section-title">🔒 Security Notes</div>
+                                    <ul style={{color: '#fbbf24', paddingLeft: '20px'}}>
+                                        {func.securityNotes.map((note, i) => (
+                                            <li key={i} style={{marginBottom: '6px'}}>{note}</li>
+                                        ))}
+                                    </ul>
+                                </>
+                            )}
+
+                            {func.usageExample && func.usageExample.trim() && (
+                                <>
+                                    <div className="section-title">Usage Example</div>
+                                    <div className="function-signature" style={{whiteSpace: 'pre-wrap'}}>
+                                        {func.usageExample.trim()}
+                                    </div>
+                                </>
+                            )}
+
+                            {dependencies && dependencies.length > 0 && (
+                                <>
+                                    <div className="section-title">Function Calls</div>
+                                    <ul style={{paddingLeft: '20px', color: '#94a3b8'}}>
+                                        {dependencies[0]?.to.map((dep, idx) => (
+                                            <li key={idx} style={{margin: '8px 0'}}>
+                                                <code style={{color: '#60a5fa'}}>{dep}</code>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </>
+                            )}
+
+                            <div style={{marginTop: '20px'}}>
+                                <a 
+                                    href={`API_Reference_v3.0_DRAFT.md#${func.id}`}
+                                    target="_blank"
+                                    style={{
+                                        color: '#60a5fa',
+                                        textDecoration: 'none',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '8px'
+                                    }}
+                                >
+                                    📖 View Full Documentation →
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Render app
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
