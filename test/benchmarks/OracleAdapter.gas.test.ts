@@ -53,7 +53,7 @@ describe("⛽ Oracle Adapter - Gas Benchmarks", function () {
     await usdcToken.waitForDeployment();
 
     // Register USDC in TokenManager
-    await tokenManager.manageTokenData(
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"](
       USDC_CODE,
       await usdcToken.getAddress(),
       USDC_DECIMALS,
@@ -169,8 +169,8 @@ describe("⛽ Oracle Adapter - Gas Benchmarks", function () {
       const wbtcToken = await (await ethers.getContractFactory("MockERC20")).deploy("Wrapped Bitcoin", "WBTC", 8);
       const wethToken = await (await ethers.getContractFactory("MockERC20")).deploy("Wrapped Ether", "WETH", 18);
 
-      await tokenManager.manageTokenData("WBTC", await wbtcToken.getAddress(), 8, HEARTBEAT);
-      await tokenManager.manageTokenData("WETH", await wethToken.getAddress(), 18, HEARTBEAT);
+      await tokenManager["manageTokenData(string,address,uint8,uint256)"]("WBTC", await wbtcToken.getAddress(), 8, HEARTBEAT);
+      await tokenManager["manageTokenData(string,address,uint8,uint256)"]("WETH", await wethToken.getAddress(), 18, HEARTBEAT);
 
       // Measure individual calls
       const gas1 = await tokenManager.getTokenPrice.estimateGas("USDC");

@@ -109,8 +109,8 @@ describe("SwapManager - Phase 1B Integration Tests", function () {
         await beacon.updateImplementation("SwapManager", swapManager.target);
 
         // Register tokens in TokenManager
-        await tokenManager.manageTokenData("USDC", mockUSDC.target, 6, 3600);
-        await tokenManager.manageTokenData("WBTC", mockWBTC.target, 8, 3600);
+        await tokenManager["manageTokenData(string,address,uint8,uint256)"]("USDC", mockUSDC.target, 6, 3600);
+        await tokenManager["manageTokenData(string,address,uint8,uint256)"]("WBTC", mockWBTC.target, 8, 3600);
 
         // Setup SwapManager
         await swapManager.setSimpleSwapRouter(mockUSDC.target); // Mock router

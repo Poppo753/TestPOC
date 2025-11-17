@@ -107,7 +107,7 @@ export class AddTokenScript extends BaseScript {
     Logger.section(`Adding Token: ${this.addOptions.tokenCode}`);
     
     const result = await this.executeTransaction(
-      this.contracts.tokenManager.manageTokenData(
+      this.contracts.tokenManager["manageTokenData(string,address,uint8,uint256)"](
         this.addOptions.tokenCode,
         this.addOptions.tokenAddress,
         this.addOptions.tokenDecimals!,

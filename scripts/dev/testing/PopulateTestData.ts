@@ -153,7 +153,7 @@ export class PopulateTestDataScript extends BaseScript {
         Logger.section("🪙 Registering Tokens in TokenManager");
         
         Logger.info("Registering USDC...");
-        const tx2 = await this.contracts.tokenManager.manageTokenData(
+        const tx2 = await this.contracts.tokenManager["manageTokenData(string,address,uint8,uint256)"](
           "USDC",
           result.mockTokens.USDC,
           6,      // token decimals
@@ -163,7 +163,7 @@ export class PopulateTestDataScript extends BaseScript {
         Logger.success("✅ USDC registered");
         
         Logger.info("Registering WBTC...");
-        const tx3 = await this.contracts.tokenManager.manageTokenData(
+        const tx3 = await this.contracts.tokenManager["manageTokenData(string,address,uint8,uint256)"](
           "WBTC",
           result.mockTokens.WBTC,
           8,      // token decimals

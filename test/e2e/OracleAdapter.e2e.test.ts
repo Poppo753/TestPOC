@@ -89,10 +89,10 @@ describe("🎬 Oracle Adapter - End-to-End Tests", function () {
     await mockOracleAdapter.setupToken("LINK", INITIAL_PRICES.LINK, 8, true);
 
     // Register tokens in TokenManager
-    await tokenManager.manageTokenData("USDC", await usdc.getAddress(), 6, HEARTBEAT);
-    await tokenManager.manageTokenData("WBTC", await wbtc.getAddress(), 8, HEARTBEAT);
-    await tokenManager.manageTokenData("DAI", await dai.getAddress(), 18, HEARTBEAT);
-    await tokenManager.manageTokenData("LINK", await link.getAddress(), 18, HEARTBEAT);
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"]("USDC", await usdc.getAddress(), 6, HEARTBEAT);
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"]("WBTC", await wbtc.getAddress(), 8, HEARTBEAT);
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"]("DAI", await dai.getAddress(), 18, HEARTBEAT);
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"]("LINK", await link.getAddress(), 18, HEARTBEAT);
 
     // Deploy ChainlinkAdapter for later use
     const ChainlinkAdapterFactory = await ethers.getContractFactory("ChainlinkAdapter");
@@ -349,7 +349,7 @@ describe("🎬 Oracle Adapter - End-to-End Tests", function () {
       await mockOracleAdapter.setupToken("LINK", linkPrice, 8, true);
 
       // Add to TokenManager
-      await tokenManager.manageTokenData("LINK", await link.getAddress(), 18, HEARTBEAT);
+      await tokenManager["manageTokenData(string,address,uint8,uint256)"]("LINK", await link.getAddress(), 18, HEARTBEAT);
 
       // Verify price accessible
       const [price] = await tokenManager.getTokenPrice("LINK");
@@ -362,7 +362,7 @@ describe("🎬 Oracle Adapter - End-to-End Tests", function () {
 
       // Try to add without oracle support
       await expect(
-        tokenManager.manageTokenData("UNSUP", await unsupportedToken.getAddress(), 18, HEARTBEAT)
+        tokenManager["manageTokenData(string,address,uint8,uint256)"]("UNSUP", await unsupportedToken.getAddress(), 18, HEARTBEAT)
       ).to.be.revertedWith("Token not supported by oracle");
     });
 
@@ -376,7 +376,7 @@ describe("🎬 Oracle Adapter - End-to-End Tests", function () {
 
       // Should fail - Chainlink doesn't support it
       await expect(
-        tokenManager.manageTokenData("NEW", await newToken.getAddress(), 18, HEARTBEAT)
+        tokenManager["manageTokenData(string,address,uint8,uint256)"]("NEW", await newToken.getAddress(), 18, HEARTBEAT)
       ).to.be.revertedWith("Token not supported by oracle");
 
       // Switch back to MockOracleAdapter
@@ -384,7 +384,7 @@ describe("🎬 Oracle Adapter - End-to-End Tests", function () {
       await tokenManager.setOracleAdapter(await mockOracleAdapter.getAddress());
 
       // Now it works
-      await tokenManager.manageTokenData("NEW", await newToken.getAddress(), 18, HEARTBEAT);
+      await tokenManager["manageTokenData(string,address,uint8,uint256)"]("NEW", await newToken.getAddress(), 18, HEARTBEAT);
       
       const [price] = await tokenManager.getTokenPrice("NEW");
       expect(price).to.equal(ethers.parseUnits("10", 8));
