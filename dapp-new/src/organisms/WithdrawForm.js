@@ -5,6 +5,7 @@
 import { Card } from '../molecules/Card.js';
 import { Input } from '../atoms/Input.js';
 import { Button } from '../atoms/Button.js';
+import { PriceImpactDisplay } from '../molecules/PriceImpactDisplay.js';
 import { web3Manager } from '../utils/web3.js';
 import { toast } from '../molecules/Alert.js';
 import { CONFIG } from '../config/contracts.js';
@@ -18,6 +19,20 @@ export class WithdrawForm {
     this.maxAmount = '0';
     this.loading = false;
     this.selectedPreset = 100; // default 100%
+    this.estimatedOutput = '0';
+    this.priceImpact = 0;
+    this.pricePreviewContainer = null; // Store reference to preview DOM element
+    
+    // Create price impact display
+    this.priceImpactDisplay = new PriceImpactDisplay({
+      inputAmount: '0',
+      inputToken: 'LP',
+      outputAmount: '0',
+      outputToken: 'ETH',
+      priceImpact: 0,
+      fee: CONFIG.withdrawFee || '0.1',
+      loading: false,
+    });
   }
 
   async updateMaxAmount() {
@@ -38,7 +53,69 @@ export class WithdrawForm {
       const percentage = this.selectedPreset / 100;
       this.amount = (parseFloat(this.maxAmount) * percentage).toFixed(6);
     }
+    
+    // Calculate estimated output
+    this.calculateEstimatedOutput();
     this.update();
+  }
+
+  async calculateEstimatedOutput() {
+    const lpAmount = parseFloat(this.amount) || 0;
+    
+    if (lpAmount === 0) {
+      this.estimatedOutput = '0';
+      this.priceImpact = 0;
+      this.updatePriceImpact();
+      if (this.pricePreviewContainer) {
+        this.pricePreviewContainer.style.display = 'none';
+      }
+      return;
+    }
+
+    try {
+      // Get pool value per 100 LP tokens
+      const poolValue = await web3Manager.getPoolValue();
+      const poolValueNum = parseFloat(poolValue) || 0;
+      
+      // Calculate ETH output: (LP tokens / 100) * poolValue
+      // Example: 0.000075 LP, poolValue = 0.000225 ETH per 100 LP
+      // ETH = (0.000075 / 100) * 0.000225 = very small
+      const ethBeforeFee = (lpAmount / 100) * poolValueNum;
+      
+      // Subtract fee (0.1%)
+      const feePercentage = parseFloat(CONFIG.PROTOCOL.WITHDRAW_FEE) * 100 || 0.1;
+      const feeAmount = ethBeforeFee * (feePercentage / 100);
+      this.estimatedOutput = (ethBeforeFee - feeAmount).toFixed(8);
+      
+      // Calculate price impact (how much of the pool you're withdrawing)
+      // If you have 0.000075 LP and pool is 0.0001 LP total
+      this.priceImpact = ((lpAmount / 100) * 0.1).toFixed(2);
+      
+      this.updatePriceImpact();
+      if (this.pricePreviewContainer) {
+        this.pricePreviewContainer.style.display = 'block';
+      }
+    } catch (error) {
+      console.error('Error calculating output:', error);
+      this.estimatedOutput = '0';
+      this.priceImpact = 0;
+      this.updatePriceImpact();
+    }
+  }
+
+  updatePriceImpact() {
+    // Update the display data
+    this.priceImpactDisplay.inputAmount = parseFloat(this.amount || 0).toFixed(8);
+    this.priceImpactDisplay.outputAmount = this.estimatedOutput;
+    this.priceImpactDisplay.priceImpact = this.priceImpact;
+    this.priceImpactDisplay.loading = false;
+    
+    // Re-render the price preview if container exists
+    if (this.pricePreviewContainer) {
+      const newPreview = this.priceImpactDisplay.render();
+      this.pricePreviewContainer.innerHTML = '';
+      this.pricePreviewContainer.appendChild(newPreview);
+    }
   }
 
   async handleWithdraw() {
@@ -116,9 +193,18 @@ export class WithdrawForm {
       onChange: (value) => {
         this.amount = value;
         this.selectedPreset = null; // Clear preset selection when manually typing
+        this.calculateEstimatedOutput(); // Update price preview
       },
     });
     container.appendChild(input.render());
+
+    // Price Impact Preview (always render, hidden if amount is 0)
+    const priceImpactWrapper = document.createElement('div');
+    priceImpactWrapper.className = 'mt-4';
+    priceImpactWrapper.style.display = parseFloat(this.amount) > 0 ? 'block' : 'none';
+    this.pricePreviewContainer = priceImpactWrapper; // Store reference
+    priceImpactWrapper.appendChild(this.priceImpactDisplay.render());
+    container.appendChild(priceImpactWrapper);
 
     // Balance Info
     const balanceInfo = document.createElement('div');

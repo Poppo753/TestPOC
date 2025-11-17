@@ -5,6 +5,7 @@
 import { Card } from '../molecules/Card.js';
 import { Input } from '../atoms/Input.js';
 import { Button } from '../atoms/Button.js';
+import { PriceImpactDisplay } from '../molecules/PriceImpactDisplay.js';
 import { web3Manager } from '../utils/web3.js';
 import { toast } from '../molecules/Alert.js';
 import { CONFIG } from '../config/contracts.js';
@@ -16,6 +17,87 @@ export class DepositForm {
     this.onSuccess = config.onSuccess || (() => {});
     this.amount = '';
     this.loading = false;
+    this.estimatedOutput = '0';
+    this.priceImpact = 0;
+    this.pricePreviewContainer = null; // Store reference to preview DOM element
+    
+    // Create price impact display
+    this.priceImpactDisplay = new PriceImpactDisplay({
+      inputAmount: '0',
+      inputToken: 'ETH',
+      outputAmount: '0',
+      outputToken: 'LP',
+      priceImpact: 0,
+      fee: '0',
+      loading: false,
+    });
+  }
+
+  async calculateEstimatedOutput() {
+    const ethAmount = parseFloat(this.amount) || 0;
+    
+    if (ethAmount === 0) {
+      this.estimatedOutput = '0';
+      this.priceImpact = 0;
+      this.updatePriceImpact();
+      return;
+    }
+
+    try {
+      // Get current LP balance (total supply) and pool value
+      const [lpBalance, poolValue] = await Promise.all([
+        web3Manager.getLPBalance(),
+        web3Manager.getPoolValue()
+      ]);
+      
+      const poolValueNum = parseFloat(poolValue) || 0;
+      const totalSupply = parseFloat(lpBalance) || 0;
+      
+      // Calculate LP tokens based on pool ratio
+      // Formula: lpTokens = (ethDeposited / poolValue) * totalSupply
+      // If pool is empty, 1 ETH = 1 LP (initial ratio)
+      if (poolValueNum === 0 || totalSupply === 0) {
+        this.estimatedOutput = ethAmount.toFixed(8);
+        this.priceImpact = 0;
+      } else {
+        // Calculate how many LP tokens you get for your ETH
+        // If poolValue = 0.000225 ETH and you have 0.000100 LP total
+        // Your share = (0.5 ETH / 0.000225 ETH) * 0.000100 LP = lots!
+        // Actually: you own (yourLP / totalLP) * poolValue
+        // So: newLP = (ethAmount / poolValue) * totalLP... wait that's still wrong
+        
+        // CORRECT: Pool value is per 100 LP tokens
+        // So if pool value = 0.000225 ETH per 100 LP
+        // Then: LP tokens = (ethAmount / poolValue) * 100
+        this.estimatedOutput = ((ethAmount / poolValueNum) * 100).toFixed(8);
+        
+        // Price impact: how much your deposit affects the pool
+        const impactPercent = (ethAmount / poolValueNum) * 100;
+        this.priceImpact = impactPercent.toFixed(2);
+      }
+      
+      this.updatePriceImpact();
+    } catch (error) {
+      console.error('Error calculating output:', error);
+      this.estimatedOutput = '0';
+      this.priceImpact = 0;
+      this.updatePriceImpact();
+    }
+  }
+
+  updatePriceImpact() {
+    // Update the display data
+    this.priceImpactDisplay.inputAmount = parseFloat(this.amount || 0).toFixed(6);
+    this.priceImpactDisplay.outputAmount = this.estimatedOutput;
+    this.priceImpactDisplay.priceImpact = this.priceImpact;
+    this.priceImpactDisplay.loading = false;
+    
+    // Re-render the price preview if container exists
+    if (this.pricePreviewContainer) {
+      const newPreview = this.priceImpactDisplay.render();
+      this.pricePreviewContainer.innerHTML = '';
+      this.pricePreviewContainer.appendChild(newPreview);
+    }
   }
 
   async handleDeposit() {
@@ -83,9 +165,18 @@ export class DepositForm {
       disabled: this.loading,
       onChange: (value) => {
         this.amount = value;
+        this.calculateEstimatedOutput(); // Update price preview
       },
     });
     container.appendChild(input.render());
+
+    // Price Impact Preview (always render, hidden if amount is 0)
+    const priceImpactWrapper = document.createElement('div');
+    priceImpactWrapper.className = 'mt-4';
+    priceImpactWrapper.style.display = parseFloat(this.amount) > 0 ? 'block' : 'none';
+    this.pricePreviewContainer = priceImpactWrapper; // Store reference
+    priceImpactWrapper.appendChild(this.priceImpactDisplay.render());
+    container.appendChild(priceImpactWrapper);
 
     // Fee Info
     const feeInfo = document.createElement('div');
@@ -106,6 +197,7 @@ export class DepositForm {
         disabled: this.loading,
         onClick: () => {
           this.amount = amount;
+          this.calculateEstimatedOutput(); // Update price preview
           this.update();
         },
       });
