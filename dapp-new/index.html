@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jethos Protocol - DeFi Strategy</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Custom Tailwind Config -->
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            purple: {
+              50: '#faf5ff',
+              100: '#f3e8ff',
+              200: '#e9d5ff',
+              300: '#d8b4fe',
+              400: '#c084fc',
+              500: '#a855f7',
+              600: '#9333ea',
+              700: '#7e22ce',
+              800: '#6b21a8',
+              900: '#581c87',
+            },
+          },
+          animation: {
+            'spin': 'spin 1s linear infinite',
+            'slide-in': 'slideIn 0.3s ease-out',
+            'slide-out': 'slideOut 0.3s ease-in',
+          },
+          keyframes: {
+            slideIn: {
+              '0%': { transform: 'translateX(100%)', opacity: '0' },
+              '100%': { transform: 'translateX(0)', opacity: '1' },
+            },
+            slideOut: {
+              '0%': { transform: 'translateX(0)', opacity: '1' },
+              '100%': { transform: 'translateX(100%)', opacity: '0' },
+            },
+          },
+        },
+      },
+    }
+  </script>
+  
+  <!-- Custom Styles -->
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+        sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(147, 51, 234, 0.5);
+      border-radius: 5px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(147, 51, 234, 0.8);
+    }
+
+    /* Loading animation */
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.5;
+      }
+    }
+
+    .animate-pulse {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    /* Gradient text */
+    .gradient-text {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* Glass effect */
+    .glass {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    /* Hover glow effect */
+    .hover-glow {
+      transition: all 0.3s ease;
+    }
+
+    .hover-glow:hover {
+      box-shadow: 0 0 30px rgba(147, 51, 234, 0.5);
+    }
+
+    /* Hide number input arrows */
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    input[type=number] {
+      -moz-appearance: textfield;
+    }
+
+    /* Custom animations for alerts */
+    .animate-slide-in {
+      animation: slideIn 0.3s ease-out forwards;
+    }
+
+    .animate-slide-out {
+      animation: slideOut 0.3s ease-in forwards;
+    }
+
+    /* Link styles */
+    a {
+      color: inherit;
+      text-decoration: none;
+      transition: opacity 0.2s ease;
+    }
+
+    a:hover {
+      opacity: 0.8;
+    }
+
+    /* Focus styles for accessibility */
+    *:focus {
+      outline: 2px solid rgba(147, 51, 234, 0.5);
+      outline-offset: 2px;
+    }
+
+    button:focus {
+      outline: 2px solid rgba(147, 51, 234, 0.8);
+    }
+  </style>
+</head>
+<body>
+  <!-- App Container -->
+  <div id="app"></div>
+
+  <!-- Loading Indicator (optional, shown while app initializes) -->
+  <div id="loader" style="display: none;">
+    <div class="fixed inset-0 bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 flex items-center justify-center">
+      <div class="text-center">
+        <div class="text-6xl mb-4 animate-pulse">🌊</div>
+        <h2 class="text-2xl font-bold text-white mb-2">Loading Jethos Protocol</h2>
+        <p class="text-purple-200">Connecting to Arbitrum...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import Scripts -->
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
