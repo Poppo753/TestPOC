@@ -68,6 +68,10 @@ contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
     /// @notice Main account number (used for all deposits)
     uint256 public constant MAIN_ACCOUNT = 0;
     
+    /// @notice Starting account number for borrow positions
+    /// @dev Users' borrow positions start from account #1, #2, #3...
+    uint256 public constant BORROW_ACCOUNT_START = 1;
+    
     /// @notice Feature flags bitmask for ISwapPlugin
     uint256 private constant FEATURE_BASIC_SWAP = 1;
     
@@ -91,6 +95,10 @@ contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
     /// @notice Supported tokens list (for easy enumeration)
     address[] public supportedTokens;
     
+    /// @notice Track next available borrow account number per user
+    /// @dev user address => next account number (starts at BORROW_ACCOUNT_START = 1)
+    mapping(address => uint256) public nextBorrowAccount;
+    
     // ==================== ERRORS ====================
     
     error InvalidAddress();
@@ -101,6 +109,9 @@ contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
     error WithdrawalFailed(address token, uint256 amount);
     error InvalidSwapDirection(address tokenIn, address tokenOut);
     error SyntheticTokenAlreadyExists(address token);
+    error InvalidAccountNumber(uint256 accountNumber);
+    error AccountNotEmpty(uint256 accountNumber);
+    error FlashLoanFailed(string reason);
     
     // ==================== EVENTS ====================
     
@@ -121,6 +132,39 @@ contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
         address indexed token,
         uint256 amount,
         address syntheticToken
+    );
+    
+    event BorrowPositionOpened(
+        address indexed user,
+        uint256 indexed accountNumber,
+        address indexed collateralToken,
+        uint256 collateralAmount
+    );
+    
+    event BorrowPositionBorrowed(
+        address indexed user,
+        uint256 indexed accountNumber,
+        address indexed borrowToken,
+        uint256 borrowAmount
+    );
+    
+    event BorrowPositionRepaid(
+        address indexed user,
+        uint256 indexed accountNumber,
+        address indexed debtToken,
+        uint256 repayAmount
+    );
+    
+    event BorrowPositionClosed(
+        address indexed user,
+        uint256 indexed accountNumber
+    );
+    
+    event FlashLoanExecuted(
+        address indexed user,
+        address indexed token,
+        uint256 amount,
+        address callbackContract
     );
     
     // ==================== CONSTRUCTOR ====================

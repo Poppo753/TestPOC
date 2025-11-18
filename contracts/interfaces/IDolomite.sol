@@ -58,6 +58,32 @@ interface IDolomiteMargin {
         address owner,
         uint256 accountNumber
     ) external view returns (bool isLiquidatable);
+
+    /**
+     * @notice Execute an Operation (sequence of Actions)
+     * @dev Used for flash loans and complex multi-step operations
+     * @param accounts Array of accounts involved in operation
+     * @param actions Array of actions to execute
+     * 
+     * FLASH LOAN FLOW:
+     * 1. Withdraw (goes negative, creates flash loan)
+     * 2. Call external contract (executes arbitrage/trade)
+     * 3. Deposit (repays flash loan)
+     * If account is not collateralized at end, transaction reverts
+     * 
+     * EXAMPLE: Flash loan 1000 USDC
+     * Account[] accounts = [Account.Info(address(this), 0)];
+     * ActionArgs[] actions = [
+     *   Withdraw(1000 USDC),           // Step 1: Borrow
+     *   Call(arbitrageContract, data), // Step 2: Use funds
+     *   Deposit(1000 USDC)             // Step 3: Repay
+     * ];
+     * dolomiteMargin.operate(accounts, actions);
+     */
+    function operate(
+        Account.Info[] memory accounts,
+        Actions.ActionArgs[] memory actions
+    ) external;
 }
 
 /**
@@ -77,6 +103,80 @@ library AccountBalanceLib {
         From,
         To,
         None
+    }
+}
+
+/**
+ * @title Actions
+ * @notice Library for Dolomite Actions used in Operations
+ * @dev Based on Dolomite Flash Loans documentation
+ * https://docs.dolomite.io/developer-documentation/flash-loans
+ */
+library Actions {
+    /**
+     * @notice Types of actions that can be performed in an Operation
+     * @dev Deposit: Add tokens to account
+     *      Withdraw: Remove tokens from account (can create flash loan if negative)
+     *      Transfer: Move tokens between accounts
+     *      Buy: Purchase asset using collateral
+     *      Sell: Sell asset for another token
+     *      Trade: Execute arbitrary trade
+     *      Liquidate: Liquidate undercollateralized account
+     *      Vaporize: Liquidate underwater account
+     *      Call: Execute external contract call
+     */
+    enum ActionType {
+        Deposit,
+        Withdraw,
+        Transfer,
+        Buy,
+        Sell,
+        Trade,
+        Liquidate,
+        Vaporize,
+        Call
+    }
+
+    /**
+     * @notice Structure representing a single action in an operation
+     * @dev Used to build complex multi-step operations (e.g., flash loans)
+     */
+    struct ActionArgs {
+        ActionType actionType;           // Type of action
+        uint256 accountId;               // Account index in Operation
+        TypesExtended.AssetAmount amount;        // Amount involved
+        uint256 primaryMarketId;         // Primary market ID
+        uint256 secondaryMarketId;       // Secondary market ID (for trades)
+        address otherAddress;            // Address involved (token, contract, etc.)
+        uint256 otherAccountId;          // Other account index
+        bytes data;                      // Additional data for action
+    }
+}
+
+/**
+ * @title Types (Extended)
+ * @notice Additional Dolomite data types for operations
+ */
+library TypesExtended {
+    /**
+     * @notice Asset amount representation
+     * @dev Used in Actions to specify amounts
+     */
+    enum AssetDenomination {
+        Wei,     // Amount in Wei (actual token amount)
+        Par      // Amount in Par (Dolomite internal accounting)
+    }
+
+    enum AssetReference {
+        Delta,   // Relative amount (add/subtract)
+        Target   // Absolute amount (set to this value)
+    }
+
+    struct AssetAmount {
+        bool sign;                      // true = positive, false = negative
+        AssetDenomination denomination; // Wei or Par
+        AssetReference ref;            // Delta or Target
+        uint256 value;                 // Actual amount
     }
 }
 
