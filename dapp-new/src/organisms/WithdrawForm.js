@@ -54,9 +54,35 @@ export class WithdrawForm {
       this.amount = (parseFloat(this.maxAmount) * percentage).toFixed(6);
     }
     
-    // Calculate estimated output
+    // Update the input field value directly without full re-render
+    const inputElement = document.querySelector('input[type="number"][placeholder="0.0"]');
+    if (inputElement) {
+      inputElement.value = this.amount;
+    }
+    
+    // Update preset buttons visually
+    this.updatePresetButtons();
+    
+    // Calculate estimated output (async but don't wait)
     this.calculateEstimatedOutput();
-    this.update();
+  }
+
+  updatePresetButtons() {
+    const presetButtons = document.querySelectorAll('[data-preset-button]');
+    presetButtons.forEach(btn => {
+      const preset = parseInt(btn.getAttribute('data-preset'));
+      if (preset === this.selectedPreset) {
+        btn.className = btn.className.replace('border-gray-300', 'border-purple-600');
+        btn.className = btn.className.replace('text-gray-700', 'text-white');
+        btn.className = btn.className.replace('bg-white', 'bg-purple-600');
+        btn.className = btn.className.replace('hover:bg-gray-50', 'hover:bg-purple-700');
+      } else {
+        btn.className = btn.className.replace('border-purple-600', 'border-gray-300');
+        btn.className = btn.className.replace('text-white', 'text-gray-700');
+        btn.className = btn.className.replace('bg-purple-600', 'bg-white');
+        btn.className = btn.className.replace('hover:bg-purple-700', 'hover:bg-gray-50');
+      }
+    });
   }
 
   async calculateEstimatedOutput() {
@@ -73,23 +99,31 @@ export class WithdrawForm {
     }
 
     try {
-      // Get pool value per 100 LP tokens
-      const poolValue = await web3Manager.getPoolValue();
+      // Get pool value (total ETH) and total LP supply
+      const [poolValue, totalSupply] = await Promise.all([
+        web3Manager.getPoolValue().catch(e => { console.error('getPoolValue error:', e); return '0'; }),
+        web3Manager.getTotalLPSupply().catch(e => { console.error('getTotalLPSupply error:', e); return '0'; })
+      ]);
+      
       const poolValueNum = parseFloat(poolValue) || 0;
+      const totalSupplyNum = parseFloat(totalSupply) || 0;
       
-      // Calculate ETH output: (LP tokens / 100) * poolValue
-      // Example: 0.000075 LP, poolValue = 0.000225 ETH per 100 LP
-      // ETH = (0.000075 / 100) * 0.000225 = very small
-      const ethBeforeFee = (lpAmount / 100) * poolValueNum;
-      
-      // Subtract fee (0.1%)
-      const feePercentage = parseFloat(CONFIG.PROTOCOL.WITHDRAW_FEE) * 100 || 0.1;
-      const feeAmount = ethBeforeFee * (feePercentage / 100);
-      this.estimatedOutput = (ethBeforeFee - feeAmount).toFixed(8);
-      
-      // Calculate price impact (how much of the pool you're withdrawing)
-      // If you have 0.000075 LP and pool is 0.0001 LP total
-      this.priceImpact = ((lpAmount / 100) * 0.1).toFixed(2);
+      if (totalSupplyNum === 0) {
+        this.estimatedOutput = '0';
+        this.priceImpact = 0;
+      } else {
+        // Formula: ethReceived = (lpAmount / totalSupply) * poolValue
+        // Your share of the pool = your LP / total LP
+        const ethBeforeFee = (lpAmount / totalSupplyNum) * poolValueNum;
+        
+        // Subtract withdrawal fee
+        const feePercentage = parseFloat(CONFIG.PROTOCOL.WITHDRAW_FEE) * 100 || 0.1;
+        const feeAmount = ethBeforeFee * (feePercentage / 100);
+        this.estimatedOutput = (ethBeforeFee - feeAmount).toFixed(8);
+        
+        // Price impact: % of pool you're withdrawing
+        this.priceImpact = ((lpAmount / totalSupplyNum) * 100).toFixed(2);
+      }
       
       this.updatePriceImpact();
       if (this.pricePreviewContainer) {
@@ -176,7 +210,10 @@ export class WithdrawForm {
           this.updateAmountFromPreset();
         },
       });
-      presetsWrapper.appendChild(btn.render());
+      const btnElement = btn.render();
+      btnElement.setAttribute('data-preset-button', '');
+      btnElement.setAttribute('data-preset', preset);
+      presetsWrapper.appendChild(btnElement);
     });
     container.appendChild(presetsWrapper);
 

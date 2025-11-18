@@ -19,12 +19,19 @@ export class Badge {
       error: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
       info: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
       purple: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
+      // Documentation variants
+      view: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-300 dark:border-blue-700',
+      write: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 border border-orange-300 dark:border-orange-700',
+      emergency: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border border-red-300 dark:border-red-700',
+      gas: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+      access: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
     };
     return variants[this.variant] || variants.default;
   }
 
   getSizeClasses() {
     const sizes = {
+      xs: 'px-1.5 py-0.5 text-xs',
       sm: 'px-2 py-0.5 text-xs',
       md: 'px-2.5 py-1 text-sm',
       lg: 'px-3 py-1.5 text-base',

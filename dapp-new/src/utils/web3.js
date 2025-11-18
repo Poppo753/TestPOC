@@ -160,6 +160,26 @@ class Web3Manager {
     return ethers.formatEther(balance);
   }
 
+  async getTotalLPSupply() {
+    if (!this.contracts.proxyGeneral) return "0";
+    try {
+      // ProxyGeneral is an ERC20 token, should have totalSupply()
+      const totalSupply = await this.contracts.proxyGeneral.totalSupply();
+      return ethers.formatEther(totalSupply);
+    } catch (e) {
+      console.error('Error getting total supply:', e);
+      // Fallback: return a reasonable estimate if totalSupply fails
+      // Use pool value as approximation (1:1 ratio)
+      try {
+        const poolValue = await this.getPoolValue();
+        return poolValue;
+      } catch (e2) {
+        console.error('Error getting pool value fallback:', e2);
+        return "0";
+      }
+    }
+  }
+
   async getPoolValue() {
     if (!this.contracts.valueCalculator) return "0";
     try {

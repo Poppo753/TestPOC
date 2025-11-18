@@ -35,68 +35,80 @@ export class DepositForm {
 
   async calculateEstimatedOutput() {
     const ethAmount = parseFloat(this.amount) || 0;
+    console.log('🎯 calculateEstimatedOutput called, amount:', ethAmount);
     
     if (ethAmount === 0) {
       this.estimatedOutput = '0';
       this.priceImpact = 0;
       this.updatePriceImpact();
+      if (this.pricePreviewContainer) {
+        this.pricePreviewContainer.style.display = 'none';
+      }
       return;
     }
 
     try {
-      // Get current LP balance (total supply) and pool value
-      const [lpBalance, poolValue] = await Promise.all([
-        web3Manager.getLPBalance(),
-        web3Manager.getPoolValue()
+      // Get pool value (total ETH in pool) and total LP supply
+      const [poolValue, totalSupply] = await Promise.all([
+        web3Manager.getPoolValue().catch(e => { console.error('getPoolValue error:', e); return '0'; }),
+        web3Manager.getTotalLPSupply().catch(e => { console.error('getTotalLPSupply error:', e); return '0'; })
       ]);
       
       const poolValueNum = parseFloat(poolValue) || 0;
-      const totalSupply = parseFloat(lpBalance) || 0;
+      const totalSupplyNum = parseFloat(totalSupply) || 0;
       
-      // Calculate LP tokens based on pool ratio
-      // Formula: lpTokens = (ethDeposited / poolValue) * totalSupply
-      // If pool is empty, 1 ETH = 1 LP (initial ratio)
-      if (poolValueNum === 0 || totalSupply === 0) {
+      // Calculate LP tokens you'll receive
+      if (poolValueNum === 0 || totalSupplyNum === 0) {
+        // Empty pool: 1 ETH = 1 LP token (initial ratio)
         this.estimatedOutput = ethAmount.toFixed(8);
         this.priceImpact = 0;
       } else {
-        // Calculate how many LP tokens you get for your ETH
-        // If poolValue = 0.000225 ETH and you have 0.000100 LP total
-        // Your share = (0.5 ETH / 0.000225 ETH) * 0.000100 LP = lots!
-        // Actually: you own (yourLP / totalLP) * poolValue
-        // So: newLP = (ethAmount / poolValue) * totalLP... wait that's still wrong
+        // Formula: lpTokens = (ethDeposited / poolValue) * totalSupply
+        // This maintains the ratio: your % of pool = your LP tokens / total LP
+        this.estimatedOutput = ((ethAmount / poolValueNum) * totalSupplyNum).toFixed(8);
         
-        // CORRECT: Pool value is per 100 LP tokens
-        // So if pool value = 0.000225 ETH per 100 LP
-        // Then: LP tokens = (ethAmount / poolValue) * 100
-        this.estimatedOutput = ((ethAmount / poolValueNum) * 100).toFixed(8);
-        
-        // Price impact: how much your deposit affects the pool
-        const impactPercent = (ethAmount / poolValueNum) * 100;
-        this.priceImpact = impactPercent.toFixed(2);
+        // Price impact: how much % you're adding to the pool
+        this.priceImpact = ((ethAmount / poolValueNum) * 100).toFixed(2);
       }
       
+      console.log('✅ Calculation complete - Output:', this.estimatedOutput, 'Impact:', this.priceImpact);
       this.updatePriceImpact();
+      if (this.pricePreviewContainer) {
+        this.pricePreviewContainer.style.display = 'block';
+      }
     } catch (error) {
       console.error('Error calculating output:', error);
       this.estimatedOutput = '0';
       this.priceImpact = 0;
       this.updatePriceImpact();
+      if (this.pricePreviewContainer) {
+        this.pricePreviewContainer.style.display = 'none';
+      }
     }
   }
 
   updatePriceImpact() {
+    console.log('🔄 updatePriceImpact called');
     // Update the display data
     this.priceImpactDisplay.inputAmount = parseFloat(this.amount || 0).toFixed(6);
     this.priceImpactDisplay.outputAmount = this.estimatedOutput;
     this.priceImpactDisplay.priceImpact = this.priceImpact;
     this.priceImpactDisplay.loading = false;
     
+    console.log('📊 Preview data:', {
+      input: this.priceImpactDisplay.inputAmount,
+      output: this.priceImpactDisplay.outputAmount,
+      impact: this.priceImpactDisplay.priceImpact
+    });
+    
     // Re-render the price preview if container exists
     if (this.pricePreviewContainer) {
+      console.log('✅ Container exists, re-rendering preview');
       const newPreview = this.priceImpactDisplay.render();
       this.pricePreviewContainer.innerHTML = '';
       this.pricePreviewContainer.appendChild(newPreview);
+    } else {
+      console.warn('⚠️ pricePreviewContainer is null!');
     }
   }
 
@@ -164,7 +176,9 @@ export class DepositForm {
       step: '0.00001',
       disabled: this.loading,
       onChange: (value) => {
+        console.log('🔢 Input onChange triggered, value:', value);
         this.amount = value;
+        console.log('📊 Calling calculateEstimatedOutput...');
         this.calculateEstimatedOutput(); // Update price preview
       },
     });
@@ -197,8 +211,15 @@ export class DepositForm {
         disabled: this.loading,
         onClick: () => {
           this.amount = amount;
-          this.calculateEstimatedOutput(); // Update price preview
-          this.update();
+          
+          // Update input field directly
+          const inputElement = document.querySelector('input[type="number"][placeholder="0.0"]');
+          if (inputElement) {
+            inputElement.value = amount;
+          }
+          
+          // Calculate and show price preview
+          this.calculateEstimatedOutput();
         },
       });
       quickButtonsWrapper.appendChild(btn.render());

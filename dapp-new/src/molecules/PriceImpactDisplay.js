@@ -46,8 +46,17 @@ export class PriceImpactDisplay {
     const container = document.createElement('div');
     container.className = 'space-y-3';
 
-    // Price preview
-    container.appendChild(this.pricePreview.render());
+    // Create NEW PricePreview with current values (don't reuse old instance)
+    const pricePreview = new PricePreview({
+      inputAmount: this.inputAmount,
+      inputToken: this.inputToken,
+      outputAmount: this.outputAmount,
+      outputToken: this.outputToken,
+      loading: this.loading,
+      variant: this.getVariantFromImpact(),
+    });
+    
+    container.appendChild(pricePreview.render());
 
     // Details section
     if (!this.loading) {
