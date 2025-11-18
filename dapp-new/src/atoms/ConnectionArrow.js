@@ -105,6 +105,12 @@ export class ConnectionArrow {
             this.toElement
         );
 
+        console.log('🎯 ConnectionArrow render:', {
+            from: { x: from.x, y: from.y },
+            to: { x: to.x, y: to.y },
+            distance: Math.sqrt((to.x - from.x) ** 2 + (to.y - from.y) ** 2)
+        });
+
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.setAttribute('class', 'connection-arrow pointer-events-none');
         svg.style.position = 'fixed';
@@ -116,7 +122,9 @@ export class ConnectionArrow {
 
         // Curve path
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute('d', this.createArrowPath(from, to));
+        const pathData = this.createArrowPath(from, to);
+        console.log('📐 Path data:', pathData);
+        path.setAttribute('d', pathData);
         path.setAttribute('stroke', this.color);
         path.setAttribute('stroke-width', '4');
         path.setAttribute('fill', 'none');
@@ -136,7 +144,9 @@ export class ConnectionArrow {
 
         // Arrow head
         const arrowHead = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        arrowHead.setAttribute('d', this.createArrowHead(from, to));
+        const arrowHeadData = this.createArrowHead(from, to);
+        console.log('🔺 ArrowHead data:', arrowHeadData);
+        arrowHead.setAttribute('d', arrowHeadData);
         arrowHead.setAttribute('stroke', this.color);
         arrowHead.setAttribute('stroke-width', '4');
         arrowHead.setAttribute('fill', 'none');
@@ -145,6 +155,8 @@ export class ConnectionArrow {
 
         svg.appendChild(path);
         svg.appendChild(arrowHead);
+        
+        console.log('✅ SVG children count:', svg.childNodes.length);
 
         // Store references for updates
         this.element = svg;

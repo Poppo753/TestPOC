@@ -4,6 +4,7 @@
 // ============================================
 
 import { TransactionItem } from '../atoms/TransactionItem.js';
+import { Skeleton } from '../atoms/Skeleton.js';
 
 export class TransactionList {
   constructor(config = {}) {
@@ -14,24 +15,39 @@ export class TransactionList {
 
   render() {
     const container = document.createElement('div');
-    container.className = 'space-y-1';
+    container.className = 'space-y-3';
 
     if (this.loading) {
-      // Loading skeletons
+      // Loading skeletons with shimmer effect
       for (let i = 0; i < 3; i++) {
-        const skeleton = document.createElement('div');
-        skeleton.className = 'flex items-center justify-between p-3 rounded-lg animate-pulse';
-        skeleton.innerHTML = `
-          <div class="flex items-center space-x-3">
-            <div class="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
-            <div class="space-y-2">
-              <div class="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
-              <div class="h-3 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
-            </div>
-          </div>
-          <div class="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
-        `;
-        container.appendChild(skeleton);
+        const skeletonRow = document.createElement('div');
+        skeletonRow.className = 'flex items-center justify-between p-4 bg-white/5 backdrop-blur-sm rounded-xl border border-white/10';
+        
+        const left = document.createElement('div');
+        left.className = 'flex items-center space-x-3';
+        
+        // Icon skeleton
+        const iconSkeleton = new Skeleton({ width: '40px', height: '40px', variant: 'circular' });
+        left.appendChild(iconSkeleton.render());
+        
+        // Text skeletons
+        const textContainer = document.createElement('div');
+        textContainer.className = 'space-y-2';
+        
+        const titleSkeleton = new Skeleton({ width: '100px', height: '16px' });
+        const subtitleSkeleton = new Skeleton({ width: '140px', height: '12px' });
+        
+        textContainer.appendChild(titleSkeleton.render());
+        textContainer.appendChild(subtitleSkeleton.render());
+        left.appendChild(textContainer);
+        
+        skeletonRow.appendChild(left);
+        
+        // Right side skeleton
+        const hashSkeleton = new Skeleton({ width: '80px', height: '16px' });
+        skeletonRow.appendChild(hashSkeleton.render());
+        
+        container.appendChild(skeletonRow);
       }
       return container;
     }

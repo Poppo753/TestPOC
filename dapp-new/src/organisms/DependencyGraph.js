@@ -11,6 +11,46 @@ export class DependencyGraph {
         this.modulesGrid = modulesGrid;
         this.arrows = [];
         this.isActive = false;
+        this.mode = 'outgoing'; // 'outgoing' or 'incoming'
+        
+        // Build reverse dependency map for incoming dependencies
+        this.buildIncomingMap();
+    }
+
+    /**
+     * Build reverse dependency map (who calls this function)
+     */
+    buildIncomingMap() {
+        this.incomingDependencies = new Map();
+        
+        this.dependencies.forEach(dep => {
+            const fromParsed = this.parseFunctionName(dep.from);
+            
+            dep.to.forEach(targetFullName => {
+                const toParsed = this.parseFunctionName(targetFullName);
+                const targetKey = toParsed.function;
+                
+                if (!this.incomingDependencies.has(targetKey)) {
+                    this.incomingDependencies.set(targetKey, []);
+                }
+                
+                this.incomingDependencies.get(targetKey).push({
+                    from: dep.from,
+                    module: fromParsed.module,
+                    function: fromParsed.function
+                });
+            });
+        });
+        
+        console.log('📊 Incoming dependencies map built:', this.incomingDependencies.size, 'functions');
+    }
+
+    /**
+     * Set dependency mode
+     */
+    setMode(mode) {
+        this.mode = mode;
+        console.log(`🔄 Dependency mode: ${mode}`);
     }
 
     /**
@@ -69,6 +109,20 @@ export class DependencyGraph {
     showDependencies(functionName) {
         this.clearAll();
 
+        if (this.mode === 'outgoing') {
+            this.showOutgoingDependencies(functionName);
+        } else {
+            this.showIncomingDependencies(functionName);
+        }
+
+        this.isActive = true;
+        this.setupEventListeners();
+    }
+
+    /**
+     * Show outgoing dependencies (what this function calls)
+     */
+    showOutgoingDependencies(functionName) {
         // Find the source element
         const sourceElement = this.findFunctionElement(functionName);
         if (!sourceElement) {
@@ -86,7 +140,7 @@ export class DependencyGraph {
         });
 
         if (!deps || !deps.to || deps.to.length === 0) {
-            console.log(`DependencyGraph: No dependencies found for ${functionName}`);
+            console.log(`DependencyGraph: No outgoing dependencies found for ${functionName}`);
             return;
         }
 
@@ -131,11 +185,77 @@ export class DependencyGraph {
                 console.warn(`DependencyGraph: Target element not found for ${parsed.function}`);
             }
         });
+    }
 
-        this.isActive = true;
+    /**
+     * Show incoming dependencies (what calls this function)
+     */
+    showIncomingDependencies(functionName) {
+        // Find the target element (this function)
+        const targetElement = this.findFunctionElement(functionName);
+        if (!targetElement) {
+            console.warn(`DependencyGraph: Target element not found for ${functionName}`);
+            return;
+        }
 
-        // Update arrows on scroll/resize
-        this.setupEventListeners();
+        // Highlight target (this function being called)
+        targetElement.classList.add('ring-4', 'ring-purple-500', 'ring-opacity-50');
+
+        // Find who calls this function
+        const incomingDeps = this.incomingDependencies.get(functionName);
+
+        if (!incomingDeps || incomingDeps.length === 0) {
+            console.log(`DependencyGraph: No incoming dependencies found for ${functionName}`);
+            return;
+        }
+
+        // Create arrows from each caller TO this function
+        incomingDeps.forEach((caller, index) => {
+            const sourceElement = this.findTargetElement(caller.function, caller.module);
+
+            if (sourceElement) {
+                console.log(`🔗 Creating incoming arrow: ${caller.function} → ${functionName}`);
+                console.log('  Source:', sourceElement);
+                console.log('  Target:', targetElement);
+                
+                // Highlight source (caller)
+                sourceElement.classList.add('ring-2', 'ring-orange-500', 'ring-opacity-50');
+
+                // Determine color
+                const color = this.getColorForFunction(functionName); // Color of target function
+                console.log('  Color:', color);
+
+                // Create arrow FROM caller TO this function (same direction as outgoing)
+                setTimeout(() => {
+                    const arrow = new ConnectionArrow({
+                        fromElement: sourceElement,  // Caller
+                        toElement: targetElement,     // This function
+                        color: color,
+                        animated: true
+                    });
+
+                    const arrowElement = arrow.render();
+                    console.log('  Arrow element created:', arrowElement);
+                    
+                    if (arrowElement) {
+                        document.body.appendChild(arrowElement);
+                        this.arrows.push({ 
+                            arrow, 
+                            arrowElement, 
+                            sourceElement, 
+                            targetElement,
+                            targetModule: caller.module,
+                            targetFunction: caller.function
+                        });
+                        
+                        // Initial update to ensure correct positioning
+                        requestAnimationFrame(() => arrow.update());
+                    }
+                }, index * 100);
+            } else {
+                console.warn(`DependencyGraph: Source element not found for ${caller.function}`);
+            }
+        });
     }
 
     /**

@@ -160,6 +160,65 @@
     button:focus {
       outline: 2px solid rgba(147, 51, 234, 0.8);
     }
+
+    /* Skeleton Loading Styles */
+    .skeleton {
+      display: block !important;
+      position: relative;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.15) !important;
+      border: 2px solid rgba(147, 51, 234, 0.5) !important; /* Debug border */
+      border-radius: 8px;
+      min-width: 20px;
+      min-height: 20px;
+    }
+
+    .skeleton.rectangular {
+      border-radius: 8px;
+    }
+
+    .skeleton.circular {
+      border-radius: 50%;
+    }
+
+    .skeleton.text {
+      border-radius: 4px;
+      height: 1em;
+      margin-bottom: 0.5em;
+    }
+
+    .skeleton-shimmer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.4) 50%,
+        rgba(255, 255, 255, 0) 100%
+      );
+      animation: shimmer 2s ease-in-out infinite;
+      transform: translateX(-100%);
+    }
+
+    @keyframes shimmer {
+      0% {
+        transform: translateX(-100%);
+      }
+      100% {
+        transform: translateX(200%);
+      }
+    }
+
+    .skeleton-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
   </style>
 </head>
 <body>

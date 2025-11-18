@@ -6,6 +6,7 @@
 import { Card } from '../molecules/Card.js';
 import { TransactionList } from '../molecules/TransactionList.js';
 import { Button } from '../atoms/Button.js';
+import { Skeleton } from '../atoms/Skeleton.js';
 import { web3Manager } from '../utils/web3.js';
 import { CONFIG } from '../config/contracts.js';
 
@@ -36,14 +37,22 @@ export class TransactionHistoryPanel {
       console.log(`📜 Loading transactions from ${this.currentBlockRange.toLocaleString()} blocks...`);
       const newTxs = await web3Manager.fetchRecentTransactions(this.currentBlockRange);
       
-      // Merge with existing (avoid duplicates)
-      this.transactions = this.mergeTxs(this.transactions, newTxs);
+      // Save to localStorage
+      if (web3Manager.userAddress) {
+        localStorage.setItem(
+          `tx_history_${web3Manager.userAddress}`,
+          JSON.stringify(newTxs)
+        );
+      }
+      
+      // Set transactions
+      this.transactions = newTxs;
       
       // Always have more to load (can go infinite)
       this.hasMoreToLoad = true;
 
-      // Filter by type if needed
-      this.applyFilter();
+      // Apply filter (without reloading from localStorage)
+      this.filterTransactions();
 
     } catch (error) {
       console.error('Error loading transactions:', error);
@@ -70,22 +79,27 @@ export class TransactionHistoryPanel {
       
       const newTxs = await web3Manager.fetchRecentTransactions(this.currentBlockRange);
       
-      // Merge with existing (avoid duplicates)
-      this.transactions = this.mergeTxs(this.transactions, newTxs);
+      // Merge with existing in localStorage
+      const stored = localStorage.getItem(`tx_history_${web3Manager.userAddress}`);
+      const existingTxs = stored ? JSON.parse(stored) : [];
+      const merged = this.mergeTxs(existingTxs, newTxs);
       
-      // Update localStorage with all transactions
+      // Update localStorage with merged transactions
       if (web3Manager.userAddress) {
         localStorage.setItem(
           `tx_history_${web3Manager.userAddress}`,
-          JSON.stringify(this.transactions)
+          JSON.stringify(merged)
         );
       }
+      
+      // Set transactions
+      this.transactions = merged;
       
       // Always have more to load
       this.hasMoreToLoad = true;
 
       // Apply current filter
-      this.applyFilter();
+      this.filterTransactions();
 
     } catch (error) {
       console.error('Error loading more transactions:', error);
@@ -115,17 +129,33 @@ export class TransactionHistoryPanel {
   }
 
   applyFilter() {
-    // Load from localStorage
+    // This method is called from DashboardTemplate after saving to localStorage
+    // Load all transactions from localStorage
     const stored = localStorage.getItem(`tx_history_${web3Manager.userAddress}`);
     if (stored) {
-      this.transactions = JSON.parse(stored);
-    }
-    
-    // Filter by type if needed
-    if (this.filterType !== 'all') {
-      this.transactions = this.transactions.filter(tx => tx.type === this.filterType);
-    }
+      const allTxs = JSON.parse(stored);
+      
+      // Filter by type if needed
+      if (this.filterType !== 'all') {
+        this.transactions = allTxs.filter(tx => tx.type === this.filterType);
+      } else {
+        this.transactions = allTxs;
+      }
 
+      // Sort by timestamp (newest first)
+      this.transactions.sort((a, b) => b.timestamp - a.timestamp);
+    }
+  }
+
+  filterTransactions() {
+    // Filter current transactions without reloading from localStorage
+    if (this.filterType !== 'all') {
+      const stored = localStorage.getItem(`tx_history_${web3Manager.userAddress}`);
+      if (stored) {
+        const allTxs = JSON.parse(stored);
+        this.transactions = allTxs.filter(tx => tx.type === this.filterType);
+      }
+    }
     // Sort by timestamp (newest first)
     this.transactions.sort((a, b) => b.timestamp - a.timestamp);
   }
@@ -219,7 +249,7 @@ export class TransactionHistoryPanel {
         size: 'xs',
         onClick: () => {
           this.filterType = filter.value;
-          this.applyFilter();
+          this.filterTransactions();
           this.update();
         },
       });
@@ -259,6 +289,46 @@ export class TransactionHistoryPanel {
       loading: this.loading,
     });
     container.appendChild(list.render());
+
+    // Loading More skeleton
+    if (this.loadingMore) {
+      const loadingMoreSkeleton = document.createElement('div');
+      loadingMoreSkeleton.className = 'mt-4 space-y-3';
+      loadingMoreSkeleton.style.minHeight = '180px'; // Ensure visibility
+      
+      for (let i = 0; i < 2; i++) {
+        const skeletonRow = document.createElement('div');
+        skeletonRow.className = 'flex items-center justify-between p-4 bg-white/5 backdrop-blur-sm rounded-xl border border-white/10';
+        
+        const left = document.createElement('div');
+        left.className = 'flex items-center space-x-3';
+        
+        // Icon skeleton
+        const iconSkeleton = new Skeleton({ width: '40px', height: '40px', variant: 'circular' });
+        left.appendChild(iconSkeleton.render());
+        
+        // Text skeletons
+        const textContainer = document.createElement('div');
+        textContainer.className = 'space-y-2';
+        
+        const titleSkeleton = new Skeleton({ width: '100px', height: '16px' });
+        const subtitleSkeleton = new Skeleton({ width: '140px', height: '12px' });
+        
+        textContainer.appendChild(titleSkeleton.render());
+        textContainer.appendChild(subtitleSkeleton.render());
+        left.appendChild(textContainer);
+        
+        skeletonRow.appendChild(left);
+        
+        // Right side skeleton
+        const hashSkeleton = new Skeleton({ width: '80px', height: '16px' });
+        skeletonRow.appendChild(hashSkeleton.render());
+        
+        loadingMoreSkeleton.appendChild(skeletonRow);
+      }
+      
+      container.appendChild(loadingMoreSkeleton);
+    }
 
     // Load More button
     if (!this.loading && this.hasMoreToLoad && this.transactions.length > 0) {

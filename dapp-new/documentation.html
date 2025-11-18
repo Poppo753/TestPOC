@@ -89,6 +89,7 @@
                 this.currentModal = null;
                 this.dependencyGraph = null;
                 this.dependenciesActive = false;
+                this.activeDependencyFunction = null;
                 
                 this.init();
             }
@@ -253,6 +254,18 @@
                 });
                 buttonsContainer.appendChild(depsBtn.render());
 
+                // Mode toggle (only visible when dependencies are active)
+                if (this.dependenciesActive) {
+                    const modeBtn = new Button({
+                        label: this.dependencyGraph?.mode === 'outgoing' ? '→ Outgoing' : '← Incoming',
+                        variant: 'outline',
+                        size: 'sm',
+                        fullWidth: true,
+                        onClick: () => this.toggleDependencyMode()
+                    });
+                    buttonsContainer.appendChild(modeBtn.render());
+                }
+
                 // View JSON button
                 const jsonBtn = new Button({
                     label: '📄 View JSON',
@@ -283,15 +296,24 @@
             handleFunctionClick(func) {
                 // Se la modalità dependencies è attiva, mostra le frecce invece del modal
                 if (this.dependenciesActive) {
-                    console.log('🔗 Showing dependencies for:', func.name);
-                    this.dependencyGraph.clearAll();
-                    setTimeout(() => {
-                        try {
-                            this.dependencyGraph.showDependencies(func.name);
-                        } catch (error) {
-                            console.warn('Error showing dependencies:', error);
-                        }
-                    }, 50);
+                    // Se clicco sulla stessa funzione, toglie le frecce
+                    if (this.activeDependencyFunction === func.name) {
+                        console.log('🔗 Hiding dependencies for:', func.name);
+                        this.dependencyGraph.clearAll();
+                        this.activeDependencyFunction = null;
+                    } else {
+                        // Altrimenti mostra le frecce della nuova funzione
+                        console.log('🔗 Showing dependencies for:', func.name);
+                        this.dependencyGraph.clearAll();
+                        this.activeDependencyFunction = func.name;
+                        setTimeout(() => {
+                            try {
+                                this.dependencyGraph.showDependencies(func.name);
+                            } catch (error) {
+                                console.warn('Error showing dependencies:', error);
+                            }
+                        }, 50);
+                    }
                 } else {
                     // Altrimenti apri il modal normale
                     this.openFunctionModal(func);
@@ -347,6 +369,28 @@
                 }
             }
 
+            toggleDependencyMode() {
+                if (!this.dependencyGraph) return;
+                
+                const newMode = this.dependencyGraph.mode === 'outgoing' ? 'incoming' : 'outgoing';
+                this.dependencyGraph.setMode(newMode);
+                
+                // If there's an active function, refresh its dependencies with new mode
+                if (this.activeDependencyFunction) {
+                    this.dependencyGraph.clearAll();
+                    setTimeout(() => {
+                        try {
+                            this.dependencyGraph.showDependencies(this.activeDependencyFunction);
+                        } catch (error) {
+                            console.warn('Error showing dependencies:', error);
+                        }
+                    }, 50);
+                }
+                
+                // Update only the controls panel, not full render
+                this.updateControlsPanel();
+            }
+
             toggleDependencies() {
                 if (!this.dependencyGraph) {
                     console.warn('Dependency graph not initialized');
@@ -361,10 +405,19 @@
                 } else {
                     console.log('🔗 Deactivating dependency visualization...');
                     this.dependencyGraph.clearAll();
+                    this.activeDependencyFunction = null;
                 }
 
-                // Update button
-                this.render();
+                // Update only controls panel
+                this.updateControlsPanel();
+            }
+
+            updateControlsPanel() {
+                const existingPanel = document.querySelector('.fixed.top-6.right-6');
+                if (existingPanel) {
+                    const newPanel = this.createControlsPanel();
+                    existingPanel.replaceWith(newPanel);
+                }
             }
 
             getColorForFunction(funcName) {

@@ -4,6 +4,7 @@
 
 import { Card } from '../molecules/Card.js';
 import { StatDisplay } from '../molecules/StatDisplay.js';
+import { Skeleton } from '../atoms/Skeleton.js';
 import { web3Manager } from '../utils/web3.js';
 import { formatEth } from '../utils/formatting.js';
 
