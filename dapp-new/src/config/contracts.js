@@ -37,6 +37,8 @@ export const ABIS = {
     "function withdraw(uint256 shares) external returns (uint256)",
     "function depositsEnabled() external view returns (bool)",
     "function withdrawsEnabled() external view returns (bool)",
+    "event Deposit(address indexed user, uint256 ethAmount, uint256 sharesReceived, uint256 totalPoolETH, uint256 totalSupply)",
+    "event Withdrawn(address indexed user, uint256 shares, uint256 ethAmount, uint256 totalPoolValue, uint256 remainingPoolBalance)",
   ],
   
   PROXY_GENERAL: [
@@ -44,6 +46,7 @@ export const ABIS = {
     "function totalSupply() external view returns (uint256)",
     "function name() external view returns (string)",
     "function symbol() external view returns (string)",
+    "function decimals() external view returns (uint8)",
   ],
   
   VALUE_CALCULATOR: [

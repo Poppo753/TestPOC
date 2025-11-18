@@ -160,16 +160,26 @@ class Web3Manager {
     return ethers.formatEther(balance);
   }
 
+  async getLPDecimals() {
+    if (!this.contracts.proxyGeneral) return 18;
+    try {
+      const decimals = await this.contracts.proxyGeneral.decimals();
+      return Number(decimals);
+    } catch (e) {
+      console.warn('⚠️ LP token decimals() not available, using default 18');
+      return 18; // default to 18
+    }
+  }
+
   async getTotalLPSupply() {
     if (!this.contracts.proxyGeneral) return "0";
     try {
-      // ProxyGeneral is an ERC20 token, should have totalSupply()
       const totalSupply = await this.contracts.proxyGeneral.totalSupply();
-      return ethers.formatEther(totalSupply);
+      const decimals = await this.getLPDecimals();
+      return ethers.formatUnits(totalSupply, decimals);
     } catch (e) {
       console.error('Error getting total supply:', e);
       // Fallback: return a reasonable estimate if totalSupply fails
-      // Use pool value as approximation (1:1 ratio)
       try {
         const poolValue = await this.getPoolValue();
         return poolValue;
@@ -266,6 +276,145 @@ class Web3Manager {
     );
 
     return tx;
+  }
+
+  // ============================================
+  // TRANSACTION HISTORY
+  // ============================================
+
+  async fetchRecentTransactions(maxBlocks = 100000) {
+    if (!this.contracts.liquidityManager || !this.userAddress) {
+      console.log('⚠️ Cannot fetch transactions: not connected');
+      return [];
+    }
+
+    try {
+      const currentBlock = await this.provider.getBlockNumber();
+      const fromBlock = Math.max(0, currentBlock - maxBlocks);
+
+      console.log('📜 Fetching transactions from block', fromBlock, 'to', currentBlock, 'for user:', this.userAddress);
+
+      const transactions = [];
+
+      try {
+        // Fetch deposit events - same approach as withdraw
+        console.log('🔍 Querying ALL Deposit events first...');
+        const allDepositFilter = this.contracts.liquidityManager.filters.Deposit();
+        const allDeposits = await this.contracts.liquidityManager.queryFilter(
+          allDepositFilter,
+          fromBlock,
+          currentBlock
+        );
+        console.log('📥 Found', allDeposits.length, 'total deposit events in blockchain');
+        
+        // Filter for this user
+        console.log('🔍 Filtering Deposit events for user:', this.userAddress);
+        const userDeposits = allDeposits.filter(event => 
+          event.args.user && event.args.user.toLowerCase() === this.userAddress.toLowerCase()
+        );
+        console.log('📥 Found', userDeposits.length, 'deposit events for this user');
+
+        for (const event of userDeposits) {
+          try {
+            console.log('📦 Processing deposit event:', event);
+            const block = await event.getBlock();
+            transactions.push({
+              type: 'deposit',
+              amount: ethers.formatEther(event.args.ethAmount),
+              token: 'ETH',
+              timestamp: block.timestamp * 1000, // Convert to ms
+              hash: event.transactionHash,
+              status: 'confirmed',
+              explorerUrl: `${CONFIG.BLOCK_EXPLORER}/tx/${event.transactionHash}`,
+            });
+          } catch (blockError) {
+            console.warn('⚠️ Error parsing deposit event:', blockError);
+          }
+        }
+      } catch (depositError) {
+        console.warn('⚠️ Error fetching deposit events:', depositError.message);
+        console.error('Full deposit error:', depositError);
+      }
+
+      try {
+        // Fetch withdraw events - same approach
+        console.log('🔍 Querying ALL Withdrawn events first...');
+        const allWithdrawFilter = this.contracts.liquidityManager.filters.Withdrawn();
+        const allWithdraws = await this.contracts.liquidityManager.queryFilter(
+          allWithdrawFilter,
+          fromBlock,
+          currentBlock
+        );
+        console.log('📤 Found', allWithdraws.length, 'total withdrawn events in blockchain');
+        
+        // Filter for this user
+        console.log('🔍 Filtering Withdrawn events for user:', this.userAddress);
+        const userWithdraws = allWithdraws.filter(event => 
+          event.args.user && event.args.user.toLowerCase() === this.userAddress.toLowerCase()
+        );
+        console.log('📤 Found', userWithdraws.length, 'withdrawn events for this user');
+
+        for (const event of userWithdraws) {
+          try {
+            console.log('📦 Processing withdrawn event:', event);
+            const block = await event.getBlock();
+            transactions.push({
+              type: 'withdraw',
+              amount: ethers.formatEther(event.args.shares),
+              token: 'LP',
+              timestamp: block.timestamp * 1000,
+              hash: event.transactionHash,
+              status: 'confirmed',
+              explorerUrl: `${CONFIG.BLOCK_EXPLORER}/tx/${event.transactionHash}`,
+            });
+          } catch (blockError) {
+            console.warn('⚠️ Error parsing withdrawn event:', blockError);
+          }
+        }
+      } catch (withdrawError) {
+        console.warn('⚠️ Error fetching withdrawn events:', withdrawError.message);
+        console.error('Full withdraw error:', withdrawError);
+      }
+
+      // Sort by timestamp (newest first)
+      transactions.sort((a, b) => b.timestamp - a.timestamp);
+
+      console.log('✅ Found', transactions.length, 'transactions');
+      return transactions;
+
+    } catch (error) {
+      console.error('❌ Error fetching transactions:', error);
+      return [];
+    }
+  }
+
+  async waitForTransaction(txHash, onUpdate) {
+    if (!this.provider) {
+      throw new Error('Not connected');
+    }
+
+    try {
+      console.log('⏳ Waiting for transaction:', txHash);
+      
+      // Wait for transaction to be mined
+      const receipt = await this.provider.waitForTransaction(txHash);
+      
+      console.log('✅ Transaction confirmed:', txHash);
+      console.log('📊 Receipt:', receipt);
+
+      // Call update callback if provided
+      if (onUpdate) {
+        onUpdate(receipt.status === 1 ? 'confirmed' : 'failed');
+      }
+
+      return receipt;
+    } catch (error) {
+      console.error('❌ Transaction failed:', error);
+      if (onUpdate) {
+        onUpdate('failed');
+      }
+      throw error;
+    }
   }
 }
 

@@ -77,6 +77,7 @@
         import { ModulesGrid } from './src/organisms/ModulesGrid.js';
         import { FunctionModal } from './src/organisms/FunctionModal.js';
         import { DocumentationStats } from './src/organisms/DocumentationStats.js';
+        import { DependencyGraph } from './src/organisms/DependencyGraph.js';
         import { ApiReferenceParser } from './src/utils/MarkdownParser.js';
         import { Button } from './src/atoms/Button.js';
 
@@ -86,6 +87,8 @@
                 this.dependencies = [];
                 this.stats = {};
                 this.currentModal = null;
+                this.dependencyGraph = null;
+                this.dependenciesActive = false;
                 
                 this.init();
             }
@@ -147,9 +150,28 @@
                 // Modules Grid
                 const modulesGrid = new ModulesGrid({
                     modules: this.modules,
-                    onFunctionClick: (func) => this.openFunctionModal(func)
+                    onFunctionClick: (func) => this.handleFunctionClick(func)
                 });
                 main.appendChild(modulesGrid.render());
+                
+                // Store reference for later use
+                this.modulesGrid = modulesGrid;
+
+                // Listen to module toggle events to refresh arrows
+                if (modulesGrid.moduleCards) {
+                    modulesGrid.moduleCards.forEach(moduleCard => {
+                        const originalUpdate = moduleCard.update.bind(moduleCard);
+                        moduleCard.update = () => {
+                            originalUpdate();
+                            // Refresh arrows after module toggle
+                            if (this.dependencyGraph && this.dependenciesActive) {
+                                setTimeout(() => {
+                                    this.dependencyGraph.refreshArrows();
+                                }, 350); // Wait for animation
+                            }
+                        };
+                    });
+                }
 
                 appContainer.appendChild(main);
 
@@ -159,6 +181,13 @@
                     position: 'bottom-left'
                 });
                 appContainer.appendChild(statsPanel.render());
+
+                // Initialize Dependency Graph
+                this.dependencyGraph = new DependencyGraph({
+                    dependencies: this.dependencies,
+                    getColorForFunction: (funcName) => this.getColorForFunction(funcName),
+                    modulesGrid: this.modulesGrid
+                });
 
                 // Controls Panel
                 const controlsPanel = this.createControlsPanel();
@@ -214,29 +243,27 @@
                 const buttonsContainer = document.createElement('div');
                 buttonsContainer.className = 'flex flex-col gap-2';
 
-                // JSON button
-                const jsonBtn = new Button({
-                    label: '📄 View JSON',
-                    variant: 'primary',
+                // Dependencies button - Toggle visualization
+                const depsBtn = new Button({
+                    label: this.dependenciesActive ? '🔗 Hide Dependencies' : '🔗 Show Dependencies',
+                    variant: this.dependenciesActive ? 'warning' : 'secondary',
                     size: 'sm',
                     fullWidth: true,
-                    onClick: () => {
-                        window.open('api_reference.json', '_blank');
-                    }
+                    onClick: () => this.toggleDependencies()
                 });
-                buttonsContainer.appendChild(jsonBtn.render());
+                buttonsContainer.appendChild(depsBtn.render());
 
-                // Dependencies button
-                const depsBtn = new Button({
-                    label: '🔗 Dependencies',
-                    variant: 'secondary',
+                // View JSON button
+                const jsonBtn = new Button({
+                    label: '📄 View JSON',
+                    variant: 'outline',
                     size: 'sm',
                     fullWidth: true,
                     onClick: () => {
                         window.open('function_dependencies.json', '_blank');
                     }
                 });
-                buttonsContainer.appendChild(depsBtn.render());
+                buttonsContainer.appendChild(jsonBtn.render());
 
                 // Reload button
                 const reloadBtn = new Button({
@@ -251,6 +278,24 @@
                 panel.appendChild(buttonsContainer);
 
                 return panel;
+            }
+
+            handleFunctionClick(func) {
+                // Se la modalità dependencies è attiva, mostra le frecce invece del modal
+                if (this.dependenciesActive) {
+                    console.log('🔗 Showing dependencies for:', func.name);
+                    this.dependencyGraph.clearAll();
+                    setTimeout(() => {
+                        try {
+                            this.dependencyGraph.showDependencies(func.name);
+                        } catch (error) {
+                            console.warn('Error showing dependencies:', error);
+                        }
+                    }, 50);
+                } else {
+                    // Altrimenti apri il modal normale
+                    this.openFunctionModal(func);
+                }
             }
 
             openFunctionModal(func) {
@@ -302,11 +347,55 @@
                 }
             }
 
+            toggleDependencies() {
+                if (!this.dependencyGraph) {
+                    console.warn('Dependency graph not initialized');
+                    return;
+                }
+
+                this.dependenciesActive = !this.dependenciesActive;
+
+                if (this.dependenciesActive) {
+                    console.log('🔗 Activating interactive dependency mode...');
+                    // Just enable the mode, arrows appear on click
+                } else {
+                    console.log('🔗 Deactivating dependency visualization...');
+                    this.dependencyGraph.clearAll();
+                }
+
+                // Update button
+                this.render();
+            }
+
+            getColorForFunction(funcName) {
+                // Find function in modules
+                for (const module of this.modules) {
+                    const func = module.functions.find(f => f.name === funcName);
+                    if (func) {
+                        const colorMap = {
+                            'view': '#60a5fa',
+                            'write': '#f59e0b',
+                            'emergency': '#ef4444',
+                            'external': '#8b5cf6'
+                        };
+                        return colorMap[func.color] || '#60a5fa';
+                    }
+                }
+                return '#60a5fa';
+            }
+
             async reload() {
                 console.log('🔄 Reloading data...');
                 const appContainer = document.getElementById('app');
                 appContainer.innerHTML = '<div id="loading" class="flex items-center justify-center h-screen"><div class="text-center"><div class="inline-block w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div><p class="text-xl text-blue-400">Reloading...</p></div></div>';
                 
+                // Clear dependencies
+                if (this.dependencyGraph) {
+                    this.dependencyGraph.destroy();
+                    this.dependencyGraph = null;
+                }
+                this.dependenciesActive = false;
+
                 try {
                     await this.loadData();
                     this.render();

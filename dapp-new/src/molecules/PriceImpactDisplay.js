@@ -12,33 +12,27 @@ export class PriceImpactDisplay {
     this.inputToken = config.inputToken || 'ETH';
     this.outputAmount = config.outputAmount || '0';
     this.outputToken = config.outputToken || 'LP';
-    this.priceImpact = config.priceImpact || 0; // percentage
+    this.priceImpact = config.priceImpact || 0; // percentage (price change)
+    this.poolImpact = config.poolImpact || 0; // percentage (pool size change)
+    this.preRate = config.preRate || 0; // ETH per LP before
+    this.postRate = config.postRate || 0; // ETH per LP after
     this.fee = config.fee || '0';
     this.loading = config.loading || false;
-    
-    this.pricePreview = new PricePreview({
-      inputAmount: this.inputAmount,
-      inputToken: this.inputToken,
-      outputAmount: this.outputAmount,
-      outputToken: this.outputToken,
-      loading: this.loading,
-      variant: this.getVariantFromImpact(),
-    });
   }
 
   getVariantFromImpact() {
-    const impact = Math.abs(parseFloat(this.priceImpact));
-    if (impact < 0.1) return 'success';
-    if (impact < 1) return 'default';
-    if (impact < 3) return 'warning';
+    const impact = Math.abs(parseFloat(this.poolImpact || this.priceImpact));
+    if (impact < 1) return 'success';
+    if (impact < 10) return 'default';
+    if (impact < 50) return 'warning';
     return 'error';
   }
 
   getImpactBadgeVariant() {
-    const impact = Math.abs(parseFloat(this.priceImpact));
-    if (impact < 0.1) return 'success';
-    if (impact < 1) return 'default';
-    if (impact < 3) return 'warning';
+    const impact = Math.abs(parseFloat(this.poolImpact || this.priceImpact));
+    if (impact < 1) return 'success';
+    if (impact < 10) return 'default';
+    if (impact < 50) return 'warning';
     return 'error';
   }
 
@@ -61,26 +55,61 @@ export class PriceImpactDisplay {
     // Details section
     if (!this.loading) {
       const details = document.createElement('div');
-      details.className = 'flex items-center justify-between text-sm px-1';
+      details.className = 'space-y-2 text-xs px-1';
 
-      // Fee info
+      // Row 1: Fee + Pool Impact
+      const row1 = document.createElement('div');
+      row1.className = 'flex items-center justify-between';
+      
       const feeDiv = document.createElement('div');
       feeDiv.className = 'text-gray-600 dark:text-gray-400';
-      feeDiv.innerHTML = `
-        <span>Fee: ${this.fee}%</span>
-      `;
+      feeDiv.innerHTML = `<span>Fee: ${this.fee}%</span>`;
+      
+      const poolImpactDiv = document.createElement('div');
+      poolImpactDiv.className = 'text-gray-700 dark:text-gray-300 font-medium';
+      poolImpactDiv.textContent = `Pool: ${parseFloat(this.poolImpact || 0) > 0 ? '+' : ''}${parseFloat(this.poolImpact || 0).toFixed(2)}%`;
+      
+      row1.appendChild(feeDiv);
+      row1.appendChild(poolImpactDiv);
+      details.appendChild(row1);
 
-      // Price impact badge
-      const impact = parseFloat(this.priceImpact);
+      // Row 2: Rate (ETH per LP) before/after
+      if (this.preRate > 0 || this.postRate > 0) {
+        const rateRow = document.createElement('div');
+        rateRow.className = 'flex items-center justify-between text-gray-600 dark:text-gray-400';
+        
+        const rateLabel = document.createElement('span');
+        rateLabel.textContent = 'Rate (ETH/LP):';
+        
+        const rateValues = document.createElement('span');
+        rateValues.className = 'font-mono';
+        rateValues.textContent = `${parseFloat(this.preRate).toFixed(6)} → ${parseFloat(this.postRate).toFixed(6)}`;
+        
+        rateRow.appendChild(rateLabel);
+        rateRow.appendChild(rateValues);
+        details.appendChild(rateRow);
+      }
+
+      // Row 3: Price impact badge
+      const impactRow = document.createElement('div');
+      impactRow.className = 'flex items-center justify-between';
+      
+      const impactLabel = document.createElement('span');
+      impactLabel.className = 'text-gray-600 dark:text-gray-400';
+      impactLabel.textContent = 'Price Impact:';
+      
+      const priceImpact = parseFloat(this.priceImpact);
       const impactBadge = new Badge({
-        label: `${impact > 0 ? '+' : ''}${impact.toFixed(2)}% impact`,
+        label: `${priceImpact > 0 ? '+' : ''}${priceImpact.toFixed(2)}%`,
         variant: this.getImpactBadgeVariant(),
         size: 'sm',
-        icon: impact > 0 ? '↑' : '↓',
+        icon: priceImpact > 0 ? '↑' : '↓',
       });
+      
+      impactRow.appendChild(impactLabel);
+      impactRow.appendChild(impactBadge.render());
+      details.appendChild(impactRow);
 
-      details.appendChild(feeDiv);
-      details.appendChild(impactBadge.render());
       container.appendChild(details);
     }
 

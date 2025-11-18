@@ -7,6 +7,7 @@ import { Input } from '../atoms/Input.js';
 import { Button } from '../atoms/Button.js';
 import { PriceImpactDisplay } from '../molecules/PriceImpactDisplay.js';
 import { web3Manager } from '../utils/web3.js';
+import { transactionHistory } from './TransactionHistoryPanel.js';
 import { toast } from '../molecules/Alert.js';
 import { CONFIG } from '../config/contracts.js';
 import { MESSAGES } from '../config/constants.js';
@@ -20,6 +21,10 @@ export class DepositForm {
     this.estimatedOutput = '0';
     this.priceImpact = 0;
     this.pricePreviewContainer = null; // Store reference to preview DOM element
+    this.inputElement = null; // Store reference to input element
+    this.poolImpact = 0; // % of pool being added
+    this.preRate = 0; // ETH per LP before
+    this.postRate = 0; // ETH per LP after
     
     // Create price impact display
     this.priceImpactDisplay = new PriceImpactDisplay({
@@ -62,13 +67,34 @@ export class DepositForm {
         // Empty pool: 1 ETH = 1 LP token (initial ratio)
         this.estimatedOutput = ethAmount.toFixed(8);
         this.priceImpact = 0;
+        this.poolImpact = 0;
+        this.preRate = 1;
+        this.postRate = 1;
       } else {
         // Formula: lpTokens = (ethDeposited / poolValue) * totalSupply
-        // This maintains the ratio: your % of pool = your LP tokens / total LP
         this.estimatedOutput = ((ethAmount / poolValueNum) * totalSupplyNum).toFixed(8);
+
+        // Pool impact: % of pool you're adding
+        this.poolImpact = ((ethAmount / poolValueNum) * 100).toFixed(2);
+
+        // Price impact: change in ETH per LP rate
+        this.preRate = poolValueNum / totalSupplyNum; // ETH per LP before
+        const newTotalSupply = totalSupplyNum + parseFloat(this.estimatedOutput);
+        const newPoolValue = poolValueNum + ethAmount;
+        this.postRate = newPoolValue / newTotalSupply; // ETH per LP after
+        const impactPercent = ((this.postRate - this.preRate) / this.preRate) * 100;
+        this.priceImpact = impactPercent.toFixed(2);
         
-        // Price impact: how much % you're adding to the pool
-        this.priceImpact = ((ethAmount / poolValueNum) * 100).toFixed(2);
+        console.log('📊 Deposit calculation:', {
+          ethAmount,
+          poolValueNum,
+          totalSupplyNum,
+          estimatedOutput: this.estimatedOutput,
+          poolImpact: this.poolImpact + '%',
+          preRate: this.preRate.toFixed(8),
+          postRate: this.postRate.toFixed(8),
+          priceImpact: this.priceImpact + '%'
+        });
       }
       
       console.log('✅ Calculation complete - Output:', this.estimatedOutput, 'Impact:', this.priceImpact);
@@ -93,12 +119,18 @@ export class DepositForm {
     this.priceImpactDisplay.inputAmount = parseFloat(this.amount || 0).toFixed(6);
     this.priceImpactDisplay.outputAmount = this.estimatedOutput;
     this.priceImpactDisplay.priceImpact = this.priceImpact;
+    this.priceImpactDisplay.poolImpact = this.poolImpact;
+    this.priceImpactDisplay.preRate = this.preRate;
+    this.priceImpactDisplay.postRate = this.postRate;
     this.priceImpactDisplay.loading = false;
     
     console.log('📊 Preview data:', {
       input: this.priceImpactDisplay.inputAmount,
       output: this.priceImpactDisplay.outputAmount,
-      impact: this.priceImpactDisplay.priceImpact
+      priceImpact: this.priceImpactDisplay.priceImpact,
+      poolImpact: this.priceImpactDisplay.poolImpact,
+      preRate: this.preRate.toFixed(8),
+      postRate: this.postRate.toFixed(8)
     });
     
     // Re-render the price preview if container exists
@@ -131,9 +163,21 @@ export class DepositForm {
 
       const tx = await web3Manager.deposit(this.amount);
       
+      // Add pending transaction to history
+      transactionHistory.addTransaction({
+        type: 'deposit',
+        amount: this.amount,
+        token: 'ETH',
+        hash: tx.hash,
+        status: 'pending',
+      });
+      
       toast.info(`Transaction sent! <a href="${CONFIG.BLOCK_EXPLORER}/tx/${tx.hash}" target="_blank" class="underline font-bold">View on Arbiscan</a>`);
 
-      const receipt = await tx.wait();
+      // Wait for confirmation and update status
+      const receipt = await web3Manager.waitForTransaction(tx.hash, (status) => {
+        transactionHistory.updateTransactionStatus(tx.hash, status);
+      });
 
       toast.success(`${MESSAGES.SUCCESS.DEPOSIT} <a href="${CONFIG.BLOCK_EXPLORER}/tx/${receipt.hash}" target="_blank" class="underline font-bold">View on Arbiscan</a>`);
 
@@ -182,7 +226,10 @@ export class DepositForm {
         this.calculateEstimatedOutput(); // Update price preview
       },
     });
-    container.appendChild(input.render());
+    const inputElement = input.render();
+    // Store reference to the actual input element
+    this.inputElement = inputElement.querySelector('input');
+    container.appendChild(inputElement);
 
     // Price Impact Preview (always render, hidden if amount is 0)
     const priceImpactWrapper = document.createElement('div');
@@ -212,10 +259,9 @@ export class DepositForm {
         onClick: () => {
           this.amount = amount;
           
-          // Update input field directly
-          const inputElement = document.querySelector('input[type="number"][placeholder="0.0"]');
-          if (inputElement) {
-            inputElement.value = amount;
+          // Update input field directly using stored reference
+          if (this.inputElement) {
+            this.inputElement.value = amount;
           }
           
           // Calculate and show price preview

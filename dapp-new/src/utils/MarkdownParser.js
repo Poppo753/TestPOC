@@ -14,8 +14,11 @@ export class ApiReferenceParser {
       const module = {
         name: moduleData.name,
         id: moduleData.id,
+        displayOrder: moduleData.displayOrder,
         functions: []
       };
+
+      console.log(`📦 Module: ${module.name}, displayOrder: ${module.displayOrder}`);
 
       // Iterate through functions
       for (const [funcKey, funcData] of Object.entries(moduleData.functions)) {

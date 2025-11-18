@@ -5,6 +5,7 @@
     "beacon": {
       "name": "Beacon",
       "id": "beacon",
+      "displayOrder": 1,
       "functions": {
         "beacon-getimplementation": {
           "name": "getImplementation",
@@ -713,6 +714,7 @@
     "proxygeneral": {
       "name": "ProxyGeneral",
       "id": "proxygeneral",
+      "displayOrder": 2,
       "functions": {
         "proxygeneral-mint": {
           "name": "mint",
@@ -1703,6 +1705,7 @@
     "tokenmanager": {
       "name": "TokenManager",
       "id": "tokenmanager",
+      "displayOrder": 3,
       "functions": {
         "tokenmanager-setoracleadapter": {
           "name": "setOracleAdapter",
@@ -2404,6 +2407,7 @@
     "valuecalculator": {
       "name": "ValueCalculator",
       "id": "valuecalculator",
+      "displayOrder": 4,
       "functions": {
         "valuecalculator-calculatetokenvalue": {
           "name": "calculateTokenValue",
@@ -2876,6 +2880,7 @@
     "liquiditymanager": {
       "name": "LiquidityManager",
       "id": "liquiditymanager",
+      "displayOrder": 5,
       "functions": {
         "liquiditymanager-deposit": {
           "name": "deposit",
@@ -3732,6 +3737,7 @@
     "swapmanager": {
       "name": "SwapManager",
       "id": "swapmanager",
+      "displayOrder": 6,
       "functions": {
         "swapmanager-performswap": {
           "name": "performSwap",
@@ -4793,6 +4799,7 @@
     "emergencyhandler": {
       "name": "EmergencyHandler",
       "id": "emergencyhandler",
+      "displayOrder": 7,
       "functions": {
         "emergencyhandler-emergencypause": {
           "name": "emergencyPause",
@@ -6137,6 +6144,7 @@
     "parametermanager": {
       "name": "ParameterManager",
       "id": "parametermanager",
+      "displayOrder": 8,
       "functions": {
         "parametermanager-getcurrentparametervalue": {
           "name": "getCurrentParameterValue",

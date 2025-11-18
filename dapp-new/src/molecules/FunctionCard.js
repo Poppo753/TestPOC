@@ -21,6 +21,10 @@ export class FunctionCard {
   render() {
     const card = document.createElement('div');
     
+    // Add data attribute for dependency graph
+    card.setAttribute('data-function-name', this.func.name);
+    card.className = 'function-card';
+    
     const baseClasses = 'p-3 rounded-lg cursor-pointer transition-all duration-200 border-l-3';
     const hoverClasses = 'hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:translate-x-1';
     const bgClasses = 'bg-gray-100/50 dark:bg-gray-800/30';
@@ -32,14 +36,14 @@ export class FunctionCard {
       emergency: 'border-l-red-500'
     };
 
-    card.className = `${baseClasses} ${hoverClasses} ${bgClasses} ${borderColorClasses[type]}`.trim();
+    card.className += ` ${baseClasses} ${hoverClasses} ${bgClasses} ${borderColorClasses[type]}`.trim();
 
     // Function name
     const nameDiv = document.createElement('div');
     nameDiv.className = 'flex items-center justify-between mb-2';
 
     const functionName = document.createElement('span');
-    functionName.className = 'font-mono font-semibold text-sm text-gray-900 dark:text-white';
+    functionName.className = 'font-mono font-semibold text-sm text-gray-900 dark:text-white function-name';
     functionName.textContent = `${this.func.name}()`;
     nameDiv.appendChild(functionName);
 
@@ -79,7 +83,10 @@ export class FunctionCard {
     }
 
     // Click handler
-    card.addEventListener('click', () => this.onClick(this.func));
+    card.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.onClick(this.func);
+    });
 
     return card;
   }

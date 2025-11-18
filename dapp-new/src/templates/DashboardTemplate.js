@@ -6,6 +6,7 @@ import { WalletConnect } from '../organisms/WalletConnect.js';
 import { StatsGrid } from '../organisms/StatsGrid.js';
 import { DepositForm } from '../organisms/DepositForm.js';
 import { WithdrawForm } from '../organisms/WithdrawForm.js';
+import { transactionHistory } from '../organisms/TransactionHistoryPanel.js';
 import { web3Manager } from '../utils/web3.js';
 
 export class DashboardTemplate {
@@ -39,6 +40,20 @@ export class DashboardTemplate {
       statsSection.innerHTML = '';
       statsSection.appendChild(this.statsGrid.render());
       
+      // Add transaction history panel below actions
+      const mainGrid = document.querySelector('[data-main-grid="true"]');
+      if (mainGrid && !document.querySelector('[data-tx-history-panel]')) {
+        console.log('📜 Adding transaction history panel...');
+        const historySection = document.createElement('div');
+        historySection.className = 'lg:col-span-12';
+        
+        const historyElement = transactionHistory.render();
+        historyElement.setAttribute('data-tx-history-panel', 'true');
+        historySection.appendChild(historyElement);
+        
+        mainGrid.appendChild(historySection);
+      }
+      
       // Load data and update forms
       setTimeout(async () => {
         await this.statsGrid.updateStats();
@@ -47,6 +62,9 @@ export class DashboardTemplate {
         // Update forms to enable buttons
         this.depositForm.update();
         this.withdrawForm.update();
+        
+        // Load transaction history
+        await this.loadTransactionHistory();
         
         // Start auto-refresh
         this.walletConnect.startAutoRefresh();
@@ -69,6 +87,33 @@ export class DashboardTemplate {
     this.walletConnect.updateWalletInfo();
     this.statsGrid.updateStats();
     this.withdrawForm.updateMaxAmount();
+    
+    // Reload transaction history
+    this.loadTransactionHistory();
+  }
+
+  async loadTransactionHistory() {
+    console.log('📜 Loading transaction history...');
+    
+    try {
+      // Fetch from blockchain
+      const transactions = await web3Manager.fetchRecentTransactions();
+      
+      // Store in localStorage
+      if (web3Manager.userAddress) {
+        localStorage.setItem(
+          `tx_history_${web3Manager.userAddress}`,
+          JSON.stringify(transactions)
+        );
+      }
+      
+      // Load into panel
+      await transactionHistory.loadTransactions();
+      
+      console.log('✅ Transaction history loaded:', transactions.length, 'transactions');
+    } catch (error) {
+      console.error('❌ Error loading transaction history:', error);
+    }
   }
 
   renderHeader() {
@@ -92,6 +137,7 @@ export class DashboardTemplate {
   renderMainGrid() {
     const grid = document.createElement('div');
     grid.className = 'grid grid-cols-1 lg:grid-cols-12 gap-6';
+    grid.setAttribute('data-main-grid', 'true');
 
     // Wallet Connect - Top left, 1 column span
     const walletSection = document.createElement('div');
@@ -135,6 +181,18 @@ export class DashboardTemplate {
     actionsSection.appendChild(this.withdrawForm.render());
     
     grid.appendChild(actionsSection);
+
+    // Transaction History Panel - Full width below actions
+    if (this.isConnected || web3Manager.userAddress) {
+      const historySection = document.createElement('div');
+      historySection.className = 'lg:col-span-12';
+      
+      const historyElement = transactionHistory.render();
+      historyElement.setAttribute('data-tx-history-panel', 'true');
+      historySection.appendChild(historyElement);
+      
+      grid.appendChild(historySection);
+    }
 
     return grid;
   }
