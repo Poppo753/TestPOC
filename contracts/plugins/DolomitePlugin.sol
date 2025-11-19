@@ -72,28 +72,10 @@ contract DolomitePlugin is ILendingProtocol, Ownable, ReentrancyGuard {
     /// @dev Users' borrow positions start from account #1, #2, #3...
     uint256 public constant BORROW_ACCOUNT_START = 1;
     
-    /// @notice Feature flags bitmask for ISwapPlugin
-    uint256 private constant FEATURE_BASIC_SWAP = 1;
-    
-    /// @notice Synthetic token prefix for deterministic address generation
-    /// @dev keccak256("dolomite.") = 0x...
-    bytes32 private constant SYNTHETIC_PREFIX = keccak256("dolomite.");
-    
     // ==================== STATE VARIABLES ====================
     
     /// @notice Circuit breaker flag (emergency stop)
     bool public circuitBreakerTripped;
-    
-    /// @notice Mapping: real token → synthetic token (dToken)
-    /// @dev WETH → dWETH, USDC → dUSDC, etc.
-    mapping(address => address) public realToSynthetic;
-    
-    /// @notice Mapping: synthetic token (dToken) → real token
-    /// @dev dWETH → WETH, dUSDC → USDC, etc.
-    mapping(address => address) public syntheticToReal;
-    
-    /// @notice Supported tokens list (for easy enumeration)
-    address[] public supportedTokens;
     
     /// @notice Track next available borrow account number per user
     /// @dev user address => next account number (starts at BORROW_ACCOUNT_START = 1)

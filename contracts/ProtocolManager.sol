@@ -132,7 +132,7 @@ contract ProtocolManager is Ownable {
      * @notice Costruttore
      * @param _beacon Indirizzo del Beacon per resolution moduli
      */
-    constructor(address _beacon) Ownable() {
+    constructor(address _beacon) Ownable(msg.sender) {
         require(_beacon != address(0), "Invalid beacon address");
         beacon = _beacon;
     }

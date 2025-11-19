@@ -340,7 +340,7 @@ export class TransactionHistoryPanel {
       const loadMoreBtn = new Button({
         label: this.loadingMore 
           ? '⏳ Loading...' 
-          : `📥 Load Older (search ${nextRange.toLocaleString()} blocks)`,
+          : '📥 Load More',
         variant: 'outline',
         size: 'sm',
         onClick: () => this.loadMoreTransactions(),
