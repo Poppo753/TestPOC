@@ -214,7 +214,8 @@ describe("DolomitePlugin - Fork Tests (Arbitrum Mainnet)", function () {
             console.log(`   Dolomite balance: ${ethers.formatEther(balance)} WETH`);
             
             expect(balance).to.be.gt(0);
-            expect(balance).to.equal(ethers.parseEther("1")); // 1 WETH depositato prima
+            // Allow 10 wei tolerance for interest accrual
+            expect(balance).to.be.closeTo(ethers.parseEther("1"), 10);
         });
 
         it("Should return 1:1 quote for deposit", async function () {

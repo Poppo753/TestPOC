@@ -5,54 +5,54 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "../interfaces/ISwapPlugin.sol";
+import "../interfaces/IProtocolManager.sol";
+import "../interfaces/ILendingProtocol.sol";
 import "../interfaces/IDolomite.sol";
+import "../interfaces/IBeacon.sol";
+import "../interfaces/IProxyGeneral.sol";
 
 /**
  * @title DolomitePlugin
- * @notice "Fake swap" plugin for Dolomite lending - deposits disguised as swaps
- * @dev Implements ISwapPlugin to integrate seamlessly with SwapManager
+ * @notice Plugin for Dolomite lending protocol integration via ProtocolManager
+ * @dev Implements ILendingProtocol for common lending operations
  * 
- * GENIUS CONCEPT:
- * - SwapManager thinks: "I'm swapping WETH for dWETH"
- * - DolomitePlugin does: deposit(WETH) → Dolomite balance
- * - "Output token" (dWETH) = synthetic token representing Dolomite position
+ * ARCHITECTURE (ProtocolManager Pattern):
+ * - Managed by ProtocolManager (9th core contract)
+ * - Custody flow: ProxyGeneral → ProtocolManager → DolomitePlugin → Dolomite
+ * - Common operations: deposit, withdraw, borrow, repay (via ILendingProtocol)
+ * - Dolomite-specific: openBorrowPosition, borrowFromPosition, etc. (via executeProtocolCall)
  * 
- * FAKE SWAP MAPPING:
- * Input Token  → Output Token    = What Actually Happens
- * ────────────────────────────────────────────────────────
- * WETH         → dWETH (0xd...)  = deposit WETH to Dolomite
- * USDC         → dUSDC (0xd...)  = deposit USDC to Dolomite
- * dWETH (0xd...) → WETH          = withdraw WETH from Dolomite
+ * INTERFACES IMPLEMENTED:
+ * - IProtocolManager: deposit, withdraw, getBalance, getTotalValue, emergencyWithdrawAll
+ * - ILendingProtocol: borrow, repay, getDebt, getHealthFactor, getBorrowCapacity
  * 
- * SYNTHETIC TOKEN ADDRESSES:
- * We use deterministic fake addresses (keccak256 hash) to represent positions:
- * - dWETH = keccak256("dolomite.WETH") → 0xd...
- * - dUSDC = keccak256("dolomite.USDC") → 0xd...
- * These are NOT real ERC20s, just identifiers for SwapManager
+ * DOLOMITE FEATURES:
+ * - Account #0: Main account (standard deposits/borrows)
+ * - Account #1+: Isolated borrow positions (leveraged trading)
+ * - Flash loans: Zero-fee via Operation framework
+ * - All accounts owned by address(this) (plugin contract)
  * 
- * ADVANTAGES:
- * ✅ Zero modifications to SwapManager
- * ✅ Reuses all SwapManager features (best price, slippage, etc.)
- * ✅ Registered in Beacon like other swap plugins
- * ✅ Can compete with Aave, Compound plugins (if we build them)
- * ✅ SwapManager's getAllQuotes() includes Dolomite yields
- * 
- * ARCHITECTURE:
- * - Registered in Beacon as "DolomitePlugin"
- * - Owner = address(this) for all Dolomite accounts
- * - Account #0: Main account (all deposits aggregated here)
- * - Future: Account #1+ for isolated borrow positions
+ * CUSTODY MODEL:
+ * - ProtocolManager calls deposit/withdraw/borrow/repay
+ * - Plugin expects tokens already in contract (sent by ProtocolManager)
+ * - Plugin returns tokens to ProxyGeneral after operations
+ * - NO direct owner calls (all via ProtocolManager)
  * 
  * DEPLOYMENT (Arbitrum One):
  * - DolomiteMargin: 0x6Bd780E7fDf01D77e4d475c821f1e7AE05409072
  * - BorrowPositionRouter: TBD
  * - DepositWithdrawalRouter: TBD
+ * 
+ * @custom:security-contact security@project4.com
+ * @custom:version 2.0.0 (refactored for ProtocolManager)
  */
-contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
+contract DolomitePlugin is ILendingProtocol, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     
     // ==================== IMMUTABLES ====================
+    
+    /// @notice Beacon for module resolution (ProxyGeneral, TokenManager, etc.)
+    address public immutable beacon;
     
     /// @notice Dolomite core protocol contract
     IDolomiteMargin public immutable dolomiteMargin;
@@ -107,31 +107,32 @@ contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
     error InsufficientBalance(int256 available, uint256 requested);
     error DepositFailed(address token, uint256 amount);
     error WithdrawalFailed(address token, uint256 amount);
-    error InvalidSwapDirection(address tokenIn, address tokenOut);
-    error SyntheticTokenAlreadyExists(address token);
+    error BorrowFailed(address token, uint256 amount);
+    error RepayFailed(address token, uint256 amount);
     error InvalidAccountNumber(uint256 accountNumber);
     error AccountNotEmpty(uint256 accountNumber);
     error FlashLoanFailed(string reason);
     
     // ==================== EVENTS ====================
     
-    event SyntheticTokenRegistered(
-        address indexed realToken,
-        address indexed syntheticToken
-    );
-    
     event DolomiteDeposit(
-        address indexed user,
         address indexed token,
-        uint256 amount,
-        address syntheticToken
+        uint256 amount
     );
     
     event DolomiteWithdrawal(
-        address indexed user,
         address indexed token,
-        uint256 amount,
-        address syntheticToken
+        uint256 amount
+    );
+    
+    event DolomiteBorrow(
+        address indexed token,
+        uint256 amount
+    );
+    
+    event DolomiteRepay(
+        address indexed token,
+        uint256 amount
     );
     
     event BorrowPositionOpened(
@@ -171,19 +172,23 @@ contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
     
     /**
      * @notice Initialize DolomitePlugin with protocol addresses
+     * @param _beacon Beacon address for module resolution
      * @param _dolomiteMargin DolomiteMargin core contract address
      * @param _borrowRouter BorrowPositionRouter address
      * @param _depositRouter DepositWithdrawalRouter address
      */
     constructor(
+        address _beacon,
         address _dolomiteMargin,
         address _borrowRouter,
         address _depositRouter
     ) Ownable() {
+        if (_beacon == address(0)) revert InvalidAddress();
         if (_dolomiteMargin == address(0)) revert InvalidAddress();
         if (_borrowRouter == address(0)) revert InvalidAddress();
         if (_depositRouter == address(0)) revert InvalidAddress();
         
+        beacon = _beacon;
         dolomiteMargin = IDolomiteMargin(_dolomiteMargin);
         borrowRouter = IBorrowPositionRouter(_borrowRouter);
         depositRouter = IDepositWithdrawalRouter(_depositRouter);
@@ -196,224 +201,371 @@ contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
         _;
     }
     
-    // ==================== ISWAP PLUGIN METADATA ====================
+    // ==================== IPROTOCOLMANAGER IMPLEMENTATION ====================
     
     /**
-     * @inheritdoc ISwapPlugin
-     * @dev Returns "Dolomite Lending" as a swap plugin
+     * @inheritdoc IProtocolManager
+     * @notice Deposit tokens into Dolomite protocol
+     * @dev Expects tokens already in this contract (sent by ProtocolManager)
+     * Flow: ProtocolManager transfers tokens here → deposit to Dolomite → update accounting
      */
-    function getProtocolInfo() external pure override returns (ProtocolInfo memory) {
-        return ProtocolInfo({
-            name: "Dolomite Lending",
-            version: "1.0.0",
-            features: FEATURE_BASIC_SWAP // Deposit/withdraw as "swap"
-        });
-    }
-    
-    /**
-     * @inheritdoc ISwapPlugin
-     * @dev Checks if pair is valid deposit/withdraw direction
-     * 
-     * VALID PAIRS:
-     * - (WETH, dWETH) = deposit WETH
-     * - (dWETH, WETH) = withdraw WETH
-     * - (USDC, dUSDC) = deposit USDC
-     * - (dUSDC, USDC) = withdraw USDC
-     */
-    function supportsTokenPair(
-        address tokenA,
-        address tokenB
-    ) external view override returns (bool) {
-        // Check if tokenA → tokenB is deposit direction
-        if (realToSynthetic[tokenA] == tokenB) {
-            return _isTokenSupported(tokenA);
-        }
-        
-        // Check if tokenA → tokenB is withdraw direction
-        if (syntheticToReal[tokenA] == tokenB) {
-            return _isTokenSupported(tokenB);
-        }
-        
-        return false;
-    }
-    
-    /**
-     * @inheritdoc ISwapPlugin
-     * @dev Health checks: DolomiteMargin exists, routers accessible, no circuit breaker
-     */
-    function isHealthy() external view override returns (bool healthy, string memory reason) {
-        // Check circuit breaker
-        if (circuitBreakerTripped) {
-            return (false, "Circuit breaker active");
-        }
-        
-        // Check DolomiteMargin contract exists
-        uint256 size;
-        address target = address(dolomiteMargin);
-        assembly {
-            size := extcodesize(target)
-        }
-        if (size == 0) {
-            return (false, "DolomiteMargin contract not found");
-        }
-        
-        // Check deposit router exists
-        target = address(depositRouter);
-        assembly {
-            size := extcodesize(target)
-        }
-        if (size == 0) {
-            return (false, "DepositRouter contract not found");
-        }
-        
-        return (true, "");
-    }
-    
-    // ==================== ISIMPLESWAP IMPLEMENTATION (FAKE SWAPS) ====================
-    
-    /**
-     * @inheritdoc ISimpleSwap
-     * @dev "Swap" that's actually a deposit or withdraw
-     * 
-     * LOGIC:
-     * - If spendToken is real and receiveToken is synthetic → DEPOSIT
-     *   Example: WETH → dWETH = deposit WETH to Dolomite
-     * 
-     * - If spendToken is synthetic and receiveToken is real → WITHDRAW
-     *   Example: dWETH → WETH = withdraw WETH from Dolomite
-     */
-    function inputSwap(
-        address spendToken,
-        address receiveToken,
-        uint256 amountIn
-    ) external override nonReentrant whenNotPaused returns (uint256 amountOut) {
-        // Validate inputs
-        require(spendToken != address(0), "Invalid spendToken");
-        require(receiveToken != address(0), "Invalid receiveToken");
-        require(amountIn > 0, "Invalid amountIn");
-        
-        // Determine direction: deposit or withdraw
-        bool isDeposit = (realToSynthetic[spendToken] == receiveToken);
-        bool isWithdraw = (syntheticToReal[spendToken] == receiveToken);
-        
-        if (!isDeposit && !isWithdraw) {
-            revert InvalidSwapDirection(spendToken, receiveToken);
-        }
-        
-        if (isDeposit) {
-            // DEPOSIT: spendToken (real) → receiveToken (synthetic)
-            return _executeDeposit(spendToken, receiveToken, amountIn);
-        } else {
-            // WITHDRAW: spendToken (synthetic) → receiveToken (real)
-            return _executeWithdraw(spendToken, receiveToken, amountIn);
-        }
-    }
-    
-    /**
-     * @inheritdoc ISimpleSwap
-     * @dev Output swap not supported for deposits (use inputSwap)
-     */
-    function outputSwap(
-        address /* spendToken */,
-        address /* receiveToken */,
-        uint256 /* amountInMax */,
-        uint256 /* amountOut */
-    ) external pure override returns (uint256) {
-        revert("DolomitePlugin: outputSwap not supported, use inputSwap");
-    }
-    
-    /**
-     * @inheritdoc ISimpleSwap
-     * @dev Returns 1:1 ratio for deposits/withdraws (no slippage on Dolomite)
-     */
-    function getExpectedOutput(
-        address spendToken,
-        address receiveToken,
-        uint256 amountIn
-    ) external view override returns (uint256) {
-        // Check if valid pair
-        bool isDeposit = (realToSynthetic[spendToken] == receiveToken);
-        bool isWithdraw = (syntheticToReal[spendToken] == receiveToken);
-        
-        if (!isDeposit && !isWithdraw) {
-            return 0; // Invalid pair
-        }
-        
-        // Dolomite deposits/withdraws are 1:1 (no fees, no slippage)
-        return amountIn;
-    }
-    
-    // ==================== INTERNAL DEPOSIT/WITHDRAW ====================
-    
-    /**
-     * @notice Execute deposit: real token → Dolomite → synthetic token
-     * @param realToken Real token being deposited (e.g., WETH)
-     * @param syntheticToken Synthetic token representing position (e.g., dWETH)
-     * @param amount Amount to deposit
-     * @return amountOut Amount of synthetic tokens "minted" (always 1:1)
-     */
-    function _executeDeposit(
-        address realToken,
-        address syntheticToken,
+    function deposit(
+        string memory tokenCode,
         uint256 amount
-    ) internal returns (uint256 amountOut) {
-        if (!_isTokenSupported(realToken)) {
-            revert TokenNotSupported(realToken);
+    ) external override nonReentrant whenNotPaused returns (bool) {
+        // Resolve token address from tokenCode
+        address tokenAddress = _resolveTokenFromCode(tokenCode);
+        if (!_isTokenSupported(tokenAddress)) {
+            revert TokenNotSupported(tokenAddress);
         }
         
-        // Get market ID for real token
-        uint256 marketId = dolomiteMargin.getMarketIdByTokenAddress(realToken);
+        // Check contract has tokens (should have been transferred by ProtocolManager)
+        uint256 balance = IERC20(tokenAddress).balanceOf(address(this));
+        require(balance >= amount, "Insufficient balance - tokens not transferred");
         
-        // Transfer real tokens from caller (SwapManager) to this contract
-        IERC20(realToken).safeTransferFrom(msg.sender, address(this), amount);
+        // Get market ID for token
+        uint256 marketId = dolomiteMargin.getMarketIdByTokenAddress(tokenAddress);
         
         // Approve DepositRouter to spend tokens
-        IERC20(realToken).safeApprove(address(depositRouter), amount);
+        IERC20(tokenAddress).safeApprove(address(depositRouter), amount);
         
         // Deposit to Dolomite main account (account #0)
-        // API: depositWei(_isolationModeMarketId, _toAccountNumber, _marketId, _amountWei, _eventFlag)
         try depositRouter.depositWei(
             0,              // _isolationModeMarketId (0 = not using isolation mode)
             MAIN_ACCOUNT,   // _toAccountNumber
             marketId,       // _marketId
             amount,         // _amountWei
-            IDepositWithdrawalRouter.EventFlag.None  // _eventFlag
+            IDepositWithdrawalRouter.EventFlag.None
         ) {
-            // Deposit succeeded
-            // "Mint" synthetic tokens (conceptually - we don't actually mint ERC20s)
-            // The balance exists on Dolomite, tracked by this contract
-            
-            emit DolomiteDeposit(msg.sender, realToken, amount, syntheticToken);
-            
-            // Return amount (1:1 ratio for deposits)
-            return amount;
-        } catch Error(string memory /* reason */) {
-            revert DepositFailed(realToken, amount);
+            emit DolomiteDeposit(tokenAddress, amount);
+            return true;
         } catch {
-            revert DepositFailed(realToken, amount);
+            revert DepositFailed(tokenAddress, amount);
         }
     }
     
     /**
-     * @notice Execute withdrawal: synthetic token → Dolomite → real token
-     * @param syntheticToken Synthetic token being "burned" (e.g., dWETH)
-     * @param realToken Real token being withdrawn (e.g., WETH)
-     * @param amount Amount to withdraw
-     * @return amountOut Amount of real tokens withdrawn
+     * @inheritdoc IProtocolManager
+     * @notice Withdraw tokens from Dolomite protocol
+     * @dev Withdraws from Dolomite → transfers to ProxyGeneral
+     * Flow: Dolomite → this contract → ProxyGeneral
      */
-    function _executeWithdraw(
-        address syntheticToken,
-        address realToken,
+    function withdraw(
+        string memory tokenCode,
         uint256 amount
-    ) internal returns (uint256 amountOut) {
-        if (!_isTokenSupported(realToken)) {
-            revert TokenNotSupported(realToken);
+    ) external override nonReentrant whenNotPaused returns (bool) {
+        // Resolve token address
+        address tokenAddress = _resolveTokenFromCode(tokenCode);
+        if (!_isTokenSupported(tokenAddress)) {
+            revert TokenNotSupported(tokenAddress);
         }
         
-        // Get market ID for real token
-        uint256 marketId = dolomiteMargin.getMarketIdByTokenAddress(realToken);
+        // Get market ID
+        uint256 marketId = dolomiteMargin.getMarketIdByTokenAddress(tokenAddress);
         
-        // Check current balance on Dolomite
+        // Check available balance on Dolomite
+        Account.Info memory account = Account.Info({
+            owner: address(this),
+            number: MAIN_ACCOUNT
+        });
+        
+        Types.Wei memory weiBalance = dolomiteMargin.getAccountWei(account, marketId);
+        int256 currentBalance = weiBalance.sign ? int256(weiBalance.value) : -int256(weiBalance.value);
+        
+        if (currentBalance <= 0 || uint256(currentBalance) < amount) {
+            revert InsufficientBalance(currentBalance, amount);
+        }
+        
+        // Record balance before withdrawal
+        uint256 balanceBefore = IERC20(tokenAddress).balanceOf(address(this));
+        
+        // Withdraw from Dolomite to this contract
+        try depositRouter.withdrawWei(
+            0,              // _isolationModeMarketId
+            MAIN_ACCOUNT,   // _fromAccountNumber
+            marketId,       // _marketId
+            amount,         // _amountWei
+            AccountBalanceLib.BalanceCheckFlag.From
+        ) {
+            // Calculate actual amount withdrawn
+            uint256 balanceAfter = IERC20(tokenAddress).balanceOf(address(this));
+            uint256 amountWithdrawn = balanceAfter - balanceBefore;
+            
+            // Transfer to ProxyGeneral
+            address proxyGeneral = _getProxyGeneral();
+            IERC20(tokenAddress).safeTransfer(proxyGeneral, amountWithdrawn);
+            
+            emit DolomiteWithdrawal(tokenAddress, amountWithdrawn);
+            return true;
+        } catch {
+            revert WithdrawalFailed(tokenAddress, amount);
+        }
+    }
+    
+    /**
+     * @inheritdoc IProtocolManager
+     * @notice Get balance of a token in Dolomite
+     */
+    function getBalance(
+        string memory tokenCode
+    ) external view override returns (uint256) {
+        address tokenAddress = _resolveTokenFromCode(tokenCode);
+        return _getDolomiteBalance(tokenAddress);
+    }
+    
+    /**
+     * @inheritdoc IProtocolManager
+     * @notice Get total value of all deposits in ETH
+     * @dev Calculates value of all positions on MAIN_ACCOUNT
+     */
+    function getTotalValue() external view override returns (uint256 totalValueETH) {
+        // TODO: Implement actual calculation using Dolomite oracle prices
+        // For now return 0 (placeholder)
+        return 0;
+    }
+    
+    /**
+     * @inheritdoc IProtocolManager
+     * @notice Get protocol information
+     */
+    function getProtocolInfo() external pure override returns (
+        string memory name,
+        string memory version,
+        bool isActive
+    ) {
+        return ("Dolomite Lending", "2.0.0", true);
+    }
+    
+    /**
+     * @inheritdoc IProtocolManager
+     * @notice Emergency withdraw all assets from Dolomite
+     * @dev Withdraws all tokens from MAIN_ACCOUNT and transfers to ProxyGeneral
+     */
+    function emergencyWithdrawAll(
+        string[] memory tokenCodes
+    ) external override nonReentrant returns (bool) {
+        address proxyGeneral = _getProxyGeneral();
+        
+        for (uint256 i = 0; i < tokenCodes.length; i++) {
+            address tokenAddress = _resolveTokenFromCode(tokenCodes[i]);
+            
+            // Get balance on Dolomite
+            uint256 balance = _getDolomiteBalance(tokenAddress);
+            if (balance == 0) continue;
+            
+            // Withdraw full balance
+            uint256 marketId = dolomiteMargin.getMarketIdByTokenAddress(tokenAddress);
+            
+            try depositRouter.withdrawWei(
+                0,
+                MAIN_ACCOUNT,
+                marketId,
+                balance,
+                AccountBalanceLib.BalanceCheckFlag.From
+            ) {
+                // Transfer to ProxyGeneral
+                uint256 contractBalance = IERC20(tokenAddress).balanceOf(address(this));
+                if (contractBalance > 0) {
+                    IERC20(tokenAddress).safeTransfer(proxyGeneral, contractBalance);
+                }
+            } catch {
+                // Continue with next token even if one fails
+                continue;
+            }
+        }
+        
+        return true;
+    }
+    
+    // ==================== ILENDINGPROTOCOL IMPLEMENTATION ====================
+    
+    /**
+     * @inheritdoc ILendingProtocol
+     * @notice Borrow tokens from Dolomite (MAIN_ACCOUNT)
+     * @dev Creates debt by withdrawing tokens → transfers to ProxyGeneral
+     */
+    function borrow(
+        string memory tokenCode,
+        uint256 amount
+    ) external override nonReentrant whenNotPaused returns (bool) {
+        address tokenAddress = _resolveTokenFromCode(tokenCode);
+        if (!_isTokenSupported(tokenAddress)) {
+            revert TokenNotSupported(tokenAddress);
+        }
+        
+        uint256 marketId = dolomiteMargin.getMarketIdByTokenAddress(tokenAddress);
+        
+        // Build Operation to withdraw tokens (creating debt)
+        Account.Info[] memory accounts = new Account.Info[](1);
+        accounts[0] = Account.Info({
+            owner: address(this),
+            number: MAIN_ACCOUNT
+        });
+        
+        Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](1);
+        actions[0] = Actions.ActionArgs({
+            actionType: Actions.ActionType.Withdraw,
+            accountId: 0,
+            amount: TypesExtended.AssetAmount({
+                sign: false,  // Negative (creates debt)
+                denomination: TypesExtended.AssetDenomination.Wei,
+                ref: TypesExtended.AssetReference.Delta,
+                value: amount
+            }),
+            primaryMarketId: marketId,
+            secondaryMarketId: 0,
+            otherAddress: address(this),  // Withdraw to this contract
+            otherAccountId: 0,
+            data: ""
+        });
+        
+        try dolomiteMargin.operate(accounts, actions) {
+            // Transfer borrowed tokens to ProxyGeneral
+            address proxyGeneral = _getProxyGeneral();
+            IERC20(tokenAddress).safeTransfer(proxyGeneral, amount);
+            
+            emit DolomiteBorrow(tokenAddress, amount);
+            return true;
+        } catch {
+            revert BorrowFailed(tokenAddress, amount);
+        }
+    }
+    
+    /**
+     * @inheritdoc ILendingProtocol
+     * @notice Repay debt on Dolomite (MAIN_ACCOUNT)
+     * @dev Expects tokens already in contract → deposits to reduce debt
+     */
+    function repay(
+        string memory tokenCode,
+        uint256 amount
+    ) external override nonReentrant whenNotPaused returns (bool) {
+        address tokenAddress = _resolveTokenFromCode(tokenCode);
+        if (!_isTokenSupported(tokenAddress)) {
+            revert TokenNotSupported(tokenAddress);
+        }
+        
+        // Check contract has tokens (should have been transferred by ProtocolManager)
+        uint256 balance = IERC20(tokenAddress).balanceOf(address(this));
+        require(balance >= amount, "Insufficient balance - tokens not transferred");
+        
+        uint256 marketId = dolomiteMargin.getMarketIdByTokenAddress(tokenAddress);
+        
+        // Approve DolomiteMargin
+        IERC20(tokenAddress).safeApprove(address(dolomiteMargin), amount);
+        
+        // Build Operation to deposit tokens (reducing debt)
+        Account.Info[] memory accounts = new Account.Info[](1);
+        accounts[0] = Account.Info({
+            owner: address(this),
+            number: MAIN_ACCOUNT
+        });
+        
+        Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](1);
+        actions[0] = Actions.ActionArgs({
+            actionType: Actions.ActionType.Deposit,
+            accountId: 0,
+            amount: TypesExtended.AssetAmount({
+                sign: true,  // Positive (deposit)
+                denomination: TypesExtended.AssetDenomination.Wei,
+                ref: TypesExtended.AssetReference.Delta,
+                value: amount
+            }),
+            primaryMarketId: marketId,
+            secondaryMarketId: 0,
+            otherAddress: address(this),  // Deposit from this contract
+            otherAccountId: 0,
+            data: ""
+        });
+        
+        try dolomiteMargin.operate(accounts, actions) {
+            emit DolomiteRepay(tokenAddress, amount);
+            return true;
+        } catch {
+            revert RepayFailed(tokenAddress, amount);
+        }
+    }
+    
+    /**
+     * @inheritdoc ILendingProtocol
+     * @notice Get debt amount for a token
+     * @dev Returns absolute value of negative balance (debt)
+     */
+    function getDebt(
+        string memory tokenCode
+    ) external view override returns (uint256 debtAmount) {
+        address tokenAddress = _resolveTokenFromCode(tokenCode);
+        
+        Account.Info memory account = Account.Info({
+            owner: address(this),
+            number: MAIN_ACCOUNT
+        });
+        
+        uint256 marketId = dolomiteMargin.getMarketIdByTokenAddress(tokenAddress);
+        Types.Wei memory weiBalance = dolomiteMargin.getAccountWei(account, marketId);
+        
+        // If balance is negative, it's debt
+        if (!weiBalance.sign) {
+            return weiBalance.value;
+        }
+        
+        return 0; // No debt
+    }
+    
+    /**
+     * @inheritdoc ILendingProtocol
+     * @notice Get health factor of account
+     * @dev Health factor = collateral value / debt value
+     * Returns 1e18 = 1.0, <1.0 = liquidatable
+     */
+    function getHealthFactor() external view override returns (uint256 healthFactor) {
+        // TODO: Implement actual health factor calculation using Dolomite account values
+        // For now return max uint256 (extremely healthy)
+        return type(uint256).max;
+    }
+    
+    /**
+     * @inheritdoc ILendingProtocol
+     * @notice Get remaining borrow capacity for a token
+     */
+    function getBorrowCapacity(
+        string memory tokenCode
+    ) external view override returns (uint256 capacity) {
+        // TODO: Calculate based on collateral and LTV ratios
+        return 0;
+    }
+    
+    // ==================== INTERNAL HELPER FUNCTIONS ====================
+    
+    /**
+     * @notice Resolve token address from tokenCode string
+     * @dev Uses TokenManager to resolve token code to address
+     * @param tokenCode Token code string (e.g., "WETH", "USDC")
+     * @return tokenAddress Address of the token
+     */
+    function _resolveTokenFromCode(string memory tokenCode) internal view returns (address) {
+        // Get TokenManager from Beacon
+        address tokenManager = IBeacon(beacon).getImplementation("TokenManager");
+        require(tokenManager != address(0), "TokenManager not found in Beacon");
+        
+        // Resolve token address (assuming TokenManager has getTokenAddress function)
+        // TODO: Update with actual TokenManager interface
+        // For now, use a simple hash-based approach or hardcoded mapping
+        
+        // Temporary: return zero address (to be implemented)
+        revert("_resolveTokenFromCode not fully implemented - needs TokenManager integration");
+    }
+    
+    /**
+     * @notice Get Dolomite balance for a token (positive = collateral, negative = debt)
+     * @param tokenAddress Token address
+     * @return balance Balance in uint256 (only positive balances)
+     */
+    function _getDolomiteBalance(address tokenAddress) internal view returns (uint256) {
+        if (!_isTokenSupported(tokenAddress)) return 0;
+        
+        uint256 marketId = dolomiteMargin.getMarketIdByTokenAddress(tokenAddress);
+        
         Account.Info memory account = Account.Info({
             owner: address(this),
             number: MAIN_ACCOUNT
@@ -421,98 +573,22 @@ contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
         
         Types.Wei memory weiBalance = dolomiteMargin.getAccountWei(account, marketId);
         
-        // Convert to int256
-        int256 currentBalance;
+        // Return only positive balances (collateral)
         if (weiBalance.sign) {
-            currentBalance = int256(weiBalance.value);
-        } else {
-            currentBalance = -int256(weiBalance.value);
+            return weiBalance.value;
         }
         
-        if (currentBalance <= 0) {
-            revert InsufficientBalance(currentBalance, amount);
-        }
-        
-        uint256 availableBalance = uint256(currentBalance);
-        
-        if (amount > availableBalance) {
-            revert InsufficientBalance(currentBalance, amount);
-        }
-        
-        // Record balance before withdrawal
-        uint256 balanceBefore = IERC20(realToken).balanceOf(address(this));
-        
-        // Withdraw from Dolomite to this contract
-        // API: withdrawWei(_isolationModeMarketId, _fromAccountNumber, _marketId, _amountWei, _balanceCheckFlag)
-        try depositRouter.withdrawWei(
-            0,              // _isolationModeMarketId (0 = not using isolation mode)
-            MAIN_ACCOUNT,   // _fromAccountNumber
-            marketId,       // _marketId
-            amount,         // _amountWei
-            AccountBalanceLib.BalanceCheckFlag.From  // _balanceCheckFlag (check source account)
-        ) {
-            // Calculate actual amount withdrawn
-            uint256 balanceAfter = IERC20(realToken).balanceOf(address(this));
-            amountOut = balanceAfter - balanceBefore;
-            
-            // Transfer real tokens to caller (SwapManager)
-            IERC20(realToken).safeTransfer(msg.sender, amountOut);
-            
-            emit DolomiteWithdrawal(msg.sender, realToken, amountOut, syntheticToken);
-            
-            return amountOut;
-        } catch Error(string memory /* reason */) {
-            revert WithdrawalFailed(realToken, amount);
-        } catch {
-            revert WithdrawalFailed(realToken, amount);
-        }
-    }
-    
-    // ==================== ADMIN: TOKEN REGISTRATION ====================
-    
-    /**
-     * @notice Register a new token with synthetic counterpart
-     * @param realToken Real token address (e.g., WETH)
-     * @dev Automatically generates deterministic synthetic address
-     * 
-     * SYNTHETIC ADDRESS GENERATION:
-     * syntheticAddr = address(uint160(uint256(keccak256(abi.encodePacked(SYNTHETIC_PREFIX, realToken)))))
-     * 
-     * This creates a unique, deterministic address for each token that:
-     * - Won't collide with real ERC20 addresses (probabilistically impossible)
-     * - Is reproducible (same input → same output)
-     * - Doesn't require deploying actual ERC20 contracts
-     */
-    function registerToken(address realToken) external onlyOwner {
-        if (realToken == address(0)) revert InvalidAddress();
-        if (realToSynthetic[realToken] != address(0)) {
-            revert SyntheticTokenAlreadyExists(realToken);
-        }
-        if (!_isTokenSupported(realToken)) {
-            revert TokenNotSupported(realToken);
-        }
-        
-        // Generate deterministic synthetic address
-        address syntheticToken = _generateSyntheticAddress(realToken);
-        
-        // Register mappings
-        realToSynthetic[realToken] = syntheticToken;
-        syntheticToReal[syntheticToken] = realToken;
-        
-        // Add to supported tokens list
-        supportedTokens.push(realToken);
-        
-        emit SyntheticTokenRegistered(realToken, syntheticToken);
+        return 0;
     }
     
     /**
-     * @notice Generate deterministic synthetic address for a token
-     * @param realToken Real token address
-     * @return syntheticAddr Deterministic synthetic address
+     * @notice Get ProxyGeneral address from Beacon
+     * @return proxyGeneral Address of ProxyGeneral
      */
-    function _generateSyntheticAddress(address realToken) internal pure returns (address) {
-        bytes32 hash = keccak256(abi.encodePacked(SYNTHETIC_PREFIX, realToken));
-        return address(uint160(uint256(hash)));
+    function _getProxyGeneral() internal view returns (address) {
+        address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
+        require(proxyGeneral != address(0), "ProxyGeneral not found in Beacon");
+        return proxyGeneral;
     }
     
     /**
@@ -531,62 +607,6 @@ contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
         }
     }
     
-    // ==================== VIEW FUNCTIONS ====================
-    
-    /**
-     * @notice Get synthetic token for a real token
-     * @param realToken Real token address
-     * @return syntheticToken Synthetic token address (or zero if not registered)
-     */
-    function getSyntheticToken(address realToken) external view returns (address) {
-        return realToSynthetic[realToken];
-    }
-    
-    /**
-     * @notice Get real token for a synthetic token
-     * @param syntheticToken Synthetic token address
-     * @return realToken Real token address (or zero if not registered)
-     */
-    function getRealToken(address syntheticToken) external view returns (address) {
-        return syntheticToReal[syntheticToken];
-    }
-    
-    /**
-     * @notice Get list of all supported tokens
-     * @return tokens Array of real token addresses
-     */
-    function getSupportedTokens() external view returns (address[] memory) {
-        return supportedTokens;
-    }
-    
-    /**
-     * @notice Get Dolomite balance for a token
-     * @param token Real token address
-     * @return balance Account balance on Dolomite (signed: positive = deposit, negative = borrow)
-     */
-    function getDolomiteBalance(address token) external view returns (int256) {
-        if (!_isTokenSupported(token)) revert TokenNotSupported(token);
-        
-        uint256 marketId = dolomiteMargin.getMarketIdByTokenAddress(token);
-        
-        // Create account info struct
-        Account.Info memory account = Account.Info({
-            owner: address(this),
-            number: MAIN_ACCOUNT
-        });
-        
-        // Get balance as Wei struct
-        Types.Wei memory weiBalance = dolomiteMargin.getAccountWei(account, marketId);
-        
-        // Convert Wei struct to int256
-        // sign = true means positive (supply), sign = false means negative (borrow)
-        if (weiBalance.sign) {
-            return int256(weiBalance.value);
-        } else {
-            return -int256(weiBalance.value);
-        }
-    }
-    
     // ==================== ADMIN FUNCTIONS ====================
     
     /**
@@ -595,12 +615,6 @@ contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
      */
     function setCircuitBreaker(bool trip) external onlyOwner {
         circuitBreakerTripped = trip;
-        
-        emit HealthStatusChanged(
-            !trip,
-            trip ? "Circuit breaker activated by owner" : "Circuit breaker deactivated",
-            block.timestamp
-        );
     }
     
     /**
@@ -623,22 +637,10 @@ contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
     
     /**
      * @notice Open a new leveraged borrow position
-     * @dev OPTION 3: Direct public function, bypasses SwapManager
-     * 
-     * FLOW:
-     * 1. User must have collateral deposited in MAIN_ACCOUNT (account #0)
-     * 2. This function moves collateral to a new borrow position (account #1, #2, etc.)
-     * 3. User can then call borrowFromPosition() to borrow against collateral
-     * 
+     * @dev Moves collateral from main account to isolated borrow account
      * @param collateralToken Token to use as collateral
      * @param collateralAmount Amount of collateral to move
      * @return accountNumber The account number of the new borrow position
-     * 
-     * EXAMPLE: Open position with 1 WETH collateral
-     * 1. First deposit WETH via inputSwap(WETH → dWETH)
-     * 2. Then call: openBorrowPosition(WETH, 1 ether)
-     * 3. Returns account number (e.g., 1)
-     * 4. Now you can borrow: borrowFromPosition(1, USDC, 1000e6)
      */
     function openBorrowPosition(
         address collateralToken,
@@ -658,15 +660,35 @@ contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
         // Get market ID for collateral token
         uint256 marketId = dolomiteMargin.getMarketIdByTokenAddress(collateralToken);
         
-        // Move collateral from MAIN_ACCOUNT to borrow position account
-        // This creates an isolated position that can be leveraged
-        borrowRouter.openBorrowPosition(
-            MAIN_ACCOUNT,                           // fromAccountNumber (main account)
-            accountNumber,                          // toAccountNumber (new borrow position)
-            marketId,                               // marketId (collateral token)
-            collateralAmount,                       // amount
-            AccountBalanceLib.BalanceCheckFlag.Both // Check both accounts are healthy
-        );
+        // Build Operation to transfer collateral from main account to borrow account
+        Account.Info[] memory accounts = new Account.Info[](2);
+        accounts[0] = Account.Info({
+            owner: address(this),
+            number: MAIN_ACCOUNT
+        });
+        accounts[1] = Account.Info({
+            owner: address(this),
+            number: accountNumber
+        });
+        
+        Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](1);
+        actions[0] = Actions.ActionArgs({
+            actionType: Actions.ActionType.Transfer,
+            accountId: 0,  // From account[0] (main account)
+            amount: TypesExtended.AssetAmount({
+                sign: false,  // Negative (withdraw from source)
+                denomination: TypesExtended.AssetDenomination.Wei,
+                ref: TypesExtended.AssetReference.Delta,
+                value: collateralAmount
+            }),
+            primaryMarketId: marketId,
+            secondaryMarketId: 0,
+            otherAddress: address(this),
+            otherAccountId: 1,  // To account[1] (borrow position)
+            data: ""
+        });
+        
+        dolomiteMargin.operate(accounts, actions);
         
         emit BorrowPositionOpened(msg.sender, accountNumber, collateralToken, collateralAmount);
         
@@ -675,19 +697,10 @@ contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
     
     /**
      * @notice Borrow tokens against a borrow position
-     * @dev User must have opened a borrow position first with openBorrowPosition()
-     * 
+     * @dev Creates debt by withdrawing tokens from Dolomite
      * @param accountNumber Account number of the borrow position
      * @param borrowToken Token to borrow
      * @param borrowAmount Amount to borrow
-     * 
-     * MECHANICS:
-     * - Borrows tokens from Dolomite using the collateral in accountNumber
-     * - Borrowed tokens are transferred to msg.sender
-     * - Position must remain collateralized (LTV < liquidation threshold)
-     * 
-     * EXAMPLE: Borrow 1000 USDC against WETH collateral in position #1
-     * borrowFromPosition(1, USDC, 1000e6)
      */
     function borrowFromPosition(
         uint256 accountNumber,
@@ -704,15 +717,31 @@ contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
         // Get market ID for borrow token
         uint256 marketId = dolomiteMargin.getMarketIdByTokenAddress(borrowToken);
         
-        // Withdraw borrowed tokens from borrow position to this contract
-        // This creates debt in the borrow position account
-        depositRouter.withdrawWei(
-            0,                                      // isolationModeMarketId (0 = not using isolation)
-            accountNumber,                          // fromAccountNumber (borrow position)
-            marketId,                               // marketId (token to borrow)
-            borrowAmount,                           // amountWei
-            AccountBalanceLib.BalanceCheckFlag.From // Check borrow account stays healthy
-        );
+        // Build Operation to withdraw tokens (creating debt)
+        Account.Info[] memory accounts = new Account.Info[](1);
+        accounts[0] = Account.Info({
+            owner: address(this),
+            number: accountNumber
+        });
+        
+        Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](1);
+        actions[0] = Actions.ActionArgs({
+            actionType: Actions.ActionType.Withdraw,
+            accountId: 0,
+            amount: TypesExtended.AssetAmount({
+                sign: false,  // Negative (creates debt)
+                denomination: TypesExtended.AssetDenomination.Wei,
+                ref: TypesExtended.AssetReference.Delta,
+                value: borrowAmount
+            }),
+            primaryMarketId: marketId,
+            secondaryMarketId: 0,
+            otherAddress: address(this),  // Withdraw to this contract
+            otherAccountId: 0,
+            data: ""
+        });
+        
+        dolomiteMargin.operate(accounts, actions);
         
         // Transfer borrowed tokens to user
         IERC20(borrowToken).safeTransfer(msg.sender, borrowAmount);
@@ -723,14 +752,9 @@ contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
     /**
      * @notice Repay debt on a borrow position
      * @dev User must approve this contract to spend repayment tokens first
-     * 
      * @param accountNumber Account number of the borrow position
      * @param debtToken Token to repay
-     * @param repayAmount Amount to repay (use type(uint256).max for full repayment)
-     * 
-     * EXAMPLE: Repay 500 USDC debt on position #1
-     * USDC.approve(dolomitePlugin, 500e6);
-     * repayBorrowPosition(1, USDC, 500e6);
+     * @param repayAmount Amount to repay (use extra to cover interest)
      */
     function repayBorrowPosition(
         uint256 accountNumber,
@@ -750,38 +774,46 @@ contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
         // Transfer repayment tokens from user to this contract
         IERC20(debtToken).safeTransferFrom(msg.sender, address(this), repayAmount);
         
-        // Approve deposit router
-        IERC20(debtToken).safeApprove(address(depositRouter), repayAmount);
+        // Approve DolomiteMargin
+        IERC20(debtToken).safeApprove(address(dolomiteMargin), repayAmount);
         
-        // Deposit tokens to borrow position (reduces debt)
-        depositRouter.depositWei(
-            0,                                     // isolationModeMarketId
-            accountNumber,                         // toAccountNumber (borrow position)
-            marketId,                              // marketId
-            repayAmount,                           // amountWei
-            IDepositWithdrawalRouter.EventFlag.None // eventFlag
-        );
+        // Build Operation to deposit tokens (reducing debt)
+        Account.Info[] memory accounts = new Account.Info[](1);
+        accounts[0] = Account.Info({
+            owner: address(this),
+            number: accountNumber
+        });
+        
+        Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](1);
+        actions[0] = Actions.ActionArgs({
+            actionType: Actions.ActionType.Deposit,
+            accountId: 0,
+            amount: TypesExtended.AssetAmount({
+                sign: true,  // Positive (deposit)
+                denomination: TypesExtended.AssetDenomination.Wei,
+                ref: TypesExtended.AssetReference.Delta,
+                value: repayAmount
+            }),
+            primaryMarketId: marketId,
+            secondaryMarketId: 0,
+            otherAddress: address(this),  // Deposit from this contract
+            otherAccountId: 0,
+            data: ""
+        });
+        
+        dolomiteMargin.operate(accounts, actions);
         
         emit BorrowPositionRepaid(msg.sender, accountNumber, debtToken, repayAmount);
     }
     
     /**
      * @notice Close a borrow position and return collateral to main account
-     * @dev All debt must be repaid first, then this withdraws collateral back to MAIN_ACCOUNT
-     * 
+     * @dev All debt must be repaid first. See docs/DolomitePlugin_Implementation_Notes.md for known issues.
      * @param accountNumber Account number of the borrow position
      * @param collateralTokens Array of collateral tokens to withdraw
      * 
-     * FLOW:
-     * 1. Repay all debt using repayBorrowPosition()
-     * 2. Call closeBorrowPosition() to withdraw collateral
-     * 3. Collateral returns to MAIN_ACCOUNT
-     * 4. User can withdraw via inputSwap(dWETH → WETH)
-     * 
-     * EXAMPLE: Close position #1 with WETH collateral
-     * uint256[] memory collaterals = new uint256[](1);
-     * collaterals[0] = WETH;
-     * closeBorrowPosition(1, collaterals);
+     * NOTE: May fail if residual debt exists (even 1 wei from interest accrual).
+     * TODO: Add dust tolerance threshold before production (see implementation notes)
      */
     function closeBorrowPosition(
         uint256 accountNumber,
@@ -791,22 +823,54 @@ contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
             revert InvalidAccountNumber(accountNumber);
         }
         
-        // Convert token addresses to market IDs
-        uint256[] memory collateralMarketIds = new uint256[](collateralTokens.length);
+        // Build Operation to transfer all collateral back to main account
+        Account.Info[] memory accounts = new Account.Info[](2);
+        accounts[0] = Account.Info({
+            owner: address(this),
+            number: accountNumber  // Borrow position
+        });
+        accounts[1] = Account.Info({
+            owner: address(this),
+            number: MAIN_ACCOUNT   // Main account
+        });
+        
+        // Create transfer action for each collateral token
+        Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](collateralTokens.length);
+        
         for (uint256 i = 0; i < collateralTokens.length; i++) {
             if (!_isTokenSupported(collateralTokens[i])) {
                 revert TokenNotSupported(collateralTokens[i]);
             }
-            collateralMarketIds[i] = dolomiteMargin.getMarketIdByTokenAddress(collateralTokens[i]);
+            
+            uint256 marketId = dolomiteMargin.getMarketIdByTokenAddress(collateralTokens[i]);
+            
+            // Get current balance in borrow position
+            Account.Info memory borrowAccount = Account.Info({
+                owner: address(this),
+                number: accountNumber
+            });
+            Types.Wei memory balance = dolomiteMargin.getAccountWei(borrowAccount, marketId);
+            
+            // Transfer all balance from borrow position to main account
+            // Only transfer if positive (collateral), skip if zero or negative (debt)
+            actions[i] = Actions.ActionArgs({
+                actionType: Actions.ActionType.Transfer,
+                accountId: 0,  // From account[0] (borrow position)
+                amount: TypesExtended.AssetAmount({
+                    sign: false,  // Negative (withdraw from source)
+                    denomination: TypesExtended.AssetDenomination.Wei,
+                    ref: TypesExtended.AssetReference.Target,  // Absolute amount (all)
+                    value: balance.sign ? balance.value : 0  // Transfer only if positive balance
+                }),
+                primaryMarketId: marketId,
+                secondaryMarketId: 0,
+                otherAddress: address(this),
+                otherAccountId: 1,  // To account[1] (main account)
+                data: ""
+            });
         }
         
-        // Close position and return collateral to main account
-        borrowRouter.closeBorrowPosition(
-            0,                  // isolationModeMarketId
-            accountNumber,      // borrowAccountNumber (position to close)
-            MAIN_ACCOUNT,       // toAccountNumber (return collateral to main)
-            collateralMarketIds // collateralMarketIds
-        );
+        dolomiteMargin.operate(accounts, actions);
         
         emit BorrowPositionClosed(msg.sender, accountNumber);
     }
@@ -815,34 +879,11 @@ contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
     
     /**
      * @notice Execute a flash loan using Dolomite's Operation framework
-     * @dev Based on Dolomite Flash Loans documentation
-     * https://docs.dolomite.io/developer-documentation/flash-loans
-     * 
-     * FLOW:
-     * 1. Withdraw tokens (balance goes negative = flash loan)
-     * 2. Call external contract to use the loaned funds
-     * 3. Deposit tokens back (repay flash loan)
-     * 4. If account is not collateralized at end, transaction reverts
-     * 
-     * NO ORIGINATION FEES - Dolomite flash loans are free!
-     * 
+     * @dev Zero-fee flash loans. See docs/DolomitePlugin_Implementation_Notes.md for details.
      * @param token Token to flash loan
      * @param amount Amount to borrow
-     * @param callbackContract Contract to call with borrowed funds
+     * @param callbackContract Contract to call with borrowed funds (must return tokens)
      * @param callbackData Data to pass to callback contract
-     * 
-     * CALLBACK CONTRACT REQUIREMENTS:
-     * - Must implement: function executeOperation(address token, uint256 amount, bytes calldata data)
-     * - Must return borrowed tokens to DolomitePlugin before operation ends
-     * - DolomitePlugin will deposit tokens back to Dolomite to close the flash loan
-     * 
-     * EXAMPLE: Flash loan 1000 USDC for arbitrage
-     * executeFlashLoan(USDC, 1000e6, arbitrageContract, abi.encode(...))
-     * 
-     * SECURITY:
-     * - Only msg.sender can trigger callback (no reentrancy from malicious contracts)
-     * - Dolomite validates collateralization at end of operation
-     * - If repayment fails, entire transaction reverts
      */
     function executeFlashLoan(
         address token,
