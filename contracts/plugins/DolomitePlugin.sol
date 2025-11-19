@@ -618,4 +618,326 @@ contract DolomitePlugin is ISwapPlugin, Ownable, ReentrancyGuard {
         
         IERC20(token).safeTransfer(recipient, amount);
     }
+    
+    // ==================== BORROW POSITIONS (OPTION 3: DIRECT CALLS) ====================
+    
+    /**
+     * @notice Open a new leveraged borrow position
+     * @dev OPTION 3: Direct public function, bypasses SwapManager
+     * 
+     * FLOW:
+     * 1. User must have collateral deposited in MAIN_ACCOUNT (account #0)
+     * 2. This function moves collateral to a new borrow position (account #1, #2, etc.)
+     * 3. User can then call borrowFromPosition() to borrow against collateral
+     * 
+     * @param collateralToken Token to use as collateral
+     * @param collateralAmount Amount of collateral to move
+     * @return accountNumber The account number of the new borrow position
+     * 
+     * EXAMPLE: Open position with 1 WETH collateral
+     * 1. First deposit WETH via inputSwap(WETH → dWETH)
+     * 2. Then call: openBorrowPosition(WETH, 1 ether)
+     * 3. Returns account number (e.g., 1)
+     * 4. Now you can borrow: borrowFromPosition(1, USDC, 1000e6)
+     */
+    function openBorrowPosition(
+        address collateralToken,
+        uint256 collateralAmount
+    ) external nonReentrant whenNotPaused returns (uint256 accountNumber) {
+        if (!_isTokenSupported(collateralToken)) {
+            revert TokenNotSupported(collateralToken);
+        }
+        
+        // Get or create next borrow account number for this user
+        accountNumber = nextBorrowAccount[msg.sender];
+        if (accountNumber == 0) {
+            accountNumber = BORROW_ACCOUNT_START;
+        }
+        nextBorrowAccount[msg.sender] = accountNumber + 1;
+        
+        // Get market ID for collateral token
+        uint256 marketId = dolomiteMargin.getMarketIdByTokenAddress(collateralToken);
+        
+        // Move collateral from MAIN_ACCOUNT to borrow position account
+        // This creates an isolated position that can be leveraged
+        borrowRouter.openBorrowPosition(
+            MAIN_ACCOUNT,                           // fromAccountNumber (main account)
+            accountNumber,                          // toAccountNumber (new borrow position)
+            marketId,                               // marketId (collateral token)
+            collateralAmount,                       // amount
+            AccountBalanceLib.BalanceCheckFlag.Both // Check both accounts are healthy
+        );
+        
+        emit BorrowPositionOpened(msg.sender, accountNumber, collateralToken, collateralAmount);
+        
+        return accountNumber;
+    }
+    
+    /**
+     * @notice Borrow tokens against a borrow position
+     * @dev User must have opened a borrow position first with openBorrowPosition()
+     * 
+     * @param accountNumber Account number of the borrow position
+     * @param borrowToken Token to borrow
+     * @param borrowAmount Amount to borrow
+     * 
+     * MECHANICS:
+     * - Borrows tokens from Dolomite using the collateral in accountNumber
+     * - Borrowed tokens are transferred to msg.sender
+     * - Position must remain collateralized (LTV < liquidation threshold)
+     * 
+     * EXAMPLE: Borrow 1000 USDC against WETH collateral in position #1
+     * borrowFromPosition(1, USDC, 1000e6)
+     */
+    function borrowFromPosition(
+        uint256 accountNumber,
+        address borrowToken,
+        uint256 borrowAmount
+    ) external nonReentrant whenNotPaused {
+        if (accountNumber < BORROW_ACCOUNT_START) {
+            revert InvalidAccountNumber(accountNumber);
+        }
+        if (!_isTokenSupported(borrowToken)) {
+            revert TokenNotSupported(borrowToken);
+        }
+        
+        // Get market ID for borrow token
+        uint256 marketId = dolomiteMargin.getMarketIdByTokenAddress(borrowToken);
+        
+        // Withdraw borrowed tokens from borrow position to this contract
+        // This creates debt in the borrow position account
+        depositRouter.withdrawWei(
+            0,                                      // isolationModeMarketId (0 = not using isolation)
+            accountNumber,                          // fromAccountNumber (borrow position)
+            marketId,                               // marketId (token to borrow)
+            borrowAmount,                           // amountWei
+            AccountBalanceLib.BalanceCheckFlag.From // Check borrow account stays healthy
+        );
+        
+        // Transfer borrowed tokens to user
+        IERC20(borrowToken).safeTransfer(msg.sender, borrowAmount);
+        
+        emit BorrowPositionBorrowed(msg.sender, accountNumber, borrowToken, borrowAmount);
+    }
+    
+    /**
+     * @notice Repay debt on a borrow position
+     * @dev User must approve this contract to spend repayment tokens first
+     * 
+     * @param accountNumber Account number of the borrow position
+     * @param debtToken Token to repay
+     * @param repayAmount Amount to repay (use type(uint256).max for full repayment)
+     * 
+     * EXAMPLE: Repay 500 USDC debt on position #1
+     * USDC.approve(dolomitePlugin, 500e6);
+     * repayBorrowPosition(1, USDC, 500e6);
+     */
+    function repayBorrowPosition(
+        uint256 accountNumber,
+        address debtToken,
+        uint256 repayAmount
+    ) external nonReentrant whenNotPaused {
+        if (accountNumber < BORROW_ACCOUNT_START) {
+            revert InvalidAccountNumber(accountNumber);
+        }
+        if (!_isTokenSupported(debtToken)) {
+            revert TokenNotSupported(debtToken);
+        }
+        
+        // Get market ID for debt token
+        uint256 marketId = dolomiteMargin.getMarketIdByTokenAddress(debtToken);
+        
+        // Transfer repayment tokens from user to this contract
+        IERC20(debtToken).safeTransferFrom(msg.sender, address(this), repayAmount);
+        
+        // Approve deposit router
+        IERC20(debtToken).safeApprove(address(depositRouter), repayAmount);
+        
+        // Deposit tokens to borrow position (reduces debt)
+        depositRouter.depositWei(
+            0,                                     // isolationModeMarketId
+            accountNumber,                         // toAccountNumber (borrow position)
+            marketId,                              // marketId
+            repayAmount,                           // amountWei
+            IDepositWithdrawalRouter.EventFlag.None // eventFlag
+        );
+        
+        emit BorrowPositionRepaid(msg.sender, accountNumber, debtToken, repayAmount);
+    }
+    
+    /**
+     * @notice Close a borrow position and return collateral to main account
+     * @dev All debt must be repaid first, then this withdraws collateral back to MAIN_ACCOUNT
+     * 
+     * @param accountNumber Account number of the borrow position
+     * @param collateralTokens Array of collateral tokens to withdraw
+     * 
+     * FLOW:
+     * 1. Repay all debt using repayBorrowPosition()
+     * 2. Call closeBorrowPosition() to withdraw collateral
+     * 3. Collateral returns to MAIN_ACCOUNT
+     * 4. User can withdraw via inputSwap(dWETH → WETH)
+     * 
+     * EXAMPLE: Close position #1 with WETH collateral
+     * uint256[] memory collaterals = new uint256[](1);
+     * collaterals[0] = WETH;
+     * closeBorrowPosition(1, collaterals);
+     */
+    function closeBorrowPosition(
+        uint256 accountNumber,
+        address[] calldata collateralTokens
+    ) external nonReentrant whenNotPaused {
+        if (accountNumber < BORROW_ACCOUNT_START) {
+            revert InvalidAccountNumber(accountNumber);
+        }
+        
+        // Convert token addresses to market IDs
+        uint256[] memory collateralMarketIds = new uint256[](collateralTokens.length);
+        for (uint256 i = 0; i < collateralTokens.length; i++) {
+            if (!_isTokenSupported(collateralTokens[i])) {
+                revert TokenNotSupported(collateralTokens[i]);
+            }
+            collateralMarketIds[i] = dolomiteMargin.getMarketIdByTokenAddress(collateralTokens[i]);
+        }
+        
+        // Close position and return collateral to main account
+        borrowRouter.closeBorrowPosition(
+            0,                  // isolationModeMarketId
+            accountNumber,      // borrowAccountNumber (position to close)
+            MAIN_ACCOUNT,       // toAccountNumber (return collateral to main)
+            collateralMarketIds // collateralMarketIds
+        );
+        
+        emit BorrowPositionClosed(msg.sender, accountNumber);
+    }
+    
+    // ==================== FLASH LOANS ====================
+    
+    /**
+     * @notice Execute a flash loan using Dolomite's Operation framework
+     * @dev Based on Dolomite Flash Loans documentation
+     * https://docs.dolomite.io/developer-documentation/flash-loans
+     * 
+     * FLOW:
+     * 1. Withdraw tokens (balance goes negative = flash loan)
+     * 2. Call external contract to use the loaned funds
+     * 3. Deposit tokens back (repay flash loan)
+     * 4. If account is not collateralized at end, transaction reverts
+     * 
+     * NO ORIGINATION FEES - Dolomite flash loans are free!
+     * 
+     * @param token Token to flash loan
+     * @param amount Amount to borrow
+     * @param callbackContract Contract to call with borrowed funds
+     * @param callbackData Data to pass to callback contract
+     * 
+     * CALLBACK CONTRACT REQUIREMENTS:
+     * - Must implement: function executeOperation(address token, uint256 amount, bytes calldata data)
+     * - Must return borrowed tokens to DolomitePlugin before operation ends
+     * - DolomitePlugin will deposit tokens back to Dolomite to close the flash loan
+     * 
+     * EXAMPLE: Flash loan 1000 USDC for arbitrage
+     * executeFlashLoan(USDC, 1000e6, arbitrageContract, abi.encode(...))
+     * 
+     * SECURITY:
+     * - Only msg.sender can trigger callback (no reentrancy from malicious contracts)
+     * - Dolomite validates collateralization at end of operation
+     * - If repayment fails, entire transaction reverts
+     */
+    function executeFlashLoan(
+        address token,
+        uint256 amount,
+        address callbackContract,
+        bytes calldata callbackData
+    ) external nonReentrant whenNotPaused {
+        if (!_isTokenSupported(token)) {
+            revert TokenNotSupported(token);
+        }
+        if (callbackContract == address(0)) {
+            revert InvalidAddress();
+        }
+        
+        // Get market ID
+        uint256 marketId = dolomiteMargin.getMarketIdByTokenAddress(token);
+        
+        // Build Operation:
+        // 1. Create account array (only using MAIN_ACCOUNT for flash loan)
+        Account.Info[] memory accounts = new Account.Info[](1);
+        accounts[0] = Account.Info({
+            owner: address(this),
+            number: MAIN_ACCOUNT
+        });
+        
+        // 2. Create actions array
+        Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](3);
+        
+        // ACTION 1: Withdraw (creates flash loan by going negative)
+        actions[0] = Actions.ActionArgs({
+            actionType: Actions.ActionType.Withdraw,
+            accountId: 0,  // Index in accounts array
+            amount: TypesExtended.AssetAmount({
+                sign: false,  // Negative (withdraw)
+                denomination: TypesExtended.AssetDenomination.Wei,
+                ref: TypesExtended.AssetReference.Delta,  // Relative amount
+                value: amount
+            }),
+            primaryMarketId: marketId,
+            secondaryMarketId: 0,
+            otherAddress: address(this),  // Tokens sent to DolomitePlugin
+            otherAccountId: 0,
+            data: ""
+        });
+        
+        // ACTION 2: Call external contract (use borrowed funds)
+        actions[1] = Actions.ActionArgs({
+            actionType: Actions.ActionType.Call,
+            accountId: 0,
+            amount: TypesExtended.AssetAmount({
+                sign: true,
+                denomination: TypesExtended.AssetDenomination.Wei,
+                ref: TypesExtended.AssetReference.Delta,
+                value: 0
+            }),
+            primaryMarketId: 0,
+            secondaryMarketId: 0,
+            otherAddress: callbackContract,
+            otherAccountId: 0,
+            data: abi.encodeWithSignature(
+                "executeOperation(address,uint256,bytes)",
+                token,
+                amount,
+                callbackData
+            )
+        });
+        
+        // ACTION 3: Deposit (repay flash loan)
+        // Note: Callback contract must return tokens to this contract before this action
+        actions[2] = Actions.ActionArgs({
+            actionType: Actions.ActionType.Deposit,
+            accountId: 0,
+            amount: TypesExtended.AssetAmount({
+                sign: true,  // Positive (deposit)
+                denomination: TypesExtended.AssetDenomination.Wei,
+                ref: TypesExtended.AssetReference.Delta,
+                value: amount
+            }),
+            primaryMarketId: marketId,
+            secondaryMarketId: 0,
+            otherAddress: address(this),  // Tokens from DolomitePlugin
+            otherAccountId: 0,
+            data: ""
+        });
+        
+        // Approve Dolomite to take back the tokens (for repayment)
+        IERC20(token).safeApprove(address(dolomiteMargin), amount);
+        
+        // Execute flash loan operation
+        try dolomiteMargin.operate(accounts, actions) {
+            emit FlashLoanExecuted(msg.sender, token, amount, callbackContract);
+        } catch Error(string memory reason) {
+            revert FlashLoanFailed(reason);
+        } catch {
+            revert FlashLoanFailed("Unknown error during flash loan");
+        }
+    }
 }
