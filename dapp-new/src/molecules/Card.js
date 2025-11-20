@@ -22,9 +22,9 @@ export class Card {
 
   getVariantClasses() {
     const variants = {
-      default: 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700',
-      gradient: 'bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border border-purple-200 dark:border-purple-800',
-      glass: 'bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg border border-gray-200/50 dark:border-gray-700/50',
+      default: 'bg-white/70 dark:bg-gray-800/70 backdrop-blur-md border border-white/30 dark:border-gray-700/30',
+      gradient: 'bg-gradient-to-br from-purple-50/70 to-indigo-50/70 dark:from-purple-900/40 dark:to-indigo-900/40 backdrop-blur-md border border-purple-200/30 dark:border-purple-800/30',
+      glass: 'bg-white/70 dark:bg-gray-800/70 backdrop-blur-lg border border-gray-200/30 dark:border-gray-700/30',
     };
     return variants[this.variant] || variants.default;
   }

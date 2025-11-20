@@ -214,14 +214,16 @@ contract UniswapV3Plugin is ISwapPlugin {
     function getExpectedOutput(
         address spendToken,
         address receiveToken,
-        uint256 amountIn
+        uint256 amountIn,
+        uint8 /* decimalsIn */,
+        uint8 /* decimalsOut */
     ) external view override returns (uint256) {
         require(spendToken != address(0), "Invalid spendToken");
         require(receiveToken != address(0), "Invalid receiveToken");
         require(amountIn > 0, "Invalid amountIn");
         
         // Delegate to SimpleSwap (view function - no gas cost for external call in view context)
-        try ISimpleSwap(simpleSwap).getExpectedOutput(spendToken, receiveToken, amountIn) 
+        try ISimpleSwap(simpleSwap).getExpectedOutput(spendToken, receiveToken, amountIn, 18, 18) 
             returns (uint256 expectedOutput) 
         {
             return expectedOutput;

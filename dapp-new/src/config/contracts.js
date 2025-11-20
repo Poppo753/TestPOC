@@ -51,7 +51,7 @@ export const ABIS = {
   
   VALUE_CALCULATOR: [
     "function getTotalPoolValueView() external view returns (uint256)",
-    "function getPoolComposition() external view returns (tuple(uint256,uint256,uint256,uint256))",
+    "function calculateValue(address token, uint256 amount) external view returns (uint256)",
   ],
 };
 

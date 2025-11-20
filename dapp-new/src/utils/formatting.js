@@ -35,6 +35,24 @@ export function formatTxHash(hash) {
   return `${hash.slice(0, 10)}...${hash.slice(-8)}`;
 }
 
+export function formatNumber(value, decimals = 2) {
+  const num = parseFloat(value);
+  if (isNaN(num)) return "0";
+  return num.toLocaleString('en-US', { 
+    minimumFractionDigits: 0,
+    maximumFractionDigits: decimals 
+  });
+}
+
+export function formatCurrency(value, decimals = 2) {
+  const num = parseFloat(value);
+  if (isNaN(num)) return "0.00";
+  return num.toLocaleString('en-US', { 
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals 
+  });
+}
+
 // ============================================
 // VALIDATION
 // ============================================

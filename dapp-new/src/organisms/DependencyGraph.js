@@ -74,6 +74,96 @@ export class DependencyGraph {
     }
 
     /**
+     * Find function element by name within a specific module
+     */
+    findFunctionElementWithModule(functionName, moduleName) {
+        console.log(`🔍 Finding function "${functionName}" in module "${moduleName}"`);
+        
+        // First check if the source module is expanded
+        const moduleCard = this.modulesGrid?.getModuleCardByName(moduleName);
+        console.log(`📦 Module card found:`, moduleCard ? `YES (expanded: ${moduleCard.isExpanded})` : 'NO');
+        
+        if (moduleCard && moduleCard.isExpanded) {
+            // Module is expanded, find the specific function within that module
+            const moduleElement = moduleCard.cardElement;
+            console.log(`📋 Module element:`, moduleElement ? 'YES' : 'NO');
+            
+            if (moduleElement) {
+                // Search for function cards - they are inside functionsInner which is inside functionsContainer
+                const functionsContainer = moduleElement.querySelector('.functions-container');
+                console.log(`📦 Functions container:`, functionsContainer ? 'YES' : 'NO');
+                
+                // The function cards are actually one level deeper
+                let searchRoot = functionsContainer;
+                if (functionsContainer) {
+                    // Try to find the inner div with the actual cards
+                    const innerDiv = functionsContainer.querySelector('div');
+                    if (innerDiv) {
+                        searchRoot = innerDiv;
+                        console.log(`📦 Found inner functions div`);
+                        console.log(`📦 Inner div classes:`, innerDiv.className);
+                        console.log(`📦 Inner div children:`, innerDiv.children.length);
+                        console.log(`📦 Inner div innerHTML length:`, innerDiv.innerHTML.length);
+                        
+                        // Log first child to see structure
+                        if (innerDiv.children.length > 0) {
+                            const firstChild = innerDiv.children[0];
+                            console.log(`📦 First child tag:`, firstChild.tagName);
+                            console.log(`📦 First child classes:`, firstChild.className);
+                            console.log(`📦 First child has .function-card:`, firstChild.classList.contains('function-card'));
+                            console.log(`📦 First child outerHTML:`, firstChild.outerHTML.substring(0, 200));
+                        }
+                    }
+                }
+                
+                const cards = searchRoot ? searchRoot.querySelectorAll('.function-card') : [];
+                console.log(`🔢 Function cards found:`, cards.length);
+                
+                // Try also searching from moduleElement directly
+                const cardsFromModule = moduleElement.querySelectorAll('.function-card');
+                console.log(`🔢 Function cards from module root:`, cardsFromModule.length);
+                
+                if (cards.length > 0) {
+                    console.log(`📝 First 3 function names:`, 
+                        Array.from(cards).slice(0, 3).map(c => 
+                            c.querySelector('.function-name')?.textContent.trim()
+                        )
+                    );
+                } else if (cardsFromModule.length > 0) {
+                    console.log(`✅ Using cards from module root instead`);
+                    // Use the cards found from module root
+                    for (const card of cardsFromModule) {
+                        const nameElement = card.querySelector('.function-name');
+                        const cardFuncName = nameElement?.textContent.trim().replace('()', ''); // Remove () from display name
+                        if (cardFuncName === functionName) {
+                            console.log(`✅ Found function card: ${cardFuncName}`);
+                            return card;
+                        }
+                    }
+                }
+                
+                for (const card of cards) {
+                    const nameElement = card.querySelector('.function-name');
+                    const cardFuncName = nameElement?.textContent.trim().replace('()', ''); // Remove () from display name
+                    if (cardFuncName === functionName) {
+                        console.log(`✅ Found function card: ${cardFuncName}`);
+                        return card;
+                    }
+                }
+                console.warn(`⚠️ Function "${functionName}" not found in module "${moduleName}"`);
+            }
+        } else if (moduleCard) {
+            // Module is collapsed, return the module header
+            console.log(`📌 Module collapsed, returning header`);
+            return moduleCard.getHeaderElement();
+        }
+        
+        // Fallback to generic search
+        console.warn(`⚠️ Falling back to generic search for "${functionName}"`);
+        return this.findFunctionElement(functionName);
+    }
+
+    /**
      * Find target element (function if expanded, module header if collapsed)
      */
     findTargetElement(functionName, moduleName) {
@@ -120,6 +210,22 @@ export class DependencyGraph {
     }
 
     /**
+     * Show dependencies for a specific function with module context
+     */
+    showDependenciesWithModule(functionName, moduleName) {
+        this.clearAll();
+
+        if (this.mode === 'outgoing') {
+            this.showOutgoingDependenciesWithModule(functionName, moduleName);
+        } else {
+            this.showIncomingDependencies(functionName);
+        }
+
+        this.isActive = true;
+        this.setupEventListeners();
+    }
+
+    /**
      * Show outgoing dependencies (what this function calls)
      */
     showOutgoingDependencies(functionName) {
@@ -135,8 +241,8 @@ export class DependencyGraph {
 
         // Find dependencies for this function
         const deps = this.dependencies.find(d => {
-            const parsed = this.parseFunctionName(d.from);
-            return parsed.function === functionName || d.from.includes(functionName);
+            // Match using full module.function format or just function name for backward compatibility
+            return d.from === functionName || d.from.endsWith(`.${functionName}`);
         });
 
         if (!deps || !deps.to || deps.to.length === 0) {
@@ -183,6 +289,77 @@ export class DependencyGraph {
                 }, index * 100);
             } else {
                 console.warn(`DependencyGraph: Target element not found for ${parsed.function}`);
+            }
+        });
+    }
+
+    /**
+     * Show outgoing dependencies with module context (what this function calls)
+     */
+    showOutgoingDependenciesWithModule(functionName, moduleName) {
+        // Find the source element using module context
+        const sourceElement = this.findFunctionElementWithModule(functionName, moduleName);
+        if (!sourceElement) {
+            console.warn(`DependencyGraph: Source element not found for ${moduleName}.${functionName}`);
+            return;
+        }
+
+        // Highlight source
+        sourceElement.classList.add('ring-4', 'ring-blue-500', 'ring-opacity-50');
+
+        // Build full function name for matching
+        const fullFunctionName = `${moduleName}.${functionName}`;
+        console.log(`🔍 Looking for dependencies: ${fullFunctionName}`);
+
+        // Find dependencies for this function using full name
+        const deps = this.dependencies.find(d => d.from === fullFunctionName);
+
+        if (!deps || !deps.to || deps.to.length === 0) {
+            console.log(`DependencyGraph: No outgoing dependencies found for ${fullFunctionName}`);
+            return;
+        }
+
+        console.log(`✅ Found ${deps.to.length} dependencies:`, deps.to);
+
+        // Create arrows to each dependency
+        deps.to.forEach((targetFullName, index) => {
+            const parsed = this.parseFunctionName(targetFullName);
+            const targetElement = this.findTargetElement(parsed.function, parsed.module);
+
+            if (targetElement) {
+                // Highlight target
+                targetElement.classList.add('ring-2', 'ring-green-500', 'ring-opacity-50');
+
+                // Determine color
+                const color = this.getColorForFunction(parsed.function);
+
+                // Create arrow with delay for animation effect
+                setTimeout(() => {
+                    const arrow = new ConnectionArrow({
+                        fromElement: sourceElement,
+                        toElement: targetElement,
+                        color: color,
+                        animated: true
+                    });
+
+                    const arrowElement = arrow.render();
+                    if (arrowElement) {
+                        document.body.appendChild(arrowElement);
+                        this.arrows.push({ 
+                            arrow, 
+                            arrowElement, 
+                            sourceElement, 
+                            targetElement,
+                            targetModule: parsed.module,
+                            targetFunction: parsed.function
+                        });
+                        
+                        // Initial update to ensure correct positioning
+                        requestAnimationFrame(() => arrow.update());
+                    }
+                }, index * 100);
+            } else {
+                console.warn(`DependencyGraph: Target element not found for ${targetFullName}`);
             }
         });
     }

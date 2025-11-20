@@ -201,6 +201,74 @@
     {
       "from": "Beacon.getImplementation",
       "to": []
+    },
+    {
+      "from": "ProtocolManager.deposit",
+      "to": [
+        "Beacon.getImplementation",
+        "ProxyGeneral.withdraw"
+      ]
+    },
+    {
+      "from": "ProtocolManager.withdraw",
+      "to": [
+        "Beacon.getImplementation"
+      ]
+    },
+    {
+      "from": "ProtocolManager.getBalance",
+      "to": [
+        "Beacon.getImplementation"
+      ]
+    },
+    {
+      "from": "ProtocolManager.getTotalValue",
+      "to": [
+        "Beacon.getImplementation"
+      ]
+    },
+    {
+      "from": "ProtocolManager.borrow",
+      "to": [
+        "Beacon.getImplementation"
+      ]
+    },
+    {
+      "from": "ProtocolManager.repay",
+      "to": [
+        "Beacon.getImplementation",
+        "ProxyGeneral.withdraw"
+      ]
+    },
+    {
+      "from": "ProtocolManager.getDebt",
+      "to": [
+        "Beacon.getImplementation"
+      ]
+    },
+    {
+      "from": "ProtocolManager.getHealthFactor",
+      "to": [
+        "Beacon.getImplementation"
+      ]
+    },
+    {
+      "from": "ProtocolManager.setAllowedSelectors",
+      "to": [
+        "Beacon.getImplementation"
+      ]
+    },
+    {
+      "from": "ProtocolManager.executeProtocolCall",
+      "to": [
+        "Beacon.getImplementation"
+      ]
+    },
+    {
+      "from": "ProtocolManager.emergencyWithdrawAll",
+      "to": [
+        "Beacon.getImplementation"
+      ]
     }
   ],
   "moduleGroups": {
@@ -209,6 +277,7 @@
     "liquidity": ["LiquidityManager"],
     "swap": ["SwapManager"],
     "governance": ["ParameterManager", "EmergencyHandler"],
+    "protocols": ["ProtocolManager"],
     "external": ["External"]
   },
   "colorCoding": {

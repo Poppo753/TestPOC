@@ -84,38 +84,55 @@ contract ValueCalculator is Ownable {
     // ==================== TOKEN VALUE CALCULATION ====================
 
     /**
-     * @notice Calcola il valore di un token con cache system
+     * @notice Calcola il valore di un token (PURE VIEW - no cache update)
+     * @dev Funzione pubblica view per calcoli senza side effects
      * @param _tokenCode Codice del token
      * @return Valore totale della posizione in ETH
      */
-    function calculateTokenValue(string memory _tokenCode) public returns (uint256) {
+    function calculateTokenValuePure(string memory _tokenCode) public view returns (uint256) {
         // CHECK CACHE FIRST
         (uint256 cachedValue, bool isCacheValid) = getCachedTokenValue(_tokenCode);
         if (isCacheValid) {
             return cachedValue;
         }
         
-        // GET FRESH PRICE
+        // GET FRESH PRICE (no cache update)
         ITokenManagerForModules tokenManager = ITokenManagerForModules(IBeacon(beacon).getImplementation("TokenManager"));
         
-        try tokenManager.getTokenPrice(_tokenCode) returns (uint256 price, uint256 timestamp, bool isStale) {
-            // VALIDATE PRICE AGE
-            require(!isStale && block.timestamp - timestamp <= maxPriceAge, "Price too old");
+        (uint256 price, uint256 timestamp, bool isStale) = tokenManager.getTokenPrice(_tokenCode);
+        require(!isStale && block.timestamp - timestamp <= maxPriceAge, "Price too old");
+        
+        // GET TOKEN BALANCE FROM PROXYGENERAL
+        address tokenAddress = tokenManager.getTokenAddress(_tokenCode);
+        address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
+        uint256 tokenBalance = IERC20(tokenAddress).balanceOf(proxyGeneral);
+        
+        // GET TOKEN INFO TO ACCESS TOKEN DECIMALS
+        ITokenManagerForModules.TokenInfo memory tokenInfo = tokenManager.getTokenInfo(_tokenCode);
+        
+        // CALCULATE VALUE (normalize by token decimals)
+        uint256 value = (tokenBalance * price) / (10 ** tokenInfo.tokenDecimals);
+        
+        return value;
+    }
+
+    /**
+     * @notice Calcola il valore di un token con cache system update
+     * @dev Usa _calculateTokenValueView e poi aggiorna la cache
+     * @param _tokenCode Codice del token
+     * @return Valore totale della posizione in ETH
+     */
+    function calculateTokenValue(string memory _tokenCode) public returns (uint256) {
+        // CALCULATE VALUE usando funzione view
+        uint256 value;
+        
+        try this.calculateTokenValuePure(_tokenCode) returns (uint256 calculatedValue) {
+            value = calculatedValue;
             
-            // GET TOKEN BALANCE FROM PROXYGENERAL
-            address tokenAddress = tokenManager.getTokenAddress(_tokenCode);
-            address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
-            uint256 tokenBalance = IERC20(tokenAddress).balanceOf(proxyGeneral);
+            // UPDATE CACHE AFTER SUCCESSFUL CALCULATION
+            ITokenManagerForModules tokenManager = ITokenManagerForModules(IBeacon(beacon).getImplementation("TokenManager"));
+            (uint256 price, , ) = tokenManager.getTokenPrice(_tokenCode);
             
-            // GET TOKEN INFO TO ACCESS TOKEN DECIMALS
-            ITokenManagerForModules.TokenInfo memory tokenInfo = tokenManager.getTokenInfo(_tokenCode);
-            
-            // CALCULATE VALUE (normalize by token decimals to get USD value in price decimals)
-            // Formula: (tokenBalance * price) / (10 ** tokenDecimals)
-            // Example: (1000e6 USDC * 1e8 price) / 1e6 = 1000e8 USD
-            uint256 value = (tokenBalance * price) / (10 ** tokenInfo.tokenDecimals);
-            
-            // UPDATE CACHE
             tokenValueCache[_tokenCode] = TokenValueCache({
                 value: value,
                 pricePerToken: price,
@@ -173,10 +190,11 @@ contract ValueCalculator is Ownable {
     }
 
     /**
-     * @notice Calcola il valore totale del pool con percentuali
+     * @notice Calcola il valore totale del pool con percentuali (PURE VIEW)
+     * @dev Ora è funzione view - non modifica stato, non aggiorna cache
      * @return PoolValueInfo con valore totale e breakdown per token
      */
-    function getTotalPoolValue() external returns (PoolValueInfo memory) {
+    function getTotalPoolValue() external view returns (PoolValueInfo memory) {
         ITokenManagerForModules tokenManager = ITokenManagerForModules(IBeacon(beacon).getImplementation("TokenManager"));
         address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
         address wethAddress = IBeacon(beacon).getImplementation("WETH");
@@ -200,15 +218,16 @@ contract ValueCalculator is Ownable {
             percentage: 0 // Will be calculated after total
         });
         
-        // CALCULATE EACH TOKEN VALUE
+        // CALCULATE EACH TOKEN VALUE usando funzione view pura
         for (uint256 i = 0; i < activeTokens.length; i++) {
             string memory tokenCode = activeTokens[i];
             
-            try this.calculateTokenValue(tokenCode) returns (uint256 tokenValue) {
+            try this.calculateTokenValuePure(tokenCode) returns (uint256 tokenValue) {
                 // GET ADDITIONAL INFO
                 address tokenAddress = tokenManager.getTokenAddress(tokenCode);
                 uint256 tokenBalance = IERC20(tokenAddress).balanceOf(proxyGeneral);
                 
+                // Get cached price if available (no update)
                 TokenValueCache memory cache = tokenValueCache[tokenCode];
                 uint256 pricePerToken = cache.isValid ? cache.pricePerToken : 0;
                 
@@ -222,10 +241,8 @@ contract ValueCalculator is Ownable {
                 
                 totalValue += tokenValue;
                 
-            } catch Error(string memory reason) {
-                // Log error but continue with other tokens
-                emit TokenError(tokenCode, reason);
-                
+            } catch {
+                // Skip failed tokens silently in view mode
                 tokenValues[i + 1] = TokenValueInfo({
                     tokenCode: tokenCode,
                     value: 0,
@@ -243,7 +260,7 @@ contract ValueCalculator is Ownable {
             }
         }
         
-        emit PoolValueUpdated(totalValue);
+        // NOTE: No event emission in view function
         
         return PoolValueInfo({
             totalValue: totalValue,

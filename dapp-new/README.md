@@ -1,5 +1,7 @@
 # 🌊 Jethos Protocol - Modular DApp
 
+cd "e:\Documents\Crypto\Defi\Arbitrum\Coding\Project4\TestSmartContract\dapp-new"; python -m http.server 8000
+
 ## 📁 Project Structure (Atomic Design Pattern)
 
 ```

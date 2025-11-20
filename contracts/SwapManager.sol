@@ -352,8 +352,8 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         require(tokenIn != address(0), "Invalid spend token");
         require(tokenOut != address(0), "Invalid receive token");
         
-        // ===== QUERY ALL PLUGINS =====
-        QuoteResult[] memory quotes = this.getAllQuotes(tokenIn, tokenOut, amountIn);
+        // ===== QUERY ALL PLUGINS WITH TOKEN CODES =====
+        QuoteResult[] memory quotes = getAllQuotes(spendTokenCode, receiveTokenCode, amountIn);
         
         // ===== SELECT BEST PLUGIN =====
         uint256 bestQuote = 0;
@@ -466,8 +466,12 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         SwapExecution memory execution;
         execution.balanceBefore = IWETH(wethAddress).balanceOf(address(proxy));
         
-        // APPROVE SIMPLESWAP TO SPEND TOKENS FROM PROXYGENERAL
-        proxy.approveSpender(validation.spendTokenAddress, address(swapper), amountIn);
+        // CHECK CURRENT ALLOWANCE - only approve if insufficient
+        uint256 currentAllowance = IERC20(validation.spendTokenAddress).allowance(address(proxy), address(swapper));
+        if (currentAllowance < amountIn) {
+            // APPROVE PLUGIN TO SPEND TOKENS FROM PROXYGENERAL (MAX for efficiency)
+            proxy.approveSpender(validation.spendTokenAddress, address(swapper), type(uint256).max);
+        }
         
         try swapper.inputSwap(
             validation.spendTokenAddress,
@@ -489,8 +493,13 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             bytes32 pairHash = keccak256(abi.encodePacked(spendTokenCode, "WETH"));
             swapSuccesses[pairHash]++;
             
-            // CALCULATE SLIPPAGE FOR ANALYTICS
-            uint256 slippage = ((validation.expectedOutput - execution.actualReceived) * 10000) / validation.expectedOutput;
+            // CALCULATE SLIPPAGE FOR ANALYTICS (avoid underflow if actualReceived > expectedOutput)
+            uint256 slippage;
+            if (execution.actualReceived >= validation.expectedOutput) {
+                slippage = 0; // No slippage, got more than expected
+            } else {
+                slippage = ((validation.expectedOutput - execution.actualReceived) * 10000) / validation.expectedOutput;
+            }
             
             // EMIT EVENT WITH SLIPPAGE DATA
             emit SwapExecuted(spendTokenCode, "WETH", amountIn, execution.actualReceived, slippage, msg.sender);
@@ -523,8 +532,12 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         SwapExecution memory execution;
         execution.balanceBefore = IERC20(validation.receiveTokenAddress).balanceOf(address(proxy));
         
-        // APPROVE SIMPLESWAP TO SPEND WETH FROM PROXYGENERAL
-        proxy.approveSpender(validation.spendTokenAddress, address(swapper), amountIn);
+        // CHECK CURRENT ALLOWANCE - only approve if insufficient
+        uint256 currentAllowance = IERC20(validation.spendTokenAddress).allowance(address(proxy), address(swapper));
+        if (currentAllowance < amountIn) {
+            // APPROVE PLUGIN TO SPEND WETH FROM PROXYGENERAL (MAX for efficiency)
+            proxy.approveSpender(validation.spendTokenAddress, address(swapper), type(uint256).max);
+        }
         
         try swapper.inputSwap(
             validation.spendTokenAddress,
@@ -546,8 +559,13 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             bytes32 pairHash = keccak256(abi.encodePacked("WETH", receiveTokenCode));
             swapSuccesses[pairHash]++;
             
-            // CALCULATE SLIPPAGE FOR ANALYTICS
-            uint256 slippage = ((validation.expectedOutput - execution.actualReceived) * 10000) / validation.expectedOutput;
+            // CALCULATE SLIPPAGE FOR ANALYTICS (avoid underflow if actualReceived > expectedOutput)
+            uint256 slippage;
+            if (execution.actualReceived >= validation.expectedOutput) {
+                slippage = 0; // No slippage, got more than expected
+            } else {
+                slippage = ((validation.expectedOutput - execution.actualReceived) * 10000) / validation.expectedOutput;
+            }
             
             // EMIT EVENT WITH SLIPPAGE DATA
             emit SwapExecuted("WETH", receiveTokenCode, amountIn, execution.actualReceived, slippage, msg.sender);
@@ -581,8 +599,12 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         SwapExecution memory execution;
         execution.balanceBefore = IERC20(validation.receiveTokenAddress).balanceOf(address(proxy));
         
-        // APPROVE SIMPLESWAP TO SPEND TOKENS FROM PROXYGENERAL
-        proxy.approveSpender(validation.spendTokenAddress, address(swapper), amountIn);
+        // CHECK CURRENT ALLOWANCE - only approve if insufficient
+        uint256 currentAllowance = IERC20(validation.spendTokenAddress).allowance(address(proxy), address(swapper));
+        if (currentAllowance < amountIn) {
+            // APPROVE PLUGIN TO SPEND TOKENS FROM PROXYGENERAL (MAX for efficiency)
+            proxy.approveSpender(validation.spendTokenAddress, address(swapper), type(uint256).max);
+        }
         
         try swapper.inputSwap(
             validation.spendTokenAddress,
@@ -604,8 +626,13 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             bytes32 pairHash = keccak256(abi.encodePacked(spendTokenCode, receiveTokenCode));
             swapSuccesses[pairHash]++;
             
-            // CALCULATE SLIPPAGE FOR ANALYTICS
-            uint256 slippage = ((validation.expectedOutput - execution.actualReceived) * 10000) / validation.expectedOutput;
+            // CALCULATE SLIPPAGE FOR ANALYTICS (avoid underflow if actualReceived > expectedOutput)
+            uint256 slippage;
+            if (execution.actualReceived >= validation.expectedOutput) {
+                slippage = 0; // No slippage, got more than expected
+            } else {
+                slippage = ((validation.expectedOutput - execution.actualReceived) * 10000) / validation.expectedOutput;
+            }
             
             // EMIT EVENT WITH SLIPPAGE DATA
             emit SwapExecuted(spendTokenCode, receiveTokenCode, amountIn, execution.actualReceived, slippage, msg.sender);
@@ -778,15 +805,40 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
      * }
      * ```
      */
+    /**
+     * @notice Get quotes from ALL registered plugins
+     * @dev Queries each plugin, returns array of results with decimals from TokenManager
+     * @param tokenCodeIn Token code to sell (e.g., "WETH", "USDC") 
+     * @param tokenCodeOut Token code to buy
+     * @param amountIn Amount to swap
+     * @return results Array of QuoteResult structs
+     */
     function getAllQuotes(
-        address tokenIn,
-        address tokenOut,
+        string memory tokenCodeIn,
+        string memory tokenCodeOut,
         uint256 amountIn
-    ) external view returns (QuoteResult[] memory results) {
+    ) public view returns (QuoteResult[] memory results) {
+        require(bytes(tokenCodeIn).length > 0, "Invalid tokenCodeIn");
+        require(bytes(tokenCodeOut).length > 0, "Invalid tokenCodeOut");
+        require(keccak256(bytes(tokenCodeIn)) != keccak256(bytes(tokenCodeOut)), "Same token");
+        require(amountIn > 0, "Amount must be > 0");
+        
+        // Get TokenManager reference
+        address tokenManagerAddr = IBeacon(beacon).getImplementation("TokenManager");
+        require(tokenManagerAddr != address(0), "TokenManager not configured");
+        ITokenManagerForModules tokens = ITokenManagerForModules(tokenManagerAddr);
+        
+        // Get token info from TokenManager (single source of truth)
+        ITokenManagerForModules.TokenInfo memory tokenInInfo = tokens.getTokenInfo(tokenCodeIn);
+        ITokenManagerForModules.TokenInfo memory tokenOutInfo = tokens.getTokenInfo(tokenCodeOut);
+        
+        address tokenIn = tokenInInfo.tokenAddress;
+        address tokenOut = tokenOutInfo.tokenAddress;
+        uint8 decimalsIn = tokenInInfo.tokenDecimals;
+        uint8 decimalsOut = tokenOutInfo.tokenDecimals;
+        
         require(tokenIn != address(0), "Invalid tokenIn");
         require(tokenOut != address(0), "Invalid tokenOut");
-        require(tokenIn != tokenOut, "Same token");
-        require(amountIn > 0, "Amount must be > 0");
         
         // Get all swap plugin names from Beacon
         string[] memory pluginNames = _getSwapPluginNames();
@@ -819,10 +871,10 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
                 continue;
             }
             
-            // Try to get quote from plugin
+            // Query plugin WITH DECIMALS FROM TOKENMANAGER
             ISimpleSwap plugin = ISimpleSwap(pluginAddr);
             
-            try plugin.getExpectedOutput(tokenIn, tokenOut, amountIn) returns (uint256 quote) {
+            try plugin.getExpectedOutput(tokenIn, tokenOut, amountIn, decimalsIn, decimalsOut) returns (uint256 quote) {
                 if (quote > 0) {
                     results[i].quote = quote;
                     results[i].isValid = true;
@@ -857,15 +909,15 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         
         ITokenManagerForModules tokens = ITokenManagerForModules(tokenManager);
         IProxyGeneral proxy = IProxyGeneral(proxyGeneral);
-        ISimpleSwap swapper = ISimpleSwap(simpleSwapRouter);
+        ISimpleSwap swapper = _getActivePlugin();
         
         // CHECK MODULE ADDRESSES
         if (tokenManager == address(0)) {
             validation.errorReason = "TokenManager not configured";
             return validation;
         }
-        if (simpleSwapRouter == address(0)) {
-            validation.errorReason = "SimpleSwap router not configured";
+        if (address(swapper) == address(0)) {
+            validation.errorReason = "Active swap plugin not configured";
             return validation;
         }
         
@@ -931,8 +983,26 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             return validation;
         }
         
+        // GET DECIMALS FROM TOKENMANAGER
+        uint8 decimalsIn = 18;
+        uint8 decimalsOut = 18;
+        
+        // Get decimals for spendToken
+        if (!spendTokenIsWeth) {
+            try tokens.getTokenInfo(spendTokenCode) returns (ITokenManagerForModules.TokenInfo memory info) {
+                decimalsIn = info.tokenDecimals;
+            } catch {}
+        }
+        
+        // Get decimals for receiveToken
+        if (!receiveTokenIsWeth) {
+            try tokens.getTokenInfo(receiveTokenCode) returns (ITokenManagerForModules.TokenInfo memory info) {
+                decimalsOut = info.tokenDecimals;
+            } catch {}
+        }
+        
         // GET EXPECTED OUTPUT AND CALCULATE SLIPPAGE PROTECTION
-        try swapper.getExpectedOutput(validation.spendTokenAddress, validation.receiveTokenAddress, amountIn) returns (uint256 expectedOutput) {
+        try swapper.getExpectedOutput(validation.spendTokenAddress, validation.receiveTokenAddress, amountIn, decimalsIn, decimalsOut) returns (uint256 expectedOutput) {
             validation.expectedOutput = expectedOutput;
             validation.minAcceptableOutput = (expectedOutput * (10000 - maxSlippage)) / 10000;
         } catch {
@@ -1268,10 +1338,12 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         
         address tokenInAddress = tokenInInfo.tokenAddress;
         address tokenOutAddress = tokenOutInfo.tokenAddress;
+        uint8 decimalsIn = tokenInInfo.tokenDecimals;
+        uint8 decimalsOut = tokenOutInfo.tokenDecimals;
         
         // Query router for expected output (this validates route exists)
         ISimpleSwap router = ISimpleSwap(simpleSwapRouter);
-        uint256 expectedOutput = router.getExpectedOutput(tokenInAddress, tokenOutAddress, amountIn);
+        uint256 expectedOutput = router.getExpectedOutput(tokenInAddress, tokenOutAddress, amountIn, decimalsIn, decimalsOut);
         
         // If we got output, estimate gas based on complexity
         if (expectedOutput > 0) {
@@ -1336,10 +1408,26 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             return (false, "Amount must be greater than 0");
         }
 
-        // Check token addresses exist
-        ITokenManagerForModules tokenManager = ITokenManagerForModules(IBeacon(beacon).getImplementation("TokenManager"));
-        address tokenInAddress = tokenManager.getTokenAddress(tokenCodeIn);
-        address tokenOutAddress = tokenManager.getTokenAddress(tokenCodeOut);
+        // Check token addresses exist - SPECIAL CASE: WETH from Beacon
+        bool tokenInIsWeth = (keccak256(bytes(tokenCodeIn)) == keccak256(bytes("WETH")));
+        bool tokenOutIsWeth = (keccak256(bytes(tokenCodeOut)) == keccak256(bytes("WETH")));
+        
+        address tokenInAddress;
+        address tokenOutAddress;
+        
+        if (tokenInIsWeth) {
+            tokenInAddress = IBeacon(beacon).getImplementation("WETH");
+        } else {
+            ITokenManagerForModules tokenManager = ITokenManagerForModules(IBeacon(beacon).getImplementation("TokenManager"));
+            tokenInAddress = tokenManager.getTokenAddress(tokenCodeIn);
+        }
+        
+        if (tokenOutIsWeth) {
+            tokenOutAddress = IBeacon(beacon).getImplementation("WETH");
+        } else {
+            ITokenManagerForModules tokenManager = ITokenManagerForModules(IBeacon(beacon).getImplementation("TokenManager"));
+            tokenOutAddress = tokenManager.getTokenAddress(tokenCodeOut);
+        }
         
         if (tokenInAddress == address(0)) {
             return (false, "Input token not supported");

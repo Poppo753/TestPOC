@@ -90,6 +90,7 @@
                 this.dependencyGraph = null;
                 this.dependenciesActive = false;
                 this.activeDependencyFunction = null;
+                this.activeDependencyModule = null;
                 
                 this.init();
             }
@@ -297,22 +298,24 @@
                 // Se la modalità dependencies è attiva, mostra le frecce invece del modal
                 if (this.dependenciesActive) {
                     // Se clicco sulla stessa funzione, toglie le frecce
-                    if (this.activeDependencyFunction === func.name) {
-                        console.log('🔗 Hiding dependencies for:', func.name);
+                    if (this.activeDependencyFunction === func.name && this.activeDependencyModule === func.module) {
+                        console.log('🔗 Hiding dependencies for:', func.module, func.name);
                         this.dependencyGraph.clearAll();
                         this.activeDependencyFunction = null;
+                        this.activeDependencyModule = null;
                     } else {
                         // Altrimenti mostra le frecce della nuova funzione
-                        console.log('🔗 Showing dependencies for:', func.name);
+                        console.log('🔗 Showing dependencies for:', func.module, func.name);
                         this.dependencyGraph.clearAll();
                         this.activeDependencyFunction = func.name;
+                        this.activeDependencyModule = func.module;
                         setTimeout(() => {
                             try {
-                                this.dependencyGraph.showDependencies(func.name);
+                                this.dependencyGraph.showDependenciesWithModule(func.name, func.module);
                             } catch (error) {
                                 console.warn('Error showing dependencies:', error);
                             }
-                        }, 50);
+                        }, 400); // Increased timeout to wait for module expansion animation
                     }
                 } else {
                     // Altrimenti apri il modal normale

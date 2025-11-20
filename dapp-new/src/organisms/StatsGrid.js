@@ -22,12 +22,12 @@ export class StatsGrid {
         animated: true,
       },
       {
-        id: 'poolValue',
+        id: 'poolValueUSD',
         label: 'Pool Value',
         value: 0,
-        suffix: 'ETH',
-        decimals: 6,
-        icon: 'chart',
+        suffix: '$',
+        decimals: 2,
+        icon: 'dollar',
         variant: 'success',
         animated: true,
       },
@@ -66,19 +66,21 @@ export class StatsGrid {
     this.update();
 
     try {
-      const [lpBalance, poolValue] = await Promise.all([
+      const [lpBalance, poolValue, poolValueUSD] = await Promise.all([
         web3Manager.getLPBalance(),
         web3Manager.getPoolValue(),
+        web3Manager.getPoolValueUSD(),
       ]);
 
       // Calculate new values
       const newLpBalance = parseFloat(lpBalance) || 0;
       const newPoolValue = parseFloat(poolValue) || 0;
+      const newPoolValueUSD = poolValueUSD || 0;
       const newUserValue = newLpBalance > 0 ? (newLpBalance * newPoolValue / 100) : 0;
 
       // Update stats data
       this.stats[0].value = newLpBalance;
-      this.stats[1].value = newPoolValue;
+      this.stats[1].value = newPoolValueUSD;
       this.stats[2].value = newUserValue;
       this.stats[3].value = 8.5;
 

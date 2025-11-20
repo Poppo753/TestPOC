@@ -23,7 +23,6 @@ export class FunctionCard {
     
     // Add data attribute for dependency graph
     card.setAttribute('data-function-name', this.func.name);
-    card.className = 'function-card';
     
     const baseClasses = 'p-3 rounded-lg cursor-pointer transition-all duration-200 border-l-3';
     const hoverClasses = 'hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:translate-x-1';
@@ -36,7 +35,8 @@ export class FunctionCard {
       emergency: 'border-l-red-500'
     };
 
-    card.className += ` ${baseClasses} ${hoverClasses} ${bgClasses} ${borderColorClasses[type]}`.trim();
+    // Build complete className string with proper spacing
+    card.className = `function-card ${baseClasses} ${hoverClasses} ${bgClasses} ${borderColorClasses[type]}`;
 
     // Function name
     const nameDiv = document.createElement('div');

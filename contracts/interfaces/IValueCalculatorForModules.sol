@@ -15,9 +15,10 @@ interface IValueCalculatorForModules {
         uint256 percentage;
     }
     
-    function getTotalPoolValue() external returns (PoolValueInfo memory);
+    function getTotalPoolValue() external view returns (PoolValueInfo memory);
     function getTotalPoolValueView() external view returns (uint256);
     function calculateTokenValue(string memory tokenCode) external returns (uint256);
+    function calculateTokenValuePure(string memory tokenCode) external view returns (uint256);
     function selectTokenForSwap(uint256 targetValue) external view returns (string memory tokenCode, uint256 amount);
     function validatePoolValue() external view returns (bool isValid, string memory errorReason);
 }

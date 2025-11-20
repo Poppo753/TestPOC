@@ -1,272 +1,5 @@
 {
   "version": "3.0.0",
-    "protocolmanager": {
-      "name": "ProtocolManager",
-      "id": "protocolmanager",
-      "displayOrder": 9,
-      "functions": {
-        "protocolmanager-deposit": {
-          "name": "deposit",
-          "id": "protocolmanager-deposit",
-          "module": "protocolmanager",
-          "description": "Deposits tokens from `ProxyGeneral` into a resolved protocol plugin. This orchestrates custody withdrawal from ProxyGeneral and delegates the deposit to the plugin implementation.",
-          "signature": "function deposit(string memory protocolName, string memory tokenCode, uint256 amount) external onlyOwner",
-          "parameters": [
-            { "name": "protocolName", "type": "string memory", "description": "Plugin module name (e.g. 'DolomitePlugin')" },
-            { "name": "tokenCode", "type": "string memory", "description": "Token code recognized by ProxyGeneral/Plugin (e.g. 'WETH', 'USDC')" },
-            { "name": "amount", "type": "uint256", "description": "Amount to deposit (wei)" }
-          ],
-          "returns": [],
-          "accessControl": "external onlyOwner",
-          "validations": [
-            "✅ amount > 0",
-            "✅ tokenCode non-empty",
-            "✅ plugin resolved via Beacon (reverts ProtocolNotFound)",
-            "✅ plugin address non-zero (InvalidProtocol)",
-            "❌ Reverts with InvalidAmount/InvalidTokenCode/ProtocolNotFound/OperationFailed"
-          ],
-          "events": "ProtocolOperationExecuted(protocolName, 'deposit', tokenCode, amount)",
-          "gasCost": "~80,000 - 150,000 gas (depends on plugin operations and ProxyGeneral withdraw)",
-          "usageExample": "protocolManager.deposit('DolomitePlugin', 'WETH', 1 ether);",
-          "calledBy": "Owner / multisig operator",
-          "securityNotes": [
-            "Only the owner may call this function. Ensure owner is a secure multisig in production.",
-            "Relies on Beacon for plugin resolution — a misconfigured Beacon entry causes revert.",
-            "Plugin deposit() logic executes off this call and may revert causing OperationFailed."
-          ],
-          "_complete": true,
-          "_missingFields": []
-        },
-        "protocolmanager-withdraw": {
-          "name": "withdraw",
-          "id": "protocolmanager-withdraw",
-          "module": "protocolmanager",
-          "description": "Requests a plugin to withdraw tokens back to `ProxyGeneral`. Delegates to plugin.withdraw which should transfer assets to proxy custody.",
-          "signature": "function withdraw(string memory protocolName, string memory tokenCode, uint256 amount) external onlyOwner",
-          "parameters": [
-            { "name": "protocolName", "type": "string memory", "description": "Plugin module name" },
-            { "name": "tokenCode", "type": "string memory", "description": "Token code" },
-            { "name": "amount", "type": "uint256", "description": "Amount to withdraw (wei)" }
-          ],
-          "returns": [],
-          "accessControl": "external onlyOwner",
-          "validations": [
-            "✅ amount > 0",
-            "✅ tokenCode non-empty",
-            "✅ plugin resolved via Beacon",
-            "❌ Reverts with InvalidAmount/InvalidTokenCode/ProtocolNotFound/OperationFailed"
-          ],
-          "events": "ProtocolOperationExecuted(protocolName, 'withdraw', tokenCode, amount)",
-          "gasCost": "~60,000 - plugin-specific",
-          "usageExample": "protocolManager.withdraw('DolomitePlugin', 'USDC', 1000e6);",
-          "calledBy": "Owner / multisig operator",
-          "securityNotes": [
-            "Ensure plugin.withdraw transfers funds to ProxyGeneral safely.",
-            "This function assumes plugin implements IProtocolManager.withdraw semantics." 
-          ],
-          "_complete": true,
-          "_missingFields": []
-        },
-        "protocolmanager-getbalance": {
-          "name": "getBalance",
-          "id": "protocolmanager-getbalance",
-          "module": "protocolmanager",
-          "description": "View function returning the plugin's balance for a given token code.",
-          "signature": "function getBalance(string memory protocolName, string memory tokenCode) external view returns (uint256 balance)",
-          "parameters": [
-            { "name": "protocolName", "type": "string memory", "description": "Plugin module name" },
-            { "name": "tokenCode", "type": "string memory", "description": "Token code" }
-          ],
-          "returns": [ { "name": "balance", "type": "uint256", "description": "Balance held by plugin (wei)" } ],
-          "accessControl": "external view",
-          "validations": [
-            "✅ Resolves plugin via Beacon",
-            "❌ Reverts with ProtocolNotFound if plugin not registered"
-          ],
-          "events": "None",
-          "gasCost": "~5,000 - plugin view cost",
-          "usageExample": "uint256 b = protocolManager.getBalance('DolomitePlugin','WETH');",
-          "calledBy": "Any caller (owner, monitoring scripts)",
-          "securityNotes": ["Read-only; returns data from plugin.getBalance()."],
-          "_complete": true,
-          "_missingFields": []
-        },
-        "protocolmanager-gettotalvalue": {
-          "name": "getTotalValue",
-          "id": "protocolmanager-gettotalvalue",
-          "module": "protocolmanager",
-          "description": "Returns total protocol value (in ETH) for a plugin by delegating to plugin.getTotalValue().",
-          "signature": "function getTotalValue(string memory protocolName) external view returns (uint256 totalValueETH)",
-          "parameters": [ { "name": "protocolName", "type": "string memory", "description": "Plugin module name" } ],
-          "returns": [ { "name": "totalValueETH", "type": "uint256", "description": "Total value in ETH (wei)" } ],
-          "accessControl": "external view",
-          "validations": ["✅ Resolves plugin via Beacon","❌ Reverts with ProtocolNotFound if plugin not found"],
-          "events": "None",
-          "gasCost": "~5,000 - plugin dependent",
-          "usageExample": "uint256 tvl = protocolManager.getTotalValue('DolomitePlugin');",
-          "calledBy": "Monitoring tools, owner",
-          "securityNotes": ["Read-only; reliant on plugin implementation correctness."],
-          "_complete": true,
-          "_missingFields": []
-        },
-        "protocolmanager-borrow": {
-          "name": "borrow",
-          "id": "protocolmanager-borrow",
-          "module": "protocolmanager",
-          "description": "Requests a lending plugin to borrow tokens and transfer them to ProxyGeneral custody.",
-          "signature": "function borrow(string memory protocolName, string memory tokenCode, uint256 amount) external onlyOwner",
-          "parameters": [
-            { "name": "protocolName", "type": "string memory", "description": "Plugin module name (lending)" },
-            { "name": "tokenCode", "type": "string memory", "description": "Token code to borrow" },
-            { "name": "amount", "type": "uint256", "description": "Amount to borrow (wei)" }
-          ],
-          "returns": [],
-          "accessControl": "external onlyOwner",
-          "validations": [
-            "✅ amount > 0",
-            "✅ tokenCode non-empty",
-            "✅ plugin resolves and implements ILendingProtocol",
-            "❌ Reverts with OperationFailed if plugin.borrow fails"
-          ],
-          "events": "LendingOperationExecuted(protocolName, 'borrow', tokenCode, amount)",
-          "gasCost": "plugin-dependent (borrow + transfer costs)",
-          "usageExample": "protocolManager.borrow('DolomitePlugin','USDC', 1000e6);",
-          "calledBy": "Owner / multisig operator",
-          "securityNotes": ["Borrowing increases protocol exposure; ensure risk limits and collateral requirements are respected."],
-          "_complete": true,
-          "_missingFields": []
-        },
-        "protocolmanager-repay": {
-          "name": "repay",
-          "id": "protocolmanager-repay",
-          "module": "protocolmanager",
-          "description": "Repays a lending position by withdrawing tokens from ProxyGeneral to the plugin and calling plugin.repay().",
-          "signature": "function repay(string memory protocolName, string memory tokenCode, uint256 amount) external onlyOwner",
-          "parameters": [
-            { "name": "protocolName", "type": "string memory", "description": "Plugin module name" },
-            { "name": "tokenCode", "type": "string memory", "description": "Token code to repay" },
-            { "name": "amount", "type": "uint256", "description": "Amount to repay (wei)" }
-          ],
-          "returns": [],
-          "accessControl": "external onlyOwner",
-          "validations": ["✅ amount > 0","✅ tokenCode non-empty","✅ plugin resolved","❌ Reverts with OperationFailed on plugin.repay failure"],
-          "events": "LendingOperationExecuted(protocolName, 'repay', tokenCode, amount)",
-          "gasCost": "plugin-dependent",
-          "usageExample": "protocolManager.repay('DolomitePlugin','USDC', 1000e6);",
-          "calledBy": "Owner / multisig operator",
-          "securityNotes": ["Ensure repayment tokens are available in ProxyGeneral before calling."],
-          "_complete": true,
-          "_missingFields": []
-        },
-        "protocolmanager-getdebt": {
-          "name": "getDebt",
-          "id": "protocolmanager-getdebt",
-          "module": "protocolmanager",
-          "description": "Returns current debt amount for a token from a lending plugin.",
-          "signature": "function getDebt(string memory protocolName, string memory tokenCode) external view returns (uint256 debtAmount)",
-          "parameters": [ { "name": "protocolName", "type": "string memory", "description": "Plugin module name" }, { "name": "tokenCode", "type": "string memory", "description": "Token code" } ],
-          "returns": [ { "name": "debtAmount", "type": "uint256", "description": "Debt amount (wei)" } ],
-          "accessControl": "external view",
-          "validations": ["✅ plugin resolved","❌ Reverts with ProtocolNotFound if plugin missing"],
-          "events": "None",
-          "gasCost": "~5,000 - plugin dependent",
-          "usageExample": "uint256 debt = protocolManager.getDebt('DolomitePlugin','USDC');",
-          "calledBy": "Owner, monitoring systems",
-          "securityNotes": ["Read-only; depends on plugin implementation correctness."],
-          "_complete": true,
-          "_missingFields": []
-        },
-        "protocolmanager-gethealthfactor": {
-          "name": "getHealthFactor",
-          "id": "protocolmanager-gethealthfactor",
-          "module": "protocolmanager",
-          "description": "Returns the health factor of the lending position from the plugin (1.0 = 1e18).",
-          "signature": "function getHealthFactor(string memory protocolName) external view returns (uint256 healthFactor)",
-          "parameters": [ { "name": "protocolName", "type": "string memory", "description": "Plugin module name" } ],
-          "returns": [ { "name": "healthFactor", "type": "uint256", "description": "Health factor in 1e18 format" } ],
-          "accessControl": "external view",
-          "validations": ["✅ plugin resolved","❌ Reverts with ProtocolNotFound if plugin missing"],
-          "events": "None",
-          "gasCost": "~5,000 - plugin dependent",
-          "usageExample": "uint256 hf = protocolManager.getHealthFactor('DolomitePlugin');",
-          "calledBy": "Owner, risk monitors",
-          "securityNotes": ["Used in risk checks; ensure callers handle zero/large values appropriately."],
-          "_complete": true,
-          "_missingFields": []
-        },
-        "protocolmanager-setallowedselectors": {
-          "name": "setAllowedSelectors",
-          "id": "protocolmanager-setallowedselectors",
-          "module": "protocolmanager",
-          "description": "Configures the dynamic whitelist of function selectors allowed to be executed via `executeProtocolCall` for a plugin.",
-          "signature": "function setAllowedSelectors(string memory protocolName, bytes4[] memory selectors, bool allowed) external onlyOwner",
-          "parameters": [
-            { "name": "protocolName", "type": "string memory", "description": "Plugin module name" },
-            { "name": "selectors", "type": "bytes4[] memory", "description": "Array of function selectors to allow/deny" },
-            { "name": "allowed", "type": "bool", "description": "True to allow, false to revoke" }
-          ],
-          "returns": [],
-          "accessControl": "external onlyOwner",
-          "validations": ["✅ plugin resolved","✅ updates mapping allowedSelectors[plugin][selector]","❌ Reverts with ProtocolNotFound/InvalidProtocol if plugin invalid"],
-          "events": "SelectorAllowanceChanged(pluginAddress, selector, allowed)",
-          "gasCost": "~5,000 gas per selector (SSTORE if changing state)",
-          "usageExample": "protocolManager.setAllowedSelectors('DolomitePlugin', selectors, true);",
-          "calledBy": "Owner / multisig operator",
-          "securityNotes": ["Careful when allowing selectors — incorrect whitelist can enable dangerous plugin calls."],
-          "_complete": true,
-          "_missingFields": []
-        },
-        "protocolmanager-executeprotocolcall": {
-          "name": "executeProtocolCall",
-          "id": "protocolmanager-executeprotocolcall",
-          "module": "protocolmanager",
-          "description": "Executes a low-level call to a plugin with provided calldata, only if the function selector is whitelisted for that plugin.",
-          "signature": "function executeProtocolCall(string memory protocolName, bytes memory data) external onlyOwner returns (bool success, bytes memory returnData)",
-          "parameters": [
-            { "name": "protocolName", "type": "string memory", "description": "Plugin module name" },
-            { "name": "data", "type": "bytes memory", "description": "Encoded calldata including selector + params" }
-          ],
-          "returns": [ { "name": "success", "type": "bool", "description": "True if call succeeded" }, { "name": "returnData", "type": "bytes memory", "description": "Raw returned data from plugin" } ],
-          "accessControl": "external onlyOwner",
-          "validations": [
-            "✅ data.length >= 4",
-            "✅ plugin resolved",
-            "✅ selector extracted and checked against allowedSelectors mapping",
-            "❌ Reverts SelectorNotAllowed if selector not whitelisted",
-            "❌ Reverts OperationFailed on low-level call failure"
-          ],
-          "events": "ProtocolSpecificCallExecuted(protocolName, selector, data)",
-          "gasCost": "low-level call gas + overhead; depends on target function",
-          "usageExample": "(success, ret) = protocolManager.executeProtocolCall('DolomitePlugin', data);",
-          "calledBy": "Owner / multisig operator",
-          "securityNotes": [
-            "This is a powerful escape hatch - only allow selectors that are safe.",
-            "Calldata length is validated to prevent empty calls.",
-            "Low-level call forwards no special gas framing — caller must ensure correct parameters." 
-          ],
-          "_complete": true,
-          "_missingFields": []
-        },
-        "protocolmanager-emergencywithdrawall": {
-          "name": "emergencyWithdrawAll",
-          "id": "protocolmanager-emergencywithdrawall",
-          "module": "protocolmanager",
-          "description": "Triggers plugin.emergencyWithdrawAll to pull all specified tokens back to ProxyGeneral in emergency scenarios.",
-          "signature": "function emergencyWithdrawAll(string memory protocolName, string[] memory tokenCodes) external onlyOwner returns (bool success)",
-          "parameters": [ { "name": "protocolName", "type": "string memory", "description": "Plugin module name" }, { "name": "tokenCodes", "type": "string[] memory", "description": "Array of token codes to withdraw" } ],
-          "returns": [ { "name": "success", "type": "bool", "description": "True if plugin returned success" } ],
-          "accessControl": "external onlyOwner",
-          "validations": ["✅ plugin resolved","❌ Reverts OperationFailed if plugin.emergencyWithdrawAll fails"],
-          "events": "ProtocolOperationExecuted(protocolName, 'emergencyWithdrawAll', '', 0)",
-          "gasCost": "plugin-dependent; could be high if multiple token operations are executed",
-          "usageExample": "protocolManager.emergencyWithdrawAll('DolomitePlugin', ['WETH','USDC']);",
-          "calledBy": "Owner / multisig operator during incident response",
-          "securityNotes": ["Emergency withdrawal should be reserved for incident response; ensure communication and monitoring when executed."],
-          "_complete": true,
-          "_missingFields": []
-        }
-      }
-    },
   "modules": {
     "beacon": {
       "name": "Beacon",
@@ -7681,6 +7414,273 @@
             "calledBy",
             "securityNotes"
           ]
+        }
+      }
+    },
+    "protocolmanager": {
+      "name": "ProtocolManager",
+      "id": "protocolmanager",
+      "displayOrder": 9,
+      "functions": {
+        "protocolmanager-deposit": {
+          "name": "deposit",
+          "id": "protocolmanager-deposit",
+          "module": "protocolmanager",
+          "description": "Deposits tokens from `ProxyGeneral` into a resolved protocol plugin. This orchestrates custody withdrawal from ProxyGeneral and delegates the deposit to the plugin implementation.",
+          "signature": "function deposit(string memory protocolName, string memory tokenCode, uint256 amount) external onlyOwner",
+          "parameters": [
+            { "name": "protocolName", "type": "string memory", "description": "Plugin module name (e.g. 'DolomitePlugin')" },
+            { "name": "tokenCode", "type": "string memory", "description": "Token code recognized by ProxyGeneral/Plugin (e.g. 'WETH', 'USDC')" },
+            { "name": "amount", "type": "uint256", "description": "Amount to deposit (wei)" }
+          ],
+          "returns": [],
+          "accessControl": "external onlyOwner",
+          "validations": [
+            "✅ amount > 0",
+            "✅ tokenCode non-empty",
+            "✅ plugin resolved via Beacon (reverts ProtocolNotFound)",
+            "✅ plugin address non-zero (InvalidProtocol)",
+            "❌ Reverts with InvalidAmount/InvalidTokenCode/ProtocolNotFound/OperationFailed"
+          ],
+          "events": "ProtocolOperationExecuted(protocolName, 'deposit', tokenCode, amount)",
+          "gasCost": "~80,000 - 150,000 gas (depends on plugin operations and ProxyGeneral withdraw)",
+          "usageExample": "protocolManager.deposit('DolomitePlugin', 'WETH', 1 ether);",
+          "calledBy": "Owner / multisig operator",
+          "securityNotes": [
+            "Only the owner may call this function. Ensure owner is a secure multisig in production.",
+            "Relies on Beacon for plugin resolution — a misconfigured Beacon entry causes revert.",
+            "Plugin deposit() logic executes off this call and may revert causing OperationFailed."
+          ],
+          "_complete": true,
+          "_missingFields": []
+        },
+        "protocolmanager-withdraw": {
+          "name": "withdraw",
+          "id": "protocolmanager-withdraw",
+          "module": "protocolmanager",
+          "description": "Requests a plugin to withdraw tokens back to `ProxyGeneral`. Delegates to plugin.withdraw which should transfer assets to proxy custody.",
+          "signature": "function withdraw(string memory protocolName, string memory tokenCode, uint256 amount) external onlyOwner",
+          "parameters": [
+            { "name": "protocolName", "type": "string memory", "description": "Plugin module name" },
+            { "name": "tokenCode", "type": "string memory", "description": "Token code" },
+            { "name": "amount", "type": "uint256", "description": "Amount to withdraw (wei)" }
+          ],
+          "returns": [],
+          "accessControl": "external onlyOwner",
+          "validations": [
+            "✅ amount > 0",
+            "✅ tokenCode non-empty",
+            "✅ plugin resolved via Beacon",
+            "❌ Reverts with InvalidAmount/InvalidTokenCode/ProtocolNotFound/OperationFailed"
+          ],
+          "events": "ProtocolOperationExecuted(protocolName, 'withdraw', tokenCode, amount)",
+          "gasCost": "~60,000 - plugin-specific",
+          "usageExample": "protocolManager.withdraw('DolomitePlugin', 'USDC', 1000e6);",
+          "calledBy": "Owner / multisig operator",
+          "securityNotes": [
+            "Ensure plugin.withdraw transfers funds to ProxyGeneral safely.",
+            "This function assumes plugin implements IProtocolManager.withdraw semantics." 
+          ],
+          "_complete": true,
+          "_missingFields": []
+        },
+        "protocolmanager-getbalance": {
+          "name": "getBalance",
+          "id": "protocolmanager-getbalance",
+          "module": "protocolmanager",
+          "description": "View function returning the plugin's balance for a given token code.",
+          "signature": "function getBalance(string memory protocolName, string memory tokenCode) external view returns (uint256 balance)",
+          "parameters": [
+            { "name": "protocolName", "type": "string memory", "description": "Plugin module name" },
+            { "name": "tokenCode", "type": "string memory", "description": "Token code" }
+          ],
+          "returns": [ { "name": "balance", "type": "uint256", "description": "Balance held by plugin (wei)" } ],
+          "accessControl": "external view",
+          "validations": [
+            "✅ Resolves plugin via Beacon",
+            "❌ Reverts with ProtocolNotFound if plugin not registered"
+          ],
+          "events": "None",
+          "gasCost": "~5,000 - plugin view cost",
+          "usageExample": "uint256 b = protocolManager.getBalance('DolomitePlugin','WETH');",
+          "calledBy": "Any caller (owner, monitoring scripts)",
+          "securityNotes": ["Read-only; returns data from plugin.getBalance()."],
+          "_complete": true,
+          "_missingFields": []
+        },
+        "protocolmanager-gettotalvalue": {
+          "name": "getTotalValue",
+          "id": "protocolmanager-gettotalvalue",
+          "module": "protocolmanager",
+          "description": "Returns total protocol value (in ETH) for a plugin by delegating to plugin.getTotalValue().",
+          "signature": "function getTotalValue(string memory protocolName) external view returns (uint256 totalValueETH)",
+          "parameters": [ { "name": "protocolName", "type": "string memory", "description": "Plugin module name" } ],
+          "returns": [ { "name": "totalValueETH", "type": "uint256", "description": "Total value in ETH (wei)" } ],
+          "accessControl": "external view",
+          "validations": ["✅ Resolves plugin via Beacon","❌ Reverts with ProtocolNotFound if plugin not found"],
+          "events": "None",
+          "gasCost": "~5,000 - plugin dependent",
+          "usageExample": "uint256 tvl = protocolManager.getTotalValue('DolomitePlugin');",
+          "calledBy": "Monitoring tools, owner",
+          "securityNotes": ["Read-only; reliant on plugin implementation correctness."],
+          "_complete": true,
+          "_missingFields": []
+        },
+        "protocolmanager-borrow": {
+          "name": "borrow",
+          "id": "protocolmanager-borrow",
+          "module": "protocolmanager",
+          "description": "Requests a lending plugin to borrow tokens and transfer them to ProxyGeneral custody.",
+          "signature": "function borrow(string memory protocolName, string memory tokenCode, uint256 amount) external onlyOwner",
+          "parameters": [
+            { "name": "protocolName", "type": "string memory", "description": "Plugin module name (lending)" },
+            { "name": "tokenCode", "type": "string memory", "description": "Token code to borrow" },
+            { "name": "amount", "type": "uint256", "description": "Amount to borrow (wei)" }
+          ],
+          "returns": [],
+          "accessControl": "external onlyOwner",
+          "validations": [
+            "✅ amount > 0",
+            "✅ tokenCode non-empty",
+            "✅ plugin resolves and implements ILendingProtocol",
+            "❌ Reverts with OperationFailed if plugin.borrow fails"
+          ],
+          "events": "LendingOperationExecuted(protocolName, 'borrow', tokenCode, amount)",
+          "gasCost": "plugin-dependent (borrow + transfer costs)",
+          "usageExample": "protocolManager.borrow('DolomitePlugin','USDC', 1000e6);",
+          "calledBy": "Owner / multisig operator",
+          "securityNotes": ["Borrowing increases protocol exposure; ensure risk limits and collateral requirements are respected."],
+          "_complete": true,
+          "_missingFields": []
+        },
+        "protocolmanager-repay": {
+          "name": "repay",
+          "id": "protocolmanager-repay",
+          "module": "protocolmanager",
+          "description": "Repays a lending position by withdrawing tokens from ProxyGeneral to the plugin and calling plugin.repay().",
+          "signature": "function repay(string memory protocolName, string memory tokenCode, uint256 amount) external onlyOwner",
+          "parameters": [
+            { "name": "protocolName", "type": "string memory", "description": "Plugin module name" },
+            { "name": "tokenCode", "type": "string memory", "description": "Token code to repay" },
+            { "name": "amount", "type": "uint256", "description": "Amount to repay (wei)" }
+          ],
+          "returns": [],
+          "accessControl": "external onlyOwner",
+          "validations": ["✅ amount > 0","✅ tokenCode non-empty","✅ plugin resolved","❌ Reverts with OperationFailed on plugin.repay failure"],
+          "events": "LendingOperationExecuted(protocolName, 'repay', tokenCode, amount)",
+          "gasCost": "plugin-dependent",
+          "usageExample": "protocolManager.repay('DolomitePlugin','USDC', 1000e6);",
+          "calledBy": "Owner / multisig operator",
+          "securityNotes": ["Ensure repayment tokens are available in ProxyGeneral before calling."],
+          "_complete": true,
+          "_missingFields": []
+        },
+        "protocolmanager-getdebt": {
+          "name": "getDebt",
+          "id": "protocolmanager-getdebt",
+          "module": "protocolmanager",
+          "description": "Returns current debt amount for a token from a lending plugin.",
+          "signature": "function getDebt(string memory protocolName, string memory tokenCode) external view returns (uint256 debtAmount)",
+          "parameters": [ { "name": "protocolName", "type": "string memory", "description": "Plugin module name" }, { "name": "tokenCode", "type": "string memory", "description": "Token code" } ],
+          "returns": [ { "name": "debtAmount", "type": "uint256", "description": "Debt amount (wei)" } ],
+          "accessControl": "external view",
+          "validations": ["✅ plugin resolved","❌ Reverts with ProtocolNotFound if plugin missing"],
+          "events": "None",
+          "gasCost": "~5,000 - plugin dependent",
+          "usageExample": "uint256 debt = protocolManager.getDebt('DolomitePlugin','USDC');",
+          "calledBy": "Owner, monitoring systems",
+          "securityNotes": ["Read-only; depends on plugin implementation correctness."],
+          "_complete": true,
+          "_missingFields": []
+        },
+        "protocolmanager-gethealthfactor": {
+          "name": "getHealthFactor",
+          "id": "protocolmanager-gethealthfactor",
+          "module": "protocolmanager",
+          "description": "Returns the health factor of the lending position from the plugin (1.0 = 1e18).",
+          "signature": "function getHealthFactor(string memory protocolName) external view returns (uint256 healthFactor)",
+          "parameters": [ { "name": "protocolName", "type": "string memory", "description": "Plugin module name" } ],
+          "returns": [ { "name": "healthFactor", "type": "uint256", "description": "Health factor in 1e18 format" } ],
+          "accessControl": "external view",
+          "validations": ["✅ plugin resolved","❌ Reverts with ProtocolNotFound if plugin missing"],
+          "events": "None",
+          "gasCost": "~5,000 - plugin dependent",
+          "usageExample": "uint256 hf = protocolManager.getHealthFactor('DolomitePlugin');",
+          "calledBy": "Owner, risk monitors",
+          "securityNotes": ["Used in risk checks; ensure callers handle zero/large values appropriately."],
+          "_complete": true,
+          "_missingFields": []
+        },
+        "protocolmanager-setallowedselectors": {
+          "name": "setAllowedSelectors",
+          "id": "protocolmanager-setallowedselectors",
+          "module": "protocolmanager",
+          "description": "Configures the dynamic whitelist of function selectors allowed to be executed via `executeProtocolCall` for a plugin.",
+          "signature": "function setAllowedSelectors(string memory protocolName, bytes4[] memory selectors, bool allowed) external onlyOwner",
+          "parameters": [
+            { "name": "protocolName", "type": "string memory", "description": "Plugin module name" },
+            { "name": "selectors", "type": "bytes4[] memory", "description": "Array of function selectors to allow/deny" },
+            { "name": "allowed", "type": "bool", "description": "True to allow, false to revoke" }
+          ],
+          "returns": [],
+          "accessControl": "external onlyOwner",
+          "validations": ["✅ plugin resolved","✅ updates mapping allowedSelectors[plugin][selector]","❌ Reverts with ProtocolNotFound/InvalidProtocol if plugin invalid"],
+          "events": "SelectorAllowanceChanged(pluginAddress, selector, allowed)",
+          "gasCost": "~5,000 gas per selector (SSTORE if changing state)",
+          "usageExample": "protocolManager.setAllowedSelectors('DolomitePlugin', selectors, true);",
+          "calledBy": "Owner / multisig operator",
+          "securityNotes": ["Careful when allowing selectors — incorrect whitelist can enable dangerous plugin calls."],
+          "_complete": true,
+          "_missingFields": []
+        },
+        "protocolmanager-executeprotocolcall": {
+          "name": "executeProtocolCall",
+          "id": "protocolmanager-executeprotocolcall",
+          "module": "protocolmanager",
+          "description": "Executes a low-level call to a plugin with provided calldata, only if the function selector is whitelisted for that plugin.",
+          "signature": "function executeProtocolCall(string memory protocolName, bytes memory data) external onlyOwner returns (bool success, bytes memory returnData)",
+          "parameters": [
+            { "name": "protocolName", "type": "string memory", "description": "Plugin module name" },
+            { "name": "data", "type": "bytes memory", "description": "Encoded calldata including selector + params" }
+          ],
+          "returns": [ { "name": "success", "type": "bool", "description": "True if call succeeded" }, { "name": "returnData", "type": "bytes memory", "description": "Raw returned data from plugin" } ],
+          "accessControl": "external onlyOwner",
+          "validations": [
+            "✅ data.length >= 4",
+            "✅ plugin resolved",
+            "✅ selector extracted and checked against allowedSelectors mapping",
+            "❌ Reverts SelectorNotAllowed if selector not whitelisted",
+            "❌ Reverts OperationFailed on low-level call failure"
+          ],
+          "events": "ProtocolSpecificCallExecuted(protocolName, selector, data)",
+          "gasCost": "low-level call gas + overhead; depends on target function",
+          "usageExample": "(success, ret) = protocolManager.executeProtocolCall('DolomitePlugin', data);",
+          "calledBy": "Owner / multisig operator",
+          "securityNotes": [
+            "This is a powerful escape hatch - only allow selectors that are safe.",
+            "Calldata length is validated to prevent empty calls.",
+            "Low-level call forwards no special gas framing — caller must ensure correct parameters." 
+          ],
+          "_complete": true,
+          "_missingFields": []
+        },
+        "protocolmanager-emergencywithdrawall": {
+          "name": "emergencyWithdrawAll",
+          "id": "protocolmanager-emergencywithdrawall",
+          "module": "protocolmanager",
+          "description": "Triggers plugin.emergencyWithdrawAll to pull all specified tokens back to ProxyGeneral in emergency scenarios.",
+          "signature": "function emergencyWithdrawAll(string memory protocolName, string[] memory tokenCodes) external onlyOwner returns (bool success)",
+          "parameters": [ { "name": "protocolName", "type": "string memory", "description": "Plugin module name" }, { "name": "tokenCodes", "type": "string[] memory", "description": "Array of token codes to withdraw" } ],
+          "returns": [ { "name": "success", "type": "bool", "description": "True if plugin returned success" } ],
+          "accessControl": "external onlyOwner",
+          "validations": ["✅ plugin resolved","❌ Reverts OperationFailed if plugin.emergencyWithdrawAll fails"],
+          "events": "ProtocolOperationExecuted(protocolName, 'emergencyWithdrawAll', '', 0)",
+          "gasCost": "plugin-dependent; could be high if multiple token operations are executed",
+          "usageExample": "protocolManager.emergencyWithdrawAll('DolomitePlugin', ['WETH','USDC']);",
+          "calledBy": "Owner / multisig operator during incident response",
+          "securityNotes": ["Emergency withdrawal should be reserved for incident response; ensure communication and monitoring when executed."],
+          "_complete": true,
+          "_missingFields": []
         }
       }
     }

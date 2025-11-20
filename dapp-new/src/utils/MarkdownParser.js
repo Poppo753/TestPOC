@@ -25,6 +25,7 @@ export class ApiReferenceParser {
         const func = {
           name: funcData.name || funcKey.split('-').pop(),
           id: funcKey,
+          module: module.name,
           description: funcData.description || '',
           signature: funcData.signature || '',
           access: funcData.accessControl || 'public',

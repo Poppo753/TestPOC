@@ -27,6 +27,7 @@ contract ChainlinkAdapter is IOracleAdapter, Ownable {
      * @param feedAddress Address of Chainlink Aggregator
      * @param decimals Number of decimals in price (typically 8 for USD pairs)
      * @param heartbeat Maximum acceptable time between updates
+     * @param denomination Price denomination ("ETH", "USD", "BTC", etc.)
      * @param isActive Whether this feed is currently active
      * @param errorCount Number of consecutive errors (for circuit breaker)
      */
@@ -34,6 +35,7 @@ contract ChainlinkAdapter is IOracleAdapter, Ownable {
         address feedAddress;
         uint8 decimals;
         uint256 heartbeat;
+        string denomination;
         bool isActive;
         uint256 errorCount;
     }
@@ -42,6 +44,12 @@ contract ChainlinkAdapter is IOracleAdapter, Ownable {
     
     /// @notice Mapping: tokenCode => Chainlink price feed configuration
     mapping(string => PriceFeedConfig) private priceFeeds;
+    
+    /// @notice Mapping: denomination => reference feed for conversions (e.g., "USD" => ETH/USD feed)
+    mapping(string => PriceFeedConfig) private referenceFeeds;
+    
+    /// @notice Target denomination for all prices (e.g., "ETH")
+    string public targetDenomination = "ETH";
     
     /// @notice Circuit breaker threshold - max errors before marking feed invalid
     uint256 public maxErrorThreshold = 3;
@@ -93,6 +101,20 @@ contract ChainlinkAdapter is IOracleAdapter, Ownable {
      */
     event ErrorCountReset(string indexed tokenCode);
     
+    /**
+     * @notice Emitted when a reference feed is configured
+     * @param denomination Currency denomination (USD, BTC, etc.)
+     * @param feedAddress Chainlink aggregator for conversion
+     */
+    event ReferenceFeedSet(string indexed denomination, address feedAddress);
+    
+    /**
+     * @notice Emitted when target denomination changes
+     * @param oldDenomination Previous target
+     * @param newDenomination New target
+     */
+    event TargetDenominationChanged(string oldDenomination, string newDenomination);
+    
     // ==================== CONSTRUCTOR ====================
     
     /**
@@ -110,12 +132,14 @@ contract ChainlinkAdapter is IOracleAdapter, Ownable {
      * @param feedAddress Chainlink Aggregator V3 address
      * @param decimals Number of decimals in price (must match feed)
      * @param heartbeat Maximum acceptable time between price updates
+     * @param denomination Price denomination ("ETH", "USD", "BTC")
      */
     function setPriceFeed(
         string memory tokenCode,
         address feedAddress,
         uint8 decimals,
-        uint256 heartbeat
+        uint256 heartbeat,
+        string memory denomination
     ) external onlyOwner {
         // ==================== VALIDATION ====================
         
@@ -124,6 +148,8 @@ contract ChainlinkAdapter is IOracleAdapter, Ownable {
         require(feedAddress != address(0), "Invalid feed address");
         require(decimals > 0 && decimals <= 18, "Invalid decimals");
         require(heartbeat > 0, "Invalid heartbeat");
+        require(bytes(denomination).length > 0, "Empty denomination");
+        require(bytes(denomination).length <= 8, "Denomination too long");
         
         // ==================== CHAINLINK FEED VALIDATION ====================
         
@@ -160,6 +186,7 @@ contract ChainlinkAdapter is IOracleAdapter, Ownable {
             feedAddress: feedAddress,
             decimals: decimals,
             heartbeat: heartbeat,
+            denomination: denomination,
             isActive: true,
             errorCount: 0  // Reset errors on configuration
         });
@@ -205,6 +232,73 @@ contract ChainlinkAdapter is IOracleAdapter, Ownable {
         emit ErrorCountReset(tokenCode);
     }
     
+    /**
+     * @notice Configure a reference feed for currency conversions
+     * @dev Example: setReferenceFeed("USD", ethUsdFeedAddress, 8, 3600)
+     *      This allows converting USD-denominated prices to ETH
+     * 
+     * @param denomination Currency code (e.g., "USD", "BTC")
+     * @param feedAddress Chainlink feed for TARGET/denomination pair
+     *        Example: For "USD", use ETH/USD feed address
+     * @param decimals Feed decimals
+     * @param heartbeat Max acceptable staleness
+     */
+    function setReferenceFeed(
+        string memory denomination,
+        address feedAddress,
+        uint8 decimals,
+        uint256 heartbeat
+    ) external onlyOwner {
+        require(bytes(denomination).length > 0, "Empty denomination");
+        require(bytes(denomination).length <= 8, "Denomination too long");
+        require(feedAddress != address(0), "Invalid feed address");
+        require(decimals > 0 && decimals <= 18, "Invalid decimals");
+        require(heartbeat > 0, "Invalid heartbeat");
+        
+        // Validate feed works
+        AggregatorV3Interface feed = AggregatorV3Interface(feedAddress);
+        
+        try feed.latestRoundData() returns (
+            uint80 roundId,
+            int256 price,
+            uint256,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        ) {
+            require(price > 0, "Invalid price");
+            require(updatedAt > 0, "Round not complete");
+            require(answeredInRound >= roundId, "Stale feed");
+        } catch {
+            revert("Reference feed validation failed");
+        }
+        
+        referenceFeeds[denomination] = PriceFeedConfig({
+            feedAddress: feedAddress,
+            decimals: decimals,
+            heartbeat: heartbeat,
+            denomination: targetDenomination, // Reference feeds are in target denomination
+            isActive: true,
+            errorCount: 0
+        });
+        
+        emit ReferenceFeedSet(denomination, feedAddress);
+    }
+    
+    /**
+     * @notice Set target denomination for all returned prices
+     * @dev All prices will be converted to this denomination
+     * @param newDenomination Target currency (e.g., "ETH", "USD", "BTC")
+     */
+    function setTargetDenomination(string memory newDenomination) external onlyOwner {
+        require(bytes(newDenomination).length > 0, "Empty denomination");
+        require(bytes(newDenomination).length <= 8, "Denomination too long");
+        
+        string memory oldDenomination = targetDenomination;
+        targetDenomination = newDenomination;
+        
+        emit TargetDenominationChanged(oldDenomination, newDenomination);
+    }
+    
     // ==================== VIEW FUNCTIONS ====================
     
     /**
@@ -220,11 +314,25 @@ contract ChainlinkAdapter is IOracleAdapter, Ownable {
         return priceFeeds[tokenCode];
     }
     
+    /**
+     * @notice Get reference feed configuration (for debugging)
+     * @param denomination Currency code to query
+     * @return config Complete PriceFeedConfig struct
+     */
+    function getReferenceFeedConfig(string memory denomination)
+        external
+        view
+        returns (PriceFeedConfig memory config)
+    {
+        return referenceFeeds[denomination];
+    }
+    
     // ==================== IORACLEADAPTER IMPLEMENTATION ====================
     
     /**
      * @inheritdoc IOracleAdapter
-     * @dev Implementation with circuit breaker and complete Chainlink validations
+     * @dev Implementation with circuit breaker, complete Chainlink validations,
+     *      and automatic denomination conversion
      */
     function getPrice(string memory tokenCode)
         external
@@ -248,12 +356,74 @@ contract ChainlinkAdapter is IOracleAdapter, Ownable {
         
         if (config.errorCount >= maxErrorThreshold) {
             // Circuit breaker activated - return invalid price
-            // Note: Cannot emit event in view function
             return (0, block.timestamp, false);
         }
         
-        // ==================== CHAINLINK ORACLE CALL ====================
+        // ==================== GET RAW PRICE FROM CHAINLINK ====================
         
+        (uint256 rawPrice, uint256 rawTimestamp, bool rawValid) = _getRawPrice(config);
+        
+        if (!rawValid) {
+            return (0, rawTimestamp, false);
+        }
+        
+        // ==================== DENOMINATION CONVERSION ====================
+        
+        // Check if conversion needed
+        bool needsConversion = keccak256(bytes(config.denomination)) != keccak256(bytes(targetDenomination));
+        
+        if (!needsConversion) {
+            // Price already in target denomination
+            return (rawPrice, rawTimestamp, true);
+        }
+        
+        // Get reference feed for conversion
+        PriceFeedConfig memory refConfig = referenceFeeds[config.denomination];
+        
+        if (!refConfig.isActive) {
+            // No reference feed configured - cannot convert
+            revert("No reference feed for denomination conversion");
+        }
+        
+        // Get reference price (e.g., ETH/USD if converting from USD to ETH)
+        (uint256 refPrice, uint256 refTimestamp, bool refValid) = _getRawPrice(refConfig);
+        
+        if (!refValid) {
+            return (0, refTimestamp, false);
+        }
+        
+        // Convert: token/denomination ÷ target/denomination = token/target
+        // Example: USDC/USD ($1.00) ÷ ETH/USD ($2500) = USDC/ETH (0.0004)
+        
+        // Normalize decimals: bring both to 18 decimals for calculation
+        uint256 normalizedTokenPrice = rawPrice * (10 ** (18 - config.decimals));
+        uint256 normalizedRefPrice = refPrice * (10 ** (18 - refConfig.decimals));
+        
+        // Calculate converted price (keep 18 decimals)
+        uint256 convertedPrice = (normalizedTokenPrice * 1e18) / normalizedRefPrice;
+        
+        // Use older timestamp for safety
+        uint256 finalTimestamp = rawTimestamp < refTimestamp ? rawTimestamp : refTimestamp;
+        
+        return (convertedPrice, finalTimestamp, true);
+    }
+    
+    /**
+     * @dev Internal function to get raw price from a Chainlink feed
+     * @param config Feed configuration
+     * @return price Raw price from feed
+     * @return timestamp Last update timestamp
+     * @return isValid Whether price passes all validations
+     */
+    function _getRawPrice(PriceFeedConfig memory config)
+        internal
+        view
+        returns (
+            uint256 price,
+            uint256 timestamp,
+            bool isValid
+        )
+    {
         AggregatorV3Interface feed = AggregatorV3Interface(config.feedAddress);
         
         try feed.latestRoundData() returns (
@@ -265,37 +435,16 @@ contract ChainlinkAdapter is IOracleAdapter, Ownable {
         ) {
             // ==================== CHAINLINK VALIDATIONS ====================
             
-            // 1. Price must be positive
             bool priceValid = rawPrice > 0;
-            
-            // 2. Round must be complete
             bool roundComplete = updatedAt > 0;
-            
-            // 3. Answer must not be stale (answeredInRound >= roundId)
             bool notStale = answeredInRound >= roundId;
-            
-            // 4. Price must be fresh (within heartbeat)
             bool isFresh = block.timestamp - updatedAt <= config.heartbeat;
             
-            // ==================== DETERMINE VALIDITY ====================
-            
-            // Price is valid if ALL checks pass
             bool allValid = priceValid && roundComplete && notStale && isFresh;
             
-            // Note: Cannot emit PriceRetrieved event in view function
-            // Events should be emitted by calling contract (TokenManager)
-            
-            // ==================== RETURN RESULT ====================
-            
-            return (
-                uint256(rawPrice),
-                updatedAt,
-                allValid
-            );
+            return (uint256(rawPrice), updatedAt, allValid);
             
         } catch Error(string memory reason) {
-            // Chainlink call failed - increment error count in storage would be needed
-            // but this is a view function, so we just revert
             revert OracleCallFailed(reason);
         } catch {
             revert OracleCallFailed("Chainlink call failed");
@@ -304,6 +453,7 @@ contract ChainlinkAdapter is IOracleAdapter, Ownable {
     
     /**
      * @inheritdoc IOracleAdapter
+     * @dev Always returns 18 decimals since prices are normalized to ETH format
      */
     function getPriceDecimals(string memory tokenCode)
         external
@@ -315,7 +465,8 @@ contract ChainlinkAdapter is IOracleAdapter, Ownable {
             revert TokenNotSupported(tokenCode);
         }
         
-        return priceFeeds[tokenCode].decimals;
+        // All prices returned are in 18 decimals (ETH standard)
+        return 18;
     }
     
     /**
