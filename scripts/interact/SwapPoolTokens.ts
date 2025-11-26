@@ -34,7 +34,7 @@ interface SwapConfig {
 const DEFAULT_CONFIG: SwapConfig = {
     tokenFrom: process.env.SWAP_TOKEN_FROM || "WETH",
     tokenTo: process.env.SWAP_TOKEN_TO || "USDC",
-    percentage: parseInt(process.env.SWAP_PERCENTAGE || "10"),
+    percentage: parseInt(process.env.SWAP_PERCENTAGE || "60"),
     slippage: parseInt(process.env.SWAP_SLIPPAGE || "300"), // 3%
     deadlineMinutes: parseInt(process.env.SWAP_DEADLINE_MINUTES || "20")
 };

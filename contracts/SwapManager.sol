@@ -171,6 +171,56 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         uint256 expectedQuote,
         uint256 actualOutput
     );
+    
+    // ==================== DEADLINE MONITORING EVENTS ====================
+    
+    /// @notice Emitted when swap starts with deadline information
+    /// @param caller Address initiating swap
+    /// @param tokenIn Token being sold
+    /// @param tokenOut Token being bought
+    /// @param amountIn Amount to swap
+    /// @param deadline Timestamp deadline
+    /// @param timeRemaining Seconds until deadline
+    event SwapStarted(
+        address indexed caller,
+        string tokenIn,
+        string tokenOut,
+        uint256 amountIn,
+        uint256 deadline,
+        uint256 timeRemaining
+    );
+    
+    /// @notice Emitted when swap completes successfully with timing info
+    /// @param caller Address that initiated swap
+    /// @param tokenIn Token sold
+    /// @param tokenOut Token bought
+    /// @param amountOut Amount received
+    /// @param deadline Original deadline
+    /// @param timeUsed Seconds used from start to completion
+    /// @param success Whether swap succeeded
+    event SwapCompleted(
+        address indexed caller,
+        string tokenIn,
+        string tokenOut,
+        uint256 amountOut,
+        uint256 deadline,
+        uint256 timeUsed,
+        bool success
+    );
+    
+    /// @notice Emitted when deadline is dangerously close (< 2 min)
+    /// @param caller Address attempting swap
+    /// @param tokenIn Token to sell
+    /// @param tokenOut Token to buy
+    /// @param deadline Timestamp deadline
+    /// @param timeRemaining Seconds remaining
+    event DeadlineCritical(
+        address indexed caller,
+        string tokenIn,
+        string tokenOut,
+        uint256 deadline,
+        uint256 timeRemaining
+    );
 
     // ==================== MODIFIERS ====================
 
@@ -223,8 +273,21 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         // DEADLINE VALIDATION
         require(block.timestamp <= deadline, "Swap deadline expired");
         
+        // Calculate time remaining
+        uint256 timeRemaining = deadline - block.timestamp;
+        
+        // EMIT SWAP STARTED EVENT
+        emit SwapStarted(
+            msg.sender,
+            spendTokenCode,
+            receiveTokenCode,
+            amountIn,
+            deadline,
+            timeRemaining
+        );
+        
         // Emetti warning se deadline stretto (< 5 min rimanente)
-        if (deadline - block.timestamp < 5 minutes) {
+        if (timeRemaining < 5 minutes) {
             emit TightDeadlineWarning(
                 msg.sender,
                 spendTokenCode,
@@ -234,8 +297,35 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             );
         }
         
+        // Emetti critical warning se deadline molto stretto (< 2 min)
+        if (timeRemaining < 2 minutes) {
+            emit DeadlineCritical(
+                msg.sender,
+                spendTokenCode,
+                receiveTokenCode,
+                deadline,
+                timeRemaining
+            );
+        }
+        
+        // Store start time for duration tracking
+        uint256 startTime = block.timestamp;
+        
         // DELEGA A CORE LOGIC
-        return _performSwapInternal(spendTokenCode, receiveTokenCode, amountIn);
+        uint256 amountOut = _performSwapInternal(spendTokenCode, receiveTokenCode, amountIn);
+        
+        // EMIT SWAP COMPLETED EVENT
+        emit SwapCompleted(
+            msg.sender,
+            spendTokenCode,
+            receiveTokenCode,
+            amountOut,
+            deadline,
+            block.timestamp - startTime,
+            true
+        );
+        
+        return amountOut;
     }
     
     /**

@@ -1,5 +1,7 @@
 import hre from "hardhat";
 
+//to check if tier is present in Uniswap V3
+
 async function main() {
     const QUOTER_V2 = "0x61fFE014bA17989E743c5F6cB21bF9697530B21e";
     const USDC = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";

@@ -37,6 +37,7 @@ const config: HardhatUserConfig = {
         blockNumber: process.env.FORK_BLOCK_NUMBER ? parseInt(process.env.FORK_BLOCK_NUMBER) : undefined,
       },
       chainId: 42161, // Arbitrum mainnet chain ID
+      timeout: 600000, // 10 minutes for fork tests
     },
   },
   gasReporter: {

@@ -244,6 +244,10 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
      * @return ethAmount ETH effettivamente prelevato
      */
     function _withdrawInternal(uint256 _shares, uint256 deadline) internal returns (uint256 ethAmount) {
+        // STORE START TIME FOR DURATION TRACKING
+        uint256 startTime = block.timestamp;
+        uint256 timeRemaining = deadline - block.timestamp;
+        
         // INITIAL VALIDATION
         require(_shares > 0, "Invalid shares amount");
         
@@ -301,20 +305,44 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
         reserveCheck.currentReserveRatio = (validation.poolEthBalance * 10000) / validation.totalValue;
         require(reserveCheck.currentReserveRatio >= poolReserveRatio, "Insufficient pool reserves");
         
+        // EMIT WITHDRAWAL STARTED EVENT
+        emit WithdrawalStarted(
+            msg.sender,
+            _shares,
+            deadline,
+            deadline - block.timestamp,
+            validation.poolEthBalance < netWithdraw
+        );
+        
+        // CHECK DEADLINE CRITICAL (< 3 min remaining)
+        if (deadline - block.timestamp < 3 minutes) {
+            emit WithdrawalDeadlineCritical(
+                msg.sender,
+                deadline,
+                deadline - block.timestamp,
+                "validation"
+            );
+        }
+        
         // CHECK IF SWAP IS REQUIRED (for net withdraw amount)
         if (validation.poolEthBalance < netWithdraw) {
             validation.requiresSwap = true;
             validation.wethNeeded = netWithdraw - validation.poolEthBalance;
             
             // EXECUTE AUTOMATIC SWAP CON DEADLINE PROPAGATION
+            // Multi-swap handles slippage tolerance internally
             _executeAutomaticSwap(validation.wethNeeded, calculator, deadline);
             
-            // VERIFY SWAP SUCCESS
+            // GET ACTUAL WETH BALANCE AFTER ALL SWAPS
             uint256 newWethBalance = IERC20(wethAddress).balanceOf(proxyGeneral);
-            require(
-                newWethBalance >= netWithdraw,
-                "Swap didn't provide enough WETH"
-            );
+            
+            // Adjust netWithdraw to what we actually have (multi-swap gave us the best possible)
+            if (newWethBalance < netWithdraw) {
+                netWithdraw = newWethBalance;
+            }
+            
+            // UPDATE poolEthBalance after swap
+            validation.poolEthBalance = newWethBalance;
         }
         
         // VALIDATE POST-WITHDRAW RESERVE RATIO
@@ -360,6 +388,16 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
             "Invalid supply change"
         );
         
+        // CHECK DEADLINE CRITICAL BEFORE FINAL TRANSFER
+        if (deadline - block.timestamp < 3 minutes) {
+            emit WithdrawalDeadlineCritical(
+                msg.sender,
+                deadline,
+                deadline - block.timestamp,
+                "transfer"
+            );
+        }
+        
         emit Withdrawn(
             msg.sender,
             _shares,
@@ -368,12 +406,22 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
             IERC20(wethAddress).balanceOf(proxyGeneral)
         );
         
+        // EMIT WITHDRAWAL COMPLETED EVENT WITH TIMING
+        emit WithdrawalCompleted(
+            msg.sender,
+            _shares,
+            netWithdraw,
+            deadline,
+            block.timestamp - startTime,
+            validation.requiresSwap
+        );
+        
         return netWithdraw;
     }
 
     /**
-     * @notice Esegue automatic swap per ottenere WETH necessario
-     * @dev Con deadline propagation per protezione MEV
+     * @notice Esegue automatic swap multipli per ottenere WETH necessario
+     * @dev Loop intelligente con slippage tolerance - swappa token finché target raggiunto
      * @param wethNeeded Quantità di WETH necessaria
      * @param calculator Reference al ValueCalculator
      * @param deadline Timestamp massimo per swap
@@ -383,32 +431,102 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
         IValueCalculatorForModules calculator,
         uint256 deadline
     ) internal {
-        // SELEZIONA TOKEN CON PERCENTUALE PIÙ BASSA
-        (string memory tokenToSwap, uint256 amountToSwap) = calculator.selectTokenForSwap(wethNeeded);
+        uint256 wethStillNeeded = wethNeeded;
+        uint256 maxIterations = 10; // Safety limit
+        uint256 iteration = 0;
+        uint256 totalWethObtained = 0;
         
-        require(bytes(tokenToSwap).length > 0, "No suitable token for swap");
-        require(amountToSwap > 0, "Invalid swap amount calculated");
-        
-        // EXECUTE SWAP VIA SWAPMANAGER
+        address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
+        address wethAddress = IBeacon(beacon).getImplementation("WETH");
         address swapManager = IBeacon(beacon).getImplementation("SwapManager");
         ISwapManagerForModules swapper = ISwapManagerForModules(swapManager);
         
-        // VALIDATE SWAP PARAMETERS
-        (bool isValid, string memory errorReason) = swapper.validateSwapParameters(
-            tokenToSwap,
-            "WETH",
-            amountToSwap
-        );
-        require(isValid, string(abi.encodePacked("Swap validation failed: ", errorReason)));
+        emit MultiSwapStarted(msg.sender, wethNeeded, maxIterations);
         
-        // PERFORM THE SWAP CON DEADLINE (MEV PROTECTED)
-        uint256 receivedWeth = swapper.performSwap(tokenToSwap, "WETH", amountToSwap, deadline);
+        while (wethStillNeeded > 0 && iteration < maxIterations) {
+            iteration++;
+            
+            // Check current WETH balance in ProxyGeneral
+            uint256 currentWeth = IERC20(wethAddress).balanceOf(proxyGeneral);
+            
+            // If current balance is enough for our original target, stop
+            if (currentWeth >= wethNeeded) {
+                emit MultiSwapCompleted(msg.sender, iteration - 1, totalWethObtained);
+                return;
+            }
+            
+            // Check deadline critical
+            uint256 timeRemaining = deadline - block.timestamp;
+            if (timeRemaining < 3 minutes) {
+                emit WithdrawalDeadlineCritical(
+                    msg.sender,
+                    deadline,
+                    timeRemaining,
+                    "multi-swap"
+                );
+            }
+            
+            // Select next token to swap
+            (string memory tokenToSwap, uint256 amountToSwap) = calculator.selectTokenForSwap(wethStillNeeded);
+            
+            // No more tokens available
+            if (bytes(tokenToSwap).length == 0 || amountToSwap == 0) {
+                // Check if we have at least 97% of target (slippage tolerance)
+                uint256 minAcceptable = (wethNeeded * 97) / 100;
+                if (totalWethObtained >= minAcceptable) {
+                    emit MultiSwapCompleted(msg.sender, iteration - 1, totalWethObtained);
+                    return;
+                }
+                
+                revert("Insufficient total liquidity across all available tokens");
+            }
+            
+            // Emit swap trigger for this iteration
+            emit AutomaticSwapTriggered(
+                msg.sender,
+                tokenToSwap,
+                amountToSwap,
+                wethStillNeeded,
+                deadline,
+                timeRemaining
+            );
+            
+            // Validate swap parameters
+            (bool isValid, string memory errorReason) = swapper.validateSwapParameters(
+                tokenToSwap,
+                "WETH",
+                amountToSwap
+            );
+            require(isValid, string(abi.encodePacked("Swap validation failed: ", errorReason)));
+            
+            // Execute swap
+            uint256 receivedWeth = swapper.performSwap(tokenToSwap, "WETH", amountToSwap, deadline);
+            require(receivedWeth > 0, "Swap returned zero WETH");
+            
+            // Update counters
+            totalWethObtained += receivedWeth;
+            
+            if (receivedWeth >= wethStillNeeded) {
+                wethStillNeeded = 0;
+            } else {
+                wethStillNeeded -= receivedWeth;
+            }
+            
+            // Emit events for this iteration
+            emit MultiSwapIteration(
+                msg.sender,
+                iteration,
+                tokenToSwap,
+                amountToSwap,
+                receivedWeth,
+                wethStillNeeded
+            );
+            emit TokenSwappedForWithdraw(tokenToSwap, amountToSwap, receivedWeth);
+        }
         
-        // VALIDATE RECEIVED AMOUNT
-        require(receivedWeth > 0, "Swap returned zero WETH");
-        
-        // EMIT TOKEN SWAPPED EVENT
-        emit TokenSwappedForWithdraw(tokenToSwap, amountToSwap, receivedWeth);
+        // Final check
+        require(wethStillNeeded == 0, "Could not obtain enough WETH after multiple swaps");
+        emit MultiSwapCompleted(msg.sender, iteration, totalWethObtained);
     }
 
     // ==================== VIEW FUNCTIONS ====================

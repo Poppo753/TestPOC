@@ -110,7 +110,18 @@ contract ValueCalculator is Ownable {
         // GET TOKEN INFO TO ACCESS TOKEN DECIMALS
         ITokenManagerForModules.TokenInfo memory tokenInfo = tokenManager.getTokenInfo(_tokenCode);
         
-        // CALCULATE VALUE (normalize by token decimals)
+        // CALCULATE VALUE
+        // tokenBalance: base units (e.g., 3564923 for 3.564923 USDC with 6 decimals)
+        // price: ETH wei per 1 whole token (e.g., 339263172768298 wei = 0.000339 ETH per 1 USDC)
+        // Expected result: value in wei
+        //
+        // Math: value_eth = (tokenBalance / 10^decimals) * (price / 1e18)
+        //       value_wei = value_eth * 1e18
+        //       value_wei = (tokenBalance / 10^decimals) * price
+        //       value_wei = (tokenBalance * price) / 10^decimals
+        //
+        // Example: 3564923 * 339263172768298 / 10^6 = 1209449877645000554 / 10^6 
+        //                                              = 1209449877645 wei = 0.001209 ETH ✅
         uint256 value = (tokenBalance * price) / (10 ** tokenInfo.tokenDecimals);
         
         return value;
@@ -381,12 +392,14 @@ contract ValueCalculator is Ownable {
         require(activeTokens.length > 0, "No swappable tokens");
         
         // GET TOTAL POOL VALUE FOR PERCENTAGE CALCULATION
+        // NOTE: We'll calculate swappable value (excluding WETH) separately
         uint256 totalPoolValue = this.getTotalPoolValueView();
         require(totalPoolValue > 0, "Pool has no value");
         
         // BUILD TOKEN INFO ARRAY
         TokenValueInfo[] memory tokenInfos = new TokenValueInfo[](activeTokens.length);
         uint256 validTokenCount = 0;
+        uint256 swappableValue = 0; // Total value of swappable tokens (non-WETH)
         
         for (uint256 i = 0; i < activeTokens.length; i++) {
             string memory currentToken = activeTokens[i];
@@ -428,10 +441,18 @@ contract ValueCalculator is Ownable {
                 pricePerToken: price,
                 percentage: percentage
             });
+            swappableValue += tokenValue; // Accumulate total swappable value
             validTokenCount++;
         }
         
         require(validTokenCount > 0, "Insufficient liquidity");
+        
+        // RECALCULATE PERCENTAGES based on swappable value only (not total pool including WETH)
+        if (swappableValue > 0) {
+            for (uint256 i = 0; i < validTokenCount; i++) {
+                tokenInfos[i].percentage = (tokenInfos[i].value * 10000) / swappableValue;
+            }
+        }
         
         // SORT BY PERCENTAGE (ASCENDING - lowest first)
         // Simple bubble sort - OK for small arrays (typically < 10 tokens)
@@ -450,25 +471,64 @@ contract ValueCalculator is Ownable {
         for (uint256 i = 0; i < validTokenCount; i++) {
             TokenValueInfo memory candidateToken = tokenInfos[i];
             
-            // CALCULATE REQUIRED AMOUNT WITH 10% BUFFER
-            // Formula: amount = (targetValue * 1.1 * 10^tokenDecimals) / price
-            uint256 targetWithBuffer = (targetValue * 110) / 100; // +10% buffer
-            
             // GET TOKEN INFO TO ACCESS TOKEN DECIMALS
             ITokenManagerForModules.TokenInfo memory tokenInfo = tokenManager.getTokenInfo(candidateToken.tokenCode);
             
+            // CALCULATE REQUIRED AMOUNT WITH 10% BUFFER
+            // Formula: amount = (targetValue * 1.1 * 10^tokenDecimals) / price
+            uint256 targetWithBuffer = (targetValue * 110) / 100; // +10% buffer
             uint256 requiredAmount = (targetWithBuffer * (10 ** tokenInfo.tokenDecimals)) / candidateToken.pricePerToken;
             
-            // CHECK IF TOKEN HAS SUFFICIENT BALANCE
+            // CHECK IF TOKEN HAS SUFFICIENT BALANCE WITH BUFFER
             if (requiredAmount <= candidateToken.balance) {
                 return (candidateToken.tokenCode, requiredAmount);
             }
             
-            // If insufficient, try next token (higher percentage but might have more balance)
+            // If not enough with buffer, try with 5% buffer
+            uint256 targetWithSmallBuffer = (targetValue * 105) / 100;
+            uint256 requiredAmountSmallBuffer = (targetWithSmallBuffer * (10 ** tokenInfo.tokenDecimals)) / candidateToken.pricePerToken;
+            
+            if (requiredAmountSmallBuffer <= candidateToken.balance) {
+                return (candidateToken.tokenCode, requiredAmountSmallBuffer);
+            }
+            
+            // If still not enough, try with NO buffer (exact amount)
+            uint256 requiredAmountExact = (targetValue * (10 ** tokenInfo.tokenDecimals)) / candidateToken.pricePerToken;
+            
+            if (requiredAmountExact <= candidateToken.balance) {
+                return (candidateToken.tokenCode, requiredAmountExact);
+            }
+            
+            // If token value is >= 95% of target, use ALL available balance
+            if (candidateToken.value >= (targetValue * 95) / 100) {
+                return (candidateToken.tokenCode, candidateToken.balance);
+            }
+            
+            // Try next token (higher percentage but might have more balance)
         }
         
-        // NO TOKEN HAS SUFFICIENT BALANCE
-        revert("Insufficient liquidity for target value");
+        // LAST RESORT: If we have ANY tokens with value, return the one with highest value
+        // This allows multi-swap to use all available liquidity
+        if (validTokenCount > 0) {
+            // Find token with highest value
+            uint256 maxValueIndex = 0;
+            uint256 maxValue = tokenInfos[0].value;
+            
+            for (uint256 i = 1; i < validTokenCount; i++) {
+                if (tokenInfos[i].value > maxValue) {
+                    maxValue = tokenInfos[i].value;
+                    maxValueIndex = i;
+                }
+            }
+            
+            // Use ALL balance of this token
+            if (tokenInfos[maxValueIndex].balance > 0) {
+                return (tokenInfos[maxValueIndex].tokenCode, tokenInfos[maxValueIndex].balance);
+            }
+        }
+        
+        // NO TOKENS AVAILABLE AT ALL - return empty to signal to caller
+        return ("", 0);
     }
 
     /**
