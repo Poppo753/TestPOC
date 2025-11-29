@@ -459,14 +459,38 @@
     </div>
 
     <script type="module">
-        import { initWeb3, getAccount, connectToMetaMask, disconnectWallet as disconnect } from './src/utils/web3.js';
-        import { CONTRACTS, LIQUIDITY_MANAGER, SWAP_MANAGER, TOKEN_MANAGER, BEACON } from './src/config/contracts.js';
-        import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@6.7.0/+esm';
+        import { web3Manager } from './src/utils/web3.js';
+        import { CONFIG, ABIS } from './src/config/contracts.js';
+        import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.min.js';
 
-        let web3Instance = null;
         let userAccount = null;
         let ownerAccount = null;
         let contracts = {};
+        let provider = null;
+        let signer = null;
+
+        // Contract ABIs
+        const SWAP_MANAGER_ABI = [
+            "function performSwap(string tokenFrom, string tokenTo, uint256 amountIn, uint256 deadline) external returns (uint256)",
+            "function swapsEnabled() view returns (bool)",
+            "function activeSwapPlugin() view returns (string)",
+            "function calculateMinAmountOut(string tokenFrom, string tokenTo, uint256 amountIn, uint256 slippageBasisPoints) view returns (uint256)",
+            "function canSwap(string tokenFrom, string tokenTo, uint256 amount) view returns (bool, string)",
+            "event SwapExecuted(address indexed user, address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut)"
+        ];
+
+        const TOKEN_MANAGER_ABI = [
+            "function getTokenAddress(string code) view returns (address)"
+        ];
+
+        const BEACON_ABI = [
+            "function getImplementation(string name) view returns (address)"
+        ];
+
+        const ERC20_ABI = [
+            "function balanceOf(address) view returns (uint256)",
+            "function decimals() view returns (uint8)"
+        ];
 
         // Make functions available globally
         window.connectWallet = connectWallet;
@@ -482,35 +506,38 @@
             try {
                 showSection('loadingSection');
 
-                // Connect to MetaMask
-                web3Instance = await connectToMetaMask();
-                userAccount = await getAccount();
+                // Connect using web3Manager
+                const state = await web3Manager.connect();
+                userAccount = state.address;
+                provider = state.provider;
+                signer = state.signer;
 
-                // Initialize contracts
-                const provider = new ethers.BrowserProvider(window.ethereum);
-                const signer = await provider.getSigner();
+                // Get Beacon first
+                contracts.beacon = new ethers.Contract(
+                    CONFIG.CONTRACTS.BEACON,
+                    BEACON_ABI,
+                    signer
+                );
+
+                // Get implementation addresses from Beacon
+                const swapManagerAddress = await contracts.beacon.getImplementation("SwapManager");
+                const tokenManagerAddress = await contracts.beacon.getImplementation("TokenManager");
 
                 contracts.liquidityManager = new ethers.Contract(
-                    LIQUIDITY_MANAGER.address,
-                    LIQUIDITY_MANAGER.abi,
+                    CONFIG.CONTRACTS.LIQUIDITY_MANAGER,
+                    ABIS.LIQUIDITY_MANAGER,
                     signer
                 );
 
                 contracts.swapManager = new ethers.Contract(
-                    SWAP_MANAGER.address,
-                    SWAP_MANAGER.abi,
+                    swapManagerAddress,
+                    SWAP_MANAGER_ABI,
                     signer
                 );
 
                 contracts.tokenManager = new ethers.Contract(
-                    TOKEN_MANAGER.address,
-                    TOKEN_MANAGER.abi,
-                    signer
-                );
-
-                contracts.beacon = new ethers.Contract(
-                    BEACON.address,
-                    BEACON.abi,
+                    tokenManagerAddress,
+                    TOKEN_MANAGER_ABI,
                     signer
                 );
 
@@ -542,10 +569,12 @@
         }
 
         async function disconnectWallet() {
-            await disconnect();
+            web3Manager.disconnect();
             userAccount = null;
             ownerAccount = null;
             contracts = {};
+            provider = null;
+            signer = null;
             showSection('connectSection');
         }
 
@@ -598,8 +627,8 @@
 
                 const tokenContract = new ethers.Contract(
                     tokenAddress,
-                    ['function balanceOf(address) view returns (uint256)', 'function decimals() view returns (uint8)'],
-                    await new ethers.BrowserProvider(window.ethereum).getSigner()
+                    ERC20_ABI,
+                    provider
                 );
 
                 const balance = await tokenContract.balanceOf(proxyAddress);
@@ -645,8 +674,8 @@
 
                 const tokenContract = new ethers.Contract(
                     tokenFromAddress,
-                    ['function balanceOf(address) view returns (uint256)'],
-                    await new ethers.BrowserProvider(window.ethereum).getSigner()
+                    ERC20_ABI,
+                    provider
                 );
 
                 const balance = await tokenContract.balanceOf(proxyAddress);
@@ -802,8 +831,8 @@
 
                 const tokenContract = new ethers.Contract(
                     tokenFromAddress,
-                    ['function balanceOf(address) view returns (uint256)', 'function decimals() view returns (uint8)'],
-                    await new ethers.BrowserProvider(window.ethereum).getSigner()
+                    ERC20_ABI,
+                    provider
                 );
 
                 const balance = await tokenContract.balanceOf(proxyAddress);

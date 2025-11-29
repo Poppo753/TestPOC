@@ -37,6 +37,7 @@ export const ABIS = {
     "function withdraw(uint256 shares) external returns (uint256)",
     "function depositsEnabled() external view returns (bool)",
     "function withdrawsEnabled() external view returns (bool)",
+    "function owner() external view returns (address)",
     "event Deposit(address indexed user, uint256 ethAmount, uint256 sharesReceived, uint256 totalPoolETH, uint256 totalSupply)",
     "event Withdrawn(address indexed user, uint256 shares, uint256 ethAmount, uint256 totalPoolValue, uint256 remainingPoolBalance)",
   ],
@@ -52,6 +53,21 @@ export const ABIS = {
   VALUE_CALCULATOR: [
     "function getTotalPoolValueView() external view returns (uint256)",
     "function calculateValue(address token, uint256 amount) external view returns (uint256)",
+  ],
+  
+  SWAP_MANAGER: [
+    "function performSwap(string tokenFrom, string tokenTo, uint256 amountIn, uint256 deadline) external returns (uint256)",
+    "function swapsEnabled() view returns (bool)",
+    "function activeSwapPlugin() view returns (string)",
+    "event SwapExecuted(address indexed user, address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut)"
+  ],
+  
+  TOKEN_MANAGER: [
+    "function getTokenAddress(string code) view returns (address)"
+  ],
+  
+  BEACON: [
+    "function getImplementation(string name) view returns (address)"
   ],
 };
 

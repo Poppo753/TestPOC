@@ -3,6 +3,15 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "scripts": {
+    "test": "hardhat test",
+    "test:e2e": "powershell -ExecutionPolicy Bypass -File ./test-e2e.ps1",
+    "test:gmx": "FORK_ENABLED=true hardhat test test/integration/GMXv2Plugin.e2e.test.ts --network hardhat",
+    "compile": "hardhat compile",
+    "deploy:setup": "hardhat run scripts/deploy/setupGMXv2Plugin.ts --network arbitrum",
+    "deploy:testnet": "hardhat run scripts/deploy/setupGMXv2Plugin.ts --network arbitrumSepolia",
+    "test:flow": "hardhat run scripts/test/testGMXv2Flow.ts --network arbitrum"
+  },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.1.0",
     "@nomicfoundation/hardhat-ethers": "^3.1.0",
