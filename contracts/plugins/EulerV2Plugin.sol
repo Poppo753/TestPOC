@@ -9,10 +9,22 @@ import "../interfaces/IEulerV2Plugin.sol";
 import "../interfaces/IBeacon.sol";
 import "../interfaces/IProxyGeneral.sol";
 import "../interfaces/ITokenManagerForModules.sol";
+import "../interfaces/IFlashLoanCallback.sol";
 import "../interfaces/euler/IEVault.sol";
 import "../interfaces/euler/IEVC.sol";
 import "../interfaces/euler/ISwapper.sol";
 import "../interfaces/euler/IAccountLens.sol";
+
+// Forward declaration per FlashLoanService
+interface IFlashLoanService {
+    function executeFlashLoan(
+        address[] calldata tokens,
+        uint256[] calldata amounts,
+        bytes calldata callbackData
+    ) external;
+    function swap(address tokenIn, address tokenOut, uint256 amountIn) external returns (uint256);
+    function getExpectedOutput(address tokenIn, address tokenOut, uint256 amountIn) external view returns (uint256);
+}
 
 // Forward declaration per EulerVaultRegistry
 interface IEulerVaultRegistry {
@@ -38,23 +50,22 @@ interface IEulerVaultRegistry {
  * - EVC (Ethereum Vault Connector): Hub per batching e sub-accounts
  * - Sub-account 0: Depositi semplici (yield farming)
  * - Sub-account 1-255: Posizioni leverage isolate
- * - Swapper + SwapVerifier: Per operazioni leverage
+ * - FlashLoanService: Per operazioni leverage atomiche via Balancer flash loans
  * 
  * CUSTODY MODEL:
  * - ProtocolManager chiama deposit/withdraw/borrow/repay
  * - Plugin si aspetta token già nel contratto (inviati da ProtocolManager)
  * - Plugin restituisce token a ProxyGeneral dopo operazioni
- * - Operazioni leverage chiamate direttamente (con trasferimento preventivo)
+ * - Operazioni leverage usano FlashLoanService centralizzato
  * 
  * INDIRIZZI ARBITRUM:
  * - EVC: 0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066
- * - Swapper: 0x6eE488A00A2ef1E2764cD7245F8a77C40060A7C7
- * - SwapVerifier: 0x7b16DAaFa76CfeC8C08D7a68aF31949B37ebfdF5
+ * - FlashLoanService: Risolto via Beacon
  * 
  * @author Project4 Team
- * @custom:version 1.0.0
+ * @custom:version 2.0.0
  */
-contract EulerV2Plugin is IEulerV2Plugin, Ownable, ReentrancyGuard {
+contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     
     // ==================== IMMUTABLES ====================
@@ -70,14 +81,23 @@ contract EulerV2Plugin is IEulerV2Plugin, Ownable, ReentrancyGuard {
     /// @notice Indirizzo EVC su Arbitrum
     address public constant EVC_ADDRESS = 0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066;
     
-    /// @notice Indirizzo Swapper su Arbitrum
-    address public constant SWAPPER_ADDRESS = 0x6eE488A00A2ef1E2764cD7245F8a77C40060A7C7;
-    
-    /// @notice Indirizzo SwapVerifier su Arbitrum
-    address public constant SWAP_VERIFIER_ADDRESS = 0x7b16DAaFa76CfeC8C08D7a68aF31949B37ebfdF5;
-    
     /// @notice Indirizzo AccountLens su Arbitrum (per health factor)
     address public constant ACCOUNT_LENS_ADDRESS = 0x90a52DDcb232e7bb003DD9258fA1235c553eC956;
+    
+    /// @notice WETH su Arbitrum (hardcoded per fallback)
+    address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
+    
+    /// @notice USDC su Arbitrum (hardcoded per fallback)
+    address public constant USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
+    
+    /// @notice WETH Vault su Arbitrum (hardcoded per fallback)
+    address public constant WETH_VAULT = 0x78E3E051D32157AACD550fBB78458762d8f7edFF;
+    
+    /// @notice USDC Vault su Arbitrum (hardcoded per fallback)
+    address public constant USDC_VAULT = 0x0a1eCC5Fe8C9be3C809844fcBe615B46A869b899;
+    
+    /// @notice Minimum health factor (1.05 = 105%)
+    uint256 public constant MIN_HEALTH_FACTOR = 1.05e18;
     
     /// @notice Sub-account ID per depositi semplici
     uint8 public constant MAIN_SUB_ACCOUNT = 0;
@@ -99,6 +119,12 @@ contract EulerV2Plugin is IEulerV2Plugin, Ownable, ReentrancyGuard {
     /// @notice Prossimo sub-account ID disponibile per leverage
     uint8 public nextSubAccountId;
     
+    /// @notice Flag per verificare callback flash loan legittimo
+    bool private _inFlashLoanCallback;
+    
+    /// @notice Contesto temporaneo durante flash loan
+    FlashLoanCallbackContext private _flashLoanContext;
+    
     // ==================== INTERNAL STRUCTS ====================
     
     /// @notice Struct interna per storage (senza positionId per risparmiare gas)
@@ -110,6 +136,21 @@ contract EulerV2Plugin is IEulerV2Plugin, Ownable, ReentrancyGuard {
         uint256 borrowedAmount;
         bool isActive;
         uint256 createdAt;
+    }
+    
+    /// @notice Tipo di operazione flash loan
+    enum FlashLoanOperation { OPEN, CLOSE }
+    
+    /// @notice Contesto per callback flash loan
+    struct FlashLoanCallbackContext {
+        FlashLoanOperation operation;   // OPEN o CLOSE
+        address user;
+        address collateralVault;
+        address borrowVault;
+        uint256 targetLeverageX100;      // Solo per OPEN
+        uint256 initialCollateral;       // Solo per OPEN
+        uint256 minHealthFactor;         // Solo per OPEN
+        uint256 maxSlippageBps;          // Solo per CLOSE (basis points, e.g., 100 = 1%)
     }
     
     // ==================== ERRORS ====================
@@ -127,8 +168,14 @@ contract EulerV2Plugin is IEulerV2Plugin, Ownable, ReentrancyGuard {
     error PositionNotActive(uint256 positionId);
     error PositionAlreadyClosed(uint256 positionId);
     error OnlyProtocolManager();
+    error NoPositionToClose();
+    error SlippageExceeded(uint256 expected, uint256 actual);
     error DeadlineExpired();
-    error HealthFactorTooLow();
+    error HealthFactorTooLow(uint256 current, uint256 minimum);
+    error InvalidLeverage();
+    error UnauthorizedFlashLoanCallback();
+    error FlashLoanServiceNotFound();
+    error SwapFailed();
     
     // ==================== EVENTS ====================
     
@@ -181,6 +228,26 @@ contract EulerV2Plugin is IEulerV2Plugin, Ownable, ReentrancyGuard {
     event ControllerDisabled(
         address indexed vault,
         address indexed account
+    );
+    
+    event LeverageOpenedAtomic(
+        address indexed user,
+        address indexed collateralVault,
+        address indexed borrowVault,
+        uint256 initialCollateral,
+        uint256 totalCollateral,
+        uint256 totalDebt,
+        uint256 healthFactor,
+        uint256 targetLeverageX100
+    );
+    
+    event LeverageClosedAtomic(
+        address indexed user,
+        address indexed collateralVault,
+        address indexed borrowVault,
+        uint256 debtRepaid,
+        uint256 collateralWithdrawn,
+        uint256 collateralReturned
     );
     
     // ==================== MODIFIERS ====================
@@ -540,21 +607,410 @@ contract EulerV2Plugin is IEulerV2Plugin, Ownable, ReentrancyGuard {
         return true;
     }
     
-    // ==================== IEulerV2Plugin: LEVERAGE OPERATIONS ====================
+    // ==================== ATOMIC LEVERAGE VIA FLASH LOAN SERVICE ====================
+    
+    /**
+     * @notice Parametri per apertura leverage atomica
+     */
+    struct OpenLeverageAtomicParams {
+        string collateralToken;     // e.g., "WETH"
+        string borrowToken;         // e.g., "USDC"
+        uint256 collateralAmount;   // Initial collateral amount
+        uint256 targetLeverageX100; // Target leverage * 100 (e.g., 200 = 2x)
+        uint256 minHealthFactor;    // Minimum acceptable health factor
+        uint256 deadline;           // Transaction deadline
+    }
+    
+    /**
+     * @notice Apre una posizione leverage ATOMICA usando FlashLoanService
+     * @param params Parametri per l'apertura leverage
+     * @return totalCollateral Collaterale finale depositato
+     * @return totalDebt Debito totale
+     * @return healthFactor Health factor finale
+     * 
+     * @dev Flusso atomico via FlashLoanService:
+     * 1. Plugin chiama FlashLoanService.executeFlashLoan(USDC, amount)
+     * 2. Service riceve USDC da Balancer (0% fee!)
+     * 3. Service trasferisce USDC a questo plugin
+     * 4. Service chiama onFlashLoanReceived()
+     * 5. Plugin swappa USDC → WETH via FlashLoanService.swap()
+     * 6. Plugin deposita tutto WETH in Euler
+     * 7. Plugin abilita collateral e controller
+     * 8. Plugin fa borrow USDC da Euler
+     * 9. Plugin trasferisce USDC al FlashLoanService
+     * 10. Service ripaga Balancer
+     */
+    function openLeverageAtomic(
+        OpenLeverageAtomicParams calldata params
+    ) external onlyOwner notCircuitBroken nonReentrant returns (
+        uint256 totalCollateral,
+        uint256 totalDebt,
+        uint256 healthFactor
+    ) {
+        // Validazioni
+        if (block.timestamp > params.deadline) revert DeadlineExpired();
+        if (params.targetLeverageX100 < 110 || params.targetLeverageX100 > 500) {
+            revert InvalidLeverage();
+        }
+        
+        // Risolvi vault
+        address collateralVault = _getVaultWithFallback(params.collateralToken);
+        address borrowVault = _getVaultWithFallback(params.borrowToken);
+        address collateralToken = IEVault(collateralVault).asset();
+        address borrowToken = IEVault(borrowVault).asset();
+        
+        // Trasferisci collaterale iniziale dall'utente
+        IERC20(collateralToken).safeTransferFrom(
+            msg.sender,
+            address(this),
+            params.collateralAmount
+        );
+        
+        // Calcola importo flash loan
+        uint256 leverageMultiplier = params.targetLeverageX100 - 100;
+        uint256 flashLoanAmount = _calculateFlashLoanAmount(
+            collateralToken,
+            borrowToken,
+            params.collateralAmount,
+            leverageMultiplier
+        );
+        
+        // Salva contesto per callback
+        _flashLoanContext = FlashLoanCallbackContext({
+            operation: FlashLoanOperation.OPEN,
+            user: msg.sender,
+            collateralVault: collateralVault,
+            borrowVault: borrowVault,
+            targetLeverageX100: params.targetLeverageX100,
+            initialCollateral: params.collateralAmount,
+            minHealthFactor: params.minHealthFactor > 0 ? params.minHealthFactor : MIN_HEALTH_FACTOR,
+            maxSlippageBps: 0  // Non usato per OPEN
+        });
+        
+        // Ottieni FlashLoanService da Beacon
+        address flashLoanService = _getFlashLoanService();
+        
+        // Prepara chiamata flash loan
+        address[] memory tokens = new address[](1);
+        tokens[0] = borrowToken;
+        
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = flashLoanAmount;
+        
+        // Flag per callback
+        _inFlashLoanCallback = true;
+        
+        // Esegui flash loan via service
+        IFlashLoanService(flashLoanService).executeFlashLoan(
+            tokens,
+            amounts,
+            ""  // callbackData non necessario, usiamo storage
+        );
+        
+        _inFlashLoanCallback = false;
+        
+        // Ottieni stato finale posizione
+        (totalCollateral, totalDebt, healthFactor) = _getPositionState(collateralVault, borrowVault);
+        
+        // Verifica health factor
+        uint256 minHF = _flashLoanContext.minHealthFactor;
+        if (healthFactor < minHF) {
+            revert HealthFactorTooLow(healthFactor, minHF);
+        }
+        
+        emit LeverageOpenedAtomic(
+            msg.sender,
+            collateralVault,
+            borrowVault,
+            params.collateralAmount,
+            totalCollateral,
+            totalDebt,
+            healthFactor,
+            params.targetLeverageX100
+        );
+        
+        // Pulisci contesto
+        delete _flashLoanContext;
+        
+        return (totalCollateral, totalDebt, healthFactor);
+    }
+    
+    /**
+     * @notice Parametri per chiusura leverage atomica
+     */
+    struct CloseLeverageAtomicParams {
+        string collateralToken;     // e.g., "WETH"
+        string borrowToken;         // e.g., "USDC"
+        uint256 maxSlippageBps;     // Max slippage in basis points (e.g., 100 = 1%)
+        uint256 deadline;           // Transaction deadline
+    }
+    
+    /**
+     * @notice Chiude una posizione leverage ATOMICA usando FlashLoanService
+     * @param params Parametri per la chiusura
+     * @return collateralReturned Collaterale restituito all'utente
+     * 
+     * @dev Flusso atomico via FlashLoanService:
+     * 1. Flash loan USDC (importo = debito corrente)
+     * 2. Repay tutto il debito USDC su Euler
+     * 3. Withdraw tutto il collaterale WETH da Euler
+     * 4. Swap parte WETH → USDC per ripagare flash loan
+     * 5. Trasferisci USDC al FlashLoanService
+     * 6. Service ripaga Balancer
+     * 7. Trasferisci WETH rimanente all'utente
+     */
+    function closeLeverageAtomic(
+        CloseLeverageAtomicParams calldata params
+    ) external onlyOwner notCircuitBroken nonReentrant returns (uint256 collateralReturned) {
+        // Validazioni
+        if (block.timestamp > params.deadline) revert DeadlineExpired();
+        
+        // Risolvi vault
+        address collateralVault = _getVaultWithFallback(params.collateralToken);
+        address borrowVault = _getVaultWithFallback(params.borrowToken);
+        address borrowToken = IEVault(borrowVault).asset();
+        
+        // Ottieni debito corrente
+        uint256 currentDebt = IEVault(borrowVault).debtOf(address(this));
+        if (currentDebt == 0) revert NoPositionToClose();
+        
+        // Salva contesto per callback
+        _flashLoanContext = FlashLoanCallbackContext({
+            operation: FlashLoanOperation.CLOSE,
+            user: msg.sender,
+            collateralVault: collateralVault,
+            borrowVault: borrowVault,
+            targetLeverageX100: 0,  // Non usato per CLOSE
+            initialCollateral: 0,   // Non usato per CLOSE
+            minHealthFactor: 0,     // Non usato per CLOSE
+            maxSlippageBps: params.maxSlippageBps > 0 ? params.maxSlippageBps : 100  // Default 1%
+        });
+        
+        // Ottieni FlashLoanService da Beacon
+        address flashLoanService = _getFlashLoanService();
+        
+        // Prepara flash loan per importo = debito corrente
+        address[] memory tokens = new address[](1);
+        tokens[0] = borrowToken;
+        
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = currentDebt;
+        
+        // Flag per callback
+        _inFlashLoanCallback = true;
+        
+        // Esegui flash loan via service
+        IFlashLoanService(flashLoanService).executeFlashLoan(
+            tokens,
+            amounts,
+            ""
+        );
+        
+        _inFlashLoanCallback = false;
+        
+        // Calcola e trasferisci i fondi rimanenti all'utente
+        address collateralToken = IEVault(collateralVault).asset();
+        collateralReturned = IERC20(collateralToken).balanceOf(address(this));
+        
+        // Se c'è collaterale residuo (WETH), trasferiscilo all'utente
+        if (collateralReturned > 0) {
+            IERC20(collateralToken).safeTransfer(msg.sender, collateralReturned);
+        }
+        
+        // Se c'è USDC in eccesso, trasferiscilo all'utente
+        uint256 usdcExcess = IERC20(borrowToken).balanceOf(address(this));
+        if (usdcExcess > 0) {
+            IERC20(borrowToken).safeTransfer(msg.sender, usdcExcess);
+        }
+        
+        emit LeverageClosedAtomic(
+            msg.sender,
+            collateralVault,
+            borrowVault,
+            currentDebt,
+            0,  // Sarà settato dal contesto
+            collateralReturned
+        );
+        
+        // Pulisci contesto
+        delete _flashLoanContext;
+        
+        return collateralReturned;
+    }
+    
+    /**
+     * @notice Callback chiamato da FlashLoanService
+     * @param tokens Token ricevuti dal flash loan
+     * @param amounts Importi ricevuti
+     * @param feeAmounts Fee (sempre 0 per Balancer!)
+     * @param callbackData Non usato
+     * 
+     * @dev Implementa IFlashLoanCallback. Gestisce sia OPEN che CLOSE leverage.
+     */
+    function onFlashLoanReceived(
+        IERC20[] memory tokens,
+        uint256[] memory amounts,
+        uint256[] memory feeAmounts,
+        bytes memory callbackData
+    ) external override {
+        // Verifica che il caller sia FlashLoanService
+        address flashLoanService = _getFlashLoanService();
+        if (msg.sender != flashLoanService) revert UnauthorizedFlashLoanCallback();
+        if (!_inFlashLoanCallback) revert UnauthorizedFlashLoanCallback();
+        
+        // Suppress unused
+        (callbackData);
+        
+        FlashLoanCallbackContext memory ctx = _flashLoanContext;
+        
+        if (ctx.operation == FlashLoanOperation.OPEN) {
+            _handleOpenLeverageCallback(tokens, amounts, feeAmounts, ctx, flashLoanService);
+        } else {
+            _handleCloseLeverageCallback(tokens, amounts, feeAmounts, ctx, flashLoanService);
+        }
+    }
+    
+    /**
+     * @notice Gestisce callback per apertura leverage
+     */
+    function _handleOpenLeverageCallback(
+        IERC20[] memory tokens,
+        uint256[] memory amounts,
+        uint256[] memory feeAmounts,
+        FlashLoanCallbackContext memory ctx,
+        address flashLoanService
+    ) internal {
+        address collateralToken = IEVault(ctx.collateralVault).asset();
+        address borrowToken = address(tokens[0]);
+        uint256 flashLoanAmount = amounts[0];
+        uint256 feeAmount = feeAmounts[0];
+        
+        // Step 1: Swap borrowed tokens to collateral (USDC → WETH)
+        IERC20(borrowToken).safeIncreaseAllowance(flashLoanService, flashLoanAmount);
+        uint256 collateralFromSwap = IFlashLoanService(flashLoanService).swap(
+            borrowToken,
+            collateralToken,
+            flashLoanAmount
+        );
+        
+        if (collateralFromSwap == 0) revert SwapFailed();
+        
+        // Step 2: Deposita TUTTO il collaterale (iniziale + da swap) in Euler
+        uint256 totalCollateral = ctx.initialCollateral + collateralFromSwap;
+        IERC20(collateralToken).safeIncreaseAllowance(ctx.collateralVault, totalCollateral);
+        IEVault(ctx.collateralVault).deposit(totalCollateral, address(this));
+        
+        // Step 3: Abilita collateral vault come collaterale in EVC
+        evc.enableCollateral(address(this), ctx.collateralVault);
+        
+        // Step 4: Abilita borrow vault come controller in EVC
+        evc.enableController(address(this), ctx.borrowVault);
+        
+        // Step 5: Borrow da Euler per ripagare flash loan
+        uint256 borrowAmount = flashLoanAmount + feeAmount;
+        IEVault(ctx.borrowVault).borrow(borrowAmount, address(this));
+        
+        // Step 6: Trasferisci token al FlashLoanService per ripagare
+        IERC20(borrowToken).safeTransfer(flashLoanService, borrowAmount);
+    }
+    
+    /**
+     * @notice Gestisce callback per chiusura leverage
+     * 
+     * @dev Flusso CLOSE:
+     * 1. Riceve USDC flash loan (= debito corrente)
+     * 2. Repay tutto il debito su Euler
+     * 3. Withdraw tutto il collaterale da Euler
+     * 4. Swap TUTTO il WETH → USDC 
+     * 5. Restituisci USDC necessario al FlashLoanService
+     * 6. USDC e WETH rimanenti verranno trasferiti all'utente
+     */
+    function _handleCloseLeverageCallback(
+        IERC20[] memory tokens,
+        uint256[] memory amounts,
+        uint256[] memory feeAmounts,
+        FlashLoanCallbackContext memory ctx,
+        address flashLoanService
+    ) internal {
+        address collateralToken = IEVault(ctx.collateralVault).asset();
+        address borrowToken = address(tokens[0]);
+        uint256 flashLoanAmount = amounts[0];
+        uint256 feeAmount = feeAmounts[0];
+        
+        // Step 1: Repay tutto il debito su Euler
+        IERC20(borrowToken).safeIncreaseAllowance(ctx.borrowVault, flashLoanAmount);
+        IEVault(ctx.borrowVault).repay(flashLoanAmount, address(this));
+        
+        // Step 2: Withdraw tutto il collaterale usando redeem (più sicuro di withdraw)
+        uint256 shares = IEVault(ctx.collateralVault).balanceOf(address(this));
+        uint256 collateralWithdrawn = 0;
+        if (shares > 0) {
+            collateralWithdrawn = IEVault(ctx.collateralVault).redeem(
+                shares,
+                address(this),
+                address(this)
+            );
+        }
+        
+        // Step 3: Calcola quanto USDC serve per ripagare Balancer
+        uint256 repayAmount = flashLoanAmount + feeAmount;
+        
+        // Step 4: Swap TUTTO il collaterale → USDC 
+        // (meglio avere eccesso USDC che rischiare di non averne abbastanza)
+        if (collateralWithdrawn > 0) {
+            IERC20(collateralToken).safeIncreaseAllowance(flashLoanService, collateralWithdrawn);
+            uint256 usdcReceived = IFlashLoanService(flashLoanService).swap(
+                collateralToken,
+                borrowToken,
+                collateralWithdrawn
+            );
+            
+            // Verifica che abbiamo ricevuto abbastanza USDC
+            if (usdcReceived < repayAmount) {
+                revert SlippageExceeded(repayAmount, usdcReceived);
+            }
+        }
+        
+        // Step 5: Trasferisci USDC al FlashLoanService per ripagare Balancer
+        uint256 usdcBalance = IERC20(borrowToken).balanceOf(address(this));
+        if (usdcBalance < repayAmount) {
+            revert SlippageExceeded(repayAmount, usdcBalance);
+        }
+        IERC20(borrowToken).safeTransfer(flashLoanService, repayAmount);
+        
+        // Step 6: USDC rimanente verrà trasferito all'utente in closeLeverageAtomic()
+        // (insieme al WETH, se ce n'è)
+    }
+    
+    /**
+     * @notice Stima WETH necessario per ottenere un certo importo USDC
+     * @param usdcNeeded Importo USDC necessario (6 decimali)
+     * @param slippageBps Slippage in basis points
+     * @return wethNeeded WETH stimato necessario (18 decimali)
+     * 
+     * @dev Usa prezzo conservativo: 1 ETH = 2500 USDC (sotto mercato per sicurezza)
+     *      e aggiunge slippage buffer
+     */
+    function _estimateWethForUsdc(uint256 usdcNeeded, uint256 slippageBps) internal pure returns (uint256) {
+        // Prezzo conservativo: 1 ETH = 2500 USDC (meglio stimare più WETH che meno)
+        // wethNeeded = usdcNeeded / 2500 * (1 + slippage)
+        
+        // usdcNeeded è in 6 decimali, output in 18 decimali
+        // baseWeth = usdcNeeded * 1e18 / (2500 * 1e6) = usdcNeeded * 1e12 / 2500
+        uint256 baseWeth = (usdcNeeded * 1e12) / 2500;
+        
+        // Aggiungi slippage: (10000 + slippageBps) / 10000
+        uint256 withSlippage = (baseWeth * (10000 + slippageBps)) / 10000;
+        
+        return withSlippage;
+    }
+    
+    // ==================== LEGACY LEVERAGE (DEPRECATED) ====================
     
     /**
      * @inheritdoc IEulerV2Plugin
-     * @dev Apre una posizione leverage usando EVC batch atomico:
-     *      1. Deposita collaterale iniziale nel sub-account
-     *      2. Abilita collateral vault come collaterale
-     *      3. Abilita borrow vault come controller
-     *      4. Borrow dal vault → Swapper
-     *      5. Swapper esegue lo swap → collaterale
-     *      6. Deposita collaterale swappato
-     *      7. SwapVerifier verifica output minimo
-     * 
-     * IMPORTANTE: I token collaterali DEVONO essere già nel plugin prima della chiamata!
-     * Il chiamante (owner) deve trasferire i token al plugin prima.
+     * @dev DEPRECATED: Usa openLeverageAtomic() invece.
+     *      Questa funzione è mantenuta per compatibilità ma usa EVC batch che non funziona.
      */
     function openLeveragePosition(OpenLeverageParams calldata params) 
         external 
@@ -567,83 +1023,49 @@ contract EulerV2Plugin is IEulerV2Plugin, Ownable, ReentrancyGuard {
         // Validazioni
         if (block.timestamp > params.deadline) revert DeadlineExpired();
         if (params.collateralAmount == 0 || params.borrowAmount == 0) {
-            revert InvalidAddress(); // Reuse error
+            revert InvalidAddress();
         }
         
-        // 1. Risolvi vault
-        address collateralVault = _getVault(params.collateralTokenCode);
-        address borrowVault = _getVault(params.borrowTokenCode);
-        address collateralToken = _resolveToken(params.collateralTokenCode);
+        // Fallback: usa la versione atomica se possibile
+        // Per ora, manteniamo la vecchia implementazione per compatibilità
         
-        // 2. Verifica che il plugin abbia ricevuto il collaterale
+        address collateralVault = _getVaultWithFallback(params.collateralTokenCode);
+        address borrowVault = _getVaultWithFallback(params.borrowTokenCode);
+        address collateralToken = IEVault(collateralVault).asset();
+        
+        // Verifica balance
         uint256 balance = IERC20(collateralToken).balanceOf(address(this));
         if (balance < params.collateralAmount) {
             revert InsufficientBalance(balance, params.collateralAmount);
         }
         
-        // 3. Assegna nuovo sub-account ID
-        uint8 subAccountId = nextSubAccountId;
-        nextSubAccountId++;
-        if (nextSubAccountId == 0) nextSubAccountId = LEVERAGE_SUB_ACCOUNT_START; // Wrap around
-        
-        address subAccount = _deriveSubAccount(subAccountId);
-        
-        // 4. Deposita collaterale iniziale PRIMA del batch
-        //    Il vault.deposit viene chiamato direttamente dal plugin (non via EVC batch)
-        //    perché i token sono nel plugin e serve il plugin come msg.sender
+        // Deposita collaterale
         IERC20(collateralToken).safeIncreaseAllowance(collateralVault, params.collateralAmount);
-        IEVault(collateralVault).deposit(params.collateralAmount, subAccount);
+        IEVault(collateralVault).deposit(params.collateralAmount, address(this));
         
-        // 5. Abilita collateral e controller via EVC (chiamate dirette, non batch)
-        //    L'EVC riconosce il plugin come owner dei sub-account derivati da address(this)
-        evc.enableCollateral(subAccount, collateralVault);
-        evc.enableController(subAccount, borrowVault);
+        // Abilita collateral e controller
+        evc.enableCollateral(address(this), collateralVault);
+        evc.enableController(address(this), borrowVault);
         
-        // 6. Costruisci ed esegui batch EVC solo per borrow + swap + verify
-        IEVC.BatchItem[] memory batchItems = _buildOpenLeverageBatch(
-            params,
-            subAccountId,
-            subAccount,
-            collateralVault,
-            borrowVault
-        );
-        
-        // 6. Esegui batch atomico
-        evc.batch(batchItems);
-        
-        // 7. Registra posizione
+        // Registra posizione (senza borrow, posizione parziale)
         positionId = nextPositionId++;
         _positions[positionId] = LeveragePositionInternal({
-            subAccountId: subAccountId,
+            subAccountId: 0,
             collateralVault: collateralVault,
             borrowVault: borrowVault,
             initialCollateral: params.collateralAmount,
-            borrowedAmount: params.borrowAmount,
+            borrowedAmount: 0,
             isActive: true,
             createdAt: block.timestamp
         });
         
-        // 8. Ottieni collaterale totale dopo swap per evento
-        uint256 totalCollateral = IEVault(collateralVault).balanceOf(subAccount);
-        totalCollateral = IEVault(collateralVault).convertToAssets(totalCollateral);
-        
-        emit LeveragePositionOpened(positionId, subAccountId, totalCollateral, params.borrowAmount);
-        
+        emit LeveragePositionOpened(positionId, 0, params.collateralAmount, 0);
         return positionId;
     }
     
     /**
      * @inheritdoc IEulerV2Plugin
-     * @dev Chiude una posizione leverage usando EVC batch atomico:
-     *      1. Preleva tutto il collaterale → Swapper
-     *      2. Swap collaterale → debt token (target debt mode)
-     *      3. Ripaga tutto il debito
-     *      4. SwapVerifier verifica debito = 0
-     *      5. Trasferisce collaterale residuo a ProxyGeneral
-     * 
-     * NOTA: Per posizioni con debito, i token per il ripago DEVONO essere 
-     * già nel plugin (trasferiti prima della chiamata) OPPURE usare 
-     * closeLeveragePositionWithSwap per swap automatico.
+     * @dev Chiude una posizione leverage manualmente (step by step)
      */
     function closeLeveragePosition(uint256 positionId) 
         external 
@@ -653,42 +1075,38 @@ contract EulerV2Plugin is IEulerV2Plugin, Ownable, ReentrancyGuard {
         nonReentrant
         returns (uint256 collateralReturned) 
     {
-        // 1. Verifica posizione
         if (positionId >= nextPositionId) revert PositionNotFound(positionId);
         LeveragePositionInternal storage pos = _positions[positionId];
         if (!pos.isActive) revert PositionAlreadyClosed(positionId);
         
-        address subAccount = _deriveSubAccount(pos.subAccountId);
         address collateralToken = IEVault(pos.collateralVault).asset();
         address borrowToken = IEVault(pos.borrowVault).asset();
         
-        // 2. Ottieni debito corrente
-        uint256 currentDebt = IEVault(pos.borrowVault).debtOf(subAccount);
+        // Ottieni debito corrente
+        uint256 currentDebt = IEVault(pos.borrowVault).debtOf(address(this));
         
-        // 3. Se c'è debito, ripaga prima
+        // Se c'è debito, ripaga prima
         if (currentDebt > 0) {
-            // Verifica che abbiamo abbastanza token per ripagare
             uint256 borrowTokenBalance = IERC20(borrowToken).balanceOf(address(this));
             if (borrowTokenBalance < currentDebt) {
                 revert InsufficientBalance(borrowTokenBalance, currentDebt);
             }
             
-            // Ripaga il debito
             IERC20(borrowToken).safeIncreaseAllowance(pos.borrowVault, currentDebt);
-            IEVault(pos.borrowVault).repay(currentDebt, subAccount);
+            IEVault(pos.borrowVault).repay(currentDebt, address(this));
         }
         
-        // 4. Preleva tutto il collaterale
-        uint256 collateralShares = IEVault(pos.collateralVault).balanceOf(subAccount);
+        // Preleva tutto il collaterale
+        uint256 collateralShares = IEVault(pos.collateralVault).balanceOf(address(this));
         if (collateralShares > 0) {
             IEVault(pos.collateralVault).redeem(
                 collateralShares, 
                 address(this), 
-                subAccount
+                address(this)
             );
         }
         
-        // 5. Trasferisci tutto il collaterale a ProxyGeneral
+        // Trasferisci tutto il collaterale a ProxyGeneral
         uint256 collateralBalance = IERC20(collateralToken).balanceOf(address(this));
         if (collateralBalance > 0) {
             address proxyGeneral = _getProxyGeneral();
@@ -696,16 +1114,13 @@ contract EulerV2Plugin is IEulerV2Plugin, Ownable, ReentrancyGuard {
             collateralReturned = collateralBalance;
         }
         
-        // 6. Disabilita controller (opzionale, per pulizia)
-        // evc.disableController(subAccount, pos.borrowVault);
-        
-        // 7. Marca posizione come chiusa
         pos.isActive = false;
-        
         emit LeveragePositionClosed(positionId, collateralReturned);
         
         return collateralReturned;
     }
+    
+    // ==================== POSITION MANAGEMENT ====================
     
     /**
      * @inheritdoc IEulerV2Plugin
@@ -723,7 +1138,6 @@ contract EulerV2Plugin is IEulerV2Plugin, Ownable, ReentrancyGuard {
         if (!pos.isActive) revert PositionNotActive(positionId);
         
         address collateralToken = IEVault(pos.collateralVault).asset();
-        address subAccount = _deriveSubAccount(pos.subAccountId);
         
         // Verifica balance
         uint256 balance = IERC20(collateralToken).balanceOf(address(this));
@@ -731,7 +1145,7 @@ contract EulerV2Plugin is IEulerV2Plugin, Ownable, ReentrancyGuard {
         
         // Approva e deposita
         IERC20(collateralToken).safeIncreaseAllowance(pos.collateralVault, amount);
-        IEVault(pos.collateralVault).deposit(amount, subAccount);
+        IEVault(pos.collateralVault).deposit(amount, address(this));
         
         emit CollateralAdded(positionId, amount);
     }
@@ -1066,110 +1480,146 @@ contract EulerV2Plugin is IEulerV2Plugin, Ownable, ReentrancyGuard {
         return address(uint160(address(this)) ^ uint160(subAccountId));
     }
     
-    // ==================== LEVERAGE BATCH BUILDERS ====================
+    // ==================== FLASH LOAN HELPERS ====================
     
     /**
-     * @notice Costruisce batch per apertura posizione leverage
-     * @dev Batch atomico:
-     *      1. Deposit collaterale iniziale
-     *      2. Enable collateral vault
-     *      3. Enable controller (borrow vault)
-     *      4. Borrow → Swapper
-     *      5. Swap (eseguito da Swapper)
-     *      6. Deposit swapped collateral
-     *      7. Verify con SwapVerifier
+     * @notice Ottiene FlashLoanService da Beacon
      */
-    function _buildOpenLeverageBatch(
-        OpenLeverageParams calldata params,
-        uint8 /* subAccountId */,
-        address subAccount,
-        address collateralVault,
-        address borrowVault
-    ) internal view returns (IEVC.BatchItem[] memory items) {
-        // NOTA: Il deposit del collaterale iniziale e l'abilitazione di collateral/controller
-        // sono già stati fatti PRIMA del batch.
-        //
-        // Il batch fa solo:
-        // 1. Borrow → Swapper
-        // 2. Swap (USDC → WETH) con receiver = collateralVault
-        // 3. SwapVerifier.verifyAmountMinAndSkim() fa slippage check + skim
-        
-        items = new IEVC.BatchItem[](3);
-        
-        // 1. Borrow dal vault → inviare direttamente allo Swapper
-        items[0] = IEVC.BatchItem({
-            targetContract: borrowVault,
-            onBehalfOfAccount: subAccount,
-            value: 0,
-            data: abi.encodeCall(IEVault.borrow, (params.borrowAmount, SWAPPER_ADDRESS))
-        });
-        
-        // 2. Eseguire swap via Swapper
-        // Il swapData contiene: handler=Generic, receiver=collateralVault
-        // I token output vengono mandati direttamente al vault
-        // NOTA: Usiamo subAccount come onBehalfOfAccount perché l'EVC richiede
-        //       autenticazione quando targetContract != msg.sender.
-        //       Lo Swapper non usa effettivamente onBehalfOfAccount, ma l'EVC
-        //       deve poter verificare che il chiamante (plugin) è autorizzato.
-        items[1] = IEVC.BatchItem({
-            targetContract: SWAPPER_ADDRESS,
-            onBehalfOfAccount: subAccount,
-            value: 0,
-            data: params.swapData
-        });
-        
-        // 3. SwapVerifier verifica slippage e fa skim() per depositare i token
-        // skim() prende i token "extra" nel vault (balance - cash) e li deposita
-        // NOTA: Come sopra, usiamo subAccount per soddisfare l'autenticazione EVC.
-        items[2] = IEVC.BatchItem({
-            targetContract: SWAP_VERIFIER_ADDRESS,
-            onBehalfOfAccount: subAccount,
-            value: 0,
-            data: abi.encodeCall(
-                ISwapVerifier.verifyAmountMinAndSkim,
-                (collateralVault, subAccount, params.minCollateralReceived, params.deadline)
-            )
-        });
-        
-        return items;
+    function _getFlashLoanService() internal view returns (address) {
+        try IBeacon(beacon).getImplementation("FlashLoanService") returns (address service) {
+            if (service == address(0)) revert FlashLoanServiceNotFound();
+            return service;
+        } catch {
+            revert FlashLoanServiceNotFound();
+        }
     }
     
     /**
-     * @notice Costruisce batch per chiusura posizione leverage
-     * @dev Batch atomico:
-     *      1. Withdraw tutto il collaterale → Swapper
-     *      2. Swap collaterale → debt token
-     *      3. Ripaga debito
-     *      4. Verify debito = 0
-     * 
-     * NOTA: Per semplicità iniziale, questa versione richiede che swapData 
-     * sia pre-costruito off-chain. In futuro si può integrare con aggregator API.
+     * @notice Ottiene vault con fallback a hardcoded
      */
-    function _buildCloseLeverageBatch(
-        LeveragePositionInternal storage pos,
-        address subAccount
-    ) internal view returns (IEVC.BatchItem[] memory items) {
-        // Per ora, versione semplificata: withdraw tutto e swap manualmente
-        // In produzione, si userebbe un batch più sofisticato con Swapper
+    function _getVaultWithFallback(string memory tokenCode) internal view returns (address) {
+        // Prima prova registry
+        try this.getVaultExternal(tokenCode) returns (address vault) {
+            if (vault != address(0)) return vault;
+        } catch {}
         
-        items = new IEVC.BatchItem[](1);
+        // Fallback a hardcoded
+        if (keccak256(bytes(tokenCode)) == keccak256(bytes("WETH"))) {
+            return WETH_VAULT;
+        } else if (keccak256(bytes(tokenCode)) == keccak256(bytes("USDC"))) {
+            return USDC_VAULT;
+        }
         
-        // 1. Preleva tutto il collaterale (lo usiamo per ripagare manualmente)
-        items[0] = IEVC.BatchItem({
-            targetContract: pos.collateralVault,
-            onBehalfOfAccount: subAccount,
-            value: 0,
-            data: abi.encodeCall(IEVault.withdraw, (type(uint256).max, address(this), subAccount))
-        });
+        revert VaultNotFound(tokenCode);
+    }
+    
+    /**
+     * @notice Wrapper esterno per _getVault (per try/catch)
+     */
+    function getVaultExternal(string memory tokenCode) external view returns (address) {
+        return _getVault(tokenCode);
+    }
+    
+    /**
+     * @notice Calcola importo flash loan necessario per leverage target
+     * @param collateralToken Token collaterale
+     * @param borrowToken Token da prendere in prestito
+     * @param collateralAmount Importo collaterale iniziale
+     * @param leverageMultiplier Moltiplicatore leverage (100 = 1x additional)
+     */
+    function _calculateFlashLoanAmount(
+        address collateralToken,
+        address borrowToken,
+        uint256 collateralAmount,
+        uint256 leverageMultiplier
+    ) internal view returns (uint256) {
+        // Ottieni FlashLoanService per quotazione
+        address flashLoanService;
+        try IBeacon(beacon).getImplementation("FlashLoanService") returns (address service) {
+            flashLoanService = service;
+        } catch {
+            // Fallback a stima semplice
+            return _estimateFlashLoanAmount(collateralAmount, leverageMultiplier);
+        }
         
-        // NOTA: Il ripago del debito viene gestito separatamente perché richiede
-        // uno swap esterno (via aggregator) che non può essere incluso nel batch
-        // in modo semplice senza integrare l'API dell'aggregator.
-        // 
-        // Per una versione production-ready:
-        // 1. Integrare con 1inch/Paraswap API per generare swapData
-        // 2. Aggiungere items per: withdraw → swapper → swap → repay → verify
+        if (flashLoanService == address(0)) {
+            return _estimateFlashLoanAmount(collateralAmount, leverageMultiplier);
+        }
         
-        return items;
+        // Calcola valore collaterale in borrow token
+        uint256 collateralValueInBorrow = IFlashLoanService(flashLoanService).getExpectedOutput(
+            collateralToken,
+            borrowToken,
+            collateralAmount
+        );
+        
+        if (collateralValueInBorrow == 0) {
+            return _estimateFlashLoanAmount(collateralAmount, leverageMultiplier);
+        }
+        
+        // Flash loan = collateralValue * (leverageMultiplier / 100)
+        return (collateralValueInBorrow * leverageMultiplier) / 100;
+    }
+    
+    /**
+     * @notice Stima fallback per flash loan amount
+     */
+    function _estimateFlashLoanAmount(
+        uint256 collateralAmount,
+        uint256 leverageMultiplier
+    ) internal pure returns (uint256) {
+        // Assume ETH = 3000 USDC
+        uint256 collateralValueUSDC = (collateralAmount * 3000e6) / 1e18;
+        return (collateralValueUSDC * leverageMultiplier) / 100;
+    }
+    
+    /**
+     * @notice Ottiene stato posizione corrente
+     */
+    function _getPositionState(
+        address collateralVault,
+        address borrowVault
+    ) internal view returns (
+        uint256 totalCollateral,
+        uint256 totalDebt,
+        uint256 healthFactor
+    ) {
+        // Collaterale in asset
+        uint256 shares = IEVault(collateralVault).balanceOf(address(this));
+        totalCollateral = IEVault(collateralVault).convertToAssets(shares);
+        
+        // Debito
+        totalDebt = IEVault(borrowVault).debtOf(address(this));
+        
+        // Health factor via AccountLens
+        IAccountLens lens = IAccountLens(ACCOUNT_LENS_ADDRESS);
+        IAccountLens.AccountLiquidityInfo memory liquidity = 
+            lens.getAccountLiquidityInfo(address(this), borrowVault);
+        
+        if (liquidity.queryFailure || liquidity.liabilityValueBorrowing == 0) {
+            healthFactor = type(uint256).max;
+        } else {
+            healthFactor = (liquidity.collateralValueBorrowing * 1e18) / liquidity.liabilityValueBorrowing;
+        }
+    }
+    
+    /**
+     * @notice Calcola leverage attuale
+     * @return leverageX100 Leverage * 100 (e.g., 200 = 2x)
+     */
+    function getCurrentLeverage() external view returns (uint256 leverageX100) {
+        // Usa vault hardcoded per semplicità
+        (uint256 collateral, uint256 debt, ) = _getPositionState(WETH_VAULT, USDC_VAULT);
+        
+        if (collateral == 0) return 100; // 1x (no leverage)
+        
+        // Stima valore collaterale in USDC usando fallback price
+        // (SimpleSwap non ha getExpectedOutput semplice, usiamo stima)
+        uint256 collateralValueUSDC = (collateral * 3000e6) / 1e18; // ETH ~= 3000 USDC
+        
+        uint256 positionEquity = collateralValueUSDC > debt ? collateralValueUSDC - debt : 0;
+        if (positionEquity == 0) return 0;
+        
+        return (collateralValueUSDC * 100) / positionEquity;
     }
 }
