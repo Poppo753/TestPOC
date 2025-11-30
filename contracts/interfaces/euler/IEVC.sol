@@ -98,6 +98,22 @@ interface IEVC {
         payable
         returns (BatchItemResult[] memory results);
     
+    /**
+     * @notice Esegue una chiamata a un contratto target per conto di un account
+     * @dev Usato per eseguire operazioni su vault per conto di un sub-account
+     * @param targetContract Contratto da chiamare
+     * @param onBehalfOfAccount Account per conto del quale eseguire
+     * @param value ETH da inviare
+     * @param data Calldata della funzione
+     * @return result Return data della chiamata
+     */
+    function call(
+        address targetContract,
+        address onBehalfOfAccount,
+        uint256 value,
+        bytes calldata data
+    ) external payable returns (bytes memory result);
+    
     // ========== COLLATERAL/CONTROLLER MANAGEMENT ==========
     
     /**

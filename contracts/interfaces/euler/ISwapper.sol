@@ -15,41 +15,61 @@ pragma solidity ^0.8.27;
  * - Lo Swapper è UNTRUSTED - non mantiene fondi
  * - SEMPRE usare SwapVerifier dopo lo Swapper per verificare output
  * - I fondi vengono inviati allo Swapper e poi swappati
+ * 
+ * HANDLER DISPONIBILI:
+ * - HANDLER_GENERIC = bytes32("Generic") - Per aggregatori esterni (1inch, Paraswap, etc.)
+ * - HANDLER_UNISWAP_V2 = bytes32("UniswapV2") - Exact output su Uniswap V2
+ * - HANDLER_UNISWAP_V3 = bytes32("UniswapV3") - Exact output su Uniswap V3
+ * 
+ * SWAPPING MODES:
+ * - MODE_EXACT_IN = 0 - Swap quantità esatta di input
+ * - MODE_EXACT_OUT = 1 - Swap per quantità esatta di output
+ * - MODE_TARGET_DEBT = 2 - Swap per ripagare debito target
  */
 interface ISwapper {
     
-    // ========== ENUMS ==========
+    // ========== CONSTANTS ==========
     
-    /**
-     * @notice Modalità di swap
-     */
-    enum SwapMode {
-        EXACT_INPUT,      // Swap quantità esatta di input per massimo output
-        EXACT_OUTPUT,     // Swap minimo input per quantità esatta di output
-        TARGET_DEBT       // Swap per ripagare un target di debito specifico
-    }
+    // Handler identifiers (bytes32)
+    // HANDLER_GENERIC = bytes32("Generic")
+    // HANDLER_UNISWAP_V2 = bytes32("UniswapV2")  
+    // HANDLER_UNISWAP_V3 = bytes32("UniswapV3")
+    
+    // Swap modes
+    // MODE_EXACT_IN = 0
+    // MODE_EXACT_OUT = 1
+    // MODE_TARGET_DEBT = 2
     
     // ========== STRUCTS ==========
     
     /**
      * @notice Parametri per eseguire uno swap
-     * @param handler Handler da usare (es. Uniswap V3, 1inch)
-     * @param mode Modalità di swap
-     * @param account Account per conto del quale swappare
+     * @dev Fonte: https://github.com/euler-xyz/evk-periphery/blob/main/src/Swaps/ISwapper.sol
+     * 
+     * @param handler Handler ID (bytes32) - es. bytes32("Generic")
+     * @param mode Modalità di swap (0=EXACT_IN, 1=EXACT_OUT, 2=TARGET_DEBT)
+     * @param account Account EVC-compatibile (usato per repay in TARGET_DEBT mode)
      * @param tokenIn Token da vendere
      * @param tokenOut Token da comprare
-     * @param amountIn Quantità input (per EXACT_INPUT)
-     * @param amountOut Quantità output (per EXACT_OUTPUT)
-     * @param data Dati specifici per l'handler (es. path Uniswap)
+     * @param amountOut Quantità output (per EXACT_OUT/TARGET_DEBT)
+     * @param vaultIn Vault da cui ripristinare input inutilizzato (EXACT_OUT mode)
+     * @param accountIn Account per deposito input inutilizzato
+     * @param receiver Destinatario del token output
+     * @param data Dati specifici per l'handler:
+     *             - GenericHandler: abi.encode(targetAddress, calldata)
+     *             - UniswapV2: abi.encode(address[] path)
+     *             - UniswapV3: bytes path (token+fee+token+fee+...)
      */
     struct SwapParams {
-        address handler;
-        SwapMode mode;
+        bytes32 handler;
+        uint256 mode;
         address account;
         address tokenIn;
         address tokenOut;
-        uint256 amountIn;
         uint256 amountOut;
+        address vaultIn;
+        address accountIn;
+        address receiver;
         bytes data;
     }
     
@@ -58,12 +78,50 @@ interface ISwapper {
     /**
      * @notice Esegue uno swap
      * @param params Parametri dello swap
-     * @return amountIn Quantità effettiva di token in usata
-     * @return amountOut Quantità effettiva di token out ricevuta
      */
-    function swap(SwapParams calldata params) 
-        external 
-        returns (uint256 amountIn, uint256 amountOut);
+    function swap(SwapParams calldata params) external;
+    
+    /**
+     * @notice Ripaga debito usando balance del contratto
+     * @param token Asset preso in prestito
+     * @param vault Vault dove è tracciato il debito
+     * @param repayAmount Quantità da ripagare
+     * @param account Account beneficiario del repay
+     */
+    function repay(address token, address vault, uint256 repayAmount, address account) external;
+    
+    /**
+     * @notice Ripaga debito e deposita surplus
+     * @param token Asset preso in prestito
+     * @param vault Vault dove è tracciato il debito e depositare
+     * @param repayAmount Quantità da ripagare
+     * @param account Account beneficiario
+     */
+    function repayAndDeposit(address token, address vault, uint256 repayAmount, address account) external;
+    
+    /**
+     * @notice Deposita balance del contratto nel vault
+     * @param token Token da depositare
+     * @param vault Vault destinazione
+     * @param amountMin Minimo da depositare (revert se balance < amountMin)
+     * @param account Account beneficiario
+     */
+    function deposit(address token, address vault, uint256 amountMin, address account) external;
+    
+    /**
+     * @notice Trasferisce balance del contratto
+     * @param token Token da trasferire
+     * @param amountMin Minimo da trasferire
+     * @param receiver Destinatario
+     */
+    function sweep(address token, uint256 amountMin, address receiver) external;
+    
+    /**
+     * @notice Esegue multiple chiamate in una transazione
+     * @param calls Array di calldata da eseguire
+     * @return results Array di risultati
+     */
+    function multicall(bytes[] calldata calls) external returns (bytes[] memory results);
 }
 
 /**
