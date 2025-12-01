@@ -267,6 +267,17 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         _;
     }
     
+    /// @notice Owner o LiquidityManager possono chiamare (per auto-close posizioni)
+    /// @dev Coerente con SwapManager.onlyAuthorizedCaller pattern
+    modifier onlyOwnerOrLiquidityManager() {
+        address liquidityManager = IBeacon(beacon).getImplementation("LiquidityManager");
+        require(
+            msg.sender == owner() || msg.sender == liquidityManager,
+            "EulerV2Plugin: not authorized"
+        );
+        _;
+    }
+    
     // ==================== CONSTRUCTOR ====================
     
     /**
@@ -718,6 +729,18 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
             revert HealthFactorTooLow(healthFactor, minHF);
         }
         
+        // Registra posizione per tracking
+        uint256 positionId = nextPositionId++;
+        _positions[positionId] = LeveragePositionInternal({
+            subAccountId: 0,
+            collateralVault: collateralVault,
+            borrowVault: borrowVault,
+            initialCollateral: params.collateralAmount,
+            borrowedAmount: totalDebt,
+            isActive: true,
+            createdAt: block.timestamp
+        });
+        
         emit LeverageOpenedAtomic(
             msg.sender,
             collateralVault,
@@ -758,10 +781,11 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
      * 5. Trasferisci USDC al FlashLoanService
      * 6. Service ripaga Balancer
      * 7. Trasferisci WETH rimanente all'utente
+     * @notice Can be called by owner or LiquidityManager (for auto-close on withdraw)
      */
     function closeLeverageAtomic(
         CloseLeverageAtomicParams calldata params
-    ) external onlyOwner notCircuitBroken nonReentrant returns (uint256 collateralReturned) {
+    ) external onlyOwnerOrLiquidityManager notCircuitBroken nonReentrant returns (uint256 collateralReturned) {
         // Validazioni
         if (block.timestamp > params.deadline) revert DeadlineExpired();
         
@@ -1066,11 +1090,12 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     /**
      * @inheritdoc IEulerV2Plugin
      * @dev Chiude una posizione leverage manualmente (step by step)
+     * @notice Can be called by owner or LiquidityManager (for auto-close on withdraw)
      */
     function closeLeveragePosition(uint256 positionId) 
         external 
         override 
-        onlyOwner
+        onlyOwnerOrLiquidityManager
         notCircuitBroken
         nonReentrant
         returns (uint256 collateralReturned) 

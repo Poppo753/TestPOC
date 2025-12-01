@@ -16,6 +16,7 @@ interface ITokenManagerForModules {
     function getTokenAddress(string memory tokenCode) external view returns (address);
     function isTokenActive(string memory tokenCode) external view returns (bool);
     function getTokenPrice(string memory tokenCode) external view returns (uint256 price, uint256 updatedAt, bool isStale);
+    function getTokenPriceForModule(string memory tokenCode) external view returns (uint256);
     function getTokenInfo(string memory tokenCode) external view returns (TokenInfo memory);
     function getActiveTokens() external view returns (string[] memory);
     function getAllTokens() external view returns (string[] memory);

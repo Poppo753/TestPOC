@@ -7,6 +7,7 @@ import "./interfaces/IBeacon.sol";
 import "./interfaces/ITokenManagerForModules.sol";
 import "./interfaces/IProxyGeneral.sol";
 import "./interfaces/IWETH.sol";
+import "./interfaces/IEulerLensAdapter.sol";
 
 /**
  * @title ValueCalculator
@@ -264,6 +265,9 @@ contract ValueCalculator is Ownable {
             }
         }
         
+        // ADD EULER LENDING POSITION VALUES
+        totalValue += _getEulerPositionValue();
+        
         // CALCULATE PERCENTAGES (basis points)
         if (totalValue > 0) {
             for (uint256 i = 0; i < tokenValues.length; i++) {
@@ -300,7 +304,56 @@ contract ValueCalculator is Ownable {
             }
         }
         
+        // ADD EULER LENDING POSITION VALUES
+        totalValue += _getEulerPositionValue();
+        
         return totalValue;
+    }
+
+    // ==================== EULER INTEGRATION ====================
+
+    /**
+     * @notice Get total Euler lending position value in ETH
+     * @dev Queries EulerLensAdapter if registered in Beacon
+     * @return eulerValue Net value of all Euler positions (collateral - debt) in ETH
+     */
+    function _getEulerPositionValue() internal view returns (uint256 eulerValue) {
+        // Try to get EulerLensAdapter from Beacon
+        try IBeacon(beacon).getImplementation("EulerLensAdapter") returns (address eulerLensAdapter) {
+            if (eulerLensAdapter != address(0)) {
+                // Query Euler position value
+                try IEulerLensAdapter(eulerLensAdapter).getTotalEulerValue() returns (uint256 value) {
+                    return value;
+                } catch {
+                    // If query fails, return 0 (don't block pool value calculation)
+                    return 0;
+                }
+            }
+        } catch {
+            // EulerLensAdapter not registered, return 0
+            return 0;
+        }
+        
+        return 0;
+    }
+
+    /**
+     * @notice Get detailed Euler position breakdown
+     * @dev Returns collateral, debt, and net value from EulerLensAdapter
+     * @return collateral Total collateral value in ETH
+     * @return debt Total debt value in ETH
+     * @return netValue Net value (collateral - debt) in ETH
+     */
+    function getEulerPositionBreakdown() external view returns (
+        uint256 collateral,
+        uint256 debt,
+        uint256 netValue
+    ) {
+        address eulerLensAdapter = IBeacon(beacon).getImplementation("EulerLensAdapter");
+        if (eulerLensAdapter != address(0)) {
+            return IEulerLensAdapter(eulerLensAdapter).getEulerPositionValues();
+        }
+        return (0, 0, 0);
     }
 
     // ==================== CACHE MANAGEMENT ====================

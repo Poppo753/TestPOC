@@ -227,4 +227,26 @@ interface ILiquidityManager {
         uint256 totalIterations,
         uint256 totalWethObtained
     );
+
+    // ==================== EULER INTEGRATION EVENTS ====================
+
+    /// @notice Emitted when an Euler position is closed to obtain WETH for withdrawal
+    event EulerPositionClosedForWeth(
+        uint256 indexed positionId,
+        uint256 wethObtained
+    );
+    
+    /// @notice Emitted when liquid tokens are swapped to WETH during withdrawal
+    event LiquidTokenSwappedForWeth(
+        string indexed tokenCode,
+        uint256 tokenAmount,
+        uint256 wethObtained
+    );
+    
+    /// @notice Emitted when an Euler normal deposit is withdrawn for WETH
+    event EulerNormalDepositWithdrawn(
+        string indexed tokenCode,
+        uint256 amount,
+        uint256 wethObtained
+    );
 }
