@@ -12,10 +12,7 @@ import "./interfaces/IValueCalculatorForModules.sol";
 import "./interfaces/ISwapManagerForModules.sol";
 import "./interfaces/IParameterManagerForModules.sol";
 import "./interfaces/IWETH.sol";
-import "./interfaces/IEulerLensAdapter.sol";
-import "./interfaces/IEulerV2Plugin.sol";
-import "./interfaces/euler/IEulerVaultRegistry.sol";
-import "./interfaces/euler/IEVault.sol";
+import "./interfaces/IProtocolManager.sol";
 
 /**
  * @title LiquidityManager
@@ -477,8 +474,7 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
             if (bytes(tokenToSwap).length == 0 || amountToSwap == 0) {
                 // WITHDRAWAL PRIORITY ORDER:
                 // 1. Swap any remaining liquid tokens (non-WETH) to WETH
-                // 2. Close normal Euler deposits (non-leverage)
-                // 3. Close leverage positions (sorted by health factor, riskiest first)
+                // 2. Close protocol positions via ProtocolManager (modular - handles all plugins)
                 
                 // STEP 1: Swap liquid tokens
                 uint256 fromLiquidSwap = _swapLiquidTokensForWeth(wethStillNeeded, proxyGeneral, wethAddress);
@@ -498,35 +494,15 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
                     }
                 }
                 
-                // STEP 2: Close normal Euler deposits
+                // STEP 2: Close protocol positions via ProtocolManager (modular for ALL plugins)
                 if (wethStillNeeded > 0) {
-                    uint256 fromNormalDeposits = _closeEulerNormalDepositsForWeth(wethStillNeeded, proxyGeneral, wethAddress);
-                    if (fromNormalDeposits > 0) {
-                        totalWethObtained += fromNormalDeposits;
-                        if (fromNormalDeposits >= wethStillNeeded) {
+                    uint256 fromProtocols = _closeProtocolPositionsForWeth(wethStillNeeded, proxyGeneral, wethAddress);
+                    if (fromProtocols > 0) {
+                        totalWethObtained += fromProtocols;
+                        if (fromProtocols >= wethStillNeeded) {
                             wethStillNeeded = 0;
                         } else {
-                            wethStillNeeded -= fromNormalDeposits;
-                        }
-                        
-                        // Check if we have enough now
-                        uint256 newWethBalance = IERC20(wethAddress).balanceOf(proxyGeneral);
-                        if (newWethBalance >= wethNeeded) {
-                            emit MultiSwapCompleted(msg.sender, iteration, totalWethObtained);
-                            return;
-                        }
-                    }
-                }
-                
-                // STEP 3: Close leverage positions (sorted by HF, riskiest first)
-                if (wethStillNeeded > 0) {
-                    uint256 fromEuler = _closeEulerPositionsForWeth(wethStillNeeded, proxyGeneral, wethAddress);
-                    if (fromEuler > 0) {
-                        totalWethObtained += fromEuler;
-                        if (fromEuler >= wethStillNeeded) {
-                            wethStillNeeded = 0;
-                        } else {
-                            wethStillNeeded -= fromEuler;
+                            wethStillNeeded -= fromProtocols;
                         }
                         // Check if we have enough now
                         uint256 newWethBalance = IERC20(wethAddress).balanceOf(proxyGeneral);
@@ -598,85 +574,73 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
     // ==================== EULER INTEGRATION ====================
 
     /**
-     * @notice Close Euler leverage positions to obtain WETH for withdrawals
-     * @dev Called by _executeAutomaticSwap when token swaps are insufficient
+     * @notice Close positions across ALL registered protocols to obtain WETH
+     * @dev Delegates to ProtocolManager which loops through all registered protocol adapters
+     * @dev This is the MODULAR version - works with ANY protocol that implements IProtocolAdapter
+     * 
      * @param wethNeeded Amount of WETH still needed
-     * @param proxyGeneral ProxyGeneral address for balance tracking
-     * @param wethAddress WETH token address
+     * @param proxyGeneral ProxyGeneral address (for balance tracking - not used directly)
+     * @param wethAddress WETH token address (for balance tracking - not used directly)
      * @return wethObtained Amount of WETH obtained from closing positions
      * 
-     * STRATEGY:
-     * 1. Query EulerLensAdapter for all positions sorted by health factor
-     * 2. Close positions starting from lowest health factor (riskiest first)
-     * 3. Stop when enough WETH is obtained
+     * FLOW:
+     * LiquidityManager._closeProtocolPositionsForWeth(5 WETH)
+     *     └── ProtocolManager.closePositionsForWeth(5 WETH)
+     *         ├── EulerV2Plugin.closePositionsForWeth() → 3 WETH
+     *         ├── AavePlugin.closePositionsForWeth()    → 2 WETH (future)
+     *         └── CompoundPlugin.closePositionsForWeth() → (not needed)
      * 
-     * SAFETY:
-     * - Uses try/catch to handle failed closures gracefully
-     * - Prioritizes riskiest positions (lowest HF) for closing
-     * - Continues to next position if one fails
+     * BENEFITS:
+     * - No Euler-specific code in LiquidityManager
+     * - Adding new protocol = just register in ProtocolManager
+     * - Each plugin handles its own normal deposits + leverage positions
      */
-    function _closeEulerPositionsForWeth(
+    function _closeProtocolPositionsForWeth(
         uint256 wethNeeded,
         address proxyGeneral,
         address wethAddress
     ) internal returns (uint256 wethObtained) {
-        // Check if EulerLensAdapter is registered
-        address lensAdapter;
-        try IBeacon(beacon).getImplementation("EulerLensAdapter") returns (address adapter) {
-            lensAdapter = adapter;
+        // Get ProtocolManager from Beacon
+        address protocolManager;
+        try IBeacon(beacon).getImplementation("ProtocolManager") returns (address pm) {
+            protocolManager = pm;
         } catch {
             return 0;
         }
         
-        if (lensAdapter == address(0)) return 0;
+        if (protocolManager == address(0)) return 0;
         
-        // Check if EulerV2Plugin is registered
-        address plugin;
-        try IBeacon(beacon).getImplementation("EulerV2Plugin") returns (address p) {
-            plugin = p;
-        } catch {
-            return 0;
-        }
-        
-        if (plugin == address(0)) return 0;
-        
-        // Get all positions sorted by health factor (lowest first = riskiest)
-        IEulerLensAdapter.PositionWithHealth[] memory sortedPositions;
-        try IEulerLensAdapter(lensAdapter).getPositionsSortedByHealth() returns (
-            IEulerLensAdapter.PositionWithHealth[] memory positions
-        ) {
-            sortedPositions = positions;
-        } catch {
-            return 0;
-        }
-        
-        if (sortedPositions.length == 0) return 0;
-        
-        // Track WETH balance before closing
+        // Track WETH balance before
         uint256 wethBefore = IERC20(wethAddress).balanceOf(proxyGeneral);
         
-        // Close positions in order (riskiest first) until we have enough WETH
-        for (uint256 i = 0; i < sortedPositions.length && wethObtained < wethNeeded; i++) {
-            uint256 positionId = sortedPositions[i].positionId;
+        // Delegate to ProtocolManager - it will loop through ALL registered protocols
+        try IProtocolManager(protocolManager).closePositionsForWeth(wethNeeded) 
+            returns (uint256 obtained, uint256 positionsClosed) 
+        {
+            // Calculate actual WETH obtained (verify via balance)
+            uint256 wethAfter = IERC20(wethAddress).balanceOf(proxyGeneral);
+            wethObtained = wethAfter > wethBefore ? wethAfter - wethBefore : obtained;
             
-            // Try to close the position
-            try IEulerV2Plugin(plugin).closeLeveragePosition(positionId) returns (uint256) {
-                // Calculate WETH obtained
-                uint256 wethAfter = IERC20(wethAddress).balanceOf(proxyGeneral);
-                if (wethAfter > wethBefore) {
-                    wethObtained += wethAfter - wethBefore;
-                    wethBefore = wethAfter;
-                }
-                
-                emit EulerPositionClosedForWeth(positionId, wethObtained);
-            } catch {
-                // Position closure failed, continue with next
-                continue;
+            if (positionsClosed > 0) {
+                emit ProtocolPositionsClosedForWeth(positionsClosed, wethObtained);
             }
+        } catch {
+            // ProtocolManager call failed
+            return 0;
         }
         
         return wethObtained;
     }
+    
+    /**
+     * @notice DEPRECATED - Use _closeProtocolPositionsForWeth instead
+     * @dev Kept for reference - will be removed in future version
+     * 
+     * Old Euler-specific function that is now replaced by the modular version above.
+     * The new architecture uses ProtocolManager to loop through ALL registered protocols,
+     * making the system extensible for future protocols (Aave, Compound, etc.)
+     */
+    // function _closeEulerPositionsForWeth(...) - REMOVED, see _closeProtocolPositionsForWeth
     
     /**
      * @notice Swap liquid tokens (non-WETH) to WETH for withdrawal
@@ -773,120 +737,19 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
     }
     
     /**
-     * @notice Close normal Euler deposits (non-leverage) to obtain WETH
-     * @dev Withdraws deposits from Euler vaults, swaps to WETH if needed
+     * @notice DEPRECATED - Normal deposits are now handled by _closeProtocolPositionsForWeth
+     * @dev Each plugin's closePositionsForWeth() should handle both normal deposits AND leverage positions
      * 
-     * STRATEGY:
-     * 1. Get all registered vaults from EulerVaultRegistry
-     * 2. For each vault, check if we have deposit shares (balanceOf > 0)
-     * 3. Withdraw and swap to WETH if needed
+     * The EulerV2Plugin.closePositionsForWeth() now:
+     * 1. First closes normal deposits (no debt)
+     * 2. Then closes leverage positions (sorted by risk)
      * 
-     * @param wethNeeded Amount of WETH still needed
-     * @param proxyGeneral Address of ProxyGeneral holding assets
-     * @param wethAddress Address of WETH token
-     * @return wethObtained Amount of WETH obtained
+     * This modular approach means:
+     * - LiquidityManager doesn't need Euler-specific code
+     * - Adding new protocols = implement IProtocolAdapter.closePositionsForWeth
+     * - Each protocol handles its own deposit/position types internally
      */
-    function _closeEulerNormalDepositsForWeth(
-        uint256 wethNeeded,
-        address proxyGeneral,
-        address wethAddress
-    ) internal returns (uint256 wethObtained) {
-        // Get EulerVaultRegistry
-        address vaultRegistry;
-        try IBeacon(beacon).getImplementation("EulerVaultRegistry") returns (address vr) {
-            vaultRegistry = vr;
-        } catch {
-            return 0;
-        }
-        
-        if (vaultRegistry == address(0)) return 0;
-        
-        // Get EulerV2Plugin (for withdrawals)
-        address plugin;
-        try IBeacon(beacon).getImplementation("EulerV2Plugin") returns (address p) {
-            plugin = p;
-        } catch {
-            return 0;
-        }
-        
-        if (plugin == address(0)) return 0;
-        
-        // Get SwapManager (for non-WETH tokens)
-        address swapManager;
-        try IBeacon(beacon).getImplementation("SwapManager") returns (address sm) {
-            swapManager = sm;
-        } catch {
-            return 0;
-        }
-        
-        // Get all registered vaults
-        (string[] memory tokenCodes, address[] memory vaults) = IEulerVaultRegistry(vaultRegistry).getAllVaults();
-        
-        // Track WETH balance
-        uint256 wethBefore = IERC20(wethAddress).balanceOf(proxyGeneral);
-        
-        // Process each vault
-        for (uint256 i = 0; i < vaults.length && wethObtained < wethNeeded; i++) {
-            address vault = vaults[i];
-            string memory tokenCode = tokenCodes[i];
-            
-            // Check if plugin has shares in this vault (deposit)
-            uint256 shares = IEVault(vault).balanceOf(plugin);
-            if (shares == 0) continue;
-            
-            // Check if there's debt - if so, skip (it's a leveraged position, not simple deposit)
-            uint256 debt = IEVault(vault).debtOf(plugin);
-            if (debt > 0) continue;
-            
-            // Get underlying asset
-            address asset = IEVault(vault).asset();
-            
-            // Calculate how much to withdraw
-            uint256 maxWithdrawable = IEVault(vault).maxWithdraw(plugin);
-            if (maxWithdrawable == 0) continue;
-            
-            // Track balance before withdrawal
-            uint256 assetBefore = IERC20(asset).balanceOf(proxyGeneral);
-            
-            // Withdraw from vault via plugin
-            try IEulerV2Plugin(plugin).withdraw(tokenCode, maxWithdrawable) returns (bool success) {
-                if (!success) continue;
-                
-                // Calculate actual withdrawn amount
-                uint256 assetAfter = IERC20(asset).balanceOf(proxyGeneral);
-                uint256 withdrawn = assetAfter > assetBefore ? assetAfter - assetBefore : 0;
-                if (withdrawn == 0) continue;
-                
-                // If it's WETH, we're done
-                if (asset == wethAddress) {
-                    wethObtained += withdrawn;
-                    wethBefore = IERC20(wethAddress).balanceOf(proxyGeneral);
-                    emit EulerNormalDepositWithdrawn(tokenCode, withdrawn, withdrawn);
-                } else {
-                    // Swap to WETH
-                    if (swapManager != address(0)) {
-                        try ISwapManagerForModules(swapManager).performSwapAuto(
-                            tokenCode,
-                            "WETH",
-                            withdrawn
-                        ) returns (uint256 wethFromSwap) {
-                            if (wethFromSwap > 0) {
-                                wethObtained += wethFromSwap;
-                                emit EulerNormalDepositWithdrawn(tokenCode, withdrawn, wethFromSwap);
-                            }
-                        } catch {
-                            // Swap failed, continue
-                        }
-                    }
-                }
-            } catch {
-                // Withdrawal failed, continue
-                continue;
-            }
-        }
-        
-        return wethObtained;
-    }
+    // function _closeEulerNormalDepositsForWeth(...) - REMOVED, see _closeProtocolPositionsForWeth
 
     // ==================== VIEW FUNCTIONS ====================
 

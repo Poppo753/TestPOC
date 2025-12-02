@@ -33,6 +33,7 @@ interface IEulerVaultRegistry {
     function getTokenCode(address vault) external view returns (string memory);
     function isRegistered(string memory tokenCode) external view returns (bool);
     function getAllRegisteredTokens() external view returns (string[] memory);
+    function getAllVaults() external view returns (string[] memory tokenCodes, address[] memory vaults);
 }
 
 /**
@@ -426,20 +427,21 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         return IEVault(vault).debtOf(address(this));
     }
     
-    /**
-     * @inheritdoc IEulerV2Plugin
-     */
-    function getBorrowedAmount(string memory tokenCode) 
-        external 
-        view 
-        override 
-        returns (uint256) 
-    {
-        address vault = _getVaultSafe(tokenCode);
-        if (vault == address(0)) return 0;
-        
-        return IEVault(vault).debtOf(address(this));
-    }
+    // DEPRECATED: Use getDebt() instead - identical functionality
+    // /**
+    //  * @inheritdoc IEulerV2Plugin
+    //  */
+    // function getBorrowedAmount(string memory tokenCode) 
+    //     external 
+    //     view 
+    //     override 
+    //     returns (uint256) 
+    // {
+    //     address vault = _getVaultSafe(tokenCode);
+    //     if (vault == address(0)) return 0;
+    //     
+    //     return IEVault(vault).debtOf(address(this));
+    // }
     
     /**
      * @inheritdoc IEulerV2Plugin
@@ -1093,6 +1095,18 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         nonReentrant
         returns (uint256 collateralReturned) 
     {
+        return _closeLeveragePositionInternal(positionId);
+    }
+    
+    /**
+     * @dev Internal function to close a leverage position
+     * @param positionId ID della posizione da chiudere
+     * @return collateralReturned Amount of collateral returned to ProxyGeneral
+     */
+    function _closeLeveragePositionInternal(uint256 positionId) 
+        internal 
+        returns (uint256 collateralReturned) 
+    {
         if (positionId >= nextPositionId) revert PositionNotFound(positionId);
         LeveragePositionStorage storage pos = _positions[positionId];
         if (!pos.isActive) revert PositionAlreadyClosed(positionId);
@@ -1740,26 +1754,213 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     function closePositionsForWeth(uint256 targetWethAmount) 
         external 
         override 
+        onlyOwnerOrLiquidityManager
         returns (uint256 wethObtained, uint256 positionsClosed) 
     {
-        // Get positions sorted by risk (riskiest first)
+        address proxyGeneral = _getProxyGeneral();
+        
+        // STEP 1: First close normal deposits (no leverage, no debt)
+        // These are simpler and less risky to close
+        (uint256 fromDeposits, uint256 depositsClosed) = _closeNormalDepositsForWeth(targetWethAmount, proxyGeneral);
+        wethObtained += fromDeposits;
+        positionsClosed += depositsClosed;
+        
+        // Check if we have enough
+        if (wethObtained >= targetWethAmount) {
+            return (wethObtained, positionsClosed);
+        }
+        
+        // STEP 2: Close leverage positions (sorted by risk, riskiest first)
+        uint256 stillNeeded = targetWethAmount - wethObtained;
         IProtocolAdapter.Position[] memory sortedPositions = this.getPositionsSortedByRisk();
         
-        address proxyGeneral = _getProxyGeneral();
-        uint256 wethBefore = IERC20(WETH).balanceOf(proxyGeneral);
-        
         for (uint256 i = 0; i < sortedPositions.length && wethObtained < targetWethAmount; i++) {
-            try this.closeLeveragePosition(sortedPositions[i].positionId) returns (uint256) {
-                uint256 wethAfter = IERC20(WETH).balanceOf(proxyGeneral);
-                if (wethAfter > wethBefore) {
-                    wethObtained += wethAfter - wethBefore;
-                    wethBefore = wethAfter;
-                }
+            uint256 positionId = sortedPositions[i].positionId;
+            
+            // Skip invalid positions
+            if (positionId >= nextPositionId) continue;
+            LeveragePositionStorage storage pos = _positions[positionId];
+            if (!pos.isActive) continue;
+            
+            // Get position tokens for closeLeverageAtomic
+            string memory collateralToken = _getTokenCodeFromVault(pos.collateralVault);
+            string memory borrowToken = _getTokenCodeFromVault(pos.borrowVault);
+            
+            // Try to close position using atomic close (with flash loan)
+            try this._closeLeverageAtomicForWeth(collateralToken, borrowToken, positionId) returns (uint256 wethReturned) {
+                wethObtained += wethReturned;
                 positionsClosed++;
             } catch {
-                // Continue on failure
+                // Continue on failure - try next position
             }
         }
+        
+        // Transfer obtained WETH to ProxyGeneral
+        if (wethObtained > 0) {
+            IERC20(WETH).safeTransfer(proxyGeneral, wethObtained);
+        }
+    }
+    
+    /**
+     * @dev Close normal (non-leverage) deposits to obtain WETH
+     * @notice Withdraws from vaults that have no debt (simple yield deposits)
+     * @param targetWethAmount Amount of WETH needed
+     * @param proxyGeneral Address to send non-WETH tokens (for swap)
+     * @return wethObtained WETH obtained from closing deposits
+     * @return depositsClosed Number of deposits closed
+     */
+    function _closeNormalDepositsForWeth(
+        uint256 targetWethAmount,
+        address proxyGeneral
+    ) internal returns (uint256 wethObtained, uint256 depositsClosed) {
+        // Get EulerVaultRegistry to find all vaults
+        address vaultRegistry = IBeacon(beacon).getImplementation("EulerVaultRegistry");
+        if (vaultRegistry == address(0)) return (0, 0);
+        
+        // Get all registered vaults
+        (string[] memory tokenCodes, address[] memory vaults) = IEulerVaultRegistry(vaultRegistry).getAllVaults();
+        
+        for (uint256 i = 0; i < vaults.length && wethObtained < targetWethAmount; i++) {
+            address vault = vaults[i];
+            
+            // Check if we have shares in this vault
+            uint256 shares = IEVault(vault).balanceOf(address(this));
+            if (shares == 0) continue;
+            
+            // Check if there's debt - if so, skip (it's leveraged, not a normal deposit)
+            uint256 debt = IEVault(vault).debtOf(address(this));
+            if (debt > 0) continue;
+            
+            // This is a normal deposit (shares > 0, debt = 0)
+            address asset = IEVault(vault).asset();
+            uint256 maxWithdrawable = IEVault(vault).maxWithdraw(address(this));
+            if (maxWithdrawable == 0) continue;
+            
+            // Withdraw from vault
+            try IEVault(vault).withdraw(maxWithdrawable, address(this), address(this)) returns (uint256 withdrawn) {
+                if (withdrawn == 0) continue;
+                
+                depositsClosed++;
+                
+                // If it's WETH, add directly
+                if (asset == WETH) {
+                    wethObtained += withdrawn;
+                } else {
+                    // Swap non-WETH to WETH via FlashLoanService
+                    address flashLoanService = _getFlashLoanService();
+                    if (flashLoanService != address(0)) {
+                        IERC20(asset).safeIncreaseAllowance(flashLoanService, withdrawn);
+                        try IFlashLoanService(flashLoanService).swap(asset, WETH, withdrawn) returns (uint256 wethFromSwap) {
+                            wethObtained += wethFromSwap;
+                        } catch {
+                            // Swap failed, transfer asset to ProxyGeneral for manual handling
+                            IERC20(asset).safeTransfer(proxyGeneral, withdrawn);
+                        }
+                    } else {
+                        // No swap service, transfer to ProxyGeneral
+                        IERC20(asset).safeTransfer(proxyGeneral, withdrawn);
+                    }
+                }
+            } catch {
+                // Withdrawal failed, continue
+            }
+        }
+        
+        return (wethObtained, depositsClosed);
+    }
+    
+    /**
+     * @dev Helper to get token code from vault address
+     */
+    function _getTokenCodeFromVault(address vault) internal view returns (string memory) {
+        address asset = IEVault(vault).asset();
+        if (asset == WETH) return "WETH";
+        // Add more token mappings as needed
+        // For now, assume USDC for any non-WETH vault
+        return "USDC";
+    }
+    
+    /**
+     * @dev Internal-use function to close a leverage position atomically and return WETH
+     * @notice Uses flash loan to close position, keeps WETH instead of swapping all to USDC
+     */
+    function _closeLeverageAtomicForWeth(
+        string memory collateralToken, 
+        string memory borrowToken,
+        uint256 positionId
+    ) external returns (uint256 wethReturned) {
+        require(msg.sender == address(this), "Only self-call");
+        
+        // Get vaults
+        address collateralVault = _getVaultWithFallback(collateralToken);
+        address borrowVault = _getVaultWithFallback(borrowToken);
+        address borrowTokenAddr = IEVault(borrowVault).asset();
+        
+        // Get current debt
+        uint256 currentDebt = IEVault(borrowVault).debtOf(address(this));
+        if (currentDebt == 0) {
+            // No debt - just withdraw collateral
+            uint256 shares = IEVault(collateralVault).balanceOf(address(this));
+            if (shares > 0) {
+                wethReturned = IEVault(collateralVault).redeem(shares, address(this), address(this));
+            }
+            _positions[positionId].isActive = false;
+            emit LeveragePositionClosed(positionId, wethReturned);
+            return wethReturned;
+        }
+        
+        // Save context for callback - use CLOSE_FOR_WETH operation
+        _flashLoanContext = FlashLoanCallbackContext({
+            operation: FlashLoanOperation.CLOSE,
+            user: address(this), // WETH goes to this contract, not external user
+            collateralVault: collateralVault,
+            borrowVault: borrowVault,
+            targetLeverageX100: 0,
+            initialCollateral: 0,
+            minHealthFactor: 0,
+            maxSlippageBps: 100
+        });
+        
+        // Get FlashLoanService
+        address flashLoanService = _getFlashLoanService();
+        
+        // Execute flash loan
+        address[] memory tokens = new address[](1);
+        tokens[0] = borrowTokenAddr;
+        
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = currentDebt;
+        
+        _inFlashLoanCallback = true;
+        
+        uint256 wethBefore = IERC20(WETH).balanceOf(address(this));
+        
+        IFlashLoanService(flashLoanService).executeFlashLoan(tokens, amounts, "");
+        
+        _inFlashLoanCallback = false;
+        
+        // Get WETH balance after (may include excess from swap)
+        wethReturned = IERC20(WETH).balanceOf(address(this)) - wethBefore;
+        
+        // If we still have USDC excess, swap it to WETH
+        uint256 usdcBalance = IERC20(borrowTokenAddr).balanceOf(address(this));
+        if (usdcBalance > 0) {
+            IERC20(borrowTokenAddr).safeIncreaseAllowance(flashLoanService, usdcBalance);
+            uint256 extraWeth = IFlashLoanService(flashLoanService).swap(
+                borrowTokenAddr,
+                WETH,
+                usdcBalance
+            );
+            wethReturned += extraWeth;
+        }
+        
+        // Mark position as closed
+        _positions[positionId].isActive = false;
+        emit LeveragePositionClosed(positionId, wethReturned);
+        
+        delete _flashLoanContext;
+        
+        return wethReturned;
     }
     
     /// @inheritdoc IProtocolAdapter

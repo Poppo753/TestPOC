@@ -110,12 +110,13 @@ interface IEulerV2Plugin is IProtocolAdapter, IEulerV2PluginSpecific {
      */
     function repay(string memory tokenCode, uint256 amount) external returns (bool success);
     
-    /**
-     * @notice Get borrowed amount for a token
-     * @param tokenCode Token code
-     * @return amount Borrowed amount
-     */
-    function getBorrowedAmount(string memory tokenCode) external view returns (uint256 amount);
+    // DEPRECATED: Use getDebt() instead - same functionality
+    // /**
+    //  * @notice Get borrowed amount for a token
+    //  * @param tokenCode Token code
+    //  * @return amount Borrowed amount
+    //  */
+    // function getBorrowedAmount(string memory tokenCode) external view returns (uint256 amount);
     
     /**
      * @notice Get health factor for the main account

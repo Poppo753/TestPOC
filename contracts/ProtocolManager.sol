@@ -182,6 +182,21 @@ contract ProtocolManager is Ownable {
     error InvalidPluginAddress();
     error InvalidLensAdapterAddress();
     
+    // ==================== MODIFIERS ====================
+    
+    /**
+     * @notice Modifier per funzioni callable da owner o LiquidityManager
+     * @dev Usato per closePositionsForWeth che deve essere chiamabile durante withdraw automatici
+     */
+    modifier onlyOwnerOrLiquidityManager() {
+        address liquidityManager = IBeacon(beacon).getImplementation("LiquidityManager");
+        require(
+            msg.sender == owner() || msg.sender == liquidityManager,
+            "ProtocolManager: not owner or LiquidityManager"
+        );
+        _;
+    }
+    
     // ==================== CONSTRUCTOR ====================
     
     /**
@@ -703,13 +718,14 @@ contract ProtocolManager is Ownable {
     /**
      * @notice Close positions across all protocols to obtain WETH
      * @dev Closes riskiest positions first (lowest HF)
+     * @dev Callable by owner or LiquidityManager for automatic withdrawals
      * @param targetWethAmount Amount of WETH needed
      * @return wethObtained Actual WETH obtained
      * @return totalPositionsClosed Total positions closed across all protocols
      */
     function closePositionsForWeth(uint256 targetWethAmount) 
         external 
-        onlyOwner 
+        onlyOwnerOrLiquidityManager 
         returns (uint256 wethObtained, uint256 totalPositionsClosed) 
     {
         // Close positions protocol by protocol, prioritizing riskiest

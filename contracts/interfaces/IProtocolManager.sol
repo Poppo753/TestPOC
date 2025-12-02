@@ -158,4 +158,30 @@ interface IProtocolManager {
      * ```
      */
     function emergencyWithdrawAll(string[] memory tokenCodes) external returns (bool success);
+    
+    // ========== MODULAR WITHDRAWAL ==========
+    
+    /**
+     * @notice Chiude posizioni su TUTTI i protocolli registrati per ottenere WETH
+     * @dev Loop su tutti i protocolli attivi, chiama IProtocolAdapter.closePositionsForWeth
+     * @dev Priorità: chiude le posizioni più rischiose prima (lowest health factor)
+     * 
+     * @param targetWethAmount Quantità di WETH necessaria
+     * @return wethObtained WETH effettivamente ottenuto
+     * @return totalPositionsClosed Numero totale di posizioni chiuse
+     * 
+     * Flow:
+     * ```
+     * for each protocol in registeredProtocols:
+     *     if (wethObtained < targetWethAmount):
+     *         IProtocolAdapter(plugin).closePositionsForWeth(stillNeeded)
+     * ```
+     * 
+     * Requirements:
+     * - Callable solo da owner o LiquidityManager
+     * - I plugin DEVONO implementare IProtocolAdapter.closePositionsForWeth
+     */
+    function closePositionsForWeth(uint256 targetWethAmount) 
+        external 
+        returns (uint256 wethObtained, uint256 totalPositionsClosed);
 }
