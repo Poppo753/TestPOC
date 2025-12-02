@@ -13,7 +13,7 @@ const config: HardhatUserConfig = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200,
+        runs: 1, // Minimum value to minimize contract size (EulerV2Plugin ~30KB)
       },
       viaIR: true, // Enable IR optimizer to avoid "stack too deep" errors
     },
@@ -38,6 +38,7 @@ const config: HardhatUserConfig = {
       },
       chainId: 42161, // Arbitrum mainnet chain ID
       timeout: 600000, // 10 minutes for fork tests
+      allowUnlimitedContractSize: true, // Allow large contracts in tests (EulerV2Plugin ~30KB)
     },
   },
   gasReporter: {

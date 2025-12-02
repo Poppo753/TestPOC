@@ -326,7 +326,7 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
     describe("2. Health Monitoring - No Position", function () {
         it("Should return max health factor when no debt", async function () {
             const pluginAddr = await eulerV2Plugin.getAddress();
-            const healthFactor = await eulerLensAdapter.getHealthFactor(pluginAddr);
+            const healthFactor = await eulerLensAdapter["getHealthFactor(address)"](pluginAddr);
             
             expect(healthFactor).to.equal(ethers.MaxUint256);
             console.log(`   ✅ Health Factor: ${formatHealthFactor(healthFactor)}`);
@@ -415,7 +415,7 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
             if (!hasLeveragePosition) this.skip();
             
             const pluginAddr = await eulerV2Plugin.getAddress();
-            const healthFactor = await eulerLensAdapter.getHealthFactor(pluginAddr);
+            const healthFactor = await eulerLensAdapter["getHealthFactor(address)"](pluginAddr);
             
             console.log(`   💪 Health Factor: ${formatHealthFactor(healthFactor)}`);
             
@@ -432,7 +432,7 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
             
             expect(controllerVault).to.not.equal(ethers.ZeroAddress);
             
-            const [ttl, status] = await eulerLensAdapter.getTimeToLiquidation(pluginAddr, controllerVault);
+            const [ttl, status] = await eulerLensAdapter["getTimeToLiquidation(address,address)"](pluginAddr, controllerVault);
             
             console.log(`   ⏱️ Time to Liquidation: ${ttl.toString()} seconds`);
             console.log(`   📋 Status: ${status}`);
@@ -550,7 +550,7 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
             const pluginAddr = await eulerV2Plugin.getAddress();
             
             const pluginHF = await eulerV2Plugin.getHealthFactor();
-            const adapterHF = await eulerLensAdapter.getHealthFactor(pluginAddr);
+            const adapterHF = await eulerLensAdapter["getHealthFactor(address)"](pluginAddr);
             
             console.log(`   📊 Plugin Health Factor: ${formatHealthFactor(pluginHF)}`);
             console.log(`   📊 Adapter Health Factor: ${formatHealthFactor(adapterHF)}`);

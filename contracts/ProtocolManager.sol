@@ -8,6 +8,8 @@ import "./interfaces/IProtocolManager.sol";
 import "./interfaces/ILendingProtocol.sol";
 import "./interfaces/IBeacon.sol";
 import "./interfaces/IProxyGeneral.sol";
+import "./interfaces/IProtocolAdapter.sol";
+import "./interfaces/ILensAdapter.sol";
 
 /**
  * @title ProtocolManager
@@ -63,6 +65,29 @@ contract ProtocolManager is Ownable {
     /// @dev Configurabile runtime via setAllowedSelectors()
     mapping(address => mapping(bytes4 => bool)) public allowedSelectors;
     
+    // ==================== PROTOCOL REGISTRY ====================
+    
+    /**
+     * @notice Protocol registration info
+     * @dev The 3 Musketeers: plugin + lensAdapter + registry
+     */
+    struct ProtocolInfo {
+        address plugin;         // IProtocolAdapter implementation
+        address lensAdapter;    // ILensAdapter implementation  
+        address registry;       // Protocol-specific config (vault mappings, etc.)
+        bool isActive;          // Can be disabled without removing
+        uint256 registeredAt;   // Timestamp of registration
+    }
+    
+    /// @notice Registered protocols by name
+    mapping(string => ProtocolInfo) public protocols;
+    
+    /// @notice Array of registered protocol names for iteration
+    string[] public registeredProtocolNames;
+    
+    /// @notice Check if protocol name is registered
+    mapping(string => bool) public isProtocolRegistered;
+    
     // ==================== EVENTS ====================
     
     /**
@@ -117,6 +142,33 @@ contract ProtocolManager is Ownable {
         bool allowed
     );
     
+    /**
+     * @notice Emesso quando un protocollo viene registrato
+     */
+    event ProtocolRegistered(
+        string indexed protocolName,
+        address plugin,
+        address lensAdapter,
+        address registry
+    );
+    
+    /**
+     * @notice Emesso quando un protocollo viene attivato/disattivato
+     */
+    event ProtocolStatusChanged(
+        string indexed protocolName,
+        bool isActive
+    );
+    
+    /**
+     * @notice Emesso quando vengono chiuse posizioni per ottenere WETH
+     */
+    event PositionsClosedForWeth(
+        string protocolName,
+        uint256 positionsClosed,
+        uint256 wethObtained
+    );
+    
     // ==================== ERRORS ====================
     
     error ProtocolNotFound(string protocolName);
@@ -125,6 +177,10 @@ contract ProtocolManager is Ownable {
     error OperationFailed(string operation, string reason);
     error InvalidAmount(uint256 amount);
     error InvalidTokenCode(string tokenCode);
+    error ProtocolAlreadyRegistered(string protocolName);
+    error ProtocolNotActive(string protocolName);
+    error InvalidPluginAddress();
+    error InvalidLensAdapterAddress();
     
     // ==================== CONSTRUCTOR ====================
     
@@ -435,5 +491,307 @@ contract ProtocolManager is Ownable {
     function _getProxyGeneral() internal view returns (address proxyGeneralAddress) {
         proxyGeneralAddress = IBeacon(beacon).getImplementation("ProxyGeneral");
         require(proxyGeneralAddress != address(0), "ProxyGeneral not found");
+    }
+    
+    // ==================== PROTOCOL REGISTRY FUNCTIONS ====================
+    
+    /**
+     * @notice Register a new protocol with its 3 Musketeers
+     * @param protocolName Unique identifier (e.g., "Euler", "Dolomite")
+     * @param plugin Address of IProtocolAdapter implementation
+     * @param lensAdapter Address of ILensAdapter implementation
+     * @param registry Address of protocol-specific registry (can be address(0))
+     */
+    function registerProtocol(
+        string memory protocolName,
+        address plugin,
+        address lensAdapter,
+        address registry
+    ) external onlyOwner {
+        if (isProtocolRegistered[protocolName]) revert ProtocolAlreadyRegistered(protocolName);
+        if (plugin == address(0)) revert InvalidPluginAddress();
+        if (lensAdapter == address(0)) revert InvalidLensAdapterAddress();
+        
+        protocols[protocolName] = ProtocolInfo({
+            plugin: plugin,
+            lensAdapter: lensAdapter,
+            registry: registry,
+            isActive: true,
+            registeredAt: block.timestamp
+        });
+        
+        registeredProtocolNames.push(protocolName);
+        isProtocolRegistered[protocolName] = true;
+        
+        emit ProtocolRegistered(protocolName, plugin, lensAdapter, registry);
+    }
+    
+    /**
+     * @notice Update protocol addresses
+     * @param protocolName Protocol to update
+     * @param plugin New plugin address (address(0) to keep current)
+     * @param lensAdapter New lens adapter address (address(0) to keep current)
+     * @param registry New registry address (address(0) to keep current)
+     */
+    function updateProtocol(
+        string memory protocolName,
+        address plugin,
+        address lensAdapter,
+        address registry
+    ) external onlyOwner {
+        if (!isProtocolRegistered[protocolName]) revert ProtocolNotFound(protocolName);
+        
+        ProtocolInfo storage info = protocols[protocolName];
+        if (plugin != address(0)) info.plugin = plugin;
+        if (lensAdapter != address(0)) info.lensAdapter = lensAdapter;
+        if (registry != address(0)) info.registry = registry;
+        
+        emit ProtocolRegistered(protocolName, info.plugin, info.lensAdapter, info.registry);
+    }
+    
+    /**
+     * @notice Enable or disable a protocol
+     * @param protocolName Protocol to update
+     * @param isActive New active status
+     */
+    function setProtocolActive(string memory protocolName, bool isActive) external onlyOwner {
+        if (!isProtocolRegistered[protocolName]) revert ProtocolNotFound(protocolName);
+        protocols[protocolName].isActive = isActive;
+        emit ProtocolStatusChanged(protocolName, isActive);
+    }
+    
+    /**
+     * @notice Get protocol info
+     * @param protocolName Protocol to query
+     * @return info ProtocolInfo struct
+     */
+    function getProtocolInfo(string memory protocolName) 
+        external view returns (ProtocolInfo memory info) 
+    {
+        if (!isProtocolRegistered[protocolName]) revert ProtocolNotFound(protocolName);
+        return protocols[protocolName];
+    }
+    
+    /**
+     * @notice Get all registered protocol names
+     * @return names Array of protocol names
+     */
+    function getAllProtocolNames() external view returns (string[] memory names) {
+        return registeredProtocolNames;
+    }
+    
+    /**
+     * @notice Get count of active protocols
+     * @return count Number of active protocols
+     */
+    function getActiveProtocolCount() external view returns (uint256 count) {
+        for (uint256 i = 0; i < registeredProtocolNames.length; i++) {
+            if (protocols[registeredProtocolNames[i]].isActive) {
+                count++;
+            }
+        }
+    }
+    
+    // ==================== AGGREGATE FUNCTIONS ====================
+    
+    /**
+     * @notice Get total value across all active protocols
+     * @return totalValueEth Sum of all protocol net values in ETH
+     */
+    function getAllProtocolsValue() external view returns (uint256 totalValueEth) {
+        for (uint256 i = 0; i < registeredProtocolNames.length; i++) {
+            ProtocolInfo storage info = protocols[registeredProtocolNames[i]];
+            if (!info.isActive) continue;
+            
+            try ILensAdapter(info.lensAdapter).getTotalValue() returns (uint256 value) {
+                totalValueEth += value;
+            } catch {
+                // Skip failed protocols
+            }
+        }
+    }
+    
+    /**
+     * @notice Get lowest health factor across all protocols
+     * @return lowestHF Minimum health factor (1e18 scale)
+     * @return protocolName Protocol with lowest HF
+     */
+    function getGlobalHealthFactor() 
+        external view returns (uint256 lowestHF, string memory protocolName) 
+    {
+        lowestHF = type(uint256).max;
+        
+        for (uint256 i = 0; i < registeredProtocolNames.length; i++) {
+            string memory name = registeredProtocolNames[i];
+            ProtocolInfo storage info = protocols[name];
+            if (!info.isActive) continue;
+            
+            try ILensAdapter(info.lensAdapter).getHealthFactor() returns (uint256 hf) {
+                if (hf < lowestHF) {
+                    lowestHF = hf;
+                    protocolName = name;
+                }
+            } catch {
+                // Skip failed protocols
+            }
+        }
+    }
+    
+    /**
+     * @notice Get all positions across all protocols sorted by risk
+     * @return positions Array of positions with risk info, sorted by HF ascending
+     */
+    function getAllPositionsSortedByRisk() 
+        external view returns (ILensAdapter.PositionWithRisk[] memory positions) 
+    {
+        // First pass: count total positions
+        uint256 totalCount = 0;
+        for (uint256 i = 0; i < registeredProtocolNames.length; i++) {
+            ProtocolInfo storage info = protocols[registeredProtocolNames[i]];
+            if (!info.isActive) continue;
+            
+            try IProtocolAdapter(info.plugin).getActivePositionCount() returns (uint256 count) {
+                totalCount += count;
+            } catch {
+                // Skip
+            }
+        }
+        
+        if (totalCount == 0) return positions;
+        
+        // Second pass: collect all positions
+        positions = new ILensAdapter.PositionWithRisk[](totalCount);
+        uint256 idx = 0;
+        
+        for (uint256 i = 0; i < registeredProtocolNames.length; i++) {
+            string memory name = registeredProtocolNames[i];
+            ProtocolInfo storage info = protocols[name];
+            if (!info.isActive) continue;
+            
+            try ILensAdapter(info.lensAdapter).getPositionsSortedByRisk() 
+                returns (ILensAdapter.PositionWithRisk[] memory protoPositions) 
+            {
+                for (uint256 j = 0; j < protoPositions.length && idx < totalCount; j++) {
+                    positions[idx++] = protoPositions[j];
+                }
+            } catch {
+                // Skip
+            }
+        }
+        
+        // Sort all by health factor (bubble sort - ok for small arrays)
+        for (uint256 i = 0; i < idx; i++) {
+            for (uint256 j = i + 1; j < idx; j++) {
+                if (positions[j].healthFactor < positions[i].healthFactor) {
+                    ILensAdapter.PositionWithRisk memory temp = positions[i];
+                    positions[i] = positions[j];
+                    positions[j] = temp;
+                }
+            }
+        }
+        
+        // Resize array if needed
+        if (idx < totalCount) {
+            ILensAdapter.PositionWithRisk[] memory resized = new ILensAdapter.PositionWithRisk[](idx);
+            for (uint256 i = 0; i < idx; i++) {
+                resized[i] = positions[i];
+            }
+            return resized;
+        }
+    }
+    
+    /**
+     * @notice Close positions across all protocols to obtain WETH
+     * @dev Closes riskiest positions first (lowest HF)
+     * @param targetWethAmount Amount of WETH needed
+     * @return wethObtained Actual WETH obtained
+     * @return totalPositionsClosed Total positions closed across all protocols
+     */
+    function closePositionsForWeth(uint256 targetWethAmount) 
+        external 
+        onlyOwner 
+        returns (uint256 wethObtained, uint256 totalPositionsClosed) 
+    {
+        // Close positions protocol by protocol, prioritizing riskiest
+        for (uint256 i = 0; i < registeredProtocolNames.length && wethObtained < targetWethAmount; i++) {
+            string memory name = registeredProtocolNames[i];
+            ProtocolInfo storage info = protocols[name];
+            if (!info.isActive) continue;
+            
+            uint256 stillNeeded = targetWethAmount - wethObtained;
+            
+            try IProtocolAdapter(info.plugin).closePositionsForWeth(stillNeeded) 
+                returns (uint256 obtained, uint256 closed) 
+            {
+                wethObtained += obtained;
+                totalPositionsClosed += closed;
+                
+                if (closed > 0) {
+                    emit PositionsClosedForWeth(name, closed, obtained);
+                }
+            } catch {
+                // Protocol failed, continue with next
+            }
+        }
+    }
+    
+    /**
+     * @notice Close a specific position in a protocol
+     * @param protocolName Protocol containing the position
+     * @param positionId Position to close
+     * @return wethReturned WETH returned from closing
+     */
+    function closePosition(string memory protocolName, uint256 positionId) 
+        external 
+        onlyOwner 
+        returns (uint256 wethReturned) 
+    {
+        if (!isProtocolRegistered[protocolName]) revert ProtocolNotFound(protocolName);
+        ProtocolInfo storage info = protocols[protocolName];
+        if (!info.isActive) revert ProtocolNotActive(protocolName);
+        
+        wethReturned = IProtocolAdapter(info.plugin).closePosition(positionId);
+        
+        emit PositionsClosedForWeth(protocolName, 1, wethReturned);
+    }
+    
+    /**
+     * @notice Get summary for all active protocols
+     * @return summaries Array of ProtocolSummary for each active protocol
+     */
+    function getAllProtocolSummaries() 
+        external view returns (IProtocolAdapter.ProtocolSummary[] memory summaries) 
+    {
+        // Count active protocols
+        uint256 activeCount = 0;
+        for (uint256 i = 0; i < registeredProtocolNames.length; i++) {
+            if (protocols[registeredProtocolNames[i]].isActive) activeCount++;
+        }
+        
+        summaries = new IProtocolAdapter.ProtocolSummary[](activeCount);
+        uint256 idx = 0;
+        
+        for (uint256 i = 0; i < registeredProtocolNames.length; i++) {
+            ProtocolInfo storage info = protocols[registeredProtocolNames[i]];
+            if (!info.isActive) continue;
+            
+            try IProtocolAdapter(info.plugin).getProtocolSummary() 
+                returns (IProtocolAdapter.ProtocolSummary memory summary) 
+            {
+                summaries[idx++] = summary;
+            } catch {
+                // Return empty summary for failed protocols
+                summaries[idx++] = IProtocolAdapter.ProtocolSummary({
+                    name: registeredProtocolNames[i],
+                    protocolType: IProtocolAdapter.ProtocolType.LENDING,
+                    totalCollateralEth: 0,
+                    totalDebtEth: 0,
+                    netValueEth: 0,
+                    activePositionCount: 0,
+                    lowestHealthFactor: type(uint256).max,
+                    isHealthy: true
+                });
+            }
+        }
     }
 }

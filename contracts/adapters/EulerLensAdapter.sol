@@ -3,6 +3,7 @@ pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "../interfaces/IEulerLensAdapter.sol";
+import "../interfaces/ILensAdapter.sol";
 import "../interfaces/IBeacon.sol";
 import "../interfaces/ITokenManagerForModules.sol";
 import "../interfaces/euler/IAccountLens.sol";
@@ -33,8 +34,8 @@ interface IEulerV2PluginView {
     }
     
     function nextPositionId() external view returns (uint256);
-    function getPosition(uint256 positionId) external view returns (LeveragePosition memory);
-    function getAllPositions() external view returns (LeveragePosition[] memory);
+    function getLeveragePosition(uint256 positionId) external view returns (LeveragePosition memory);
+    function getAllLeveragePositions() external view returns (LeveragePosition[] memory);
     function getDebt(string memory tokenCode) external view returns (uint256);
     function getBalance(string memory tokenCode) external view returns (uint256);
 }
@@ -61,7 +62,7 @@ interface IEulerV2PluginView {
  * @author Project4 Team
  * @custom:version 1.0.0
  */
-contract EulerLensAdapter is IEulerLensAdapter, Ownable {
+contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     
     // ==================== CONSTANTS ====================
     
@@ -250,7 +251,7 @@ contract EulerLensAdapter is IEulerLensAdapter, Ownable {
         returns (uint256 ethValue) 
     {
         IEulerV2PluginView plugin = IEulerV2PluginView(_getEulerV2Plugin());
-        IEulerV2PluginView.LeveragePosition memory pos = plugin.getPosition(positionId);
+        IEulerV2PluginView.LeveragePosition memory pos = plugin.getLeveragePosition(positionId);
         
         if (!pos.isActive) {
             return 0;
@@ -353,7 +354,7 @@ contract EulerLensAdapter is IEulerLensAdapter, Ownable {
         IEulerV2PluginView plugin = IEulerV2PluginView(_getEulerV2Plugin());
         
         // Get all positions
-        IEulerV2PluginView.LeveragePosition[] memory allPositions = plugin.getAllPositions();
+        IEulerV2PluginView.LeveragePosition[] memory allPositions = plugin.getAllLeveragePositions();
         
         // First pass: count positions at risk
         uint256 atRiskCount = 0;
@@ -392,7 +393,7 @@ contract EulerLensAdapter is IEulerLensAdapter, Ownable {
         returns (bool shouldClose) 
     {
         IEulerV2PluginView plugin = IEulerV2PluginView(_getEulerV2Plugin());
-        IEulerV2PluginView.LeveragePosition memory pos = plugin.getPosition(positionId);
+        IEulerV2PluginView.LeveragePosition memory pos = plugin.getLeveragePosition(positionId);
         
         if (!pos.isActive) {
             return false;
@@ -427,7 +428,7 @@ contract EulerLensAdapter is IEulerLensAdapter, Ownable {
     function getVaultForToken(string memory tokenCode) 
         external 
         view 
-        override 
+        override(IEulerLensAdapter, ILensAdapter)
         returns (address vault) 
     {
         IEulerVaultRegistry registry = IEulerVaultRegistry(_getEulerVaultRegistry());
@@ -488,7 +489,7 @@ contract EulerLensAdapter is IEulerLensAdapter, Ownable {
         
         // Get all active positions
         IEulerV2PluginView.LeveragePosition[] memory allPositions;
-        try plugin.getAllPositions() returns (IEulerV2PluginView.LeveragePosition[] memory p) {
+        try plugin.getAllLeveragePositions() returns (IEulerV2PluginView.LeveragePosition[] memory p) {
             allPositions = p;
         } catch {
             return positions; // Empty array
@@ -533,7 +534,7 @@ contract EulerLensAdapter is IEulerLensAdapter, Ownable {
     {
         IEulerV2PluginView plugin = IEulerV2PluginView(_getEulerV2Plugin());
         
-        try plugin.getPosition(positionId) returns (IEulerV2PluginView.LeveragePosition memory pos) {
+        try plugin.getLeveragePosition(positionId) returns (IEulerV2PluginView.LeveragePosition memory pos) {
             if (!pos.isActive) {
                 return type(uint256).max; // Inactive = no risk
             }
@@ -614,7 +615,7 @@ contract EulerLensAdapter is IEulerLensAdapter, Ownable {
         view
         returns (uint256 collateral, uint256 debt)
     {
-        IEulerV2PluginView.LeveragePosition[] memory positions = plugin.getAllPositions();
+        IEulerV2PluginView.LeveragePosition[] memory positions = plugin.getAllLeveragePositions();
         
         for (uint256 i = 0; i < positions.length; i++) {
             if (!positions[i].isActive) continue;
@@ -774,5 +775,300 @@ contract EulerLensAdapter is IEulerLensAdapter, Ownable {
         address tm = IBeacon(beacon).getImplementation("TokenManager");
         if (tm == address(0)) revert TokenManagerNotFound();
         return tm;
+    }
+    
+    // ==================== ILensAdapter IMPLEMENTATION ====================
+    
+    /// @inheritdoc ILensAdapter
+    function protocolName() external pure override returns (string memory) {
+        return "Euler";
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getPlugin() external view override returns (address plugin) {
+        return _getEulerV2Plugin();
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getHealthFactor() external view override returns (uint256 healthFactor) {
+        address plugin = _getEulerV2Plugin();
+        return this.getHealthFactor(plugin);
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getPositionHealth(uint256 positionId) 
+        external view override returns (ILensAdapter.HealthInfo memory info) 
+    {
+        IEulerV2PluginView plugin = IEulerV2PluginView(_getEulerV2Plugin());
+        
+        try plugin.getLeveragePosition(positionId) returns (IEulerV2PluginView.LeveragePosition memory pos) {
+            if (!pos.isActive) {
+                return ILensAdapter.HealthInfo({
+                    healthFactor: type(uint256).max,
+                    liquidationThreshold: 0,
+                    timeToLiquidation: TTL_INFINITY,
+                    riskLevel: "INACTIVE",
+                    isHealthy: true
+                });
+            }
+            
+            uint256 hf = _getPositionHealthFactor(pos);
+            (int256 ttl, string memory status) = _getTimeToLiquidationInternal(pos);
+            
+            string memory riskLevel = "SAFE";
+            if (hf <= 1e18) riskLevel = "LIQUIDATABLE";
+            else if (hf <= 1.1e18) riskLevel = "DANGER";
+            else if (hf <= 1.5e18) riskLevel = "WARNING";
+            
+            return ILensAdapter.HealthInfo({
+                healthFactor: hf,
+                liquidationThreshold: 1e18,  // Euler uses 1.0 as liquidation threshold
+                timeToLiquidation: ttl,
+                riskLevel: riskLevel,
+                isHealthy: hf >= DEFAULT_SAFE_HEALTH_FACTOR
+            });
+        } catch {
+            return ILensAdapter.HealthInfo({
+                healthFactor: type(uint256).max,
+                liquidationThreshold: 0,
+                timeToLiquidation: TTL_ERROR,
+                riskLevel: "ERROR",
+                isHealthy: true
+            });
+        }
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getAccountHealth() external view override returns (ILensAdapter.HealthInfo memory info) {
+        address plugin = _getEulerV2Plugin();
+        uint256 hf = this.getHealthFactor(plugin);
+        
+        (int256 ttl, string memory status) = this.getTimeToLiquidation(plugin, address(0));
+        
+        string memory riskLevel = "SAFE";
+        if (hf <= 1e18) riskLevel = "LIQUIDATABLE";
+        else if (hf <= 1.1e18) riskLevel = "DANGER";
+        else if (hf <= 1.5e18) riskLevel = "WARNING";
+        
+        return ILensAdapter.HealthInfo({
+            healthFactor: hf,
+            liquidationThreshold: 1e18,
+            timeToLiquidation: ttl,
+            riskLevel: riskLevel,
+            isHealthy: hf >= DEFAULT_SAFE_HEALTH_FACTOR
+        });
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getTimeToLiquidation(uint256 positionId) 
+        external view override returns (int256 ttl, string memory status) 
+    {
+        IEulerV2PluginView plugin = IEulerV2PluginView(_getEulerV2Plugin());
+        
+        try plugin.getLeveragePosition(positionId) returns (IEulerV2PluginView.LeveragePosition memory pos) {
+            if (!pos.isActive) {
+                return (TTL_INFINITY, "INACTIVE");
+            }
+            return _getTimeToLiquidationInternal(pos);
+        } catch {
+            return (TTL_ERROR, "ERROR");
+        }
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getPositionsAtRisk(uint256 minHealthFactor) 
+        external view override returns (ILensAdapter.PositionWithRisk[] memory positions) 
+    {
+        // Use existing getEulerPositionsAtRisk and convert to ILensAdapter format
+        uint256[] memory positionIds = this.getEulerPositionsAtRisk(minHealthFactor);
+        
+        positions = new ILensAdapter.PositionWithRisk[](positionIds.length);
+        IEulerV2PluginView plugin = IEulerV2PluginView(_getEulerV2Plugin());
+        
+        for (uint256 i = 0; i < positionIds.length; i++) {
+            IEulerV2PluginView.LeveragePosition memory pos = plugin.getLeveragePosition(positionIds[i]);
+            uint256 hf = _getPositionHealthFactor(pos);
+            (int256 ttl, string memory status) = _getTimeToLiquidationInternal(pos);
+            
+            (uint256 collEth, uint256 debtEth) = _getPositionValueInEth(pos);
+            
+            positions[i] = ILensAdapter.PositionWithRisk({
+                positionId: positionIds[i],
+                protocolName: "Euler",
+                healthFactor: hf,
+                timeToLiquidation: ttl,
+                riskLevel: status,
+                collateralEth: collEth,
+                debtEth: debtEth,
+                shouldAutoClose: hf < minHealthFactor
+            });
+        }
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function shouldAutoClose(uint256 positionId, uint256 healthThreshold) 
+        external view override returns (bool) 
+    {
+        return this.shouldAutoClosePosition(positionId, healthThreshold);
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getPositionsSortedByRisk() 
+        external view override returns (ILensAdapter.PositionWithRisk[] memory positions) 
+    {
+        // Use existing getPositionsSortedByHealth and convert
+        IEulerLensAdapter.PositionWithHealth[] memory sorted = this.getPositionsSortedByHealth();
+        
+        positions = new ILensAdapter.PositionWithRisk[](sorted.length);
+        IEulerV2PluginView plugin = IEulerV2PluginView(_getEulerV2Plugin());
+        
+        for (uint256 i = 0; i < sorted.length; i++) {
+            IEulerV2PluginView.LeveragePosition memory pos = plugin.getLeveragePosition(sorted[i].positionId);
+            (int256 ttl, string memory status) = _getTimeToLiquidationInternal(pos);
+            (uint256 collEth, uint256 debtEth) = _getPositionValueInEth(pos);
+            
+            string memory riskLevel = "SAFE";
+            if (sorted[i].healthFactor <= 1e18) riskLevel = "LIQUIDATABLE";
+            else if (sorted[i].healthFactor <= 1.1e18) riskLevel = "DANGER";
+            else if (sorted[i].healthFactor <= 1.5e18) riskLevel = "WARNING";
+            
+            positions[i] = ILensAdapter.PositionWithRisk({
+                positionId: sorted[i].positionId,
+                protocolName: "Euler",
+                healthFactor: sorted[i].healthFactor,
+                timeToLiquidation: ttl,
+                riskLevel: riskLevel,
+                collateralEth: collEth,
+                debtEth: debtEth,
+                shouldAutoClose: sorted[i].healthFactor < DEFAULT_SAFE_HEALTH_FACTOR
+            });
+        }
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getTotalValue() external view override returns (uint256 netValueEth) {
+        return this.getTotalEulerValue();
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getValueBreakdown() external view override returns (ILensAdapter.ValueBreakdown memory breakdown) {
+        (uint256 collateral, uint256 debt, uint256 net) = this.getEulerPositionValues();
+        
+        // Calculate available to withdraw (simplified: assume 20% of collateral for safety)
+        uint256 available = collateral > debt ? (collateral - debt) * 80 / 100 : 0;
+        
+        return ILensAdapter.ValueBreakdown({
+            totalCollateralEth: collateral,
+            totalDebtEth: debt,
+            netValueEth: net,
+            availableToWithdrawEth: available
+        });
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getPositionValue(uint256 positionId) 
+        external view override returns (uint256 collateralEth, uint256 debtEth, uint256 netEth) 
+    {
+        IEulerV2PluginView plugin = IEulerV2PluginView(_getEulerV2Plugin());
+        
+        try plugin.getLeveragePosition(positionId) returns (IEulerV2PluginView.LeveragePosition memory pos) {
+            (collateralEth, debtEth) = _getPositionValueInEth(pos);
+            netEth = collateralEth > debtEth ? collateralEth - debtEth : 0;
+        } catch {
+            return (0, 0, 0);
+        }
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getYieldInfo(string memory tokenCode) 
+        external view override returns (ILensAdapter.YieldInfo memory info) 
+    {
+        address vault = this.getVaultForToken(tokenCode);
+        if (vault == address(0)) {
+            return ILensAdapter.YieldInfo({
+                supplyAPY: 0,
+                borrowAPY: 0,
+                netAPY: 0,
+                rewardsAPY: 0
+            });
+        }
+        
+        (uint256 borrowAPY, uint256 supplyAPY) = this.getVaultAPYs(vault);
+        
+        return ILensAdapter.YieldInfo({
+            supplyAPY: supplyAPY,
+            borrowAPY: borrowAPY,
+            netAPY: int256(supplyAPY) - int256(borrowAPY),
+            rewardsAPY: 0  // Euler doesn't have separate rewards (yet)
+        });
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getNetAPY() external view override returns (int256 netAPY) {
+        // Simplified: average of all positions' net APY
+        // In reality, would need to weight by position size
+        ILensAdapter.YieldInfo memory wethYield = this.getYieldInfo("WETH");
+        return wethYield.netAPY;
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getMaxWithdrawable(string memory tokenCode) 
+        external view override returns (uint256 maxAmount) 
+    {
+        return this.getWithdrawableAmount(tokenCode);
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function estimateWethFromCloseAll() external view override returns (uint256 wethAmount) {
+        (uint256 collateral, uint256 debt, uint256 net) = this.getEulerPositionValues();
+        // Estimate: net value minus some slippage for swaps
+        return net * 95 / 100;  // 5% slippage estimate
+    }
+    
+    // ==================== INTERNAL HELPERS ====================
+    
+    /**
+     * @notice Get position value in ETH
+     */
+    function _getPositionValueInEth(IEulerV2PluginView.LeveragePosition memory pos) 
+        internal view returns (uint256 collateralEth, uint256 debtEth) 
+    {
+        if (!pos.isActive) return (0, 0);
+        
+        // Get collateral value
+        address collateralToken = IEVault(pos.collateralVault).asset();
+        uint256 collateralBalance = IEVault(pos.collateralVault).maxWithdraw(_getSubAccountAddress(_getEulerV2Plugin(), pos.subAccountId));
+        collateralEth = _convertToEthValue(collateralToken, collateralBalance);
+        
+        // Get debt value
+        address debtToken = IEVault(pos.borrowVault).asset();
+        uint256 debtBalance = IEVault(pos.borrowVault).debtOf(_getSubAccountAddress(_getEulerV2Plugin(), pos.subAccountId));
+        debtEth = _convertToEthValue(debtToken, debtBalance);
+    }
+    
+    /**
+     * @notice Get time to liquidation for a position
+     */
+    function _getTimeToLiquidationInternal(IEulerV2PluginView.LeveragePosition memory pos) 
+        internal view returns (int256 ttl, string memory status) 
+    {
+        if (!pos.isActive) return (TTL_INFINITY, "INACTIVE");
+        
+        uint256 hf = _getPositionHealthFactor(pos);
+        
+        if (hf <= 1e18) return (TTL_LIQUIDATION, "LIQUIDATABLE");
+        if (hf >= type(uint256).max / 2) return (TTL_INFINITY, "SAFE_NO_DEBT");
+        
+        // Estimate based on borrow rate (simplified)
+        // Real calculation would use VaultLens.getAccountStatusInfo()
+        if (hf >= 2e18) return (TTL_MORE_THAN_ONE_YEAR, "SAFE_OVER_1_YEAR");
+        
+        // Rough estimate: time until HF drops to 1.0
+        uint256 buffer = hf - 1e18;  // HF buffer above 1.0
+        uint256 annualRate = 0.1e18;  // Assume 10% annual rate
+        uint256 secondsPerYear = 365 days;
+        
+        ttl = int256((buffer * secondsPerYear) / annualRate);
+        status = hf < 1.2e18 ? "AT_RISK" : "WARNING";
     }
 }
