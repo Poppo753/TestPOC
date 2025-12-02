@@ -8,6 +8,7 @@ import "./interfaces/ITokenManagerForModules.sol";
 import "./interfaces/IProxyGeneral.sol";
 import "./interfaces/IWETH.sol";
 import "./interfaces/IEulerLensAdapter.sol";
+import "./interfaces/IProtocolManager.sol";
 
 /**
  * @title ValueCalculator
@@ -265,8 +266,8 @@ contract ValueCalculator is Ownable {
             }
         }
         
-        // ADD EULER LENDING POSITION VALUES
-        totalValue += _getEulerPositionValue();
+        // ADD ALL REGISTERED PROTOCOLS VALUE (MODULAR)
+        totalValue += _getAllProtocolsValue();
         
         // CALCULATE PERCENTAGES (basis points)
         if (totalValue > 0) {
@@ -304,16 +305,80 @@ contract ValueCalculator is Ownable {
             }
         }
         
-        // ADD EULER LENDING POSITION VALUES
-        totalValue += _getEulerPositionValue();
+        // ADD ALL REGISTERED PROTOCOLS VALUE (MODULAR)
+        totalValue += _getAllProtocolsValue();
         
         return totalValue;
     }
 
-    // ==================== EULER INTEGRATION ====================
+    // ==================== PROTOCOL INTEGRATION (MODULAR) ====================
 
     /**
-     * @notice Get total Euler lending position value in ETH
+     * @notice Get total value across ALL registered protocols (MODULAR)
+     * @dev Delegates to ProtocolManager which loops through all active LensAdapters
+     * @dev This replaces the old hardcoded _getEulerPositionValue() approach
+     * @return protocolsValue Net value of all protocol positions in ETH
+     * 
+     * Flow:
+     * ```
+     * ValueCalculator._getAllProtocolsValue()
+     *     └── ProtocolManager.getAllProtocolsValue()
+     *         ├── EulerLensAdapter.getTotalValue()
+     *         ├── MorphoLensAdapter.getTotalValue() [FUTURE]
+     *         └── DolomiteLensAdapter.getTotalValue() [FUTURE]
+     * ```
+     */
+    function _getAllProtocolsValue() internal view returns (uint256 protocolsValue) {
+        // Try to get ProtocolManager from Beacon
+        try IBeacon(beacon).getImplementation("ProtocolManager") returns (address protocolManager) {
+            if (protocolManager != address(0)) {
+                // Query total value across all protocols
+                try IProtocolManager(protocolManager).getAllProtocolsValue() returns (uint256 value) {
+                    return value;
+                } catch {
+                    // If query fails, fallback to legacy Euler-only calculation
+                    return _getEulerPositionValue();
+                }
+            }
+        } catch {
+            // ProtocolManager not registered, fallback to legacy
+            return _getEulerPositionValue();
+        }
+        
+        return 0;
+    }
+    
+    /**
+     * @notice Get position breakdown for a specific protocol
+     * @dev Delegates to ProtocolManager.getProtocolPositionBreakdown()
+     * @param protocolName Name of the protocol (e.g., "EulerV2", "Morpho", "Dolomite")
+     * @return collateral Total collateral value in ETH
+     * @return debt Total debt value in ETH
+     * @return netValue Net value (collateral - debt) in ETH
+     */
+    function getProtocolPositionBreakdown(string memory protocolName) 
+        external 
+        view 
+        returns (uint256 collateral, uint256 debt, uint256 netValue) 
+    {
+        address protocolManager = IBeacon(beacon).getImplementation("ProtocolManager");
+        if (protocolManager != address(0)) {
+            try IProtocolManager(protocolManager).getProtocolPositionBreakdown(protocolName) 
+                returns (uint256 col, uint256 dbt, uint256 net) 
+            {
+                return (col, dbt, net);
+            } catch {
+                return (0, 0, 0);
+            }
+        }
+        return (0, 0, 0);
+    }
+
+    // ==================== LEGACY EULER INTEGRATION (DEPRECATED) ====================
+
+    /**
+     * @notice DEPRECATED - Use _getAllProtocolsValue() instead
+     * @dev Kept for backward compatibility as fallback when ProtocolManager is not available
      * @dev Queries EulerLensAdapter if registered in Beacon
      * @return eulerValue Net value of all Euler positions (collateral - debt) in ETH
      */
@@ -338,7 +403,8 @@ contract ValueCalculator is Ownable {
     }
 
     /**
-     * @notice Get detailed Euler position breakdown
+     * @notice DEPRECATED - Use getProtocolPositionBreakdown("EulerV2") instead
+     * @dev Kept for backward compatibility
      * @dev Returns collateral, debt, and net value from EulerLensAdapter
      * @return collateral Total collateral value in ETH
      * @return debt Total debt value in ETH

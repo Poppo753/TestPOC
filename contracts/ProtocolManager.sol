@@ -627,6 +627,46 @@ contract ProtocolManager is Ownable {
     }
     
     /**
+     * @notice Get position breakdown for a specific protocol
+     * @dev Returns collateral, debt, and net value from the protocol's LensAdapter
+     * @param protocolName Name of the protocol (e.g., "EulerV2", "Morpho", "Dolomite")
+     * @return collateral Total collateral value in ETH
+     * @return debt Total debt value in ETH
+     * @return netValue Net value (collateral - debt) in ETH
+     */
+    function getProtocolPositionBreakdown(string memory protocolName) 
+        external 
+        view 
+        returns (uint256 collateral, uint256 debt, uint256 netValue) 
+    {
+        ProtocolInfo storage info = protocols[protocolName];
+        
+        // Check if protocol is registered and active
+        if (!isProtocolRegistered[protocolName] || !info.isActive) {
+            return (0, 0, 0);
+        }
+        
+        // Check if LensAdapter is configured
+        if (info.lensAdapter == address(0)) {
+            return (0, 0, 0);
+        }
+        
+        // Get value breakdown from LensAdapter
+        try ILensAdapter(info.lensAdapter).getValueBreakdown() 
+            returns (ILensAdapter.ValueBreakdown memory breakdown) 
+        {
+            return (breakdown.totalCollateralEth, breakdown.totalDebtEth, breakdown.netValueEth);
+        } catch {
+            // If getValueBreakdown fails, try getTotalValue as fallback
+            try ILensAdapter(info.lensAdapter).getTotalValue() returns (uint256 value) {
+                return (value, 0, value); // Assume no debt if breakdown not available
+            } catch {
+                return (0, 0, 0);
+            }
+        }
+    }
+    
+    /**
      * @notice Get lowest health factor across all protocols
      * @return lowestHF Minimum health factor (1e18 scale)
      * @return protocolName Protocol with lowest HF

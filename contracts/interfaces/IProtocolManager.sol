@@ -184,4 +184,47 @@ interface IProtocolManager {
     function closePositionsForWeth(uint256 targetWethAmount) 
         external 
         returns (uint256 wethObtained, uint256 totalPositionsClosed);
+    
+    // ========== MODULAR VALUE CALCULATION ==========
+    
+    /**
+     * @notice Get total value across ALL active protocols (MODULAR)
+     * @dev Loops through all registered protocols and sums their net values via LensAdapters
+     * @dev Each protocol's LensAdapter must implement getTotalValue()
+     * 
+     * @return totalValueEth Sum of all protocol net values in ETH (in wei)
+     * 
+     * Flow:
+     * ```
+     * for each protocol in registeredProtocols:
+     *     totalValue += ILensAdapter(protocol.lensAdapter).getTotalValue()
+     * ```
+     * 
+     * Example:
+     * ```
+     * uint256 totalProtocolValue = IProtocolManager(protocolManager).getAllProtocolsValue();
+     * // Returns: 10 ETH (5 ETH from Euler + 3 ETH from Morpho + 2 ETH from Aave)
+     * ```
+     */
+    function getAllProtocolsValue() external view returns (uint256 totalValueEth);
+    
+    /**
+     * @notice Get position breakdown for a specific protocol
+     * @dev Returns collateral, debt, and net value from the protocol's LensAdapter
+     * 
+     * @param protocolName Name of the protocol (e.g., "EulerV2", "Morpho", "Dolomite")
+     * @return collateral Total collateral value in ETH
+     * @return debt Total debt value in ETH
+     * @return netValue Net value (collateral - debt) in ETH
+     * 
+     * Example:
+     * ```
+     * (uint256 col, uint256 dbt, uint256 net) = protocolManager.getProtocolPositionBreakdown("EulerV2");
+     * // Returns: (10 ETH collateral, 5 ETH debt, 5 ETH net)
+     * ```
+     */
+    function getProtocolPositionBreakdown(string memory protocolName) 
+        external 
+        view 
+        returns (uint256 collateral, uint256 debt, uint256 netValue);
 }
