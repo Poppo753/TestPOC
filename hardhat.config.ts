@@ -13,7 +13,7 @@ const config: HardhatUserConfig = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 1, // Minimum value to minimize contract size (EulerV2Plugin ~30KB)
+        runs: 200, // Default balanced value (with viaIR, size doesn't change but gas is optimized)
       },
       viaIR: true, // Enable IR optimizer to avoid "stack too deep" errors
     },
@@ -56,7 +56,7 @@ const config: HardhatUserConfig = {
     target: "ethers-v6", // Target compatibile con Ethers.js
   },
   sourcify: {
-    enabled: true
+    enabled: false
   },
   paths: {
     sources: "./contracts",
@@ -68,3 +68,14 @@ const config: HardhatUserConfig = {
 };
 
 export default config;
+
+
+
+
+
+
+
+
+
+
+
