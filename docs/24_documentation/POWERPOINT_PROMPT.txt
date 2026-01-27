@@ -6,7 +6,7 @@
 
 ## INFORMAZIONI GENERALI
 
-**Titolo Presentazione:** "Project4 - Aggregatore DeFi Modulare"
+**Titolo Presentazione:** "Jethos Protocol - Aggregatore DeFi Modulare"
 **Sottotitolo:** "Architettura Smart Contract su Arbitrum"
 **Stile Grafico:** Professionale, tech/blockchain, colori blu/viola/verde acqua
 **Network:** Arbitrum One (Layer 2 Ethereum)
@@ -20,7 +20,7 @@
 
 ## Slide 1.1 - Titolo e Cos'è il Protocollo
 
-**TITOLO SLIDE:** "Project4 - Aggregatore DeFi Modulare"
+**TITOLO SLIDE:** "Jethos Protocol - Aggregatore DeFi Modulare"
 
 **TESTO (bullet point):**
 - Aggregatore DeFi modulare deployato su Arbitrum One
