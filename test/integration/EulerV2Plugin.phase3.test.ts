@@ -48,6 +48,7 @@ describe("EulerV2Plugin - FASE 3: Leverage Atomico", function () {
     let ownerAddress: string;
     let eulerPlugin: Contract;
     let eulerVaultRegistry: Contract;
+    let eulerLensAdapter: Contract;
     let weth: Contract;
     let usdc: Contract;
     let wethVault: Contract;
@@ -237,6 +238,14 @@ describe("EulerV2Plugin - FASE 3: Leverage Atomico", function () {
         await eulerPlugin.waitForDeployment();
         console.log(`   ✅ EulerV2Plugin deployed: ${await eulerPlugin.getAddress()}`);
 
+        // Deploy EulerLensAdapter
+        const EulerLensAdapter = await ethers.getContractFactory("EulerLensAdapter", owner);
+        eulerLensAdapter = await EulerLensAdapter.deploy(ADDRESSES.BEACON);
+        await eulerLensAdapter.waitForDeployment();
+        await (await beacon.updateImplementation("EulerLensAdapter", await eulerLensAdapter.getAddress())).wait();
+        await (await beacon.updateImplementation("EulerV2Plugin", await eulerPlugin.getAddress())).wait();
+        console.log(`   ✅ EulerLensAdapter deployed: ${await eulerLensAdapter.getAddress()}`);
+
         // Authorize in ProxyGeneral
         const proxyFull = await ethers.getContractAt(
             ["function authorizeModule(address, string memory) external"],
@@ -409,8 +418,8 @@ describe("EulerV2Plugin - FASE 3: Leverage Atomico", function () {
                     console.log(`   Borrowed: ${ethers.formatUnits(position.borrowedAmount, 6)} USDC`);
                     console.log(`   Active: ${position.isActive}`);
                     
-                    // Get health
-                    const health = await leveragePlugin.getPositionHealth(0);
+                    // Get health using LensAdapter
+                    const health = await eulerLensAdapter.getPositionHealthFactor(0);
                     if (health === ethers.MaxUint256) {
                         console.log(`   Health Factor: MAX (very safe)`);
                     } else {

@@ -45,7 +45,7 @@ interface IEulerVaultRegistry {
  * - Gestito da ProtocolManager (orchestratore centrale)
  * - Custody flow: ProxyGeneral → ProtocolManager → EulerV2Plugin → Euler Vaults
  * - Operazioni comuni: deposit, withdraw, borrow, repay (via ILendingProtocol)
- * - Operazioni leverage: openLeveragePosition, closeLeveragePosition (via IEulerV2Plugin)
+ * - Operazioni leverage ATOMICHE: openLeverageAtomic, closeLeverageAtomic (via FlashLoanService)
  * 
  * EULER V2 SPECIFICO:
  * - EVC (Ethereum Vault Connector): Hub per batching e sub-accounts
@@ -486,43 +486,8 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         return (liquidity.collateralValueBorrowing * 1e18) / liquidity.liabilityValueBorrowing;
     }
     
-    /**
-     * @notice Ottiene health factor per un vault controller specifico
-     * @param controllerVault Vault controller da interrogare
-     * @return healthFactor in 1e18 (1e18 = 1.0)
-     */
-    function getHealthFactorForVault(address controllerVault) 
-        external 
-        view 
-        returns (uint256) 
-    {
-        IAccountLens lens = IAccountLens(ACCOUNT_LENS_ADDRESS);
-        IAccountLens.AccountLiquidityInfo memory liquidity = 
-            lens.getAccountLiquidityInfo(address(this), controllerVault);
-        
-        if (liquidity.queryFailure || liquidity.liabilityValueBorrowing == 0) {
-            return type(uint256).max;
-        }
-        
-        return (liquidity.collateralValueBorrowing * 1e18) / liquidity.liabilityValueBorrowing;
-    }
-    
-    /**
-     * @notice Ottiene il tempo alla liquidazione
-     * @param controllerVault Vault controller
-     * @return ttl Secondi alla liquidazione, valori speciali:
-     *         -1 = già liquidabile
-     *         type(int256).max = nessun debito
-     *         type(int256).max - 1 = più di un anno
-     */
-    function getTimeToLiquidation(address controllerVault) 
-        external 
-        view 
-        returns (int256 ttl) 
-    {
-        IAccountLens lens = IAccountLens(ACCOUNT_LENS_ADDRESS);
-        return lens.getTimeToLiquidation(address(this), controllerVault);
-    }
+    // REMOVED: getHealthFactorForVault() - Use EulerLensAdapter.getSubAccountHealth() instead
+    // REMOVED: getTimeToLiquidation() - Use EulerLensAdapter.getTimeToLiquidation() instead
 
     /**
      * @notice Get borrow capacity for a token
@@ -1024,139 +989,12 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         return withSlippage;
     }
     
-    // ==================== LEGACY LEVERAGE (DEPRECATED) ====================
-    
-    /**
-     * @inheritdoc IEulerV2PluginSpecific
-     * @dev DEPRECATED: Usa openLeverageAtomic() invece.
-     *      Questa funzione è mantenuta per compatibilità ma usa EVC batch che non funziona.
-     */
-    function openLeveragePosition(OpenLeverageParams calldata params) 
-        external 
-        override 
-        onlyOwner
-        notCircuitBroken
-        nonReentrant
-        returns (uint256 positionId) 
-    {
-        // Validazioni
-        if (block.timestamp > params.deadline) revert DeadlineExpired();
-        if (params.collateralAmount == 0 || params.borrowAmount == 0) {
-            revert InvalidAddress();
-        }
-        
-        // Fallback: usa la versione atomica se possibile
-        // Per ora, manteniamo la vecchia implementazione per compatibilità
-        
-        address collateralVault = _getVaultWithFallback(params.collateralTokenCode);
-        address borrowVault = _getVaultWithFallback(params.borrowTokenCode);
-        address collateralToken = IEVault(collateralVault).asset();
-        
-        // Verifica balance
-        uint256 balance = IERC20(collateralToken).balanceOf(address(this));
-        if (balance < params.collateralAmount) {
-            revert InsufficientBalance(balance, params.collateralAmount);
-        }
-        
-        // Deposita collaterale
-        IERC20(collateralToken).safeIncreaseAllowance(collateralVault, params.collateralAmount);
-        IEVault(collateralVault).deposit(params.collateralAmount, address(this));
-        
-        // Abilita collateral e controller
-        evc.enableCollateral(address(this), collateralVault);
-        evc.enableController(address(this), borrowVault);
-        
-        // Registra posizione (senza borrow, posizione parziale)
-        positionId = nextPositionId++;
-        _positions[positionId] = LeveragePositionStorage({
-            subAccountId: 0,
-            collateralVault: collateralVault,
-            borrowVault: borrowVault,
-            initialCollateral: params.collateralAmount,
-            borrowedAmount: 0,
-            isActive: true,
-            createdAt: block.timestamp
-        });
-        
-        emit LeveragePositionOpened(positionId, 0, params.collateralAmount, 0);
-        return positionId;
-    }
-    
-    /**
-     * @inheritdoc IEulerV2PluginSpecific
-     * @dev Chiude una posizione leverage manualmente (step by step)
-     * @notice Can be called by owner or LiquidityManager (for auto-close on withdraw)
-     */
-    function closeLeveragePosition(uint256 positionId) 
-        external 
-        override 
-        onlyOwnerOrLiquidityManager
-        notCircuitBroken
-        nonReentrant
-        returns (uint256 collateralReturned) 
-    {
-        return _closeLeveragePositionInternal(positionId);
-    }
-    
-    /**
-     * @dev Internal function to close a leverage position
-     * @param positionId ID della posizione da chiudere
-     * @return collateralReturned Amount of collateral returned to ProxyGeneral
-     */
-    function _closeLeveragePositionInternal(uint256 positionId) 
-        internal 
-        returns (uint256 collateralReturned) 
-    {
-        if (positionId >= nextPositionId) revert PositionNotFound(positionId);
-        LeveragePositionStorage storage pos = _positions[positionId];
-        if (!pos.isActive) revert PositionAlreadyClosed(positionId);
-        
-        address collateralToken = IEVault(pos.collateralVault).asset();
-        address borrowToken = IEVault(pos.borrowVault).asset();
-        
-        // Ottieni debito corrente
-        uint256 currentDebt = IEVault(pos.borrowVault).debtOf(address(this));
-        
-        // Se c'è debito, ripaga prima
-        if (currentDebt > 0) {
-            uint256 borrowTokenBalance = IERC20(borrowToken).balanceOf(address(this));
-            if (borrowTokenBalance < currentDebt) {
-                revert InsufficientBalance(borrowTokenBalance, currentDebt);
-            }
-            
-            IERC20(borrowToken).safeIncreaseAllowance(pos.borrowVault, currentDebt);
-            IEVault(pos.borrowVault).repay(currentDebt, address(this));
-        }
-        
-        // Preleva tutto il collaterale
-        uint256 collateralShares = IEVault(pos.collateralVault).balanceOf(address(this));
-        if (collateralShares > 0) {
-            IEVault(pos.collateralVault).redeem(
-                collateralShares, 
-                address(this), 
-                address(this)
-            );
-        }
-        
-        // Trasferisci tutto il collaterale a ProxyGeneral
-        uint256 collateralBalance = IERC20(collateralToken).balanceOf(address(this));
-        if (collateralBalance > 0) {
-            address proxyGeneral = _getProxyGeneral();
-            IERC20(collateralToken).safeTransfer(proxyGeneral, collateralBalance);
-            collateralReturned = collateralBalance;
-        }
-        
-        pos.isActive = false;
-        emit LeveragePositionClosed(positionId, collateralReturned);
-        
-        return collateralReturned;
-    }
-    
     // ==================== POSITION MANAGEMENT ====================
     
     /**
      * @inheritdoc IEulerV2PluginSpecific
-     * @dev Aggiunge collaterale a una posizione esistente per aumentare health factor
+     * @dev Aggiunge collaterale a una posizione esistente per migliorare health factor
+     * @dev Il collaterale viene depositato sul sub-account della posizione leverage
      */
     function addCollateralToPosition(uint256 positionId, uint256 amount) 
         external 
@@ -1170,14 +1008,21 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         if (!pos.isActive) revert PositionNotActive(positionId);
         
         address collateralToken = IEVault(pos.collateralVault).asset();
+        address subAccount = _deriveSubAccount(pos.subAccountId);
         
-        // Verifica balance
+        // Verifica balance disponibile nel contratto
         uint256 balance = IERC20(collateralToken).balanceOf(address(this));
         if (balance < amount) revert InsufficientBalance(balance, amount);
         
-        // Approva e deposita
-        IERC20(collateralToken).safeIncreaseAllowance(pos.collateralVault, amount);
-        IEVault(pos.collateralVault).deposit(amount, address(this));
+        // Trasferisci collaterale al sub-account
+        IERC20(collateralToken).safeTransfer(subAccount, amount);
+        
+        // Deposita nel vault per conto del sub-account (aumenta collaterale → migliora HF)
+        evc.call(pos.collateralVault, subAccount, 0, abi.encodeWithSelector(
+            IEVault.deposit.selector,
+            amount,
+            subAccount
+        ));
         
         emit CollateralAdded(positionId, amount);
     }
@@ -1208,33 +1053,6 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         IERC20(collateralToken).safeTransfer(proxyGeneral, amount);
         
         emit CollateralRemoved(positionId, amount);
-    }
-    
-    /**
-     * @inheritdoc IEulerV2PluginSpecific
-     * @dev Calcola health factor di una posizione leverage usando AccountLens
-     */
-    function getPositionHealth(uint256 positionId) 
-        external 
-        view 
-        override 
-        returns (uint256) 
-    {
-        if (positionId >= nextPositionId) revert PositionNotFound(positionId);
-        LeveragePositionStorage storage pos = _positions[positionId];
-        if (!pos.isActive) return 0;
-        
-        address subAccount = _deriveSubAccount(pos.subAccountId);
-        
-        IAccountLens lens = IAccountLens(ACCOUNT_LENS_ADDRESS);
-        IAccountLens.AccountLiquidityInfo memory liquidity = 
-            lens.getAccountLiquidityInfo(subAccount, pos.borrowVault);
-        
-        if (liquidity.queryFailure || liquidity.liabilityValueBorrowing == 0) {
-            return type(uint256).max;
-        }
-        
-        return (liquidity.collateralValueBorrowing * 1e18) / liquidity.liabilityValueBorrowing;
     }
     
     /**
@@ -1746,8 +1564,37 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     }
     
     /// @inheritdoc IProtocolAdapter
+    /// @dev Closes a leverage position atomically using closeLeverageAtomic().
+    ///      Retrieves position info and calls the atomic close function.
     function closePosition(uint256 positionId) external override returns (uint256 wethReturned) {
-        return this.closeLeveragePosition(positionId);
+        // Verifica che la posizione esista ed è attiva
+        if (positionId >= nextPositionId) revert PositionNotFound(positionId);
+        LeveragePositionStorage storage pos = _positions[positionId];
+        if (!pos.isActive) revert PositionAlreadyClosed(positionId);
+        
+        // Recupera token codes dai vault addresses
+        IEulerVaultRegistry registry = IEulerVaultRegistry(
+            IBeacon(beacon).getImplementation("EulerVaultRegistry")
+        );
+        
+        string memory collateralTokenCode = registry.getTokenCode(pos.collateralVault);
+        string memory borrowTokenCode = registry.getTokenCode(pos.borrowVault);
+        
+        // Prepara parametri per chiusura atomica
+        CloseLeverageAtomicParams memory params = CloseLeverageAtomicParams({
+            collateralToken: collateralTokenCode,
+            borrowToken: borrowTokenCode,
+            maxSlippageBps: 200,  // 2% max slippage (default conservativo)
+            deadline: block.timestamp + 300  // 5 minuti deadline
+        });
+        
+        // Chiama chiusura atomica
+        wethReturned = this.closeLeverageAtomic(params);
+        
+        // Marca posizione come chiusa
+        pos.isActive = false;
+        
+        return wethReturned;
     }
     
     /// @inheritdoc IProtocolAdapter

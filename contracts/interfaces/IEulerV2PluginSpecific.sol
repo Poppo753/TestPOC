@@ -70,37 +70,16 @@ interface IEulerV2PluginSpecific {
     event CollateralRemoved(uint256 indexed positionId, uint256 amount);
     event CircuitBreakerSet(bool tripped);
     
-    // ==================== LEVERAGE OPERATIONS ====================
+    // ==================== LEVERAGE OPERATIONS (DEPRECATED - Use Atomic) ====================
+    
+    // NOTE: Non-atomic leverage functions have been removed.
+    // Use openLeverageAtomic() and closeLeverageAtomic() from IEulerV2Plugin instead.
+    
+    // ==================== COLLATERAL MANAGEMENT ====================
     
     /**
-     * @notice Open a new leverage position
-     * @dev Executes atomic EVC batch:
-     *      1. Deposit initial collateral
-     *      2. Enable collateral vault as collateral
-     *      3. Enable borrow vault as controller
-     *      4. Borrow → send to Swapper
-     *      5. Swap borrowed → collateral
-     *      6. Deposit swapped collateral
-     *      7. Verify with SwapVerifier
-     * 
-     * @param params Position parameters (see OpenLeverageParams)
-     * @return positionId Unique ID of created position
-     */
-    function openLeveragePosition(OpenLeverageParams calldata params) 
-        external 
-        returns (uint256 positionId);
-    
-    /**
-     * @notice Close an existing leverage position
-     * @param positionId Position ID to close
-     * @return collateralReturned Collateral returned to ProxyGeneral
-     */
-    function closeLeveragePosition(uint256 positionId) 
-        external 
-        returns (uint256 collateralReturned);
-    
-    /**
-     * @notice Add collateral to an existing position
+     * @notice Add collateral to an existing position to improve health factor
+     * @dev Useful for saving positions close to liquidation
      * @param positionId Position ID
      * @param amount Collateral amount to add
      */
@@ -108,22 +87,13 @@ interface IEulerV2PluginSpecific {
     
     /**
      * @notice Remove collateral from an existing position
+     * @dev EVC will verify that health factor remains above 1.0
      * @param positionId Position ID
      * @param amount Collateral amount to remove
      */
     function removeCollateralFromPosition(uint256 positionId, uint256 amount) external;
     
     // ==================== EULER-SPECIFIC VIEWS ====================
-    
-    /**
-     * @notice Get health factor of a specific position
-     * @param positionId Position ID
-     * @return healthFactor Health factor in 18 decimals (1.0 = 1e18)
-     */
-    function getPositionHealth(uint256 positionId) 
-        external 
-        view 
-        returns (uint256 healthFactor);
     
     /**
      * @notice Get values of a position

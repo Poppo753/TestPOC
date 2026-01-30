@@ -26,6 +26,7 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
 
     let plugin: EulerV2Plugin;
     let vaultRegistry: EulerVaultRegistry;
+    let eulerLensAdapter: any;
     let owner: SignerWithAddress;
     let mockBeacon: any;
     let mockProxyGeneral: any;
@@ -92,6 +93,13 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
         const EulerPluginFactory = await ethers.getContractFactory("EulerV2Plugin");
         plugin = await EulerPluginFactory.deploy(await mockBeacon.getAddress());
         await plugin.waitForDeployment();
+
+        // Deploy EulerLensAdapter
+        const EulerLensAdapterFactory = await ethers.getContractFactory("EulerLensAdapter");
+        eulerLensAdapter = await EulerLensAdapterFactory.deploy(await mockBeacon.getAddress());
+        await eulerLensAdapter.waitForDeployment();
+        await mockBeacon.setImplementation("EulerLensAdapter", await eulerLensAdapter.getAddress());
+        await mockBeacon.setImplementation("EulerV2Plugin", await plugin.getAddress());
 
         // ==================== SETUP VAULTS AND TOKENS ====================
         
@@ -329,13 +337,13 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
             const addAmount = ethers.parseEther("0.05");
             await wethContract.connect(wethWhale).transfer(await plugin.getAddress(), addAmount);
 
-            const healthBefore = await plugin.getPositionHealth(testPositionId);
+            const healthBefore = await eulerLensAdapter.getPositionHealthFactor(testPositionId);
 
             try {
                 const tx = await plugin.addCollateralToPosition(testPositionId, addAmount);
                 await tx.wait();
 
-                const healthAfter = await plugin.getPositionHealth(testPositionId);
+                const healthAfter = await eulerLensAdapter.getPositionHealthFactor(testPositionId);
                 
                 console.log(`   Health before: ${healthBefore === ethers.MaxUint256 ? "MAX" : ethers.formatEther(healthBefore)}`);
                 console.log(`   Health after: ${healthAfter === ethers.MaxUint256 ? "MAX" : ethers.formatEther(healthAfter)}`);

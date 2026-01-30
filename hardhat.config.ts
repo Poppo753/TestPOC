@@ -13,7 +13,9 @@ const config: HardhatUserConfig = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200, // Default balanced value (with viaIR, size doesn't change but gas is optimized)
+        runs: 1, // CRITICAL: Minimize bytecode size (31.5KB -> target <24.6KB)
+               // Low runs = smaller deployment, higher runtime gas
+               // Required for EulerV2Plugin to fit in 24KB limit
       },
       viaIR: true, // Enable IR optimizer to avoid "stack too deep" errors
     },

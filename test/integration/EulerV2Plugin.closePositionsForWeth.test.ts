@@ -16,6 +16,7 @@ describe("EulerV2Plugin - closePositionsForWeth E2E", function () {
     
     // Contracts
     let eulerV2Plugin: Contract;
+    let eulerLensAdapter: Contract;
     let beacon: Contract;
     let tokenManager: Contract;
     let chainlinkAdapter: Contract;
@@ -135,9 +136,21 @@ describe("EulerV2Plugin - closePositionsForWeth E2E", function () {
         console.log(`   ✅ EulerV2Plugin deployed: ${await eulerV2Plugin.getAddress()}`);
         await sleep(DELAY_MS);
         
+        // Deploy EulerLensAdapter
+        const EulerLensAdapterFactory = await ethers.getContractFactory("EulerLensAdapter");
+        eulerLensAdapter = await EulerLensAdapterFactory.deploy(await beacon.getAddress());
+        await eulerLensAdapter.waitForDeployment();
+        console.log(`   ✅ EulerLensAdapter deployed: ${await eulerLensAdapter.getAddress()}`);
+        await sleep(DELAY_MS);
+        
         // Register plugin in Beacon (required for FlashLoanService authorization)
         await beacon.updateImplementation("EulerV2Plugin", await eulerV2Plugin.getAddress());
         console.log(`   ✅ EulerV2Plugin registered in Beacon`);
+        await sleep(DELAY_MS);
+        
+        // Register EulerLensAdapter in Beacon
+        await beacon.updateImplementation("EulerLensAdapter", await eulerLensAdapter.getAddress());
+        console.log(`   ✅ EulerLensAdapter registered in Beacon`);
         await sleep(DELAY_MS);
         
         // Fund deployer with WETH (not plugin directly)
@@ -208,7 +221,7 @@ describe("EulerV2Plugin - closePositionsForWeth E2E", function () {
             // Log health factors
             for (let i = 0; i < 3; i++) {
                 await sleep(DELAY_MS);
-                const hf = await eulerV2Plugin.getPositionHealth(i);
+                const hf = await eulerLensAdapter.getPositionHealthFactor(i);
                 console.log(`      Position ${i}: HF = ${ethers.formatEther(hf)}`);
             }
         });
