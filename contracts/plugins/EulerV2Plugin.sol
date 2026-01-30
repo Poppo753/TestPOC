@@ -85,18 +85,6 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     /// @notice Indirizzo AccountLens su Arbitrum (per health factor)
     address public constant ACCOUNT_LENS_ADDRESS = 0x90a52DDcb232e7bb003DD9258fA1235c553eC956;
     
-    /// @notice WETH su Arbitrum (hardcoded per fallback)
-    address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
-    
-    /// @notice USDC su Arbitrum (hardcoded per fallback)
-    address public constant USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
-    
-    /// @notice WETH Vault su Arbitrum (hardcoded per fallback)
-    address public constant WETH_VAULT = 0x78E3E051D32157AACD550fBB78458762d8f7edFF;
-    
-    /// @notice USDC Vault su Arbitrum (hardcoded per fallback)
-    address public constant USDC_VAULT = 0x0a1eCC5Fe8C9be3C809844fcBe615B46A869b899;
-    
     /// @notice Minimum health factor (1.05 = 105%)
     uint256 public constant MIN_HEALTH_FACTOR = 1.05e18;
     
@@ -1308,29 +1296,11 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     }
     
     /**
-     * @notice Ottiene vault con fallback a hardcoded
+     * @notice Ottiene vault da Registry (fail-fast se non configurato)
+     * @dev Rimosso fallback hardcoded - Registry DEVE essere configurato correttamente
      */
     function _getVaultWithFallback(string memory tokenCode) internal view returns (address) {
-        // Prima prova registry
-        try this.getVaultExternal(tokenCode) returns (address vault) {
-            if (vault != address(0)) return vault;
-        } catch {}
-        
-        // Fallback a hardcoded
-        if (keccak256(bytes(tokenCode)) == keccak256(bytes("WETH"))) {
-            return WETH_VAULT;
-        } else if (keccak256(bytes(tokenCode)) == keccak256(bytes("USDC"))) {
-            return USDC_VAULT;
-        }
-        
-        revert VaultNotFound(tokenCode);
-    }
-    
-    /**
-     * @notice Wrapper esterno per _getVault (per try/catch)
-     */
-    function getVaultExternal(string memory tokenCode) external view returns (address) {
-        return _getVault(tokenCode);
+        return _getVault(tokenCode);  // Reverte con VaultNotFound se non trovato
     }
     
     /**
@@ -1585,7 +1555,8 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         
         // Transfer obtained WETH to ProxyGeneral
         if (wethObtained > 0) {
-            IERC20(WETH).safeTransfer(proxyGeneral, wethObtained);
+            address weth = IBeacon(beacon).getImplementation("WETH");
+            IERC20(weth).safeTransfer(proxyGeneral, wethObtained);
         }
     }
     
@@ -1630,15 +1601,17 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
                 
                 depositsClosed++;
                 
+                address weth = IBeacon(beacon).getImplementation("WETH");
+                
                 // If it's WETH, add directly
-                if (asset == WETH) {
+                if (asset == weth) {
                     wethObtained += withdrawn;
                 } else {
                     // Swap non-WETH to WETH via FlashLoanService
                     address flashLoanService = _getFlashLoanService();
                     if (flashLoanService != address(0)) {
                         IERC20(asset).safeIncreaseAllowance(flashLoanService, withdrawn);
-                        try IFlashLoanService(flashLoanService).swap(asset, WETH, withdrawn) returns (uint256 wethFromSwap) {
+                        try IFlashLoanService(flashLoanService).swap(asset, weth, withdrawn) returns (uint256 wethFromSwap) {
                             wethObtained += wethFromSwap;
                         } catch {
                             // Swap failed, transfer asset to ProxyGeneral for manual handling
@@ -1662,7 +1635,8 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
      */
     function _getTokenCodeFromVault(address vault) internal view returns (string memory) {
         address asset = IEVault(vault).asset();
-        if (asset == WETH) return "WETH";
+        address weth = IBeacon(beacon).getImplementation("WETH");
+        if (asset == weth) return "WETH";
         // Add more token mappings as needed
         // For now, assume USDC for any non-WETH vault
         return "USDC";
@@ -1721,14 +1695,15 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         
         _inFlashLoanCallback = true;
         
-        uint256 wethBefore = IERC20(WETH).balanceOf(address(this));
+        address weth = IBeacon(beacon).getImplementation("WETH");
+        uint256 wethBefore = IERC20(weth).balanceOf(address(this));
         
         IFlashLoanService(flashLoanService).executeFlashLoan(tokens, amounts, "");
         
         _inFlashLoanCallback = false;
         
         // Get WETH balance after (may include excess from swap)
-        wethReturned = IERC20(WETH).balanceOf(address(this)) - wethBefore;
+        wethReturned = IERC20(weth).balanceOf(address(this)) - wethBefore;
         
         // If we still have USDC excess, swap it to WETH
         uint256 usdcBalance = IERC20(borrowTokenAddr).balanceOf(address(this));
@@ -1736,7 +1711,7 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
             IERC20(borrowTokenAddr).safeIncreaseAllowance(flashLoanService, usdcBalance);
             uint256 extraWeth = IFlashLoanService(flashLoanService).swap(
                 borrowTokenAddr,
-                WETH,
+                weth,
                 usdcBalance
             );
             wethReturned += extraWeth;
