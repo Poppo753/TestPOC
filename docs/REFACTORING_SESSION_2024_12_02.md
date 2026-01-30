@@ -1,4 +1,4 @@
-# Refactoring Session - 2 Dicembre 2024
+# Refactoring Session - 2 Dicembre 2025 *data giusta
 
 ## Obiettivo della Sessione
 
