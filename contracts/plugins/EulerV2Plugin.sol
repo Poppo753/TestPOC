@@ -1056,29 +1056,6 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     }
     
     /**
-     * @inheritdoc IEulerV2PluginSpecific
-     * @dev Ritorna (collateralValue, debtValue) in unit of account
-     */
-    function getPositionValue(uint256 positionId) 
-        external 
-        view 
-        override 
-        returns (uint256 collateralValue, uint256 debtValue) 
-    {
-        if (positionId >= nextPositionId) return (0, 0);
-        LeveragePositionStorage storage pos = _positions[positionId];
-        if (!pos.isActive) return (0, 0);
-        
-        address subAccount = _deriveSubAccount(pos.subAccountId);
-        
-        IAccountLens lens = IAccountLens(ACCOUNT_LENS_ADDRESS);
-        IAccountLens.AccountLiquidityInfo memory liquidity = 
-            lens.getAccountLiquidityInfo(subAccount, pos.borrowVault);
-        
-        return (liquidity.collateralValueBorrowing, liquidity.liabilityValueBorrowing);
-    }
-    
-    /**
      * @inheritdoc IProtocolAdapter
      * @dev Returns positions in standard IProtocolAdapter.Position format
      */

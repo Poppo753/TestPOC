@@ -241,10 +241,11 @@ describe("EulerV2Plugin - Leverage E2E Tests (with 1inch)", function () {
         it("Should have correct position value", async function () {
             if (positionId === undefined) this.skip();
             
-            const [collateralValue, debtValue] = await plugin.getPositionValue(positionId);
+            const [collateralValue, debtValue, netValue] = await eulerLensAdapter.getPositionValue(positionId);
             
             console.log(`   Collateral Value: ${ethers.formatEther(collateralValue)} ETH`);
             console.log(`   Debt Value: ${ethers.formatEther(debtValue)} ETH`);
+            console.log(`   Net Value: ${ethers.formatEther(netValue)} ETH`);
             
             expect(collateralValue).to.be.gt(0n);
             expect(debtValue).to.be.gt(0n);
@@ -313,7 +314,7 @@ describe("EulerV2Plugin - Leverage E2E Tests (with 1inch)", function () {
             }
 
             // Get debt estimate
-            const [, debtValue] = await plugin.getPositionValue(testPositionId);
+            const [, debtValue] = await eulerLensAdapter.getPositionValue(testPositionId);
             console.log(`   Current debt value: ${ethers.formatEther(debtValue)} ETH`);
             
             // Transfer USDC for debt repayment

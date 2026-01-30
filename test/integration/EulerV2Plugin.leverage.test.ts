@@ -395,8 +395,8 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
                 this.skip();
             }
 
-            // Ottieni debt value dalla posizione (invece di chiamare _deriveSubAccount che è internal)
-            const [, debtValue] = await plugin.getPositionValue(testPositionId);
+            // Ottieni debt value dalla posizione usando LensAdapter
+            const [, debtValue] = await eulerLensAdapter.getPositionValue(testPositionId);
             
             // Stima del debito effettivo (debtValue è in unit of account, potrebbe essere diverso)
             // Per sicurezza, otteniamo USDC in eccesso

@@ -96,17 +96,6 @@ interface IEulerV2PluginSpecific {
     // ==================== EULER-SPECIFIC VIEWS ====================
     
     /**
-     * @notice Get values of a position
-     * @param positionId Position ID
-     * @return collateralValue Collateral value in ETH (18 decimals)
-     * @return debtValue Debt value in ETH (18 decimals)
-     */
-    function getPositionValue(uint256 positionId) 
-        external 
-        view 
-        returns (uint256 collateralValue, uint256 debtValue);
-    
-    /**
      * @notice Get internal position data (Euler-specific format)
      * @param positionId Position ID
      * @return position Internal position data
