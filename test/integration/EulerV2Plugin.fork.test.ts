@@ -411,7 +411,7 @@ describe("EulerV2Plugin - Fork Tests (Arbitrum Mainnet)", function () {
 
     describe("8. Circuit Breaker", function () {
         it("Should allow owner to trip circuit breaker", async function () {
-            await plugin.connect(owner).tripCircuitBreaker();
+            await plugin.connect(owner).setCircuitBreaker(true);
             expect(await plugin.circuitBreakerTripped()).to.be.true;
         });
 
@@ -433,7 +433,7 @@ describe("EulerV2Plugin - Fork Tests (Arbitrum Mainnet)", function () {
         });
 
         it("Should allow owner to reset circuit breaker", async function () {
-            await plugin.connect(owner).resetCircuitBreaker();
+            await plugin.connect(owner).setCircuitBreaker(false);
             expect(await plugin.circuitBreakerTripped()).to.be.false;
         });
     });

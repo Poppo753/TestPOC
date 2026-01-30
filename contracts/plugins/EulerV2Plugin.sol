@@ -1119,22 +1119,6 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         emit CircuitBreakerSet(tripped);
     }
     
-    /**
-     * @notice Attiva il circuit breaker (wrapper per setCircuitBreaker(true))
-     */
-    function tripCircuitBreaker() external onlyOwner {
-        circuitBreakerTripped = true;
-        emit CircuitBreakerSet(true);
-    }
-    
-    /**
-     * @notice Disattiva il circuit breaker (wrapper per setCircuitBreaker(false))
-     */
-    function resetCircuitBreaker() external onlyOwner {
-        circuitBreakerTripped = false;
-        emit CircuitBreakerSet(false);
-    }
-    
     // ==================== EVC CONFIGURATION ====================
     
     /**
@@ -1430,26 +1414,6 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         } else {
             healthFactor = (liquidity.collateralValueBorrowing * 1e18) / liquidity.liabilityValueBorrowing;
         }
-    }
-    
-    /**
-     * @notice Calcola leverage attuale
-     * @return leverageX100 Leverage * 100 (e.g., 200 = 2x)
-     */
-    function getCurrentLeverage() external view returns (uint256 leverageX100) {
-        // Usa vault hardcoded per semplicità
-        (uint256 collateral, uint256 debt, ) = _getPositionState(WETH_VAULT, USDC_VAULT);
-        
-        if (collateral == 0) return 100; // 1x (no leverage)
-        
-        // Stima valore collaterale in USDC usando fallback price
-        // (SimpleSwap non ha getExpectedOutput semplice, usiamo stima)
-        uint256 collateralValueUSDC = (collateral * 3000e6) / 1e18; // ETH ~= 3000 USDC
-        
-        uint256 positionEquity = collateralValueUSDC > debt ? collateralValueUSDC - debt : 0;
-        if (positionEquity == 0) return 0;
-        
-        return (collateralValueUSDC * 100) / positionEquity;
     }
     
     // ==================== IProtocolAdapter IMPLEMENTATION ====================

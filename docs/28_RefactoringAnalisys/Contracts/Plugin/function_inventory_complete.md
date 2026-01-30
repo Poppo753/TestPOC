@@ -224,22 +224,22 @@
 
 ### High Priority (EulerV2Plugin - Est. 2-3 KB saving)
 
-1. ✅ **REMOVED**: `getHealthFactorForVault()` → Use `EulerLensAdapter.getSubAccountHealth()`
-2. ✅ **REMOVED**: `getTimeToLiquidation()` → Use `EulerLensAdapter.getTimeToLiquidation()`
-3. ❌ **REMOVE**: `getPositionHealth()` → Use `EulerLensAdapter.getPositionHealth()`
-4. ❌ **REMOVE**: `getPositionValue()` → Use `EulerLensAdapter.getPositionValue()`
-5. ❌ **REMOVE**: `getLeveragePosition()` → Use `EulerLensAdapter` (already interface call)
-6. ❌ **REMOVE**: `getAllLeveragePositions()` → Use `EulerLensAdapter`
+1. ✅ **REMOVED**: `getHealthFactorForVault()` → Use `EulerLensAdapter.getSubAccountHealth()` (-247 bytes)
+2. ✅ **REMOVED**: `getTimeToLiquidation()` → Use `EulerLensAdapter.getTimeToLiquidation()` (-included in #1)
+3. ✅ **REMOVED**: `getPositionHealth()` → Use `EulerLensAdapter.getPositionHealthFactor()` (-300 bytes)
+4. ✅ **REMOVED**: `getPositionValue()` → Use `EulerLensAdapter.getPositionValue()` (-228 bytes)
+5. ⛔ **KEEP**: `getLeveragePosition()` → CRITICAL - Called by EulerLensAdapter (8 times)
+6. ⛔ **KEEP**: `getAllLeveragePositions()` → CRITICAL - Called by EulerLensAdapter (3 times, performance)
 
 ### Medium Priority (EulerV2Plugin - Est. 0.5-1 KB saving)
 
-7. ❌ **REMOVE**: `tripCircuitBreaker()` → Direct `setCircuitBreaker(true)`
-8. ❌ **REMOVE**: `resetCircuitBreaker()` → Direct `setCircuitBreaker(false)`
-9. ❌ **REMOVE**: `setupBorrowConfig()` → Call enable functions directly
-10. ❌ **REMOVE**: `getBorrowCapacity()` → Stub function
-11. ❌ **REMOVE**: `getProtocolInfo()` → Legacy, hardcoded
-12. ❌ **REMOVE**: `getCurrentLeverage()` → Not used
-13. ❌ **REMOVE**: `getVaultExternal()` → Internal wrapper
+7. ✅ **REMOVED**: `tripCircuitBreaker()` → Use `setCircuitBreaker(true)` (-91 bytes total with #8)
+8. ✅ **REMOVED**: `resetCircuitBreaker()` → Use `setCircuitBreaker(false)` (-included in #7)
+9. 🔍 **SKIP**: `setupBorrowConfig()` → Wrapper, but keeping for convenience
+10. ⛔ **KEEP**: `getBorrowCapacity()` → Required by ILendingProtocol interface (stub returning 0)
+11. ⛔ **KEEP**: `getProtocolInfo()` → Legacy but referenced in IProtocolManager  
+12. ✅ **REMOVED**: `getCurrentLeverage()` → Hardcoded, use getLeveragePosition() instead (-687 bytes!)
+13. 🔍 **NEXT**: `getVaultExternal()` → Internal wrapper, analyze usage
 
 ### Low Priority (EulerLensAdapter - Cleanup)
 

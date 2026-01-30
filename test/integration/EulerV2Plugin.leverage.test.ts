@@ -481,7 +481,7 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
     describe("7. Circuit Breaker on Leverage Operations", function () {
         it("Should block leverage operations when circuit breaker is active", async function () {
             // Trip circuit breaker
-            await plugin.tripCircuitBreaker();
+            await plugin.setCircuitBreaker(true);
             expect(await plugin.circuitBreakerTripped()).to.be.true;
 
             const params = {
@@ -500,7 +500,7 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
         });
 
         it("Should allow operations after circuit breaker reset", async function () {
-            await plugin.resetCircuitBreaker();
+            await plugin.setCircuitBreaker(false);
             expect(await plugin.circuitBreakerTripped()).to.be.false;
         });
     });
