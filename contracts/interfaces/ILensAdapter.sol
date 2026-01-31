@@ -206,6 +206,57 @@ interface ILensAdapter {
      */
     function estimateWethFromCloseAll() external view returns (uint256 wethAmount);
     
+    // ============================================================================
+    // VIEW FUNCTIONS - Moved from IProtocolAdapter
+    // ============================================================================
+
+    /**
+     * @notice Get liquidation threshold for position
+     * @param positionId Position ID
+     * @return thresholdEth Liquidation threshold in ETH
+     */
+    function getLiquidationThreshold(uint256 positionId) 
+        external 
+        view 
+        returns (uint256 thresholdEth);
+
+    /**
+     * @notice Estimate position state after swap
+     * @param positionId Position ID
+     * @param tokenIn Token to swap from
+     * @param tokenOut Token to swap to
+     * @param amountIn Amount to swap
+     * @return newCollateralEth New collateral value in ETH
+     * @return newDebtEth New debt value in ETH
+     * @return newHealthFactor New health factor
+     */
+    function estimatePositionAfterSwap(
+        uint256 positionId,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn
+    ) 
+        external 
+        view 
+        returns (
+            uint256 newCollateralEth,
+            uint256 newDebtEth,
+            uint256 newHealthFactor
+        );
+
+    /**
+     * @notice Get protocol limits
+     * @return minHealthFactor Minimum health factor (18 decimals)
+     * @return maxLeverage Maximum leverage (100 = 1x, 300 = 3x)
+     */
+    function getProtocolLimits() 
+        external 
+        view 
+        returns (
+            uint256 minHealthFactor,
+            uint256 maxLeverage
+        );
+    
     // ==================== EVENTS ====================
     
     event HealthChecked(uint256 indexed positionId, uint256 healthFactor, string riskLevel);
