@@ -92,32 +92,7 @@ interface IProtocolAdapter {
      */
     function protocolType() external view returns (ProtocolType protocolType);
     
-    /**
-     * @notice Get protocol summary
-     * @return summary ProtocolSummary struct with aggregated data
-     */
-    function getProtocolSummary() external view returns (ProtocolSummary memory summary);
-    
     // ==================== POSITION MANAGEMENT ====================
-    
-    /**
-     * @notice Get count of active positions
-     * @return count Number of active positions
-     */
-    function getActivePositionCount() external view returns (uint256 count);
-    
-    /**
-     * @notice Get all active positions in standardized format
-     * @return positions Array of Position structs
-     */
-    function getAllPositions() external view returns (Position[] memory positions);
-    
-    /**
-     * @notice Get a specific position by ID
-     * @param positionId Position identifier
-     * @return position Position struct
-     */
-    function getPosition(uint256 positionId) external view returns (Position memory position);
     
     /**
      * @notice Close a position and return assets to ProxyGeneral
@@ -136,26 +111,6 @@ interface IProtocolAdapter {
     function closePositionsForWeth(uint256 targetWethAmount) 
         external 
         returns (uint256 wethObtained, uint256 positionsClosed);
-    
-    // ==================== VALUE FUNCTIONS ====================
-    
-    /**
-     * @notice Get total collateral value in ETH
-     * @return collateralEth Total collateral across all positions
-     */
-    function getTotalCollateral() external view returns (uint256 collateralEth);
-    
-    /**
-     * @notice Get total debt value in ETH
-     * @return debtEth Total debt across all positions
-     */
-    function getTotalDebt() external view returns (uint256 debtEth);
-    
-    /**
-     * @notice Get lowest health factor across all positions
-     * @return healthFactor Minimum HF (1e18 scale), max uint if no debt
-     */
-    function getLowestHealthFactor() external view returns (uint256 healthFactor);
     
     // ==================== BASIC OPERATIONS ====================
     

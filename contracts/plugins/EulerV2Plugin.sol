@@ -237,6 +237,7 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
      * @inheritdoc IProtocolAdapter
      * @dev Deposita token nel vault Euler corrispondente
      *      I token devono essere già nel contratto (inviati da ProtocolManager)
+     *      Auto-abilita il vault come collaterale in EVC se non già abilitato
      */
     function deposit(string memory tokenCode, uint256 amount) 
         external 
@@ -256,10 +257,15 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
             revert InsufficientBalance(balance, amount);
         }
         
-        // 3. Approva vault
+        // 3. Auto-abilita vault come collaterale se non già fatto
+        if (!evc.isCollateralEnabled(address(this), vault)) {
+            evc.enableCollateral(address(this), vault);
+        }
+        
+        // 4. Approva vault
         IERC20(token).safeIncreaseAllowance(vault, amount);
         
-        // 4. Deposita nel vault Euler (riceve shares)
+        // 5. Deposita nel vault Euler (riceve shares)
         uint256 sharesBefore = IEVault(vault).balanceOf(address(this));
         IEVault(vault).deposit(amount, address(this));
         uint256 sharesReceived = IEVault(vault).balanceOf(address(this)) - sharesBefore;
@@ -313,6 +319,7 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
      * @inheritdoc IEulerV2Plugin
      * @dev Prende in prestito dal vault e invia a ProxyGeneral
      *      Richiede collaterale già depositato
+     *      Auto-abilita il vault come controller in EVC se non già abilitato
      */
     function borrow(string memory tokenCode, uint256 amount) 
         external 
@@ -326,10 +333,15 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         address token = _resolveToken(tokenCode);
         address vault = _getVault(tokenCode);
         
-        // 2. Borrow da Euler
+        // 2. Auto-abilita vault come controller se non già fatto
+        if (!evc.isControllerEnabled(address(this), vault)) {
+            evc.enableController(address(this), vault);
+        }
+        
+        // 3. Borrow da Euler
         IEVault(vault).borrow(amount, address(this));
         
-        // 3. Trasferisci a ProxyGeneral
+        // 4. Trasferisci a ProxyGeneral
         address proxyGeneral = _getProxyGeneral();
         IERC20(token).safeTransfer(proxyGeneral, amount);
         
@@ -1005,51 +1017,6 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
      * @inheritdoc IProtocolAdapter
      * @dev Returns positions in standard IProtocolAdapter.Position format
      */
-    function getAllPositions() 
-        external 
-        view 
-        override 
-        returns (IProtocolAdapter.Position[] memory positions) 
-    {
-        address registry = _getVaultRegistry();
-        (IEulerRegistry.LeveragePositionStorage[] memory activePos, uint256[] memory posIds) = 
-            IEulerRegistry(registry).getActivePositions();
-        
-        positions = new IProtocolAdapter.Position[](activePos.length);
-        for (uint256 i = 0; i < activePos.length; i++) {
-            positions[i] = _convertToStandardPosition(posIds[i], activePos[i]);
-        }
-    }
-    
-    /**
-     * @inheritdoc IProtocolAdapter
-     * @dev Returns position in standard IProtocolAdapter.Position format
-     */
-    function getPosition(uint256 positionId) 
-        external 
-        view 
-        override 
-        returns (IProtocolAdapter.Position memory) 
-    {
-        address registry = _getVaultRegistry();
-        IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPosition(positionId);
-        return _convertToStandardPosition(positionId, pos);
-    }
-    
-    /**
-     * @inheritdoc IProtocolAdapter
-     */
-    function getActivePositionCount() 
-        external 
-        view 
-        override 
-        returns (uint256) 
-    {
-        address registry = _getVaultRegistry();
-        (, uint256[] memory posIds) = IEulerRegistry(registry).getActivePositions();
-        return posIds.length;
-    }
-    
     // ==================== ADMIN FUNCTIONS ====================
     
     /**
@@ -1058,109 +1025,6 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     function setCircuitBreaker(bool tripped) external override onlyOwner {
         circuitBreakerTripped = tripped;
         emit CircuitBreakerSet(tripped);
-    }
-    
-    // ==================== EVC CONFIGURATION ====================
-    
-    /**
-     * @notice Abilita un vault come collaterale per il main account
-     * @dev Necessario prima di poter fare borrow usando quel collaterale
-     * @param vault Indirizzo del vault da abilitare come collaterale
-     */
-    function enableCollateral(address vault) external onlyOwner {
-        if (vault == address(0)) revert InvalidAddress();
-        evc.enableCollateral(address(this), vault);
-        emit CollateralEnabled(vault, address(this));
-    }
-    
-    /**
-     * @notice Abilita un vault come controller per il main account
-     * @dev Il controller vault può liquidare l'account e controllarne lo stato
-     *      Necessario prima di fare borrow da quel vault
-     * @param vault Indirizzo del vault controller
-     */
-    function enableController(address vault) external onlyOwner {
-        if (vault == address(0)) revert InvalidAddress();
-        evc.enableController(address(this), vault);
-        emit ControllerEnabled(vault, address(this));
-    }
-    
-    /**
-     * @notice Disabilita un vault come collaterale
-     * @dev Non può essere chiamato se ci sono debiti che usano quel collaterale
-     * @param vault Vault da disabilitare
-     */
-    function disableCollateral(address vault) external onlyOwner {
-        if (vault == address(0)) revert InvalidAddress();
-        evc.disableCollateral(address(this), vault);
-        emit CollateralDisabled(vault, address(this));
-    }
-    
-    /**
-     * @notice Disabilita un vault come controller
-     * @dev Non può essere chiamato se ci sono debiti aperti con quel vault
-     * @param vault Vault controller da disabilitare
-     */
-    function disableController(address vault) external onlyOwner {
-        if (vault == address(0)) revert InvalidAddress();
-        evc.disableController(address(this), vault);
-        emit ControllerDisabled(vault, address(this));
-    }
-    
-    /**
-     * @notice Configura collateral e controller in una chiamata
-     * @dev Utility per setup rapido prima di borrow
-     * @param collateralVault Vault da usare come collaterale
-     * @param borrowVault Vault da cui fare borrow (sarà controller)
-     */
-    function setupBorrowConfig(address collateralVault, address borrowVault) external onlyOwner {
-        if (collateralVault == address(0) || borrowVault == address(0)) revert InvalidAddress();
-        
-        // Abilita collateral
-        if (!evc.isCollateralEnabled(address(this), collateralVault)) {
-            evc.enableCollateral(address(this), collateralVault);
-            emit CollateralEnabled(collateralVault, address(this));
-        }
-        
-        // Abilita controller
-        if (!evc.isControllerEnabled(address(this), borrowVault)) {
-            evc.enableController(address(this), borrowVault);
-            emit ControllerEnabled(borrowVault, address(this));
-        }
-    }
-    
-    /**
-     * @notice Verifica se un vault è abilitato come collaterale
-     * @param vault Vault da verificare
-     * @return True se è abilitato
-     */
-    function isCollateralEnabled(address vault) external view returns (bool) {
-        return evc.isCollateralEnabled(address(this), vault);
-    }
-    
-    /**
-     * @notice Verifica se un vault è abilitato come controller
-     * @param vault Vault da verificare
-     * @return True se è abilitato
-     */
-    function isControllerEnabled(address vault) external view returns (bool) {
-        return evc.isControllerEnabled(address(this), vault);
-    }
-    
-    /**
-     * @notice Ottiene tutti i vault collateral abilitati
-     * @return Array di indirizzi vault
-     */
-    function getEnabledCollaterals() external view returns (address[] memory) {
-        return evc.getCollaterals(address(this));
-    }
-    
-    /**
-     * @notice Ottiene tutti i vault controller abilitati
-     * @return Array di indirizzi vault
-     */
-    function getEnabledControllers() external view returns (address[] memory) {
-        return evc.getControllers(address(this));
     }
     
     // ==================== INTERNAL HELPERS ====================
@@ -1358,53 +1222,6 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     /// @inheritdoc IProtocolAdapter
     function protocolType() external pure override returns (IProtocolAdapter.ProtocolType) {
         return IProtocolAdapter.ProtocolType.LENDING;
-    }
-    
-    /// @inheritdoc IProtocolAdapter
-    function getProtocolSummary() external view override returns (IProtocolAdapter.ProtocolSummary memory summary) {
-        uint256 activeCount = 0;
-        uint256 totalColl = 0;
-        uint256 totalDbt = 0;
-        uint256 lowestHF = type(uint256).max;
-        
-        address registry = _getVaultRegistry();
-        uint256 totalPositions = IEulerRegistry(registry).nextPositionId();
-        
-        for (uint256 i = 0; i < totalPositions; i++) {
-            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(i);
-            if (pos.createdAt == 0 || !pos.isActive) continue;
-            
-            activeCount++;
-            
-            // Get position values
-            address subAccount = _deriveSubAccount(pos.subAccountId);
-            uint256 collShares = IEVault(pos.collateralVault).balanceOf(subAccount);
-            uint256 collAssets = IEVault(pos.collateralVault).convertToAssets(collShares);
-            uint256 debtAssets = IEVault(pos.borrowVault).debtOf(subAccount);
-            
-            totalColl += collAssets;
-            totalDbt += debtAssets;
-            
-            // Get health factor
-            IAccountLens lens = IAccountLens(ACCOUNT_LENS_ADDRESS);
-            IAccountLens.AccountLiquidityInfo memory liq = lens.getAccountLiquidityInfo(subAccount, pos.borrowVault);
-            uint256 hf = type(uint256).max;
-            if (!liq.queryFailure && liq.liabilityValueBorrowing > 0) {
-                hf = (liq.collateralValueBorrowing * 1e18) / liq.liabilityValueBorrowing;
-            }
-            if (hf < lowestHF) lowestHF = hf;
-        }
-        
-        summary = IProtocolAdapter.ProtocolSummary({
-            name: "Euler",
-            protocolType: IProtocolAdapter.ProtocolType.LENDING,
-            totalCollateralEth: totalColl,  // Already in ETH for WETH collateral
-            totalDebtEth: totalDbt,          // Needs conversion for USDC debt
-            netValueEth: totalColl > totalDbt ? totalColl - totalDbt : 0,
-            activePositionCount: activeCount,
-            lowestHealthFactor: lowestHF,
-            isHealthy: lowestHF >= 1.2e18
-        });
     }
     
     /// @inheritdoc IProtocolAdapter
@@ -1661,57 +1478,6 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         delete _flashLoanContext;
         
         return wethReturned;
-    }
-    
-    /// @inheritdoc IProtocolAdapter
-    function getTotalCollateral() external view override returns (uint256 collateralEth) {
-        address registry = _getVaultRegistry();
-        uint256 totalPositions = IEulerRegistry(registry).nextPositionId();
-        
-        for (uint256 i = 0; i < totalPositions; i++) {
-            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(i);
-            if (!pos.isActive) continue;
-            
-            address subAccount = _deriveSubAccount(pos.subAccountId);
-            uint256 shares = IEVault(pos.collateralVault).balanceOf(subAccount);
-            collateralEth += IEVault(pos.collateralVault).convertToAssets(shares);
-        }
-    }
-    
-    /// @inheritdoc IProtocolAdapter
-    function getTotalDebt() external view override returns (uint256 debtEth) {
-        address registry = _getVaultRegistry();
-        uint256 totalPositions = IEulerRegistry(registry).nextPositionId();
-        
-        for (uint256 i = 0; i < totalPositions; i++) {
-            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(i);
-            if (!pos.isActive) continue;
-            
-            address subAccount = _deriveSubAccount(pos.subAccountId);
-            debtEth += IEVault(pos.borrowVault).debtOf(subAccount);
-        }
-    }
-    
-    /// @inheritdoc IProtocolAdapter
-    function getLowestHealthFactor() external view override returns (uint256 healthFactor) {
-        healthFactor = type(uint256).max;
-        
-        address registry = _getVaultRegistry();
-        uint256 totalPositions = IEulerRegistry(registry).nextPositionId();
-        
-        for (uint256 i = 0; i < totalPositions; i++) {
-            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(i);
-            if (pos.createdAt == 0 || !pos.isActive) continue;
-            
-            address subAccount = _deriveSubAccount(pos.subAccountId);
-            IAccountLens lens = IAccountLens(ACCOUNT_LENS_ADDRESS);
-            IAccountLens.AccountLiquidityInfo memory liq = lens.getAccountLiquidityInfo(subAccount, pos.borrowVault);
-            
-            if (!liq.queryFailure && liq.liabilityValueBorrowing > 0) {
-                uint256 hf = (liq.collateralValueBorrowing * 1e18) / liq.liabilityValueBorrowing;
-                if (hf < healthFactor) healthFactor = hf;
-            }
-        }
     }
     
     /// @inheritdoc IProtocolAdapter

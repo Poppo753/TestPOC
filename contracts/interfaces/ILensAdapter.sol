@@ -27,7 +27,58 @@ import "./IProtocolAdapter.sol";
  */
 interface ILensAdapter {
     
+    // ==================== ENUMS ====================
+    
+    /**
+     * @notice Type of protocol for categorization
+     */
+    enum ProtocolType {
+        LENDING,    // Euler, Aave, Compound, Dolomite
+        YIELD,      // Yearn, Convex, GMX GLP
+        TRADING,    // GMX Perps, dYdX
+        LIQUIDITY   // Uniswap LP, Curve LP
+    }
+    
+    /**
+     * @notice Status of a position
+     */
+    enum PositionStatus {
+        ACTIVE,
+        CLOSED,
+        LIQUIDATED
+    }
+    
     // ==================== STRUCTS ====================
+    
+    /**
+     * @notice Standardized position structure across all protocols
+     */
+    struct Position {
+        uint256 positionId;           // Unique ID within this protocol
+        string protocolName;          // "Euler", "Dolomite", etc.
+        PositionStatus status;        // ACTIVE, CLOSED, LIQUIDATED
+        uint256 collateralValueEth;   // Total collateral in ETH
+        uint256 debtValueEth;         // Total debt in ETH
+        uint256 netValueEth;          // collateral - debt
+        uint256 healthFactor;         // 1e18 = 1.0, type(uint256).max = no debt
+        uint256 openTimestamp;        // When position was opened
+        address collateralToken;      // Primary collateral token
+        address debtToken;            // Primary debt token (address(0) if none)
+    }
+    
+    /**
+     * @notice Protocol summary for quick overview
+     */
+    struct ProtocolSummary {
+        string name;
+        ProtocolType protocolType;
+        uint256 totalCollateralEth;
+        uint256 totalDebtEth;
+        uint256 netValueEth;
+        uint256 activePositionCount;
+        uint256 lowestHealthFactor;   // Min HF across all positions
+        bool isHealthy;               // All positions above safe threshold
+    }
     
     /**
      * @notice Detailed health information for a position or account
@@ -88,6 +139,33 @@ interface ILensAdapter {
      */
     function getPlugin() external view returns (address plugin);
     
+    // ==================== POSITION QUERIES ====================
+    
+    /**
+     * @notice Get count of active positions
+     * @return count Number of active positions
+     */
+    function getActivePositionCount() external view returns (uint256 count);
+    
+    /**
+     * @notice Get all active positions in standardized format
+     * @return positions Array of Position structs
+     */
+    function getAllPositions() external view returns (Position[] memory positions);
+    
+    /**
+     * @notice Get a specific position by ID
+     * @param positionId Position identifier
+     * @return position Position struct
+     */
+    function getPosition(uint256 positionId) external view returns (Position memory position);
+    
+    /**
+     * @notice Get protocol summary
+     * @return summary ProtocolSummary struct with aggregated data
+     */
+    function getProtocolSummary() external view returns (ProtocolSummary memory summary);
+    
     // ==================== HEALTH MONITORING ====================
     
     /**
@@ -146,6 +224,24 @@ interface ILensAdapter {
         external view returns (PositionWithRisk[] memory positions);
     
     // ==================== VALUE FUNCTIONS ====================
+    
+    /**
+     * @notice Get total collateral value in ETH
+     * @return collateralEth Total collateral across all positions
+     */
+    function getTotalCollateral() external view returns (uint256 collateralEth);
+    
+    /**
+     * @notice Get total debt value in ETH
+     * @return debtEth Total debt across all positions
+     */
+    function getTotalDebt() external view returns (uint256 debtEth);
+    
+    /**
+     * @notice Get lowest health factor across all positions
+     * @return healthFactor Minimum HF (1e18 scale), max uint if no debt
+     */
+    function getLowestHealthFactor() external view returns (uint256 healthFactor);
     
     /**
      * @notice Get total net value of all positions in ETH

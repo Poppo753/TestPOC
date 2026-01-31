@@ -160,6 +160,132 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         healthFactor = (totalCollateral * 80 * 1e18) / (totalDebt * 100);
     }
     
+    // ==================== POSITION QUERIES ====================
+    
+    /// @inheritdoc ILensAdapter
+    function getActivePositionCount() external view returns (uint256 count) {
+        address registry = _getRegistry();
+        (, uint256[] memory posIds) = IEulerRegistry(registry).getActivePositions();
+        return posIds.length;
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getAllPositions() external view returns (ILensAdapter.Position[] memory positions) {
+        address registry = _getRegistry();
+        (IEulerRegistry.LeveragePositionStorage[] memory activePos, uint256[] memory posIds) = 
+            IEulerRegistry(registry).getActivePositions();
+        
+        positions = new ILensAdapter.Position[](activePos.length);
+        for (uint256 i = 0; i < activePos.length; i++) {
+            positions[i] = _convertToStandardPosition(posIds[i], activePos[i]);
+        }
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getPosition(uint256 positionId) external view returns (ILensAdapter.Position memory) {
+        address registry = _getRegistry();
+        IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPosition(positionId);
+        return _convertToStandardPosition(positionId, pos);
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getProtocolSummary() external view returns (ILensAdapter.ProtocolSummary memory summary) {
+        uint256 activeCount = 0;
+        uint256 totalColl = 0;
+        uint256 totalDbt = 0;
+        uint256 lowestHF = type(uint256).max;
+        
+        address registry = _getRegistry();
+        uint256 totalPositions = IEulerRegistry(registry).nextPositionId();
+        
+        for (uint256 i = 0; i < totalPositions; i++) {
+            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(i);
+            if (pos.createdAt == 0 || !pos.isActive) continue;
+            
+            activeCount++;
+            
+            // Get position values
+            address subAccount = _deriveSubAccount(pos.subAccountId);
+            uint256 collShares = IEVault(pos.collateralVault).balanceOf(subAccount);
+            uint256 collAssets = IEVault(pos.collateralVault).convertToAssets(collShares);
+            uint256 debtAssets = IEVault(pos.borrowVault).debtOf(subAccount);
+            
+            totalColl += collAssets;
+            totalDbt += debtAssets;
+            
+            // Get health factor
+            IAccountLens lens = IAccountLens(ACCOUNT_LENS);
+            IAccountLens.AccountLiquidityInfo memory liq = lens.getAccountLiquidityInfo(subAccount, pos.borrowVault);
+            uint256 hf = type(uint256).max;
+            if (!liq.queryFailure && liq.liabilityValueBorrowing > 0) {
+                hf = (liq.collateralValueBorrowing * 1e18) / liq.liabilityValueBorrowing;
+            }
+            if (hf < lowestHF) lowestHF = hf;
+        }
+        
+        summary = ILensAdapter.ProtocolSummary({
+            name: "Euler",
+            protocolType: ILensAdapter.ProtocolType.LENDING,
+            totalCollateralEth: totalColl,
+            totalDebtEth: totalDbt,
+            netValueEth: totalColl > totalDbt ? totalColl - totalDbt : 0,
+            activePositionCount: activeCount,
+            lowestHealthFactor: lowestHF,
+            isHealthy: lowestHF >= 1.2e18
+        });
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getTotalCollateral() external view returns (uint256 collateralEth) {
+        address registry = _getRegistry();
+        uint256 totalPositions = IEulerRegistry(registry).nextPositionId();
+        
+        for (uint256 i = 0; i < totalPositions; i++) {
+            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(i);
+            if (!pos.isActive) continue;
+            
+            address subAccount = _deriveSubAccount(pos.subAccountId);
+            uint256 shares = IEVault(pos.collateralVault).balanceOf(subAccount);
+            collateralEth += IEVault(pos.collateralVault).convertToAssets(shares);
+        }
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getTotalDebt() external view returns (uint256 debtEth) {
+        address registry = _getRegistry();
+        uint256 totalPositions = IEulerRegistry(registry).nextPositionId();
+        
+        for (uint256 i = 0; i < totalPositions; i++) {
+            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(i);
+            if (!pos.isActive) continue;
+            
+            address subAccount = _deriveSubAccount(pos.subAccountId);
+            debtEth += IEVault(pos.borrowVault).debtOf(subAccount);
+        }
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getLowestHealthFactor() external view returns (uint256 healthFactor) {
+        healthFactor = type(uint256).max;
+        
+        address registry = _getRegistry();
+        uint256 totalPositions = IEulerRegistry(registry).nextPositionId();
+        
+        for (uint256 i = 0; i < totalPositions; i++) {
+            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(i);
+            if (pos.createdAt == 0 || !pos.isActive) continue;
+            
+            address subAccount = _deriveSubAccount(pos.subAccountId);
+            IAccountLens lens = IAccountLens(ACCOUNT_LENS);
+            IAccountLens.AccountLiquidityInfo memory liq = lens.getAccountLiquidityInfo(subAccount, pos.borrowVault);
+            
+            if (!liq.queryFailure && liq.liabilityValueBorrowing > 0) {
+                uint256 hf = (liq.collateralValueBorrowing * 1e18) / liq.liabilityValueBorrowing;
+                if (hf < healthFactor) healthFactor = hf;
+            }
+        }
+    }
+    
     // ==================== HEALTH MONITORING ====================
     
     /**
@@ -1182,4 +1308,55 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         minHealthFactor = 1.05e18; // 105%
         maxLeverage = 300; // 3x
     }
+    
+    // ==================== HELPER FUNCTIONS (moved from Plugin) ====================
+    
+    /**
+     * @notice Derive sub-account address from subAccountId
+     * @param subAccountId The sub-account ID (0-255)
+     * @return subAccount The derived sub-account address
+     */
+    function _deriveSubAccount(uint8 subAccountId) internal view returns (address) {
+        // Get the plugin address to derive sub-account
+        address plugin = _getEulerV2Plugin();
+        return address(uint160(plugin) ^ uint160(subAccountId));
+    }
+    
+    /**
+     * @notice Convert internal position to ILensAdapter.Position format
+     */
+    function _convertToStandardPosition(uint256 positionId, IEulerRegistry.LeveragePositionStorage memory pos) 
+        internal view returns (ILensAdapter.Position memory) 
+    {
+        address subAccount = _deriveSubAccount(pos.subAccountId);
+        
+        // Get collateral value
+        uint256 collShares = IEVault(pos.collateralVault).balanceOf(subAccount);
+        uint256 collValue = IEVault(pos.collateralVault).convertToAssets(collShares);
+        
+        // Get debt value
+        uint256 debtValue = IEVault(pos.borrowVault).debtOf(subAccount);
+        
+        // Get health factor
+        uint256 hf = type(uint256).max;
+        IAccountLens lens = IAccountLens(ACCOUNT_LENS);
+        IAccountLens.AccountLiquidityInfo memory liq = lens.getAccountLiquidityInfo(subAccount, pos.borrowVault);
+        if (!liq.queryFailure && liq.liabilityValueBorrowing > 0) {
+            hf = (liq.collateralValueBorrowing * 1e18) / liq.liabilityValueBorrowing;
+        }
+        
+        return ILensAdapter.Position({
+            positionId: positionId,
+            protocolName: "Euler",
+            status: pos.isActive ? ILensAdapter.PositionStatus.ACTIVE : ILensAdapter.PositionStatus.CLOSED,
+            collateralValueEth: collValue,
+            debtValueEth: debtValue,
+            netValueEth: collValue > debtValue ? collValue - debtValue : 0,
+            healthFactor: hf,
+            openTimestamp: pos.createdAt,
+            collateralToken: pos.collateralVault,
+            debtToken: pos.borrowVault
+        });
+    }
+    
 }

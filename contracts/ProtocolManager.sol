@@ -705,7 +705,7 @@ contract ProtocolManager is Ownable {
             ProtocolInfo storage info = protocols[registeredProtocolNames[i]];
             if (!info.isActive) continue;
             
-            try IProtocolAdapter(info.plugin).getActivePositionCount() returns (uint256 count) {
+            try ILensAdapter(info.lensAdapter).getActivePositionCount() returns (uint256 count) {
                 totalCount += count;
             } catch {
                 // Skip
@@ -815,8 +815,7 @@ contract ProtocolManager is Ownable {
      * @notice Get summary for all active protocols
      * @return summaries Array of ProtocolSummary for each active protocol
      */
-    function getAllProtocolSummaries() 
-        external view returns (IProtocolAdapter.ProtocolSummary[] memory summaries) 
+    function getAllProtocolSummaries() external view returns (ILensAdapter.ProtocolSummary[] memory summaries)
     {
         // Count active protocols
         uint256 activeCount = 0;
@@ -824,22 +823,22 @@ contract ProtocolManager is Ownable {
             if (protocols[registeredProtocolNames[i]].isActive) activeCount++;
         }
         
-        summaries = new IProtocolAdapter.ProtocolSummary[](activeCount);
+        summaries = new ILensAdapter.ProtocolSummary[](activeCount);
         uint256 idx = 0;
         
         for (uint256 i = 0; i < registeredProtocolNames.length; i++) {
             ProtocolInfo storage info = protocols[registeredProtocolNames[i]];
             if (!info.isActive) continue;
             
-            try IProtocolAdapter(info.plugin).getProtocolSummary() 
-                returns (IProtocolAdapter.ProtocolSummary memory summary) 
+            try ILensAdapter(info.lensAdapter).getProtocolSummary() 
+                returns (ILensAdapter.ProtocolSummary memory summary) 
             {
                 summaries[idx++] = summary;
             } catch {
                 // Return empty summary for failed protocols
-                summaries[idx++] = IProtocolAdapter.ProtocolSummary({
+                summaries[idx++] = ILensAdapter.ProtocolSummary({
                     name: registeredProtocolNames[i],
-                    protocolType: IProtocolAdapter.ProtocolType.LENDING,
+                    protocolType: ILensAdapter.ProtocolType.LENDING,
                     totalCollateralEth: 0,
                     totalDebtEth: 0,
                     netValueEth: 0,
