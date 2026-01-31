@@ -27,13 +27,41 @@ interface IFlashLoanService {
 }
 
 // Forward declaration per EulerVaultRegistry
-interface IEulerVaultRegistry {
+interface IEulerRegistry {
+    // Vault Registry functions
     function getVault(string memory tokenCode) external view returns (address);
     function getVaultSafe(string memory tokenCode) external view returns (address);
     function getTokenCode(address vault) external view returns (string memory);
     function isRegistered(string memory tokenCode) external view returns (bool);
     function getAllRegisteredTokens() external view returns (string[] memory);
     function getAllVaults() external view returns (string[] memory tokenCodes, address[] memory vaults);
+    
+    // Position Manager functions
+    struct LeveragePositionStorage {
+        uint8 subAccountId;
+        address collateralVault;
+        address borrowVault;
+        uint256 initialCollateral;
+        uint256 borrowedAmount;
+        bool isActive;
+        uint256 createdAt;
+    }
+    
+    function nextPositionId() external view returns (uint256);
+    function createPosition(
+        uint8 subAccountId,
+        address collateralVault,
+        address borrowVault,
+        uint256 initialCollateral,
+        uint256 borrowedAmount
+    ) external returns (uint256 positionId);
+    function updatePosition(uint256 positionId, uint256 newBorrowedAmount) external;
+    function closePositionRecord(uint256 positionId) external;
+    function getPosition(uint256 positionId) external view returns (LeveragePositionStorage memory);
+    function getPositionSafe(uint256 positionId) external view returns (LeveragePositionStorage memory);
+    function getAllPositions() external view returns (LeveragePositionStorage[] memory);
+    function getActivePositions() external view returns (LeveragePositionStorage[] memory, uint256[] memory);
+    function isPositionActive(uint256 positionId) external view returns (bool);
 }
 
 /**
@@ -99,12 +127,6 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     /// @notice Circuit breaker flag (emergency stop)
     bool public override circuitBreakerTripped;
     
-    /// @notice Prossimo position ID da assegnare
-    uint256 public override nextPositionId;
-    
-    /// @notice Mapping positionId → LeveragePosition
-    mapping(uint256 => LeveragePositionStorage) internal _positions;
-    
     /// @notice Prossimo sub-account ID disponibile per leverage
     uint8 public nextSubAccountId;
     
@@ -115,17 +137,6 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     FlashLoanCallbackContext private _flashLoanContext;
     
     // ==================== INTERNAL STRUCTS ====================
-    
-    /// @notice Struct interna per storage (senza positionId per risparmiare gas)
-    struct LeveragePositionStorage {
-        uint8 subAccountId;
-        address collateralVault;
-        address borrowVault;
-        uint256 initialCollateral;
-        uint256 borrowedAmount;
-        bool isActive;
-        uint256 createdAt;
-    }
     
     /// @notice Tipo di operazione flash loan
     enum FlashLoanOperation { OPEN, CLOSE }
@@ -677,17 +688,15 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
             revert HealthFactorTooLow(healthFactor, minHF);
         }
         
-        // Registra posizione per tracking
-        uint256 positionId = nextPositionId++;
-        _positions[positionId] = LeveragePositionStorage({
-            subAccountId: 0,
-            collateralVault: collateralVault,
-            borrowVault: borrowVault,
-            initialCollateral: params.collateralAmount,
-            borrowedAmount: totalDebt,
-            isActive: true,
-            createdAt: block.timestamp
-        });
+        // Registra posizione per tracking nel Registry
+        address registry = _getVaultRegistry();
+        uint256 positionId = IEulerRegistry(registry).createPosition(
+            0, // subAccountId (main account per atomic leverage)
+            collateralVault,
+            borrowVault,
+            params.collateralAmount,
+            totalDebt
+        );
         
         emit LeverageOpenedAtomic(
             msg.sender,
@@ -991,8 +1000,8 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         notCircuitBroken
         nonReentrant
     {
-        if (positionId >= nextPositionId) revert PositionNotFound(positionId);
-        LeveragePositionStorage storage pos = _positions[positionId];
+        address registry = _getVaultRegistry();
+        IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPosition(positionId);
         if (!pos.isActive) revert PositionNotActive(positionId);
         
         address collateralToken = IEVault(pos.collateralVault).asset();
@@ -1026,8 +1035,8 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         notCircuitBroken
         nonReentrant
     {
-        if (positionId >= nextPositionId) revert PositionNotFound(positionId);
-        LeveragePositionStorage storage pos = _positions[positionId];
+        address registry = _getVaultRegistry();
+        IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPosition(positionId);
         if (!pos.isActive) revert PositionNotActive(positionId);
         
         address collateralToken = IEVault(pos.collateralVault).asset();
@@ -1053,19 +1062,13 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         override 
         returns (IProtocolAdapter.Position[] memory positions) 
     {
-        // Conta posizioni attive
-        uint256 count = 0;
-        for (uint256 i = 0; i < nextPositionId; i++) {
-            if (_positions[i].isActive) count++;
-        }
+        address registry = _getVaultRegistry();
+        (IEulerRegistry.LeveragePositionStorage[] memory activePos, uint256[] memory posIds) = 
+            IEulerRegistry(registry).getActivePositions();
         
-        // Popola array
-        positions = new IProtocolAdapter.Position[](count);
-        uint256 idx = 0;
-        for (uint256 i = 0; i < nextPositionId && idx < count; i++) {
-            if (_positions[i].isActive) {
-                positions[idx++] = _convertToStandardPosition(i, _positions[i]);
-            }
+        positions = new IProtocolAdapter.Position[](activePos.length);
+        for (uint256 i = 0; i < activePos.length; i++) {
+            positions[i] = _convertToStandardPosition(posIds[i], activePos[i]);
         }
     }
     
@@ -1079,8 +1082,9 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         override 
         returns (IProtocolAdapter.Position memory) 
     {
-        if (positionId >= nextPositionId) revert PositionNotFound(positionId);
-        return _convertToStandardPosition(positionId, _positions[positionId]);
+        address registry = _getVaultRegistry();
+        IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPosition(positionId);
+        return _convertToStandardPosition(positionId, pos);
     }
     
     /**
@@ -1090,11 +1094,11 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         external 
         view 
         override 
-        returns (uint256 count) 
+        returns (uint256) 
     {
-        for (uint256 i = 0; i < nextPositionId; i++) {
-            if (_positions[i].isActive) count++;
-        }
+        address registry = _getVaultRegistry();
+        (, uint256[] memory posIds) = IEulerRegistry(registry).getActivePositions();
+        return posIds.length;
     }
     
     // ==================== ADMIN FUNCTIONS ====================
@@ -1234,12 +1238,20 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     }
     
     /**
+     * @notice Ottiene indirizzo EulerRegistry (Position Manager)
+     * @return registry Indirizzo del Registry
+     */
+    function _getVaultRegistry() internal view returns (address registry) {
+        return IBeacon(beacon).getImplementation("EulerRegistry");
+    }
+    
+    /**
      * @notice Ottiene vault address da EulerVaultRegistry
      * @dev Reverte se non trovato
      */
     function _getVault(string memory tokenCode) internal view returns (address) {
-        address registry = IBeacon(beacon).getImplementation("EulerVaultRegistry");
-        return IEulerVaultRegistry(registry).getVault(tokenCode);
+        address registry = _getVaultRegistry();
+        return IEulerRegistry(registry).getVault(tokenCode);
     }
     
     /**
@@ -1247,9 +1259,9 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
      * @return address(0) se non trovato
      */
     function _getVaultSafe(string memory tokenCode) internal view returns (address) {
-        address registry = IBeacon(beacon).getImplementation("EulerVaultRegistry");
+        address registry = _getVaultRegistry();
         if (registry == address(0)) return address(0);
-        return IEulerVaultRegistry(registry).getVaultSafe(tokenCode);
+        return IEulerRegistry(registry).getVaultSafe(tokenCode);
     }
     
     /**
@@ -1260,7 +1272,8 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         view 
         returns (LeveragePosition memory) 
     {
-        LeveragePositionStorage storage pos = _positions[positionId];
+        address registry = _getVaultRegistry();
+        IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPosition(positionId);
         return LeveragePosition({
             positionId: positionId,
             subAccountId: pos.subAccountId,
@@ -1405,9 +1418,12 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         uint256 totalDbt = 0;
         uint256 lowestHF = type(uint256).max;
         
-        for (uint256 i = 0; i < nextPositionId; i++) {
-            LeveragePositionStorage storage pos = _positions[i];
-            if (!pos.isActive) continue;
+        address registry = _getVaultRegistry();
+        uint256 totalPositions = IEulerRegistry(registry).nextPositionId();
+        
+        for (uint256 i = 0; i < totalPositions; i++) {
+            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(i);
+            if (pos.createdAt == 0 || !pos.isActive) continue;
             
             activeCount++;
             
@@ -1444,10 +1460,14 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     
     /// @inheritdoc IProtocolAdapter
     function getPositionsSortedByRisk() external view override returns (IProtocolAdapter.Position[] memory positions) {
+        address registry = _getVaultRegistry();
+        uint256 totalPositions = IEulerRegistry(registry).nextPositionId();
+        
         // First count active positions
         uint256 activeCount = 0;
-        for (uint256 i = 0; i < nextPositionId; i++) {
-            if (_positions[i].isActive) activeCount++;
+        for (uint256 i = 0; i < totalPositions; i++) {
+            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(i);
+            if (pos.createdAt != 0 && pos.isActive) activeCount++;
         }
         
         if (activeCount == 0) return positions;
@@ -1455,8 +1475,8 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         positions = new IProtocolAdapter.Position[](activeCount);
         uint256 idx = 0;
         
-        for (uint256 i = 0; i < nextPositionId && idx < activeCount; i++) {
-            LeveragePositionStorage storage pos = _positions[i];
+        for (uint256 i = 0; i < totalPositions && idx < activeCount; i++) {
+            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(i);
             if (!pos.isActive) continue;
             
             positions[idx++] = _convertToStandardPosition(i, pos);
@@ -1479,17 +1499,15 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     ///      Retrieves position info and calls the atomic close function.
     function closePosition(uint256 positionId) external override returns (uint256 wethReturned) {
         // Verifica che la posizione esista ed è attiva
-        if (positionId >= nextPositionId) revert PositionNotFound(positionId);
-        LeveragePositionStorage storage pos = _positions[positionId];
+        address registry = _getVaultRegistry();
+        IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPosition(positionId);
         if (!pos.isActive) revert PositionAlreadyClosed(positionId);
         
         // Recupera token codes dai vault addresses
-        IEulerVaultRegistry registry = IEulerVaultRegistry(
-            IBeacon(beacon).getImplementation("EulerVaultRegistry")
-        );
+        IEulerRegistry registryContract = IEulerRegistry(registry);
         
-        string memory collateralTokenCode = registry.getTokenCode(pos.collateralVault);
-        string memory borrowTokenCode = registry.getTokenCode(pos.borrowVault);
+        string memory collateralTokenCode = registryContract.getTokenCode(pos.collateralVault);
+        string memory borrowTokenCode = registryContract.getTokenCode(pos.borrowVault);
         
         // Prepara parametri per chiusura atomica
         CloseLeverageAtomicParams memory params = CloseLeverageAtomicParams({
@@ -1502,8 +1520,8 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         // Chiama chiusura atomica
         wethReturned = this.closeLeverageAtomic(params);
         
-        // Marca posizione come chiusa
-        pos.isActive = false;
+        // Marca posizione come chiusa nel Registry
+        IEulerRegistry(registry).closePositionRecord(positionId);
         
         return wethReturned;
     }
@@ -1532,13 +1550,14 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         uint256 stillNeeded = targetWethAmount - wethObtained;
         IProtocolAdapter.Position[] memory sortedPositions = this.getPositionsSortedByRisk();
         
+        address registry = _getVaultRegistry();
+        
         for (uint256 i = 0; i < sortedPositions.length && wethObtained < targetWethAmount; i++) {
             uint256 positionId = sortedPositions[i].positionId;
             
             // Skip invalid positions
-            if (positionId >= nextPositionId) continue;
-            LeveragePositionStorage storage pos = _positions[positionId];
-            if (!pos.isActive) continue;
+            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(positionId);
+            if (pos.createdAt == 0 || !pos.isActive) continue;
             
             // Get position tokens for closeLeverageAtomic
             string memory collateralToken = _getTokenCodeFromVault(pos.collateralVault);
@@ -1577,7 +1596,7 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         if (vaultRegistry == address(0)) return (0, 0);
         
         // Get all registered vaults
-        (string[] memory tokenCodes, address[] memory vaults) = IEulerVaultRegistry(vaultRegistry).getAllVaults();
+        (string[] memory tokenCodes, address[] memory vaults) = IEulerRegistry(vaultRegistry).getAllVaults();
         
         for (uint256 i = 0; i < vaults.length && wethObtained < targetWethAmount; i++) {
             address vault = vaults[i];
@@ -1666,7 +1685,8 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
             if (shares > 0) {
                 wethReturned = IEVault(collateralVault).redeem(shares, address(this), address(this));
             }
-            _positions[positionId].isActive = false;
+            address registry = _getVaultRegistry();
+            IEulerRegistry(registry).closePositionRecord(positionId);
             emit LeveragePositionClosed(positionId, wethReturned);
             return wethReturned;
         }
@@ -1717,8 +1737,9 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
             wethReturned += extraWeth;
         }
         
-        // Mark position as closed
-        _positions[positionId].isActive = false;
+        // Mark position as closed nel Registry
+        address registry = _getVaultRegistry();
+        IEulerRegistry(registry).closePositionRecord(positionId);
         emit LeveragePositionClosed(positionId, wethReturned);
         
         delete _flashLoanContext;
@@ -1728,8 +1749,11 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     
     /// @inheritdoc IProtocolAdapter
     function getTotalCollateral() external view override returns (uint256 collateralEth) {
-        for (uint256 i = 0; i < nextPositionId; i++) {
-            LeveragePositionStorage storage pos = _positions[i];
+        address registry = _getVaultRegistry();
+        uint256 totalPositions = IEulerRegistry(registry).nextPositionId();
+        
+        for (uint256 i = 0; i < totalPositions; i++) {
+            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(i);
             if (!pos.isActive) continue;
             
             address subAccount = _deriveSubAccount(pos.subAccountId);
@@ -1740,8 +1764,11 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     
     /// @inheritdoc IProtocolAdapter
     function getTotalDebt() external view override returns (uint256 debtEth) {
-        for (uint256 i = 0; i < nextPositionId; i++) {
-            LeveragePositionStorage storage pos = _positions[i];
+        address registry = _getVaultRegistry();
+        uint256 totalPositions = IEulerRegistry(registry).nextPositionId();
+        
+        for (uint256 i = 0; i < totalPositions; i++) {
+            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(i);
             if (!pos.isActive) continue;
             
             address subAccount = _deriveSubAccount(pos.subAccountId);
@@ -1753,9 +1780,12 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     function getLowestHealthFactor() external view override returns (uint256 healthFactor) {
         healthFactor = type(uint256).max;
         
-        for (uint256 i = 0; i < nextPositionId; i++) {
-            LeveragePositionStorage storage pos = _positions[i];
-            if (!pos.isActive) continue;
+        address registry = _getVaultRegistry();
+        uint256 totalPositions = IEulerRegistry(registry).nextPositionId();
+        
+        for (uint256 i = 0; i < totalPositions; i++) {
+            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(i);
+            if (pos.createdAt == 0 || !pos.isActive) continue;
             
             address subAccount = _deriveSubAccount(pos.subAccountId);
             IAccountLens lens = IAccountLens(ACCOUNT_LENS_ADDRESS);
@@ -1786,54 +1816,12 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         emit CircuitBreakerSet(true);
     }
     
-    // ==================== IEulerV2PluginSpecific IMPLEMENTATION ====================
-    
-    /// @inheritdoc IEulerV2PluginSpecific
-    function getLeveragePosition(uint256 positionId) 
-        external view override 
-        returns (IEulerV2PluginSpecific.LeveragePositionInternal memory position) 
-    {
-        LeveragePositionStorage storage pos = _positions[positionId];
-        position = IEulerV2PluginSpecific.LeveragePositionInternal({
-            positionId: positionId,
-            subAccountId: pos.subAccountId,
-            collateralVault: pos.collateralVault,
-            borrowVault: pos.borrowVault,
-            initialCollateral: pos.initialCollateral,
-            borrowedAmount: pos.borrowedAmount,
-            isActive: pos.isActive,
-            createdAt: pos.createdAt
-        });
-    }
-    
-    /// @inheritdoc IEulerV2PluginSpecific
-    function getAllLeveragePositions() 
-        external view override 
-        returns (IEulerV2PluginSpecific.LeveragePositionInternal[] memory positions) 
-    {
-        positions = new IEulerV2PluginSpecific.LeveragePositionInternal[](nextPositionId);
-        
-        for (uint256 i = 0; i < nextPositionId; i++) {
-            LeveragePositionStorage storage pos = _positions[i];
-            positions[i] = IEulerV2PluginSpecific.LeveragePositionInternal({
-                positionId: i,
-                subAccountId: pos.subAccountId,
-                collateralVault: pos.collateralVault,
-                borrowVault: pos.borrowVault,
-                initialCollateral: pos.initialCollateral,
-                borrowedAmount: pos.borrowedAmount,
-                isActive: pos.isActive,
-                createdAt: pos.createdAt
-            });
-        }
-    }
-    
     // ==================== INTERNAL HELPERS ====================
     
     /**
      * @notice Convert internal position to IProtocolAdapter.Position format
      */
-    function _convertToStandardPosition(uint256 positionId, LeveragePositionStorage storage pos) 
+    function _convertToStandardPosition(uint256 positionId, IEulerRegistry.LeveragePositionStorage memory pos) 
         internal view returns (IProtocolAdapter.Position memory) 
     {
         address subAccount = _deriveSubAccount(pos.subAccountId);
@@ -1867,3 +1855,4 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         });
     }
 }
+
