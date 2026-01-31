@@ -6,34 +6,10 @@ import "../interfaces/IEulerLensAdapter.sol";
 import "../interfaces/ILensAdapter.sol";
 import "../interfaces/IBeacon.sol";
 import "../interfaces/ITokenManagerForModules.sol";
+import "../interfaces/IEulerRegistry.sol";
 import "../interfaces/euler/IAccountLens.sol";
 import "../interfaces/euler/IEVault.sol";
 import "../interfaces/euler/IEVC.sol";
-
-// Forward declaration per EulerVaultRegistry
-interface IEulerRegistry {
-    struct LeveragePositionStorage {
-        uint8 subAccountId;
-        address collateralVault;
-        address borrowVault;
-        uint256 initialCollateral;
-        uint256 borrowedAmount;
-        bool isActive;
-        uint256 createdAt;
-    }
-    
-    function getVault(string memory tokenCode) external view returns (address);
-    function getVaultSafe(string memory tokenCode) external view returns (address);
-    function getTokenCode(address vault) external view returns (string memory);
-    function isRegistered(string memory tokenCode) external view returns (bool);
-    function getAllRegisteredTokens() external view returns (string[] memory);
-    function getAllVaults() external view returns (string[] memory tokenCodes, address[] memory vaults);
-    function nextPositionId() external view returns (uint256);
-    function getPosition(uint256 positionId) external view returns (LeveragePositionStorage memory);
-    function getPositionSafe(uint256 positionId) external view returns (LeveragePositionStorage memory);
-    function getAllPositions() external view returns (LeveragePositionStorage[] memory);
-    function getActivePositions() external view returns (LeveragePositionStorage[] memory, uint256[] memory);
-}
 
 // Forward declaration per EulerV2Plugin
 interface IEulerV2PluginView {

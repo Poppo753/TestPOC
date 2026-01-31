@@ -11,6 +11,7 @@ import "../interfaces/IProxyGeneral.sol";
 import "../interfaces/ITokenManagerForModules.sol";
 import "../interfaces/IFlashLoanCallback.sol";
 import "../interfaces/ILensAdapter.sol";
+import "../interfaces/IEulerRegistry.sol";
 import "../interfaces/euler/IEVault.sol";
 import "../interfaces/euler/IEVC.sol";
 import "../interfaces/euler/ISwapper.sol";
@@ -25,44 +26,6 @@ interface IFlashLoanService {
     ) external;
     function swap(address tokenIn, address tokenOut, uint256 amountIn) external returns (uint256);
     function getExpectedOutput(address tokenIn, address tokenOut, uint256 amountIn) external view returns (uint256);
-}
-
-// Forward declaration per EulerVaultRegistry
-interface IEulerRegistry {
-    // Vault Registry functions
-    function getVault(string memory tokenCode) external view returns (address);
-    function getVaultSafe(string memory tokenCode) external view returns (address);
-    function getTokenCode(address vault) external view returns (string memory);
-    function isRegistered(string memory tokenCode) external view returns (bool);
-    function getAllRegisteredTokens() external view returns (string[] memory);
-    function getAllVaults() external view returns (string[] memory tokenCodes, address[] memory vaults);
-    
-    // Position Manager functions
-    struct LeveragePositionStorage {
-        uint8 subAccountId;
-        address collateralVault;
-        address borrowVault;
-        uint256 initialCollateral;
-        uint256 borrowedAmount;
-        bool isActive;
-        uint256 createdAt;
-    }
-    
-    function nextPositionId() external view returns (uint256);
-    function createPosition(
-        uint8 subAccountId,
-        address collateralVault,
-        address borrowVault,
-        uint256 initialCollateral,
-        uint256 borrowedAmount
-    ) external returns (uint256 positionId);
-    function updatePosition(uint256 positionId, uint256 newBorrowedAmount) external;
-    function closePositionRecord(uint256 positionId) external;
-    function getPosition(uint256 positionId) external view returns (LeveragePositionStorage memory);
-    function getPositionSafe(uint256 positionId) external view returns (LeveragePositionStorage memory);
-    function getAllPositions() external view returns (LeveragePositionStorage[] memory);
-    function getActivePositions() external view returns (LeveragePositionStorage[] memory, uint256[] memory);
-    function isPositionActive(uint256 positionId) external view returns (bool);
 }
 
 /**
