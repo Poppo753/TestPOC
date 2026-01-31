@@ -37,21 +37,6 @@ interface IEulerV2PluginSpecific {
         uint256 deadline;
     }
     
-    /**
-     * @notice Internal leverage position data
-     * @dev This is the Euler-specific format, converted to IProtocolAdapter.Position for external use
-     */
-    struct LeveragePositionInternal {
-        uint256 positionId;
-        uint8 subAccountId;
-        address collateralVault;
-        address borrowVault;
-        uint256 initialCollateral;
-        uint256 borrowedAmount;
-        bool isActive;
-        uint256 createdAt;
-    }
-    
     // ==================== EVENTS ====================
     
     event LeveragePositionOpened(
@@ -92,33 +77,6 @@ interface IEulerV2PluginSpecific {
      * @param amount Collateral amount to remove
      */
     function removeCollateralFromPosition(uint256 positionId, uint256 amount) external;
-    
-    // ==================== EULER-SPECIFIC VIEWS ====================
-    
-    /**
-     * @notice Get internal position data (Euler-specific format)
-     * @param positionId Position ID
-     * @return position Internal position data
-     */
-    function getLeveragePosition(uint256 positionId) 
-        external 
-        view 
-        returns (LeveragePositionInternal memory position);
-    
-    /**
-     * @notice Get all internal positions (Euler-specific format)
-     * @return positions Array of internal positions
-     */
-    function getAllLeveragePositions() 
-        external 
-        view 
-        returns (LeveragePositionInternal[] memory positions);
-    
-    /**
-     * @notice Get next position ID that will be assigned
-     * @return nextId Next position ID
-     */
-    function nextPositionId() external view returns (uint256 nextId);
     
     // ==================== ADMIN ====================
     
