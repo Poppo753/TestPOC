@@ -146,6 +146,44 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         return IBeacon(beacon).getImplementation("EulerRegistry");
     }
     
+    // ==================== ILensAdapter IMPLEMENTATIONS ====================
+    
+    /// @inheritdoc ILensAdapter
+    function getTotalValue() external view override returns (uint256 netValueEth) {
+        return this.getTotalEulerValue();
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getValueBreakdown() external view override returns (ILensAdapter.ValueBreakdown memory breakdown) {
+        (uint256 totalCollateral, uint256 totalDebt, ) = _calculateTotalValues();
+        
+        breakdown.totalCollateralEth = totalCollateral;
+        breakdown.totalDebtEth = totalDebt;
+        breakdown.netValueEth = totalCollateral > totalDebt ? totalCollateral - totalDebt : 0;
+        
+        // Simplified: available = collateral - (debt / 0.8)
+        if (totalDebt > 0) {
+            uint256 requiredCollateral = (totalDebt * 10) / 8;
+            breakdown.availableToWithdrawEth = totalCollateral > requiredCollateral 
+                ? totalCollateral - requiredCollateral 
+                : 0;
+        } else {
+            breakdown.availableToWithdrawEth = totalCollateral;
+        }
+    }
+    
+    /// @inheritdoc ILensAdapter
+    function getHealthFactor() external view override returns (uint256 healthFactor) {
+        (uint256 totalCollateral, uint256 totalDebt, ) = _calculateTotalValues();
+        
+        if (totalDebt == 0) {
+            return type(uint256).max;
+        }
+        
+        // Health factor = (collateral * LTV) / debt (80% LTV)
+        healthFactor = (totalCollateral * 80 * 1e18) / (totalDebt * 100);
+    }
+    
     // ==================== HEALTH MONITORING ====================
     
     /**
@@ -808,12 +846,6 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     }
     
     /// @inheritdoc ILensAdapter
-    function getHealthFactor() external view override returns (uint256 healthFactor) {
-        address plugin = _getEulerV2Plugin();
-        return this.getHealthFactor(plugin);
-    }
-    
-    /// @inheritdoc ILensAdapter
     function getPositionHealth(uint256 positionId) 
         external view override returns (ILensAdapter.HealthInfo memory info) 
     {
@@ -964,26 +996,6 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     }
     
     /// @inheritdoc ILensAdapter
-    function getTotalValue() external view override returns (uint256 netValueEth) {
-        return this.getTotalEulerValue();
-    }
-    
-    /// @inheritdoc ILensAdapter
-    function getValueBreakdown() external view override returns (ILensAdapter.ValueBreakdown memory breakdown) {
-        (uint256 collateral, uint256 debt, uint256 net) = this.getEulerPositionValues();
-        
-        // Calculate available to withdraw (simplified: assume 20% of collateral for safety)
-        uint256 available = collateral > debt ? (collateral - debt) * 80 / 100 : 0;
-        
-        return ILensAdapter.ValueBreakdown({
-            totalCollateralEth: collateral,
-            totalDebtEth: debt,
-            netValueEth: net,
-            availableToWithdrawEth: available
-        });
-    }
-    
-    /// @inheritdoc ILensAdapter
     function getPositionValue(uint256 positionId) 
         external view override returns (uint256 collateralEth, uint256 debtEth, uint256 netEth) 
     {
@@ -1088,5 +1100,110 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         
         ttl = int256((buffer * secondsPerYear) / annualRate);
         status = hf < 1.2e18 ? "AT_RISK" : "WARNING";
+    }
+    
+    // ============================================================================
+    // NEW VIEW FUNCTIONS - Moved from IProtocolAdapter
+    // ============================================================================
+
+    /// @inheritdoc ILensAdapter
+    function getLiquidationThreshold(uint256 positionId) 
+        external 
+        view 
+        override 
+        returns (uint256 thresholdEth) 
+    {
+        address registry = _getRegistry();
+        IEulerRegistry.LeveragePositionStorage memory pos = 
+            IEulerRegistry(registry).getPosition(positionId);
+        
+        require(pos.isActive, "Position not active");
+        
+        // Get sub-account address
+        address subAccount = _getSubAccountAddress(_getEulerV2Plugin(), pos.subAccountId);
+        
+        // Get debt value
+        address borrowToken = IEVault(pos.borrowVault).asset();
+        uint256 debtBalance = IEVault(pos.borrowVault).debtOf(subAccount);
+        uint256 debtValueEth = _convertToEthValue(borrowToken, debtBalance);
+        
+        // Liquidation threshold = debt / LTV
+        // Assuming 80% LTV, liquidation at ~83% (1 / 0.8 * 1.05)
+        thresholdEth = (debtValueEth * 10000) / 8300;
+    }
+
+    /// @inheritdoc ILensAdapter
+    function estimatePositionAfterSwap(
+        uint256 positionId,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn
+    ) 
+        external 
+        view 
+        override 
+        returns (
+            uint256 newCollateralEth,
+            uint256 newDebtEth,
+            uint256 newHealthFactor
+        ) 
+    {
+        address registry = _getRegistry();
+        IEulerRegistry.LeveragePositionStorage memory pos = 
+            IEulerRegistry(registry).getPosition(positionId);
+        
+        require(pos.isActive, "Position not active");
+        
+        address subAccount = _getSubAccountAddress(_getEulerV2Plugin(), pos.subAccountId);
+        
+        // Get current values
+        address collateralToken = IEVault(pos.collateralVault).asset();
+        address borrowToken = IEVault(pos.borrowVault).asset();
+        
+        uint256 collateralBalance = IEVault(pos.collateralVault).balanceOf(subAccount);
+        uint256 debtBalance = IEVault(pos.borrowVault).debtOf(subAccount);
+        
+        // Estimate swap output (simplified - using 1:1 ratio, real would use DEX quote)
+        uint256 amountOut = amountIn; // Simplified
+        
+        // Calculate new balances
+        uint256 newCollateralBalance = collateralBalance;
+        uint256 newDebtBalance = debtBalance;
+        
+        if (tokenIn == collateralToken) {
+            newCollateralBalance -= amountIn;
+        }
+        if (tokenOut == collateralToken) {
+            newCollateralBalance += amountOut;
+        }
+        if (tokenIn == borrowToken) {
+            newDebtBalance -= amountIn;
+        }
+        if (tokenOut == borrowToken) {
+            newDebtBalance += amountOut;
+        }
+        
+        // Calculate new values in ETH
+        newCollateralEth = _convertToEthValue(collateralToken, newCollateralBalance);
+        newDebtEth = _convertToEthValue(borrowToken, newDebtBalance);
+        
+        // Calculate new health factor
+        newHealthFactor = newDebtEth == 0 
+            ? type(uint256).max 
+            : (newCollateralEth * 80 * 1e18) / (newDebtEth * 100);
+    }
+
+    /// @inheritdoc ILensAdapter
+    function getProtocolLimits() 
+        external 
+        pure 
+        override 
+        returns (
+            uint256 minHealthFactor,
+            uint256 maxLeverage
+        ) 
+    {
+        minHealthFactor = 1.05e18; // 105%
+        maxLeverage = 300; // 3x
     }
 }
