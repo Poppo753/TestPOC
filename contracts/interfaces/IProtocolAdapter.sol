@@ -120,12 +120,6 @@ interface IProtocolAdapter {
     function getPosition(uint256 positionId) external view returns (Position memory position);
     
     /**
-     * @notice Get positions sorted by health factor (lowest first = riskiest)
-     * @return positions Sorted array of positions
-     */
-    function getPositionsSortedByRisk() external view returns (Position[] memory positions);
-    
-    /**
      * @notice Close a position and return assets to ProxyGeneral
      * @param positionId Position to close
      * @return wethReturned Amount of WETH returned to ProxyGeneral
@@ -144,12 +138,6 @@ interface IProtocolAdapter {
         returns (uint256 wethObtained, uint256 positionsClosed);
     
     // ==================== VALUE FUNCTIONS ====================
-    
-    /**
-     * @notice Get total value of all positions in ETH
-     * @return totalValueEth Net value (collateral - debt) in ETH
-     */
-    function getTotalValue() external view returns (uint256 totalValueEth);
     
     /**
      * @notice Get total collateral value in ETH
@@ -193,14 +181,6 @@ interface IProtocolAdapter {
      * @return balance Token balance
      */
     function getBalance(string memory tokenCode) external view returns (uint256 balance);
-    
-    /**
-     * @notice Get maximum withdrawable amount for a token
-     * @dev Considers debt obligations and health factor requirements
-     * @param tokenCode Token identifier
-     * @return maxAmount Maximum withdrawable without breaking health
-     */
-    function getMaxWithdrawable(string memory tokenCode) external view returns (uint256 maxAmount);
     
     // ==================== EMERGENCY ====================
     
