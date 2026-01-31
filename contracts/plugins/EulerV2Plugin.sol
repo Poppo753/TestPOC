@@ -10,6 +10,7 @@ import "../interfaces/IBeacon.sol";
 import "../interfaces/IProxyGeneral.sol";
 import "../interfaces/ITokenManagerForModules.sol";
 import "../interfaces/IFlashLoanCallback.sol";
+import "../interfaces/ILensAdapter.sol";
 import "../interfaces/euler/IEVault.sol";
 import "../interfaces/euler/IEVC.sol";
 import "../interfaces/euler/ISwapper.sol";
@@ -519,21 +520,6 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         // Shares convertite in assets
         uint256 shares = IEVault(vault).balanceOf(address(this));
         return IEVault(vault).convertToAssets(shares);
-    }
-    
-    /**
-     * @inheritdoc IProtocolAdapter
-     * @dev Ritorna il valore totale in ETH di tutti i depositi
-     *      Per ora ritorna 0 - sarà implementato con EulerLensAdapter
-     */
-    function getTotalValue() 
-        external 
-        view 
-        override 
-        returns (uint256) 
-    {
-        // TODO: Implementare con EulerLensAdapter per calcolo valore in ETH
-        return 0;
     }
     
     /**
@@ -1459,42 +1445,6 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     }
     
     /// @inheritdoc IProtocolAdapter
-    function getPositionsSortedByRisk() external view override returns (IProtocolAdapter.Position[] memory positions) {
-        address registry = _getVaultRegistry();
-        uint256 totalPositions = IEulerRegistry(registry).nextPositionId();
-        
-        // First count active positions
-        uint256 activeCount = 0;
-        for (uint256 i = 0; i < totalPositions; i++) {
-            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(i);
-            if (pos.createdAt != 0 && pos.isActive) activeCount++;
-        }
-        
-        if (activeCount == 0) return positions;
-        
-        positions = new IProtocolAdapter.Position[](activeCount);
-        uint256 idx = 0;
-        
-        for (uint256 i = 0; i < totalPositions && idx < activeCount; i++) {
-            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(i);
-            if (!pos.isActive) continue;
-            
-            positions[idx++] = _convertToStandardPosition(i, pos);
-        }
-        
-        // Sort by health factor (bubble sort - ok for small arrays)
-        for (uint256 i = 0; i < positions.length; i++) {
-            for (uint256 j = i + 1; j < positions.length; j++) {
-                if (positions[j].healthFactor < positions[i].healthFactor) {
-                    IProtocolAdapter.Position memory temp = positions[i];
-                    positions[i] = positions[j];
-                    positions[j] = temp;
-                }
-            }
-        }
-    }
-    
-    /// @inheritdoc IProtocolAdapter
     /// @dev Closes a leverage position atomically using closeLeverageAtomic().
     ///      Retrieves position info and calls the atomic close function.
     function closePosition(uint256 positionId) external override returns (uint256 wethReturned) {
@@ -1548,7 +1498,10 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         
         // STEP 2: Close leverage positions (sorted by risk, riskiest first)
         uint256 stillNeeded = targetWethAmount - wethObtained;
-        IProtocolAdapter.Position[] memory sortedPositions = this.getPositionsSortedByRisk();
+        
+        // Get sorted positions from LensAdapter
+        address lensAdapter = IBeacon(beacon).getImplementation("EulerLensAdapter");
+        ILensAdapter.PositionWithRisk[] memory sortedPositions = ILensAdapter(lensAdapter).getPositionsSortedByRisk();
         
         address registry = _getVaultRegistry();
         
@@ -1796,13 +1749,6 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
                 if (hf < healthFactor) healthFactor = hf;
             }
         }
-    }
-    
-    /// @inheritdoc IProtocolAdapter
-    function getMaxWithdrawable(string memory tokenCode) external view override returns (uint256 maxAmount) {
-        address vault = _getVaultSafe(tokenCode);
-        if (vault == address(0)) return 0;
-        return IEVault(vault).maxWithdraw(address(this));
     }
     
     /// @inheritdoc IProtocolAdapter
