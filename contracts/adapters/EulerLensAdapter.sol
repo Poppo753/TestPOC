@@ -11,13 +11,28 @@ import "../interfaces/euler/IEVault.sol";
 import "../interfaces/euler/IEVC.sol";
 
 // Forward declaration per EulerVaultRegistry
-interface IEulerVaultRegistry {
+interface IEulerRegistry {
+    struct LeveragePositionStorage {
+        uint8 subAccountId;
+        address collateralVault;
+        address borrowVault;
+        uint256 initialCollateral;
+        uint256 borrowedAmount;
+        bool isActive;
+        uint256 createdAt;
+    }
+    
     function getVault(string memory tokenCode) external view returns (address);
     function getVaultSafe(string memory tokenCode) external view returns (address);
     function getTokenCode(address vault) external view returns (string memory);
     function isRegistered(string memory tokenCode) external view returns (bool);
     function getAllRegisteredTokens() external view returns (string[] memory);
     function getAllVaults() external view returns (string[] memory tokenCodes, address[] memory vaults);
+    function nextPositionId() external view returns (uint256);
+    function getPosition(uint256 positionId) external view returns (LeveragePositionStorage memory);
+    function getPositionSafe(uint256 positionId) external view returns (LeveragePositionStorage memory);
+    function getAllPositions() external view returns (LeveragePositionStorage[] memory);
+    function getActivePositions() external view returns (LeveragePositionStorage[] memory, uint256[] memory);
 }
 
 // Forward declaration per EulerV2Plugin
@@ -117,6 +132,18 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     constructor(address _beacon) Ownable() {
         if (_beacon == address(0)) revert InvalidBeacon();
         beacon = _beacon;
+    }
+    
+    // ============================================================================
+    // INTERNAL HELPERS
+    // ============================================================================
+
+    /**
+     * @notice Get EulerRegistry address via Beacon
+     * @return registry EulerRegistry address
+     */
+    function _getRegistry() private view returns (address registry) {
+        return IBeacon(beacon).getImplementation("EulerRegistry");
     }
     
     // ==================== HEALTH MONITORING ====================
@@ -250,8 +277,8 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         override 
         returns (uint256 ethValue) 
     {
-        IEulerV2PluginView plugin = IEulerV2PluginView(_getEulerV2Plugin());
-        IEulerV2PluginView.LeveragePosition memory pos = plugin.getLeveragePosition(positionId);
+        address registry = _getRegistry();
+        IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPosition(positionId);
         
         if (!pos.isActive) {
             return 0;
@@ -351,10 +378,10 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         override 
         returns (uint256[] memory positionIds) 
     {
-        IEulerV2PluginView plugin = IEulerV2PluginView(_getEulerV2Plugin());
+        address registry = _getRegistry();
         
         // Get all positions
-        IEulerV2PluginView.LeveragePosition[] memory allPositions = plugin.getAllLeveragePositions();
+        IEulerRegistry.LeveragePositionStorage[] memory allPositions = IEulerRegistry(registry).getAllPositions();
         
         // First pass: count positions at risk
         uint256 atRiskCount = 0;
@@ -374,7 +401,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
             if (allPositions[i].isActive) {
                 uint256 hf = _getPositionHealthFactor(allPositions[i]);
                 if (hf < minHealthFactor) {
-                    positionIds[idx] = allPositions[i].positionId;
+                    positionIds[idx] = i; // Position ID = array index
                     idx++;
                 }
             }
@@ -392,8 +419,8 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         override 
         returns (bool shouldClose) 
     {
-        IEulerV2PluginView plugin = IEulerV2PluginView(_getEulerV2Plugin());
-        IEulerV2PluginView.LeveragePosition memory pos = plugin.getLeveragePosition(positionId);
+        address registry = _getRegistry();
+        IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPosition(positionId);
         
         if (!pos.isActive) {
             return false;
@@ -431,8 +458,8 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         override(IEulerLensAdapter, ILensAdapter)
         returns (address vault) 
     {
-        IEulerVaultRegistry registry = IEulerVaultRegistry(_getEulerVaultRegistry());
-        vault = registry.getVaultSafe(tokenCode);
+        address registry = _getRegistry();
+        vault = IEulerRegistry(registry).getVaultSafe(tokenCode);
     }
     
     /**
@@ -485,11 +512,11 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         override 
         returns (IEulerLensAdapter.PositionWithHealth[] memory positions) 
     {
-        IEulerV2PluginView plugin = IEulerV2PluginView(_getEulerV2Plugin());
+        address registry = _getRegistry();
         
         // Get all active positions
-        IEulerV2PluginView.LeveragePosition[] memory allPositions;
-        try plugin.getAllLeveragePositions() returns (IEulerV2PluginView.LeveragePosition[] memory p) {
+        IEulerRegistry.LeveragePositionStorage[] memory allPositions;
+        try IEulerRegistry(registry).getAllPositions() returns (IEulerRegistry.LeveragePositionStorage[] memory p) {
             allPositions = p;
         } catch {
             return positions; // Empty array
@@ -502,7 +529,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         // Build array with health factors
         positions = new IEulerLensAdapter.PositionWithHealth[](allPositions.length);
         for (uint256 i = 0; i < allPositions.length; i++) {
-            positions[i].positionId = allPositions[i].positionId;
+            positions[i].positionId = i; // Position ID = array index
             positions[i].healthFactor = _getPositionHealthFactor(allPositions[i]);
         }
         
@@ -532,9 +559,9 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         override 
         returns (uint256 healthFactor) 
     {
-        IEulerV2PluginView plugin = IEulerV2PluginView(_getEulerV2Plugin());
+        address registry = _getRegistry();
         
-        try plugin.getLeveragePosition(positionId) returns (IEulerV2PluginView.LeveragePosition memory pos) {
+        try IEulerRegistry(registry).getPosition(positionId) returns (IEulerRegistry.LeveragePositionStorage memory pos) {
             if (!pos.isActive) {
                 return type(uint256).max; // Inactive = no risk
             }
@@ -563,10 +590,10 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     {
         address pluginAddr = _getEulerV2Plugin();
         IEulerV2PluginView plugin = IEulerV2PluginView(pluginAddr);
-        IEulerVaultRegistry registry = IEulerVaultRegistry(_getEulerVaultRegistry());
+        address registry = _getRegistry();
         
         // Get all registered tokens
-        string[] memory tokens = registry.getAllRegisteredTokens();
+        string[] memory tokens = IEulerRegistry(registry).getAllRegisteredTokens();
         
         // Calculate simple deposit values
         for (uint256 i = 0; i < tokens.length; i++) {
@@ -577,7 +604,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
             uint256 debt = plugin.getDebt(tokenCode);
             
             // Get token address
-            address vault = registry.getVaultSafe(tokenCode);
+            address vault = IEulerRegistry(registry).getVaultSafe(tokenCode);
             if (vault == address(0)) continue;
             
             address asset = IEVault(vault).asset();
@@ -592,7 +619,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         }
         
         // Add leverage positions value
-        (uint256 leverageCollateral, uint256 leverageDebt) = _calculateLeverageValues(plugin);
+        (uint256 leverageCollateral, uint256 leverageDebt) = _calculateLeverageValues();
         totalCollateral += leverageCollateral;
         totalDebt += leverageDebt;
         
@@ -606,21 +633,21 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     
     /**
      * @notice Calculate values from leverage positions
-     * @param plugin EulerV2Plugin instance
      * @return collateral Total collateral from leverage positions in ETH
      * @return debt Total debt from leverage positions in ETH
      */
-    function _calculateLeverageValues(IEulerV2PluginView plugin)
+    function _calculateLeverageValues()
         internal
         view
         returns (uint256 collateral, uint256 debt)
     {
-        IEulerV2PluginView.LeveragePosition[] memory positions = plugin.getAllLeveragePositions();
+        address registry = _getRegistry();
+        IEulerRegistry.LeveragePositionStorage[] memory positions = IEulerRegistry(registry).getAllPositions();
         
         for (uint256 i = 0; i < positions.length; i++) {
             if (!positions[i].isActive) continue;
             
-            IEulerV2PluginView.LeveragePosition memory pos = positions[i];
+            IEulerRegistry.LeveragePositionStorage memory pos = positions[i];
             
             // Get assets
             address collateralAsset = IEVault(pos.collateralVault).asset();
@@ -661,10 +688,10 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         ITokenManagerForModules tokenManager = ITokenManagerForModules(_getTokenManager());
         
         // Try to get token code from registry
-        IEulerVaultRegistry registry = IEulerVaultRegistry(_getEulerVaultRegistry());
+        address registry = _getRegistry();
         
         // Get all vaults to find token code
-        (string[] memory tokenCodes, address[] memory vaults) = registry.getAllVaults();
+        (string[] memory tokenCodes, address[] memory vaults) = IEulerRegistry(registry).getAllVaults();
         
         string memory tokenCode;
         bool found = false;
@@ -707,7 +734,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
      * @param pos Position data
      * @return hf Health factor in 1e18
      */
-    function _getPositionHealthFactor(IEulerV2PluginView.LeveragePosition memory pos)
+    function _getPositionHealthFactor(IEulerRegistry.LeveragePositionStorage memory pos)
         internal
         view
         returns (uint256 hf)
@@ -760,15 +787,6 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     }
     
     /**
-     * @notice Get EulerVaultRegistry address from Beacon
-     */
-    function _getEulerVaultRegistry() internal view returns (address) {
-        address registry = IBeacon(beacon).getImplementation("EulerVaultRegistry");
-        if (registry == address(0)) revert EulerVaultRegistryNotFound();
-        return registry;
-    }
-    
-    /**
      * @notice Get TokenManager address from Beacon
      */
     function _getTokenManager() internal view returns (address) {
@@ -799,9 +817,9 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     function getPositionHealth(uint256 positionId) 
         external view override returns (ILensAdapter.HealthInfo memory info) 
     {
-        IEulerV2PluginView plugin = IEulerV2PluginView(_getEulerV2Plugin());
+        address registry = _getRegistry();
         
-        try plugin.getLeveragePosition(positionId) returns (IEulerV2PluginView.LeveragePosition memory pos) {
+        try IEulerRegistry(registry).getPosition(positionId) returns (IEulerRegistry.LeveragePositionStorage memory pos) {
             if (!pos.isActive) {
                 return ILensAdapter.HealthInfo({
                     healthFactor: type(uint256).max,
@@ -863,9 +881,9 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     function getTimeToLiquidation(uint256 positionId) 
         external view override returns (int256 ttl, string memory status) 
     {
-        IEulerV2PluginView plugin = IEulerV2PluginView(_getEulerV2Plugin());
+        address registry = _getRegistry();
         
-        try plugin.getLeveragePosition(positionId) returns (IEulerV2PluginView.LeveragePosition memory pos) {
+        try IEulerRegistry(registry).getPosition(positionId) returns (IEulerRegistry.LeveragePositionStorage memory pos) {
             if (!pos.isActive) {
                 return (TTL_INFINITY, "INACTIVE");
             }
@@ -883,10 +901,10 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         uint256[] memory positionIds = this.getEulerPositionsAtRisk(minHealthFactor);
         
         positions = new ILensAdapter.PositionWithRisk[](positionIds.length);
-        IEulerV2PluginView plugin = IEulerV2PluginView(_getEulerV2Plugin());
+        address registry = _getRegistry();
         
         for (uint256 i = 0; i < positionIds.length; i++) {
-            IEulerV2PluginView.LeveragePosition memory pos = plugin.getLeveragePosition(positionIds[i]);
+            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPosition(positionIds[i]);
             uint256 hf = _getPositionHealthFactor(pos);
             (int256 ttl, string memory status) = _getTimeToLiquidationInternal(pos);
             
@@ -920,10 +938,10 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         IEulerLensAdapter.PositionWithHealth[] memory sorted = this.getPositionsSortedByHealth();
         
         positions = new ILensAdapter.PositionWithRisk[](sorted.length);
-        IEulerV2PluginView plugin = IEulerV2PluginView(_getEulerV2Plugin());
+        address registry = _getRegistry();
         
         for (uint256 i = 0; i < sorted.length; i++) {
-            IEulerV2PluginView.LeveragePosition memory pos = plugin.getLeveragePosition(sorted[i].positionId);
+            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPosition(sorted[i].positionId);
             (int256 ttl, string memory status) = _getTimeToLiquidationInternal(pos);
             (uint256 collEth, uint256 debtEth) = _getPositionValueInEth(pos);
             
@@ -969,9 +987,9 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     function getPositionValue(uint256 positionId) 
         external view override returns (uint256 collateralEth, uint256 debtEth, uint256 netEth) 
     {
-        IEulerV2PluginView plugin = IEulerV2PluginView(_getEulerV2Plugin());
+        address registry = _getRegistry();
         
-        try plugin.getLeveragePosition(positionId) returns (IEulerV2PluginView.LeveragePosition memory pos) {
+        try IEulerRegistry(registry).getPosition(positionId) returns (IEulerRegistry.LeveragePositionStorage memory pos) {
             (collateralEth, debtEth) = _getPositionValueInEth(pos);
             netEth = collateralEth > debtEth ? collateralEth - debtEth : 0;
         } catch {
@@ -1030,7 +1048,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     /**
      * @notice Get position value in ETH
      */
-    function _getPositionValueInEth(IEulerV2PluginView.LeveragePosition memory pos) 
+    function _getPositionValueInEth(IEulerRegistry.LeveragePositionStorage memory pos) 
         internal view returns (uint256 collateralEth, uint256 debtEth) 
     {
         if (!pos.isActive) return (0, 0);
@@ -1049,7 +1067,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     /**
      * @notice Get time to liquidation for a position
      */
-    function _getTimeToLiquidationInternal(IEulerV2PluginView.LeveragePosition memory pos) 
+    function _getTimeToLiquidationInternal(IEulerRegistry.LeveragePositionStorage memory pos) 
         internal view returns (int256 ttl, string memory status) 
     {
         if (!pos.isActive) return (TTL_INFINITY, "INACTIVE");
