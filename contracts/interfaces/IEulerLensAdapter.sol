@@ -100,14 +100,6 @@ interface IEulerLensAdapter {
         );
     
     /**
-     * @notice Get collateral value for a specific leverage position
-     * @param positionId Position ID from EulerV2Plugin
-     * @return ethValue Collateral value in ETH
-     */
-    function getPositionCollateralInEth(uint256 positionId) 
-        external view returns (uint256 ethValue);
-    
-    /**
      * @notice Get withdrawable amount for a token (considering debt)
      * @param tokenCode Token code (e.g., "WETH")
      * @return amount Maximum withdrawable amount without breaking health

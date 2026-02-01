@@ -78,20 +78,6 @@ interface IProtocolAdapter {
         bool isHealthy;               // All positions above safe threshold
     }
     
-    // ==================== IDENTIFICATION ====================
-    
-    /**
-     * @notice Get the protocol name
-     * @return name Protocol identifier (e.g., "Euler", "Dolomite")
-     */
-    function protocolName() external view returns (string memory name);
-    
-    /**
-     * @notice Get the protocol type
-     * @return protocolType Type enum (LENDING, YIELD, TRADING, LIQUIDITY)
-     */
-    function protocolType() external view returns (ProtocolType protocolType);
-    
     // ==================== POSITION MANAGEMENT ====================
     
     /**
@@ -145,12 +131,6 @@ interface IProtocolAdapter {
      * @return success True if successful
      */
     function emergencyWithdrawAll(string[] memory tokenCodes) external returns (bool success);
-    
-    /**
-     * @notice Check if circuit breaker is active
-     * @return isActive True if circuit breaker is tripped
-     */
-    function isCircuitBreakerActive() external view returns (bool isActive);
     
     /**
      * @notice Activate circuit breaker (emergency stop)

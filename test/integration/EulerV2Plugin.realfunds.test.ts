@@ -154,21 +154,21 @@ describe("EulerV2Plugin - Real Funds on Fork", function () {
         }
     });
 
-    describe("Step 1: Deploy EulerVaultRegistry and Mock ProtocolManager", function () {
+    describe("Step 1: Deploy EulerRegistry and Mock ProtocolManager", function () {
         it("Should setup all required beacon implementations", async function () {
-            console.log("\n📦 Deploying EulerVaultRegistry...");
+            console.log("\n📦 Deploying EulerRegistry...");
             
-            const EulerVaultRegistry = await ethers.getContractFactory("EulerVaultRegistry", owner);
-            eulerVaultRegistry = await EulerVaultRegistry.deploy();
+            const EulerRegistry = await ethers.getContractFactory("EulerRegistry", owner);
+            eulerVaultRegistry = await EulerRegistry.deploy();
             await eulerVaultRegistry.waitForDeployment();
             
             const registryAddress = await eulerVaultRegistry.getAddress();
-            console.log(`   ✅ EulerVaultRegistry deployed to: ${registryAddress}`);
+            console.log(`   ✅ EulerRegistry deployed to: ${registryAddress}`);
 
             // Register in Beacon
-            let tx = await beacon.updateImplementation("EulerVaultRegistry", registryAddress);
+            let tx = await beacon.updateImplementation("EulerRegistry", registryAddress);
             await tx.wait();
-            console.log("   ✅ Registered in Beacon as 'EulerVaultRegistry'");
+            console.log("   ✅ Registered in Beacon as 'EulerRegistry'");
 
             // Configure vaults
             await (await eulerVaultRegistry.setVault("WETH", ADDRESSES.WETH_VAULT)).wait();
@@ -294,17 +294,15 @@ describe("EulerV2Plugin - Real Funds on Fork", function () {
         });
     });
 
-    describe("Step 6: Enable Collateral", function () {
-        it("Should enable WETH vault as collateral", async function () {
+    describe("Step 6: Verify Auto-Enabled Collateral", function () {
+        it("Should verify WETH vault was auto-enabled as collateral during deposit", async function () {
             const pluginAddress = await eulerPlugin.getAddress();
             
-            console.log("\n🔒 Enabling WETH vault as collateral...");
+            console.log("\n🔒 Verifying WETH vault auto-enabled as collateral...");
 
-            const tx = await eulerPlugin.enableCollateral(ADDRESSES.WETH_VAULT);
-            await tx.wait();
-
+            // deposit() dovrebbe aver già abilitato il vault come collaterale
             const isEnabled = await evc.isCollateralEnabled(pluginAddress, ADDRESSES.WETH_VAULT);
-            console.log(`   ✅ Collateral enabled: ${isEnabled}`);
+            console.log(`   ✅ Collateral auto-enabled: ${isEnabled}`);
 
             expect(isEnabled).to.be.true;
         });
@@ -368,23 +366,10 @@ describe("EulerV2Plugin - Real Funds on Fork", function () {
             expect(shares).to.be.gt(0);
         });
         
-        it("Should enable USDC vault as controller for borrowing", async function () {
-            const pluginAddress = await eulerPlugin.getAddress();
-            
-            console.log("\n🔐 Enabling USDC vault as controller...");
-            
-            const tx = await eulerPlugin.enableController(ADDRESSES.USDC_VAULT);
-            await tx.wait();
-            
-            const isController = await evc.isControllerEnabled(pluginAddress, ADDRESSES.USDC_VAULT);
-            console.log(`   ✅ Controller enabled: ${isController}`);
-            
-            expect(isController).to.be.true;
-        });
     });
     
     describe("Step 9: Borrow USDC against WETH collateral", function () {
-        it("Should borrow small amount of USDC", async function () {
+        it("Should borrow small amount of USDC (auto-enables controller)", async function () {
             const pluginAddress = await eulerPlugin.getAddress();
             
             // Check max borrow capacity first
@@ -404,6 +389,11 @@ describe("EulerV2Plugin - Real Funds on Fork", function () {
                 
                 console.log(`   Tx hash: ${receipt.hash}`);
                 console.log(`   Gas used: ${receipt.gasUsed}`);
+                
+                // Verifica che controller sia stato auto-abilitato
+                const isController = await evc.isControllerEnabled(pluginAddress, ADDRESSES.USDC_VAULT);
+                console.log(`   ✅ Controller auto-enabled: ${isController}`);
+                expect(isController).to.be.true;
                 
                 // Check borrowed USDC (va a ProxyGeneral)
                 const proxyUsdc = await usdc.balanceOf(ADDRESSES.PROXY_GENERAL);
@@ -480,29 +470,6 @@ describe("EulerV2Plugin - Real Funds on Fork", function () {
             
             // Just verify we reduced the debt
             expect(remainingDebt).to.be.lt(currentDebt);
-        });
-        
-        it("Should try to disable USDC controller (may fail with dust debt)", async function () {
-            const pluginAddress = await eulerPlugin.getAddress();
-            
-            // Check if we can disable controller (debt must be 0)
-            const debt = await usdcVault.debtOf(pluginAddress);
-            console.log(`\n📊 Debt before disabling controller: ${ethers.formatUnits(debt, 6)}`);
-            
-            if (debt > 0n) {
-                console.log("   ⚠️ Cannot disable controller with outstanding debt (even dust)");
-                console.log("   ℹ️  In production, you'd need to fully repay before withdrawing collateral");
-                return;
-            }
-            
-            console.log("🔓 Disabling USDC vault as controller...");
-            const tx = await eulerPlugin.disableController(ADDRESSES.USDC_VAULT);
-            await tx.wait();
-            
-            const isController = await evc.isControllerEnabled(pluginAddress, ADDRESSES.USDC_VAULT);
-            console.log(`   ✅ Controller disabled: ${!isController}`);
-            
-            expect(isController).to.be.false;
         });
     });
     
@@ -633,21 +600,10 @@ describe("EulerV2Plugin - Real Funds on Fork", function () {
             const shares = await wethVault.balanceOf(pluginAddress);
             console.log(`   ✅ Vault shares: ${ethers.formatEther(shares)}`);
             
-            // Check collateral and controller status
+            // Verifica che collateral sia stato auto-abilitato
             const isCollateral = await evc.isCollateralEnabled(pluginAddress, ADDRESSES.WETH_VAULT);
-            console.log(`   Collateral enabled: ${isCollateral}`);
-            
-            if (!isCollateral) {
-                await (await leveragePlugin.enableCollateral(ADDRESSES.WETH_VAULT)).wait();
-                console.log(`   ✅ Enabled WETH vault as collateral`);
-            }
-            
-            // Enable USDC vault as controller
-            const isController = await evc.isControllerEnabled(pluginAddress, ADDRESSES.USDC_VAULT);
-            if (!isController) {
-                await (await leveragePlugin.enableController(ADDRESSES.USDC_VAULT)).wait();
-                console.log(`   ✅ Enabled USDC vault as controller`);
-            }
+            console.log(`   ✅ Collateral auto-enabled: ${isCollateral}`);
+            expect(isCollateral).to.be.true;
             
             // Step 2: Borrow small amount of USDC
             const borrowAmount = ethers.parseUnits("0.1", 6); // 0.1 USDC
@@ -659,13 +615,17 @@ describe("EulerV2Plugin - Real Funds on Fork", function () {
                 const debt = await usdcVault.debtOf(pluginAddress);
                 console.log(`   ✅ USDC debt: ${ethers.formatUnits(debt, 6)}`);
                 
+                // Verifica che controller sia stato auto-abilitato
+                const isController = await evc.isControllerEnabled(pluginAddress, ADDRESSES.USDC_VAULT);
+                console.log(`   ✅ Controller auto-enabled: ${isController}`);
+                
                 // This proves the leverage components work!
                 console.log("\n🎉 LEVERAGE COMPONENTS VERIFIED!");
-                console.log("   - Deposit ✓");
-                console.log("   - Enable Collateral ✓");
-                console.log("   - Enable Controller ✓");
+                console.log("   - Deposit ✓ (auto-enables collateral)");
+                console.log("   - Borrow ✓ (auto-enables controller)");
                 console.log("   - Borrow against collateral ✓");
                 
+                expect(isController).to.be.true;
                 expect(debt).to.be.gt(0);
             } catch (error: any) {
                 console.log(`\n❌ Borrow failed: ${error.message}`);

@@ -336,7 +336,7 @@ contract ProtocolManager is Ownable {
         string memory tokenCode,
         uint256 amount
     ) external onlyOwner {
-        if (amount == 0) revert InvalidAmount(amount);
+        // amount = 0 means "repay all" (handled by plugin)
         if (bytes(tokenCode).length == 0) revert InvalidTokenCode(tokenCode);
         
         // 1. Resolve plugin
@@ -838,7 +838,7 @@ contract ProtocolManager is Ownable {
                 // Return empty summary for failed protocols
                 summaries[idx++] = ILensAdapter.ProtocolSummary({
                     name: registeredProtocolNames[i],
-                    protocolType: ILensAdapter.ProtocolType.LENDING,
+                    protocolType: IProtocolAdapter.ProtocolType.LENDING,
                     totalCollateralEth: 0,
                     totalDebtEth: 0,
                     netValueEth: 0,

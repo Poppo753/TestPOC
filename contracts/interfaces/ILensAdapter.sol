@@ -30,16 +30,6 @@ interface ILensAdapter {
     // ==================== ENUMS ====================
     
     /**
-     * @notice Type of protocol for categorization
-     */
-    enum ProtocolType {
-        LENDING,    // Euler, Aave, Compound, Dolomite
-        YIELD,      // Yearn, Convex, GMX GLP
-        TRADING,    // GMX Perps, dYdX
-        LIQUIDITY   // Uniswap LP, Curve LP
-    }
-    
-    /**
      * @notice Status of a position
      */
     enum PositionStatus {
@@ -71,7 +61,7 @@ interface ILensAdapter {
      */
     struct ProtocolSummary {
         string name;
-        ProtocolType protocolType;
+        IProtocolAdapter.ProtocolType protocolType;
         uint256 totalCollateralEth;
         uint256 totalDebtEth;
         uint256 netValueEth;
@@ -134,6 +124,18 @@ interface ILensAdapter {
     function protocolName() external view returns (string memory name);
     
     /**
+     * @notice Get the protocol type (moved from IProtocolAdapter for architectural consistency)
+     * @return protocolType Type enum (LENDING, YIELD, TRADING, LIQUIDITY)
+     */
+    function protocolType() external view returns (IProtocolAdapter.ProtocolType protocolType);
+    
+    /**
+     * @notice Check if circuit breaker is active (moved from IProtocolAdapter for architectural consistency)
+     * @return isActive True if circuit breaker is tripped
+     */
+    function isCircuitBreakerActive() external view returns (bool isActive);
+    
+    /**
      * @notice Get associated plugin address
      * @return plugin Address of the protocol plugin
      */
@@ -147,18 +149,9 @@ interface ILensAdapter {
      */
     function getActivePositionCount() external view returns (uint256 count);
     
-    /**
-     * @notice Get all active positions in standardized format
-     * @return positions Array of Position structs
-     */
-    function getAllPositions() external view returns (Position[] memory positions);
+
     
-    /**
-     * @notice Get a specific position by ID
-     * @param positionId Position identifier
-     * @return position Position struct
-     */
-    function getPosition(uint256 positionId) external view returns (Position memory position);
+
     
     /**
      * @notice Get protocol summary
@@ -188,14 +181,7 @@ interface ILensAdapter {
      */
     function getAccountHealth() external view returns (HealthInfo memory info);
     
-    /**
-     * @notice Get time to liquidation for a position
-     * @param positionId Position to check
-     * @return ttl Seconds until liquidation, -1 if already liquidatable, max if safe
-     * @return status Human-readable status string
-     */
-    function getTimeToLiquidation(uint256 positionId) 
-        external view returns (int256 ttl, string memory status);
+
     
     // ==================== RISK ASSESSMENT ====================
     
@@ -207,14 +193,7 @@ interface ILensAdapter {
     function getPositionsAtRisk(uint256 minHealthFactor) 
         external view returns (PositionWithRisk[] memory positions);
     
-    /**
-     * @notice Check if a position should be auto-closed
-     * @param positionId Position to check
-     * @param healthThreshold HF threshold for auto-close
-     * @return shouldClose True if position should be closed
-     */
-    function shouldAutoClose(uint256 positionId, uint256 healthThreshold) 
-        external view returns (bool shouldClose);
+
     
     /**
      * @notice Get all positions sorted by risk (riskiest first)
@@ -224,25 +203,7 @@ interface ILensAdapter {
         external view returns (PositionWithRisk[] memory positions);
     
     // ==================== VALUE FUNCTIONS ====================
-    
-    /**
-     * @notice Get total collateral value in ETH
-     * @return collateralEth Total collateral across all positions
-     */
-    function getTotalCollateral() external view returns (uint256 collateralEth);
-    
-    /**
-     * @notice Get total debt value in ETH
-     * @return debtEth Total debt across all positions
-     */
-    function getTotalDebt() external view returns (uint256 debtEth);
-    
-    /**
-     * @notice Get lowest health factor across all positions
-     * @return healthFactor Minimum HF (1e18 scale), max uint if no debt
-     */
-    function getLowestHealthFactor() external view returns (uint256 healthFactor);
-    
+
     /**
      * @notice Get total net value of all positions in ETH
      * @return netValueEth Net value (collateral - debt)
@@ -255,15 +216,7 @@ interface ILensAdapter {
      */
     function getValueBreakdown() external view returns (ValueBreakdown memory breakdown);
     
-    /**
-     * @notice Get value of a specific position in ETH
-     * @param positionId Position to check
-     * @return collateralEth Collateral value
-     * @return debtEth Debt value
-     * @return netEth Net value
-     */
-    function getPositionValue(uint256 positionId) 
-        external view returns (uint256 collateralEth, uint256 debtEth, uint256 netEth);
+
     
     // ==================== YIELD INFORMATION ====================
     
@@ -289,12 +242,7 @@ interface ILensAdapter {
      */
     function getVaultForToken(string memory tokenCode) external view returns (address vault);
     
-    /**
-     * @notice Get maximum withdrawable amount maintaining health
-     * @param tokenCode Token to withdraw
-     * @return maxAmount Maximum amount that can be withdrawn
-     */
-    function getMaxWithdrawable(string memory tokenCode) external view returns (uint256 maxAmount);
+
     
     /**
      * @notice Estimate WETH obtainable by closing all positions

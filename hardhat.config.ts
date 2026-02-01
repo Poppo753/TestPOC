@@ -13,9 +13,7 @@ const config: HardhatUserConfig = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 1, // CRITICAL: Minimize bytecode size (31.5KB -> target <24.6KB)
-               // Low runs = smaller deployment, higher runtime gas
-               // Required for EulerV2Plugin to fit in 24KB limit
+        runs: 1000, // Higher runs = smaller bytecode (for EulerV2Plugin 24KB limit)
       },
       viaIR: true, // Enable IR optimizer to avoid "stack too deep" errors
     },
@@ -29,8 +27,13 @@ const config: HardhatUserConfig = {
     arbitrum: {
       url: process.env.ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-      timeout: 60000, // 60 seconds
+      timeout: 120000, // 120 seconds (increased for nonce sync)
       chainId: 42161,
+      gasMultiplier: 1.2, // 20% buffer for gas estimation
+      // Fix nonce management issues
+      httpHeaders: {
+        "Content-Type": "application/json",
+      },
     },
     hardhat: {
       forking: {

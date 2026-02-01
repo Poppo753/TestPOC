@@ -4,6 +4,7 @@ pragma solidity ^0.8.19;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "../interfaces/IEulerLensAdapter.sol";
 import "../interfaces/ILensAdapter.sol";
+import "../interfaces/IProtocolAdapter.sol";
 import "../interfaces/IBeacon.sol";
 import "../interfaces/ITokenManagerForModules.sol";
 import "../interfaces/IEulerRegistry.sol";
@@ -29,6 +30,7 @@ interface IEulerV2PluginView {
     function getAllLeveragePositions() external view returns (LeveragePosition[] memory);
     function getDebt(string memory tokenCode) external view returns (uint256);
     function getBalance(string memory tokenCode) external view returns (uint256);
+    function isCircuitBreakerActive() external view returns (bool);
 }
 
 /**
@@ -169,24 +171,9 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         return posIds.length;
     }
     
-    /// @inheritdoc ILensAdapter
-    function getAllPositions() external view returns (ILensAdapter.Position[] memory positions) {
-        address registry = _getRegistry();
-        (IEulerRegistry.LeveragePositionStorage[] memory activePos, uint256[] memory posIds) = 
-            IEulerRegistry(registry).getActivePositions();
-        
-        positions = new ILensAdapter.Position[](activePos.length);
-        for (uint256 i = 0; i < activePos.length; i++) {
-            positions[i] = _convertToStandardPosition(posIds[i], activePos[i]);
-        }
-    }
+
     
-    /// @inheritdoc ILensAdapter
-    function getPosition(uint256 positionId) external view returns (ILensAdapter.Position memory) {
-        address registry = _getRegistry();
-        IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPosition(positionId);
-        return _convertToStandardPosition(positionId, pos);
-    }
+
     
     /// @inheritdoc ILensAdapter
     function getProtocolSummary() external view returns (ILensAdapter.ProtocolSummary memory summary) {
@@ -225,7 +212,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         
         summary = ILensAdapter.ProtocolSummary({
             name: "Euler",
-            protocolType: ILensAdapter.ProtocolType.LENDING,
+            protocolType: IProtocolAdapter.ProtocolType.LENDING,
             totalCollateralEth: totalColl,
             totalDebtEth: totalDbt,
             netValueEth: totalColl > totalDbt ? totalColl - totalDbt : 0,
@@ -235,56 +222,11 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         });
     }
     
-    /// @inheritdoc ILensAdapter
-    function getTotalCollateral() external view returns (uint256 collateralEth) {
-        address registry = _getRegistry();
-        uint256 totalPositions = IEulerRegistry(registry).nextPositionId();
-        
-        for (uint256 i = 0; i < totalPositions; i++) {
-            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(i);
-            if (!pos.isActive) continue;
-            
-            address subAccount = _deriveSubAccount(pos.subAccountId);
-            uint256 shares = IEVault(pos.collateralVault).balanceOf(subAccount);
-            collateralEth += IEVault(pos.collateralVault).convertToAssets(shares);
-        }
-    }
+
     
-    /// @inheritdoc ILensAdapter
-    function getTotalDebt() external view returns (uint256 debtEth) {
-        address registry = _getRegistry();
-        uint256 totalPositions = IEulerRegistry(registry).nextPositionId();
-        
-        for (uint256 i = 0; i < totalPositions; i++) {
-            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(i);
-            if (!pos.isActive) continue;
-            
-            address subAccount = _deriveSubAccount(pos.subAccountId);
-            debtEth += IEVault(pos.borrowVault).debtOf(subAccount);
-        }
-    }
+
     
-    /// @inheritdoc ILensAdapter
-    function getLowestHealthFactor() external view returns (uint256 healthFactor) {
-        healthFactor = type(uint256).max;
-        
-        address registry = _getRegistry();
-        uint256 totalPositions = IEulerRegistry(registry).nextPositionId();
-        
-        for (uint256 i = 0; i < totalPositions; i++) {
-            IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(i);
-            if (pos.createdAt == 0 || !pos.isActive) continue;
-            
-            address subAccount = _deriveSubAccount(pos.subAccountId);
-            IAccountLens lens = IAccountLens(ACCOUNT_LENS);
-            IAccountLens.AccountLiquidityInfo memory liq = lens.getAccountLiquidityInfo(subAccount, pos.borrowVault);
-            
-            if (!liq.queryFailure && liq.liabilityValueBorrowing > 0) {
-                uint256 hf = (liq.collateralValueBorrowing * 1e18) / liq.liabilityValueBorrowing;
-                if (hf < healthFactor) healthFactor = hf;
-            }
-        }
-    }
+
     
     // ==================== HEALTH MONITORING ====================
     
@@ -408,49 +350,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         (totalCollateral, totalDebt, netValue) = _calculateTotalValues();
     }
     
-    /**
-     * @inheritdoc IEulerLensAdapter
-     */
-    function getPositionCollateralInEth(uint256 positionId) 
-        external 
-        view 
-        override 
-        returns (uint256 ethValue) 
-    {
-        address registry = _getRegistry();
-        IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPosition(positionId);
-        
-        if (!pos.isActive) {
-            return 0;
-        }
-        
-        // Get collateral vault
-        address collateralVault = pos.collateralVault;
-        address asset = IEVault(collateralVault).asset();
-        
-        // Get collateral amount in vault (shares → assets)
-        // Note: For leverage positions, collateral is held in sub-account
-        // We use initialCollateral * leverage as approximation for current collateral
-        uint256 collateralAmount = pos.initialCollateral;
-        
-        // If leverage was applied, estimate total collateral
-        if (pos.borrowedAmount > 0 && pos.initialCollateral > 0) {
-            // Estimate based on initial leverage: total = initial + borrowed value in collateral terms
-            // This is an approximation - precise value would need sub-account query
-            address borrowAsset = IEVault(pos.borrowVault).asset();
-            
-            // Get price ratio between collateral and borrow asset
-            uint256 borrowValueInEth = _convertToEthValue(borrowAsset, pos.borrowedAmount);
-            uint256 initialInEth = _convertToEthValue(asset, pos.initialCollateral);
-            
-            // Total collateral ≈ initial + borrowed (converted)
-            ethValue = initialInEth + borrowValueInEth;
-            return ethValue;
-        }
-        
-        // Simple case: just convert collateral to ETH
-        ethValue = _convertToEthValue(asset, collateralAmount);
-    }
+
     
     /**
      * @inheritdoc IEulerLensAdapter
@@ -942,6 +842,27 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         return "Euler";
     }
     
+    /// @notice Get protocol type (moved from plugin for architectural consistency)
+    /// @return protocolType Always returns LENDING for Euler
+    function protocolType() external pure returns (IProtocolAdapter.ProtocolType) {
+        return IProtocolAdapter.ProtocolType.LENDING;
+    }
+    
+    /// @notice Check if circuit breaker is active (moved from plugin for architectural consistency)
+    /// @dev Queries the plugin's circuit breaker state
+    /// @return isActive True if circuit breaker is tripped
+    function isCircuitBreakerActive() external view returns (bool isActive) {
+        address plugin = _getEulerV2Plugin();
+        
+        // Call the plugin's isCircuitBreakerActive() function
+        try IEulerV2PluginView(plugin).isCircuitBreakerActive() returns (bool status) {
+            return status;
+        } catch {
+            // If call fails, assume circuit breaker is active for safety
+            return true;
+        }
+    }
+    
     /// @inheritdoc ILensAdapter
     function getPlugin() external view override returns (address plugin) {
         return _getEulerV2Plugin();
@@ -1011,21 +932,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         });
     }
     
-    /// @inheritdoc ILensAdapter
-    function getTimeToLiquidation(uint256 positionId) 
-        external view override returns (int256 ttl, string memory status) 
-    {
-        address registry = _getRegistry();
-        
-        try IEulerRegistry(registry).getPosition(positionId) returns (IEulerRegistry.LeveragePositionStorage memory pos) {
-            if (!pos.isActive) {
-                return (TTL_INFINITY, "INACTIVE");
-            }
-            return _getTimeToLiquidationInternal(pos);
-        } catch {
-            return (TTL_ERROR, "ERROR");
-        }
-    }
+
     
     /// @inheritdoc ILensAdapter
     function getPositionsAtRisk(uint256 minHealthFactor) 
@@ -1057,12 +964,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         }
     }
     
-    /// @inheritdoc ILensAdapter
-    function shouldAutoClose(uint256 positionId, uint256 healthThreshold) 
-        external view override returns (bool) 
-    {
-        return this.shouldAutoClosePosition(positionId, healthThreshold);
-    }
+
     
     /// @inheritdoc ILensAdapter
     function getPositionsSortedByRisk() 
@@ -1097,19 +999,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         }
     }
     
-    /// @inheritdoc ILensAdapter
-    function getPositionValue(uint256 positionId) 
-        external view override returns (uint256 collateralEth, uint256 debtEth, uint256 netEth) 
-    {
-        address registry = _getRegistry();
-        
-        try IEulerRegistry(registry).getPosition(positionId) returns (IEulerRegistry.LeveragePositionStorage memory pos) {
-            (collateralEth, debtEth) = _getPositionValueInEth(pos);
-            netEth = collateralEth > debtEth ? collateralEth - debtEth : 0;
-        } catch {
-            return (0, 0, 0);
-        }
-    }
+
     
     /// @inheritdoc ILensAdapter
     function getYieldInfo(string memory tokenCode) 
@@ -1143,12 +1033,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         return wethYield.netAPY;
     }
     
-    /// @inheritdoc ILensAdapter
-    function getMaxWithdrawable(string memory tokenCode) 
-        external view override returns (uint256 maxAmount) 
-    {
-        return this.getWithdrawableAmount(tokenCode);
-    }
+
     
     /// @inheritdoc ILensAdapter
     function estimateWethFromCloseAll() external view override returns (uint256 wethAmount) {

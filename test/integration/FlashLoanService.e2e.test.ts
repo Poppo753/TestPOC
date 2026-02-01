@@ -20,11 +20,10 @@
  * 4. FlashLoanService trasferisce USDC a EulerV2Plugin
  * 5. FlashLoanService → EulerV2Plugin.onFlashLoanReceived()
  * 6. EulerV2Plugin: swap USDC→WETH via FlashLoanService.swap()
- * 7. EulerV2Plugin: deposit WETH in Euler
- * 8. EulerV2Plugin: enable collateral + controller
- * 9. EulerV2Plugin: borrow USDC from Euler
- * 10. EulerV2Plugin: transfer USDC back to FlashLoanService
- * 11. FlashLoanService: repay Balancer
+ * 7. EulerV2Plugin: deposit WETH in Euler (auto-enables collateral)
+ * 8. EulerV2Plugin: borrow USDC from Euler (auto-enables controller)
+ * 9. EulerV2Plugin: transfer USDC back to FlashLoanService
+ * 10. FlashLoanService: repay Balancer
  * → Tutto atomico!
  * 
  * SETUP:
@@ -59,8 +58,9 @@ describe("FlashLoanService + EulerV2Plugin - Atomic Leverage E2E", function () {
         // SimpleSwap (Uniswap V3 wrapper)
         SIMPLE_SWAP: "0xa0DB78167CBAccD47524a261b7741C6B41Bbd096",
         
-        // Our deployed Beacon
+        // Our deployed infrastructure
         BEACON: "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+        TOKEN_MANAGER: "0xc4c8581a7Cbb4e046adB6A6e9008375F38441517",
     };
 
     // Whale addresses con WETH
@@ -220,6 +220,63 @@ describe("FlashLoanService + EulerV2Plugin - Atomic Leverage E2E", function () {
     // ==================== PHASE 1: DEPLOY CONTRACTS ====================
     
     describe("Phase 1: Deploy FlashLoanService and EulerV2Plugin", function () {
+        it("Should setup Beacon with required implementations", async function () {
+            console.log("\n   Setting up Beacon with required implementations...");
+            
+            const beaconOwner = await beacon.owner();
+            let beaconAsOwner = beacon;
+            
+            if (beaconOwner.toLowerCase() !== deployerAddress.toLowerCase()) {
+                await network.provider.request({
+                    method: "hardhat_impersonateAccount",
+                    params: [beaconOwner],
+                });
+                const owner = await ethers.getSigner(beaconOwner);
+                await deployer.sendTransaction({ to: beaconOwner, value: ethers.parseEther("0.1") });
+                beaconAsOwner = beacon.connect(owner);
+            }
+            
+            // Deploy and register EulerRegistry
+            const EulerRegistry = await ethers.getContractFactory("EulerRegistry");
+            const eulerRegistry = await EulerRegistry.deploy();
+            await eulerRegistry.waitForDeployment();
+            
+            await (await beaconAsOwner.updateImplementation("EulerRegistry", await eulerRegistry.getAddress())).wait();
+            console.log(`   ✅ EulerRegistry registered`);
+            
+            // Configure vaults in registry
+            await (await eulerRegistry.setVault("WETH", ADDRESSES.WETH_VAULT)).wait();
+            await (await eulerRegistry.setVault("USDC", ADDRESSES.USDC_VAULT)).wait();
+            console.log(`   ✅ Vaults configured in registry`);
+            
+            // Store registry for later use
+            (this as any).eulerRegistry = eulerRegistry;
+            
+            // Register tokens (only if not already registered)
+            try {
+                const existingWeth = await beacon.getImplementation("WETH");
+                if (existingWeth !== ADDRESSES.WETH) {
+                    await (await beaconAsOwner.updateImplementation("WETH", ADDRESSES.WETH)).wait();
+                }
+            } catch {
+                await (await beaconAsOwner.updateImplementation("WETH", ADDRESSES.WETH)).wait();
+            }
+            
+            try {
+                const existingUsdc = await beacon.getImplementation("USDC");
+                if (existingUsdc !== ADDRESSES.USDC) {
+                    await (await beaconAsOwner.updateImplementation("USDC", ADDRESSES.USDC)).wait();
+                }
+            } catch {
+                await (await beaconAsOwner.updateImplementation("USDC", ADDRESSES.USDC)).wait();
+            }
+            console.log(`   ✅ Tokens registered`);
+            
+            // Register existing TokenManager as ProtocolManager (for plugin authorization)
+            await (await beaconAsOwner.updateImplementation("ProtocolManager", ADDRESSES.TOKEN_MANAGER)).wait();
+            console.log(`   ✅ TokenManager registered as ProtocolManager`);
+        });
+        
         it("Should deploy FlashLoanService", async function () {
             console.log("\n   Deploying FlashLoanService...");
             
@@ -292,6 +349,13 @@ describe("FlashLoanService + EulerV2Plugin - Atomic Leverage E2E", function () {
             expect(registered).to.equal(await eulerV2Plugin.getAddress());
             
             console.log(`   ✅ Verified: EulerV2Plugin = ${registered}`);
+            
+            // Transfer EulerRegistry ownership to plugin (required for createPosition)
+            const eulerRegistry = (this as any).eulerRegistry;
+            if (eulerRegistry) {
+                await (await eulerRegistry.transferOwnership(await eulerV2Plugin.getAddress())).wait();
+                console.log(`   ✅ EulerRegistry ownership transferred to plugin`);
+            }
         });
 
         it("Should register FlashLoanService in Beacon", async function () {
@@ -441,14 +505,13 @@ describe("FlashLoanService + EulerV2Plugin - Atomic Leverage E2E", function () {
             expect(isEnabled).to.be.true;
         });
 
-        it("Should report correct leverage via getCurrentLeverage", async function () {
-            const leverage = await eulerV2Plugin.getCurrentLeverage();
-            const leverageNum = Number(leverage) / 100;
+        it("Should report correct leverage (calculated from position)", async function () {
+            const leverage = await estimateLeverage();
             
-            console.log(`\n   Reported Leverage: ${leverageNum.toFixed(2)}x`);
+            console.log(`\n   Calculated Leverage: ${leverage.toFixed(2)}x`);
             
-            expect(leverageNum).to.be.gte(1.5);
-            expect(leverageNum).to.be.lte(2.5);
+            expect(leverage).to.be.gte(1.5);
+            expect(leverage).to.be.lte(2.5);
         });
 
         it("Should have healthy position (health factor > 1.05)", async function () {
