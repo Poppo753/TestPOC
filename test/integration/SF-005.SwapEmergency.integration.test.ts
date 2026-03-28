@@ -4,6 +4,34 @@
  * Purpose: Test swap system emergency handling and recovery
  * Focus: Testing system resilience during emergency conditions
  * Coverage: Emergency stops, graceful degradation, and recovery procedures
+ * 
+ * ⚠️ CURRENT LIMITATION - PHASE A DOCUMENTATION:
+ * ========================================================================
+ * NOTE: These integration tests currently SIMULATE emergency scenarios
+ * using direct token transfers instead of calling SwapManager.performSwap().
+ * 
+ * Current Approach (Simulated):
+ * - Emergency pause/unpause tested functionally
+ * - Actual swap blocking during emergency NOT tested via real swaps
+ * - Recovery procedures tested with simulated token movements
+ * 
+ * Coverage Status:
+ * ✅ Emergency pause mechanisms: TESTED (functional)
+ * ✅ Access control for emergency functions: TESTED
+ * ⚠️ Swap blocking during pause: TESTED but SIMULATED
+ * ❌ Real swap revert during emergency: NOT TESTED WITH ROUTER
+ * ❌ Recovery swap execution post-unpause: NOT TESTED E2E
+ * 
+ * Reason: MockSimpleSwap implementation pending (Phase B)
+ * 
+ * TODO - Phase B: Test emergency scenarios with real SwapManager calls
+ * - Attempt real swaps during emergency pause (verify revert)
+ * - Execute recovery swaps after unpause
+ * - Verify state consistency through emergency cycle
+ * - Test emergency shutdown with active swap attempts
+ * 
+ * Expected Coverage Improvement: Pause logic → Full emergency flow with swaps
+ * ========================================================================
  */
 
 import { expect } from "chai";

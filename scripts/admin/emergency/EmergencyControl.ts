@@ -182,7 +182,7 @@ export class EmergencyControl extends BaseScript {
         this.beacon = this.contracts.beacon;
         
         try {
-            const ehAddress = await this.beacon.getModule("EmergencyHandler");
+            const ehAddress = await this.beacon.getImplementation("EmergencyHandler");
             this.emergencyHandler = await ethers.getContractAt("EmergencyHandler", ehAddress);
         } catch (error: any) {
             Logger.error(`⚠️ EmergencyHandler not found: ${error.message}`);
@@ -356,7 +356,7 @@ export class EmergencyControl extends BaseScript {
                 Logger.info(`⏸️ Pausing ${moduleName}...`);
                 
                 // Get module address
-                const moduleAddress = await this.beacon.getModule(moduleName);
+                const moduleAddress = await this.beacon.getImplementation(moduleName);
                 const module = await ethers.getContractAt(moduleName, moduleAddress);
                 
                 // Attempt to pause (if module supports it)
@@ -466,7 +466,7 @@ export class EmergencyControl extends BaseScript {
         // Check 1: All modules accessible
         for (const moduleName of this.MODULES) {
             try {
-                const moduleAddress = await this.beacon.getModule(moduleName);
+                const moduleAddress = await this.beacon.getImplementation(moduleName);
                 if (!moduleAddress || moduleAddress === ethers.ZeroAddress) {
                     criticalIssues.push(`${moduleName} not registered`);
                 }
@@ -477,7 +477,7 @@ export class EmergencyControl extends BaseScript {
 
         // Check 2: Sufficient liquidity
         try {
-            const lmAddress = await this.beacon.getModule("LiquidityManager");
+            const lmAddress = await this.beacon.getImplementation("LiquidityManager");
             const balance = await ethers.provider.getBalance(lmAddress);
             const balanceInEth = parseFloat(ethers.formatEther(balance));
             
@@ -517,7 +517,7 @@ export class EmergencyControl extends BaseScript {
                     continue;
                 }
 
-                const moduleAddress = await this.beacon.getModule(moduleName);
+                const moduleAddress = await this.beacon.getImplementation(moduleName);
                 const module = await ethers.getContractAt(moduleName, moduleAddress);
                 
                 try {

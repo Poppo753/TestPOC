@@ -51,7 +51,23 @@ describe("Integration: Beacon ↔ Modules", function () {
     console.log("🚀 Deploying all modules for integration testing...");
     
     const TokenManagerFactory = await ethers.getContractFactory("TokenManager");
-    tokenManager = await TokenManagerFactory.deploy(await beacon.getAddress());
+    // Deploy MockOracleAdapter for TokenManager
+
+    const MockOracleAdapterFactory = await ethers.getContractFactory("MockOracleAdapter");
+
+    const mockOracleAdapter = await MockOracleAdapterFactory.deploy();
+
+    await mockOracleAdapter.waitForDeployment();
+
+    
+
+    tokenManager = await TokenManagerFactory.deploy(
+
+      await beacon.getAddress(),
+
+      await mockOracleAdapter.getAddress()
+
+    );
     await tokenManager.waitForDeployment();
 
     const ParameterManagerFactory = await ethers.getContractFactory("ParameterManager");
@@ -851,7 +867,23 @@ describe("Integration: Beacon ↔ Modules", function () {
         // Deploy new TokenManager version
         console.log("\n   🔄 DEPLOYING NEW TOKENMANAGER VERSION:");
         const TokenManagerFactory = await ethers.getContractFactory("TokenManager");
-        const newTokenManager = await TokenManagerFactory.deploy(await beacon.getAddress());
+        // Deploy MockOracleAdapter for TokenManager
+
+        const MockOracleAdapterFactory = await ethers.getContractFactory("MockOracleAdapter");
+
+        const mockOracleAdapter = await MockOracleAdapterFactory.deploy();
+
+        await mockOracleAdapter.waitForDeployment();
+
+        
+
+        const newTokenManager = await TokenManagerFactory.deploy(
+
+          await beacon.getAddress(),
+
+          await mockOracleAdapter.getAddress()
+
+        );
         await newTokenManager.waitForDeployment();
         console.log(`      🆕 New TokenManager: ${await newTokenManager.getAddress()}`);
 
@@ -893,7 +925,31 @@ describe("Integration: Beacon ↔ Modules", function () {
         
         console.log("   🏗️ Deploying multiple new module versions:");
         
-        const newTokenManager = await TokenManagerFactory.deploy(await beacon.getAddress());
+        // Deploy MockOracleAdapter for TokenManager
+
+        
+        const MockOracleAdapterFactory = await ethers.getContractFactory("MockOracleAdapter");
+
+        
+        const mockOracleAdapter = await MockOracleAdapterFactory.deploy();
+
+        
+        await mockOracleAdapter.waitForDeployment();
+
+        
+        
+
+        
+        const newTokenManager = await TokenManagerFactory.deploy(
+
+        
+          await beacon.getAddress(),
+
+        
+          await mockOracleAdapter.getAddress()
+
+        
+        );
         await newTokenManager.waitForDeployment();
         console.log(`      📦 New TokenManager: ${await newTokenManager.getAddress()}`);
         
@@ -1166,7 +1222,23 @@ describe("Integration: Beacon ↔ Modules", function () {
         console.log("\n   🚫 TESTING OPERATIONS ON FROZEN MODULES:");
         
         const TokenManagerFactory = await ethers.getContractFactory("TokenManager");
-        const newTokenManager = await TokenManagerFactory.deploy(await beacon.getAddress());
+        // Deploy MockOracleAdapter for TokenManager
+
+        const MockOracleAdapterFactory = await ethers.getContractFactory("MockOracleAdapter");
+
+        const mockOracleAdapter = await MockOracleAdapterFactory.deploy();
+
+        await mockOracleAdapter.waitForDeployment();
+
+        
+
+        const newTokenManager = await TokenManagerFactory.deploy(
+
+          await beacon.getAddress(),
+
+          await mockOracleAdapter.getAddress()
+
+        );
         await newTokenManager.waitForDeployment();
         
         console.log("      🚫 Attempting to update frozen module...");

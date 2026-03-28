@@ -27,6 +27,8 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
     uint256 public maxSlippage = 300; // 3% default
     
     /// @notice SimpleSwap router address
+    /// @dev DEPRECATED: Use activeSwapPlugin + Beacon resolution instead
+    /// Maintained for backward compatibility and fallback
     address public simpleSwapRouter;
     
     /// @notice Swaps enabled flag
@@ -52,6 +54,12 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
     
     /// @notice Maximum deadline window permesso
     uint256 public constant MAX_DEADLINE_WINDOW = 1 hours;
+    
+    // ==================== NEW STORAGE (Phase 1A) ====================
+    
+    /// @notice Active swap plugin name for Beacon resolution
+    /// @dev Default: "UniswapV3Plugin" (reusing existing SimpleSwap deployed)
+    string public activeSwapPlugin = "UniswapV3Plugin";
 
     // ==================== STRUCTS ====================
     
@@ -71,6 +79,22 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         uint256 actualReceived;
         uint256 actualSpent;
         bool success;
+    }
+    
+    // ==================== NEW STRUCTS (Phase 1B) ====================
+    
+    /**
+     * @notice Quote result from a single plugin
+     * @param pluginName Name of the plugin queried
+     * @param quote Expected output amount (0 if invalid)
+     * @param isValid True if quote is valid and usable
+     * @param errorReason Human-readable error if not valid
+     */
+    struct QuoteResult {
+        string pluginName;
+        uint256 quote;
+        bool isValid;
+        string errorReason;
     }
 
     // ==================== EVENTS ====================
@@ -119,6 +143,84 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         address indexed executor,
         uint256 timestamp
     );
+    
+    // ==================== NEW EVENTS (Phase 1A) ====================
+    
+    /// @notice Emitted when active swap plugin is changed
+    event SwapPluginChanged(
+        string indexed oldPlugin,
+        string indexed newPlugin,
+        address newPluginAddress
+    );
+    
+    /// @notice Emitted when deprecated function is called
+    /// @dev Used for migration tracking and alerting
+    event DeprecationWarning(
+        string functionName,
+        string message
+    );
+    
+    // ==================== NEW EVENTS (Phase 1B) ====================
+    
+    /// @notice Emitted when best plugin is selected and executed
+    /// @param pluginName Name of the selected plugin
+    /// @param expectedQuote Quote that won the selection
+    /// @param actualOutput Actual output received from swap
+    event BestPluginSelected(
+        string indexed pluginName,
+        uint256 expectedQuote,
+        uint256 actualOutput
+    );
+    
+    // ==================== DEADLINE MONITORING EVENTS ====================
+    
+    /// @notice Emitted when swap starts with deadline information
+    /// @param caller Address initiating swap
+    /// @param tokenIn Token being sold
+    /// @param tokenOut Token being bought
+    /// @param amountIn Amount to swap
+    /// @param deadline Timestamp deadline
+    /// @param timeRemaining Seconds until deadline
+    event SwapStarted(
+        address indexed caller,
+        string tokenIn,
+        string tokenOut,
+        uint256 amountIn,
+        uint256 deadline,
+        uint256 timeRemaining
+    );
+    
+    /// @notice Emitted when swap completes successfully with timing info
+    /// @param caller Address that initiated swap
+    /// @param tokenIn Token sold
+    /// @param tokenOut Token bought
+    /// @param amountOut Amount received
+    /// @param deadline Original deadline
+    /// @param timeUsed Seconds used from start to completion
+    /// @param success Whether swap succeeded
+    event SwapCompleted(
+        address indexed caller,
+        string tokenIn,
+        string tokenOut,
+        uint256 amountOut,
+        uint256 deadline,
+        uint256 timeUsed,
+        bool success
+    );
+    
+    /// @notice Emitted when deadline is dangerously close (< 2 min)
+    /// @param caller Address attempting swap
+    /// @param tokenIn Token to sell
+    /// @param tokenOut Token to buy
+    /// @param deadline Timestamp deadline
+    /// @param timeRemaining Seconds remaining
+    event DeadlineCritical(
+        address indexed caller,
+        string tokenIn,
+        string tokenOut,
+        uint256 deadline,
+        uint256 timeRemaining
+    );
 
     // ==================== MODIFIERS ====================
 
@@ -148,58 +250,6 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
     // ==================== MAIN SWAP FUNCTIONS ====================
 
     /**
-     * @notice Esegue swap da token a WETH come richiesto dalle specs
-     * @param tokenCode Token da vendere
-     * @param amountIn Quantità da swappare
-     * @param minAmountOut Minimum amount out per slippage protection
-     * @param deadline Deadline per lo swap
-     * @return amountOut Quantità WETH ricevuta
-     */
-    function swapTokenForWETH(
-        string memory tokenCode,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        uint256 deadline
-    ) 
-        external
-        nonReentrant
-        onlyAuthorizedCaller
-        whenSwapsEnabled
-        returns (uint256 amountOut)
-    {
-        require(block.timestamp <= deadline, "Swap deadline expired");
-        uint256 received = performSwap(tokenCode, "WETH", amountIn, deadline);
-        require(received >= minAmountOut, "Insufficient output amount");
-        return received;
-    }
-
-    /**
-     * @notice Swap WETH per altro token
-     * @param tokenCode Token da ricevere
-     * @param wethAmountIn Quantità WETH da spendere
-     * @param minTokenOut Minimum amount out per slippage protection
-     * @param deadline Deadline per lo swap
-     * @return tokenAmountOut Quantità token ricevuta
-     */
-    function swapWETHForToken(
-        string memory tokenCode,
-        uint256 wethAmountIn,
-        uint256 minTokenOut,
-        uint256 deadline
-    ) 
-        external
-        nonReentrant
-        onlyAuthorizedCaller
-        whenSwapsEnabled
-        returns (uint256 tokenAmountOut)
-    {
-        require(block.timestamp <= deadline, "Swap deadline expired");
-        uint256 received = performSwap("WETH", tokenCode, wethAmountIn, deadline);
-        require(received >= minTokenOut, "Insufficient output amount");
-        return received;
-    }
-
-    /**
      * @notice Esegue swap con deadline ESPLICITO (MEV protected)
      * @dev Fornisce protezione MEV via deadline check
      * @param spendTokenCode Token da vendere
@@ -223,8 +273,21 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         // DEADLINE VALIDATION
         require(block.timestamp <= deadline, "Swap deadline expired");
         
+        // Calculate time remaining
+        uint256 timeRemaining = deadline - block.timestamp;
+        
+        // EMIT SWAP STARTED EVENT
+        emit SwapStarted(
+            msg.sender,
+            spendTokenCode,
+            receiveTokenCode,
+            amountIn,
+            deadline,
+            timeRemaining
+        );
+        
         // Emetti warning se deadline stretto (< 5 min rimanente)
-        if (deadline - block.timestamp < 5 minutes) {
+        if (timeRemaining < 5 minutes) {
             emit TightDeadlineWarning(
                 msg.sender,
                 spendTokenCode,
@@ -234,8 +297,35 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             );
         }
         
+        // Emetti critical warning se deadline molto stretto (< 2 min)
+        if (timeRemaining < 2 minutes) {
+            emit DeadlineCritical(
+                msg.sender,
+                spendTokenCode,
+                receiveTokenCode,
+                deadline,
+                timeRemaining
+            );
+        }
+        
+        // Store start time for duration tracking
+        uint256 startTime = block.timestamp;
+        
         // DELEGA A CORE LOGIC
-        return _performSwapInternal(spendTokenCode, receiveTokenCode, amountIn);
+        uint256 amountOut = _performSwapInternal(spendTokenCode, receiveTokenCode, amountIn);
+        
+        // EMIT SWAP COMPLETED EVENT
+        emit SwapCompleted(
+            msg.sender,
+            spendTokenCode,
+            receiveTokenCode,
+            amountOut,
+            deadline,
+            block.timestamp - startTime,
+            true
+        );
+        
+        return amountOut;
     }
     
     /**
@@ -262,6 +352,148 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         // Delega a versione con deadline esplicito (ha già nonReentrant)
         return performSwap(spendTokenCode, receiveTokenCode, amountIn, deadline);
     }
+    
+    // ==================== MULTI-PLUGIN SWAP (Phase 1B.2) ====================
+    
+    /**
+     * @notice Execute swap with BEST PRICE plugin (multi-plugin query)
+     * @dev Queries all registered plugins, selects best quote, executes swap
+     * @param spendTokenCode Token code to sell (e.g., "WETH", "USDC")
+     * @param receiveTokenCode Token code to buy (e.g., "USDC", "WETH")
+     * @param amountIn Amount of spendToken to swap
+     * @param minAmountOut Minimum acceptable output (slippage protection)
+     * @param deadline Maximum timestamp for execution (MEV protection)
+     * @return amountOut Actual amount received from best plugin
+     * 
+     * BEHAVIOR:
+     * 1. Validates inputs (deadline, amounts, tokens)
+     * 2. Resolves token addresses via TokenManager
+     * 3. Queries ALL plugins via getAllQuotes()
+     * 4. Selects plugin with highest valid quote
+     * 5. Executes swap with winning plugin
+     * 6. Emits BestPluginSelected event
+     * 
+     * AUTHORIZATION:
+     * - onlyAuthorizedCaller: solo LiquidityManager-ETH/USDC/WBTC
+     * - Same security as performSwap()
+     * 
+     * GAS COST:
+     * - Overhead ~10-15k gas vs performSwap() (depends on # plugins)
+     * - Worth it for best price guarantee
+     * 
+     * FAILURE MODES:
+     * - No valid quotes → revert "No valid plugin found"
+     * - Best quote < minAmountOut → revert "Best quote below minimum"
+     * - Deadline expired → revert "Deadline expired"
+     * 
+     * USAGE (from LiquidityManager):
+     * ```solidity
+     * uint256 output = swapManager.swapWithBestPlugin(
+     *     "WETH",
+     *     "USDC",
+     *     1 ether,
+     *     1900 * 1e6,  // min 1900 USDC
+     *     block.timestamp + 600
+     * );
+     * ```
+     */
+    function swapWithBestPlugin(
+        string memory spendTokenCode,
+        string memory receiveTokenCode,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        uint256 deadline
+    )
+        external
+        nonReentrant
+        onlyAuthorizedCaller
+        whenSwapsEnabled
+        returns (uint256 amountOut)
+    {
+        // ===== VALIDATION =====
+        require(block.timestamp <= deadline, "Deadline expired");
+        require(amountIn > 0, "Amount must be greater than 0");
+        require(minAmountOut > 0, "minAmountOut must be greater than 0");
+        require(
+            keccak256(bytes(spendTokenCode)) != keccak256(bytes(receiveTokenCode)),
+            "Cannot swap same token"
+        );
+        
+        // Emetti warning se deadline stretto
+        if (deadline - block.timestamp < 5 minutes) {
+            emit TightDeadlineWarning(
+                msg.sender,
+                spendTokenCode,
+                receiveTokenCode,
+                deadline,
+                block.timestamp
+            );
+        }
+        
+        // ===== RESOLVE TOKEN ADDRESSES =====
+        address tokenManager = IBeacon(beacon).getImplementation("TokenManager");
+        require(tokenManager != address(0), "TokenManager not configured");
+        
+        ITokenManagerForModules tokens = ITokenManagerForModules(tokenManager);
+        
+        address tokenIn = tokens.getTokenAddress(spendTokenCode);
+        address tokenOut = tokens.getTokenAddress(receiveTokenCode);
+        
+        require(tokenIn != address(0), "Invalid spend token");
+        require(tokenOut != address(0), "Invalid receive token");
+        
+        // ===== QUERY ALL PLUGINS WITH TOKEN CODES =====
+        QuoteResult[] memory quotes = getAllQuotes(spendTokenCode, receiveTokenCode, amountIn);
+        
+        // ===== SELECT BEST PLUGIN =====
+        uint256 bestQuote = 0;
+        string memory bestPluginName;
+        
+        for (uint256 i = 0; i < quotes.length; i++) {
+            if (quotes[i].isValid && quotes[i].quote > bestQuote) {
+                bestQuote = quotes[i].quote;
+                bestPluginName = quotes[i].pluginName;
+            }
+        }
+        
+        // Validate best quote found
+        require(bytes(bestPluginName).length > 0, "No valid plugin found");
+        require(bestQuote >= minAmountOut, "Best quote below minimum");
+        
+        // ===== EXECUTE SWAP WITH BEST PLUGIN =====
+        address bestPluginAddr = IBeacon(beacon).getImplementation(bestPluginName);
+        require(bestPluginAddr != address(0), "Best plugin not registered");
+        
+        ISimpleSwap bestPlugin = ISimpleSwap(bestPluginAddr);
+        
+        // Get ProxyGeneral reference
+        address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
+        IProxyGeneral proxy = IProxyGeneral(proxyGeneral);
+        
+        // Approve plugin to spend tokens from ProxyGeneral
+        proxy.approveSpender(tokenIn, address(bestPlugin), amountIn);
+        
+        // Execute swap (no need to recheck minAmountOut - already validated bestQuote)
+        amountOut = bestPlugin.inputSwap(tokenIn, tokenOut, amountIn);
+        
+        // ===== EMIT EVENT & TRACKING =====
+        emit BestPluginSelected(bestPluginName, bestQuote, amountOut);
+        
+        emit SwapExecuted(
+            spendTokenCode,
+            receiveTokenCode,
+            amountIn,
+            amountOut,
+            0, // slippage calculation omitted for simplicity
+            msg.sender
+        );
+        
+        // Update success tracking
+        bytes32 pairHash = keccak256(abi.encodePacked(spendTokenCode, receiveTokenCode));
+        swapSuccesses[pairHash]++;
+        
+        return amountOut;
+    }
 
     /**
      * @notice Core swap logic (INTERNAL)
@@ -286,7 +518,6 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             keccak256(bytes(spendTokenCode)) != keccak256(bytes(receiveTokenCode)),
             "Cannot swap same token"
         );
-        require(simpleSwapRouter != address(0), "SimpleSwap router not set");
         
         // PRE-SWAP VALIDATION
         SwapValidation memory validation = _validateSwapParameters(spendTokenCode, receiveTokenCode, amountIn);
@@ -296,7 +527,7 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
         
         IProxyGeneral proxy = IProxyGeneral(proxyGeneral);
-        ISimpleSwap swapper = ISimpleSwap(simpleSwapRouter);
+        ISimpleSwap swapper = _getActivePlugin(); // PHASE 1A.4: Use plugin resolution instead of hardcoded
         
         // SPECIAL HANDLING FOR WETH
         if (keccak256(bytes(receiveTokenCode)) == keccak256(bytes("WETH"))) {
@@ -325,8 +556,12 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         SwapExecution memory execution;
         execution.balanceBefore = IWETH(wethAddress).balanceOf(address(proxy));
         
-        // APPROVE SIMPLESWAP TO SPEND TOKENS FROM PROXYGENERAL
-        proxy.approveSpender(validation.spendTokenAddress, address(swapper), amountIn);
+        // CHECK CURRENT ALLOWANCE - only approve if insufficient
+        uint256 currentAllowance = IERC20(validation.spendTokenAddress).allowance(address(proxy), address(swapper));
+        if (currentAllowance < amountIn) {
+            // APPROVE PLUGIN TO SPEND TOKENS FROM PROXYGENERAL (MAX for efficiency)
+            proxy.approveSpender(validation.spendTokenAddress, address(swapper), type(uint256).max);
+        }
         
         try swapper.inputSwap(
             validation.spendTokenAddress,
@@ -348,8 +583,13 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             bytes32 pairHash = keccak256(abi.encodePacked(spendTokenCode, "WETH"));
             swapSuccesses[pairHash]++;
             
-            // CALCULATE SLIPPAGE FOR ANALYTICS
-            uint256 slippage = ((validation.expectedOutput - execution.actualReceived) * 10000) / validation.expectedOutput;
+            // CALCULATE SLIPPAGE FOR ANALYTICS (avoid underflow if actualReceived > expectedOutput)
+            uint256 slippage;
+            if (execution.actualReceived >= validation.expectedOutput) {
+                slippage = 0; // No slippage, got more than expected
+            } else {
+                slippage = ((validation.expectedOutput - execution.actualReceived) * 10000) / validation.expectedOutput;
+            }
             
             // EMIT EVENT WITH SLIPPAGE DATA
             emit SwapExecuted(spendTokenCode, "WETH", amountIn, execution.actualReceived, slippage, msg.sender);
@@ -382,8 +622,12 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         SwapExecution memory execution;
         execution.balanceBefore = IERC20(validation.receiveTokenAddress).balanceOf(address(proxy));
         
-        // APPROVE SIMPLESWAP TO SPEND WETH FROM PROXYGENERAL
-        proxy.approveSpender(validation.spendTokenAddress, address(swapper), amountIn);
+        // CHECK CURRENT ALLOWANCE - only approve if insufficient
+        uint256 currentAllowance = IERC20(validation.spendTokenAddress).allowance(address(proxy), address(swapper));
+        if (currentAllowance < amountIn) {
+            // APPROVE PLUGIN TO SPEND WETH FROM PROXYGENERAL (MAX for efficiency)
+            proxy.approveSpender(validation.spendTokenAddress, address(swapper), type(uint256).max);
+        }
         
         try swapper.inputSwap(
             validation.spendTokenAddress,
@@ -405,8 +649,13 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             bytes32 pairHash = keccak256(abi.encodePacked("WETH", receiveTokenCode));
             swapSuccesses[pairHash]++;
             
-            // CALCULATE SLIPPAGE FOR ANALYTICS
-            uint256 slippage = ((validation.expectedOutput - execution.actualReceived) * 10000) / validation.expectedOutput;
+            // CALCULATE SLIPPAGE FOR ANALYTICS (avoid underflow if actualReceived > expectedOutput)
+            uint256 slippage;
+            if (execution.actualReceived >= validation.expectedOutput) {
+                slippage = 0; // No slippage, got more than expected
+            } else {
+                slippage = ((validation.expectedOutput - execution.actualReceived) * 10000) / validation.expectedOutput;
+            }
             
             // EMIT EVENT WITH SLIPPAGE DATA
             emit SwapExecuted("WETH", receiveTokenCode, amountIn, execution.actualReceived, slippage, msg.sender);
@@ -440,8 +689,12 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         SwapExecution memory execution;
         execution.balanceBefore = IERC20(validation.receiveTokenAddress).balanceOf(address(proxy));
         
-        // APPROVE SIMPLESWAP TO SPEND TOKENS FROM PROXYGENERAL
-        proxy.approveSpender(validation.spendTokenAddress, address(swapper), amountIn);
+        // CHECK CURRENT ALLOWANCE - only approve if insufficient
+        uint256 currentAllowance = IERC20(validation.spendTokenAddress).allowance(address(proxy), address(swapper));
+        if (currentAllowance < amountIn) {
+            // APPROVE PLUGIN TO SPEND TOKENS FROM PROXYGENERAL (MAX for efficiency)
+            proxy.approveSpender(validation.spendTokenAddress, address(swapper), type(uint256).max);
+        }
         
         try swapper.inputSwap(
             validation.spendTokenAddress,
@@ -463,8 +716,13 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             bytes32 pairHash = keccak256(abi.encodePacked(spendTokenCode, receiveTokenCode));
             swapSuccesses[pairHash]++;
             
-            // CALCULATE SLIPPAGE FOR ANALYTICS
-            uint256 slippage = ((validation.expectedOutput - execution.actualReceived) * 10000) / validation.expectedOutput;
+            // CALCULATE SLIPPAGE FOR ANALYTICS (avoid underflow if actualReceived > expectedOutput)
+            uint256 slippage;
+            if (execution.actualReceived >= validation.expectedOutput) {
+                slippage = 0; // No slippage, got more than expected
+            } else {
+                slippage = ((validation.expectedOutput - execution.actualReceived) * 10000) / validation.expectedOutput;
+            }
             
             // EMIT EVENT WITH SLIPPAGE DATA
             emit SwapExecuted(spendTokenCode, receiveTokenCode, amountIn, execution.actualReceived, slippage, msg.sender);
@@ -501,6 +759,231 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         return (validation.isValid, validation.errorReason);
     }
 
+    // ==================== INTERNAL PLUGIN RESOLUTION (Phase 1A.3) ====================
+    
+    /**
+     * @notice Resolves active swap plugin with fallback
+     * @dev Tries Beacon resolution first, falls back to deprecated simpleSwapRouter
+     * @return plugin ISimpleSwap implementation address
+     * 
+     * RESOLUTION LOGIC:
+     * 1. Try: Beacon.getImplementation(activeSwapPlugin)
+     * 2. Fallback: Use simpleSwapRouter (deprecated but maintained)
+     * 3. Revert if both fail
+     * 
+     * BACKWARD COMPATIBILITY:
+     * - If Beacon resolution fails → simpleSwapRouter used (old system works)
+     * - If activeSwapPlugin empty → simpleSwapRouter used
+     * - If both fail → revert with clear error
+     */
+    function _getActivePlugin() internal view returns (ISimpleSwap plugin) {
+        // TRY NEW SYSTEM: Beacon resolution
+        if (bytes(activeSwapPlugin).length > 0) {
+            try IBeacon(beacon).getImplementation(activeSwapPlugin) returns (address pluginAddr) {
+                if (pluginAddr != address(0) && pluginAddr.code.length > 0) {
+                    return ISimpleSwap(pluginAddr);
+                }
+            } catch {
+                // Beacon resolution failed, will fallback
+            }
+        }
+        
+        // FALLBACK TO OLD SYSTEM: simpleSwapRouter (deprecated)
+        if (simpleSwapRouter != address(0)) {
+            return ISimpleSwap(simpleSwapRouter);
+        }
+        
+        // BOTH FAILED: No plugin configured
+        revert("No swap plugin configured");
+    }
+    
+    // ==================== MULTI-PLUGIN QUERY SYSTEM (Phase 1B) ====================
+    
+    /**
+     * @notice Get list of swap plugin names from Beacon
+     * @dev Filters Beacon registered modules for swap plugins by naming convention
+     * @return pluginNames Array of plugin names (e.g., ["UniswapV3Plugin", "CamelotPlugin"])
+     * 
+     * NAMING CONVENTION:
+     * - Plugins MUST end with "Plugin" suffix
+     * - Examples: "UniswapV3Plugin", "CamelotPlugin", "OdosPlugin"
+     * - This allows filtering without ModuleCategory enum
+     * 
+     * OPTIMIZATION:
+     * - Max 10 plugins to prevent gas exhaustion
+     * - Can be extended if needed (monitor gas costs)
+     */
+    function _getSwapPluginNames() internal view returns (string[] memory pluginNames) {
+        string[] memory allModules = IBeacon(beacon).getRegisteredModules();
+        
+        // First pass: count swap plugins
+        uint256 count = 0;
+        for (uint256 i = 0; i < allModules.length && count < 10; i++) {
+            if (_isSwapPlugin(allModules[i])) {
+                count++;
+            }
+        }
+        
+        // Second pass: collect plugin names
+        pluginNames = new string[](count);
+        uint256 index = 0;
+        for (uint256 i = 0; i < allModules.length && index < count; i++) {
+            if (_isSwapPlugin(allModules[i])) {
+                pluginNames[index] = allModules[i];
+                index++;
+            }
+        }
+        
+        return pluginNames;
+    }
+    
+    /**
+     * @notice Check if module name is a swap plugin
+     * @dev Uses naming convention: must end with "Plugin"
+     * 
+     * GAS OPTIMIZATION: 
+     * - Inline suffix check (6 bytes: "Plugin")
+     * - No memory allocation for suffix bytes
+     */
+    function _isSwapPlugin(string memory moduleName) internal pure returns (bool) {
+        bytes memory nameBytes = bytes(moduleName);
+        
+        // Must be at least 7 chars (e.g., "XPlugin")
+        if (nameBytes.length < 6) {
+            return false;
+        }
+        
+        // Check if last 6 chars match "Plugin" (0x506C7567696E)
+        // P=0x50, l=0x6C, u=0x75, g=0x67, i=0x69, n=0x6E
+        uint256 offset = nameBytes.length - 6;
+        return (
+            nameBytes[offset]     == 0x50 && // P
+            nameBytes[offset + 1] == 0x6C && // l
+            nameBytes[offset + 2] == 0x75 && // u
+            nameBytes[offset + 3] == 0x67 && // g
+            nameBytes[offset + 4] == 0x69 && // i
+            nameBytes[offset + 5] == 0x6E    // n
+        );
+    }
+    
+    /**
+     * @notice Get quotes from ALL registered swap plugins
+     * @dev Queries each plugin via Beacon, returns array with validity status
+     * @param tokenIn Token to sell (address)
+     * @param tokenOut Token to buy (address)
+     * @param amountIn Amount of tokenIn to swap
+     * @return results Array of QuoteResult structs (one per plugin)
+     * 
+     * BEHAVIOR:
+     * - Queries all plugins found via _getSwapPluginNames()
+     * - Each plugin query wrapped in try/catch (failures don't revert)
+     * - Invalid plugins return isValid=false with errorReason
+     * - View function: no state changes, safe to call off-chain
+     * 
+     * GAS OPTIMIZATION:
+     * - Max 10 plugins queried (enforced in _getSwapPluginNames)
+     * - Early continue on plugin resolution failures
+     * - Memory-efficient result allocation
+     * 
+     * USAGE:
+     * ```solidity
+     * QuoteResult[] memory quotes = swapManager.getAllQuotes(WETH, USDC, 1 ether);
+     * for (uint i = 0; i < quotes.length; i++) {
+     *     if (quotes[i].isValid) {
+     *         console.log(quotes[i].pluginName, quotes[i].quote);
+     *     }
+     * }
+     * ```
+     */
+    /**
+     * @notice Get quotes from ALL registered plugins
+     * @dev Queries each plugin, returns array of results with decimals from TokenManager
+     * @param tokenCodeIn Token code to sell (e.g., "WETH", "USDC") 
+     * @param tokenCodeOut Token code to buy
+     * @param amountIn Amount to swap
+     * @return results Array of QuoteResult structs
+     */
+    function getAllQuotes(
+        string memory tokenCodeIn,
+        string memory tokenCodeOut,
+        uint256 amountIn
+    ) public view returns (QuoteResult[] memory results) {
+        require(bytes(tokenCodeIn).length > 0, "Invalid tokenCodeIn");
+        require(bytes(tokenCodeOut).length > 0, "Invalid tokenCodeOut");
+        require(keccak256(bytes(tokenCodeIn)) != keccak256(bytes(tokenCodeOut)), "Same token");
+        require(amountIn > 0, "Amount must be > 0");
+        
+        // Get TokenManager reference
+        address tokenManagerAddr = IBeacon(beacon).getImplementation("TokenManager");
+        require(tokenManagerAddr != address(0), "TokenManager not configured");
+        ITokenManagerForModules tokens = ITokenManagerForModules(tokenManagerAddr);
+        
+        // Get token info from TokenManager (single source of truth)
+        ITokenManagerForModules.TokenInfo memory tokenInInfo = tokens.getTokenInfo(tokenCodeIn);
+        ITokenManagerForModules.TokenInfo memory tokenOutInfo = tokens.getTokenInfo(tokenCodeOut);
+        
+        address tokenIn = tokenInInfo.tokenAddress;
+        address tokenOut = tokenOutInfo.tokenAddress;
+        uint8 decimalsIn = tokenInInfo.tokenDecimals;
+        uint8 decimalsOut = tokenOutInfo.tokenDecimals;
+        
+        require(tokenIn != address(0), "Invalid tokenIn");
+        require(tokenOut != address(0), "Invalid tokenOut");
+        
+        // Get all swap plugin names from Beacon
+        string[] memory pluginNames = _getSwapPluginNames();
+        results = new QuoteResult[](pluginNames.length);
+        
+        // Query each plugin
+        for (uint256 i = 0; i < pluginNames.length; i++) {
+            results[i].pluginName = pluginNames[i];
+            
+            // Try to resolve plugin address from Beacon
+            address pluginAddr;
+            try IBeacon(beacon).getImplementation(pluginNames[i]) returns (address addr) {
+                pluginAddr = addr;
+            } catch {
+                results[i].isValid = false;
+                results[i].errorReason = "Beacon resolution failed";
+                continue;
+            }
+            
+            // Verify plugin address is valid
+            if (pluginAddr == address(0)) {
+                results[i].isValid = false;
+                results[i].errorReason = "Plugin not registered";
+                continue;
+            }
+            
+            if (pluginAddr.code.length == 0) {
+                results[i].isValid = false;
+                results[i].errorReason = "Plugin is not a contract";
+                continue;
+            }
+            
+            // Query plugin WITH DECIMALS FROM TOKENMANAGER
+            ISimpleSwap plugin = ISimpleSwap(pluginAddr);
+            
+            try plugin.getExpectedOutput(tokenIn, tokenOut, amountIn, decimalsIn, decimalsOut) returns (uint256 quote) {
+                if (quote > 0) {
+                    results[i].quote = quote;
+                    results[i].isValid = true;
+                } else {
+                    results[i].isValid = false;
+                    results[i].errorReason = "Quote is zero";
+                }
+            } catch Error(string memory reason) {
+                results[i].isValid = false;
+                results[i].errorReason = reason;
+            } catch {
+                results[i].isValid = false;
+                results[i].errorReason = "getExpectedOutput failed";
+            }
+        }
+        
+        return results;
+    }
+
     /**
      * @notice Validazione interna parametri swap
      */
@@ -516,15 +999,15 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         
         ITokenManagerForModules tokens = ITokenManagerForModules(tokenManager);
         IProxyGeneral proxy = IProxyGeneral(proxyGeneral);
-        ISimpleSwap swapper = ISimpleSwap(simpleSwapRouter);
+        ISimpleSwap swapper = _getActivePlugin();
         
         // CHECK MODULE ADDRESSES
         if (tokenManager == address(0)) {
             validation.errorReason = "TokenManager not configured";
             return validation;
         }
-        if (simpleSwapRouter == address(0)) {
-            validation.errorReason = "SimpleSwap router not configured";
+        if (address(swapper) == address(0)) {
+            validation.errorReason = "Active swap plugin not configured";
             return validation;
         }
         
@@ -590,8 +1073,26 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             return validation;
         }
         
+        // GET DECIMALS FROM TOKENMANAGER
+        uint8 decimalsIn = 18;
+        uint8 decimalsOut = 18;
+        
+        // Get decimals for spendToken
+        if (!spendTokenIsWeth) {
+            try tokens.getTokenInfo(spendTokenCode) returns (ITokenManagerForModules.TokenInfo memory info) {
+                decimalsIn = info.tokenDecimals;
+            } catch {}
+        }
+        
+        // Get decimals for receiveToken
+        if (!receiveTokenIsWeth) {
+            try tokens.getTokenInfo(receiveTokenCode) returns (ITokenManagerForModules.TokenInfo memory info) {
+                decimalsOut = info.tokenDecimals;
+            } catch {}
+        }
+        
         // GET EXPECTED OUTPUT AND CALCULATE SLIPPAGE PROTECTION
-        try swapper.getExpectedOutput(validation.spendTokenAddress, validation.receiveTokenAddress, amountIn) returns (uint256 expectedOutput) {
+        try swapper.getExpectedOutput(validation.spendTokenAddress, validation.receiveTokenAddress, amountIn, decimalsIn, decimalsOut) returns (uint256 expectedOutput) {
             validation.expectedOutput = expectedOutput;
             validation.minAcceptableOutput = (expectedOutput * (10000 - maxSlippage)) / 10000;
         } catch {
@@ -735,9 +1236,16 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
 
     /**
      * @notice Imposta SimpleSwap router address
+     * @dev DEPRECATED: Use setActiveSwapPlugin() instead
+     *      Maintained for backward compatibility only
      * @param newRouter Nuovo router address
      */
     function setSimpleSwapRouter(address newRouter) external onlyOwner {
+        emit DeprecationWarning(
+            "setSimpleSwapRouter",
+            "DEPRECATED: Use setActiveSwapPlugin() instead. This function maintained for backward compatibility only."
+        );
+        
         require(newRouter != address(0), "Invalid router address");
         require(newRouter.code.length > 0, "Router must be a contract");
         
@@ -745,6 +1253,25 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         simpleSwapRouter = newRouter;
         
         emit SimpleSwapRouterUpdated(oldRouter, newRouter);
+    }
+    
+    /**
+     * @notice Set active swap plugin by name (NEW - Phase 1A.3)
+     * @dev Plugin must be registered in Beacon before calling
+     * @param pluginName Plugin name (e.g., "UniswapV3Plugin", "CamelotPlugin")
+     */
+    function setActiveSwapPlugin(string memory pluginName) external onlyOwner {
+        require(bytes(pluginName).length > 0, "Invalid plugin name");
+        
+        // Verify plugin exists in Beacon
+        address pluginAddr = IBeacon(beacon).getImplementation(pluginName);
+        require(pluginAddr != address(0), "Plugin not registered in Beacon");
+        require(pluginAddr.code.length > 0, "Plugin address is not a contract");
+        
+        string memory oldPlugin = activeSwapPlugin;
+        activeSwapPlugin = pluginName;
+        
+        emit SwapPluginChanged(oldPlugin, pluginName, pluginAddr);
     }
 
     /**
@@ -901,10 +1428,12 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         
         address tokenInAddress = tokenInInfo.tokenAddress;
         address tokenOutAddress = tokenOutInfo.tokenAddress;
+        uint8 decimalsIn = tokenInInfo.tokenDecimals;
+        uint8 decimalsOut = tokenOutInfo.tokenDecimals;
         
         // Query router for expected output (this validates route exists)
         ISimpleSwap router = ISimpleSwap(simpleSwapRouter);
-        uint256 expectedOutput = router.getExpectedOutput(tokenInAddress, tokenOutAddress, amountIn);
+        uint256 expectedOutput = router.getExpectedOutput(tokenInAddress, tokenOutAddress, amountIn, decimalsIn, decimalsOut);
         
         // If we got output, estimate gas based on complexity
         if (expectedOutput > 0) {
@@ -969,10 +1498,26 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             return (false, "Amount must be greater than 0");
         }
 
-        // Check token addresses exist
-        ITokenManagerForModules tokenManager = ITokenManagerForModules(IBeacon(beacon).getImplementation("TokenManager"));
-        address tokenInAddress = tokenManager.getTokenAddress(tokenCodeIn);
-        address tokenOutAddress = tokenManager.getTokenAddress(tokenCodeOut);
+        // Check token addresses exist - SPECIAL CASE: WETH from Beacon
+        bool tokenInIsWeth = (keccak256(bytes(tokenCodeIn)) == keccak256(bytes("WETH")));
+        bool tokenOutIsWeth = (keccak256(bytes(tokenCodeOut)) == keccak256(bytes("WETH")));
+        
+        address tokenInAddress;
+        address tokenOutAddress;
+        
+        if (tokenInIsWeth) {
+            tokenInAddress = IBeacon(beacon).getImplementation("WETH");
+        } else {
+            ITokenManagerForModules tokenManager = ITokenManagerForModules(IBeacon(beacon).getImplementation("TokenManager"));
+            tokenInAddress = tokenManager.getTokenAddress(tokenCodeIn);
+        }
+        
+        if (tokenOutIsWeth) {
+            tokenOutAddress = IBeacon(beacon).getImplementation("WETH");
+        } else {
+            ITokenManagerForModules tokenManager = ITokenManagerForModules(IBeacon(beacon).getImplementation("TokenManager"));
+            tokenOutAddress = tokenManager.getTokenAddress(tokenCodeOut);
+        }
         
         if (tokenInAddress == address(0)) {
             return (false, "Input token not supported");

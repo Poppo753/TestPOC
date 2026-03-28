@@ -325,7 +325,7 @@ export class UpdateParameters extends BaseScript {
             this.beacon = this.contracts.beacon;
             
             // Get ParameterManager
-            const paramManagerAddress = await this.beacon.getModule("ParameterManager");
+            const paramManagerAddress = await this.beacon.getImplementation("ParameterManager");
             this.parameterManager = await ethers.getContractAt("ParameterManager", paramManagerAddress);
             
             if (this.options.verbose) {
@@ -695,7 +695,7 @@ export class UpdateParameters extends BaseScript {
             }
 
             // Call the parameter manager contract
-            const tx = await this.parameterManager.updateParameter(
+            const tx = await this.parameterManager.proposeParameterChange(
                 param.key,
                 contractValue,
                 { gasLimit: 300000 }

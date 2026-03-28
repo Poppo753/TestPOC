@@ -391,7 +391,7 @@ export class SystemHealth extends BaseScript {
         let moduleCount = 0;
         for (const moduleName of this.COMPONENTS.slice(1)) { // Skip Beacon itself
             try {
-                const moduleAddress = await this.beacon.getModule(moduleName);
+                const moduleAddress = await this.beacon.getImplementation(moduleName);
                 if (moduleAddress && moduleAddress !== ethers.ZeroAddress) {
                     moduleCount++;
                 }
@@ -441,7 +441,7 @@ export class SystemHealth extends BaseScript {
      */
     private async checkTokenManager(issues: HealthIssue[], metrics: ComponentMetrics): Promise<void> {
         try {
-            const tmAddress = await this.beacon.getModule("TokenManager");
+            const tmAddress = await this.beacon.getImplementation("TokenManager");
             const tokenManager = await ethers.getContractAt("TokenManager", tmAddress);
 
             // Check supported tokens count
@@ -479,7 +479,7 @@ export class SystemHealth extends BaseScript {
      */
     private async checkLiquidityManager(issues: HealthIssue[], metrics: ComponentMetrics): Promise<void> {
         try {
-            const lmAddress = await this.beacon.getModule("LiquidityManager");
+            const lmAddress = await this.beacon.getImplementation("LiquidityManager");
             const liquidityManager = await ethers.getContractAt("LiquidityManager", lmAddress);
 
             // Check contract balance
@@ -530,7 +530,7 @@ export class SystemHealth extends BaseScript {
      */
     private async checkSwapManager(issues: HealthIssue[], metrics: ComponentMetrics): Promise<void> {
         try {
-            const smAddress = await this.beacon.getModule("SwapManager");
+            const smAddress = await this.beacon.getImplementation("SwapManager");
             const swapManager = await ethers.getContractAt("SwapManager", smAddress);
 
             // Check if swaps are paused (mock check)
@@ -567,7 +567,7 @@ export class SystemHealth extends BaseScript {
      */
     private async checkParameterManager(issues: HealthIssue[], metrics: ComponentMetrics): Promise<void> {
         try {
-            const pmAddress = await this.beacon.getModule("ParameterManager");
+            const pmAddress = await this.beacon.getImplementation("ParameterManager");
             const paramManager = await ethers.getContractAt("ParameterManager", pmAddress);
 
             // Check critical parameters are set (mock values)
@@ -619,7 +619,7 @@ export class SystemHealth extends BaseScript {
      */
     private async checkValueCalculator(issues: HealthIssue[], metrics: ComponentMetrics): Promise<void> {
         try {
-            const vcAddress = await this.beacon.getModule("ValueCalculator");
+            const vcAddress = await this.beacon.getImplementation("ValueCalculator");
             const valueCalculator = await ethers.getContractAt("ValueCalculator", vcAddress);
 
             // ValueCalculator is generally stable - just check accessibility
@@ -643,7 +643,7 @@ export class SystemHealth extends BaseScript {
      */
     private async checkEmergencyHandler(issues: HealthIssue[], metrics: ComponentMetrics): Promise<void> {
         try {
-            const ehAddress = await this.beacon.getModule("EmergencyHandler");
+            const ehAddress = await this.beacon.getImplementation("EmergencyHandler");
             const emergencyHandler = await ethers.getContractAt("EmergencyHandler", ehAddress);
 
             // Check if system is in emergency mode (mock)

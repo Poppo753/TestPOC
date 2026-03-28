@@ -299,7 +299,7 @@ export class RecoveryManager extends BaseScript {
 
         for (const moduleName of modules) {
             try {
-                const address = await this.beacon.getModule(moduleName);
+                const address = await this.beacon.getImplementation(moduleName);
                 const owner = await this.beacon.owner();
 
                 // Check if paused (mock - would check actual state)
@@ -346,7 +346,7 @@ export class RecoveryManager extends BaseScript {
 
         for (const moduleName of modules) {
             try {
-                const address = await this.beacon.getModule(moduleName);
+                const address = await this.beacon.getImplementation(moduleName);
                 const balance = await ethers.provider.getBalance(address);
 
                 balances.push({

@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swap Configuration - Owner Only</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            color: #1a202c;
+            margin-bottom: 8px;
+        }
+
+        .header .subtitle {
+            color: #718096;
+            font-size: 14px;
+        }
+
+        .alert {
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            font-size: 14px;
+        }
+
+        .alert-info {
+            background: #ebf8ff;
+            color: #2c5282;
+            border: 1px solid #bee3f8;
+        }
+
+        .alert-error {
+            background: #fff5f5;
+            color: #c53030;
+            border: 1px solid #feb2b2;
+        }
+
+        .alert-success {
+            background: #f0fff4;
+            color: #276749;
+            border: 1px solid #9ae6b4;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #edf2f7;
+            color: #2d3748;
+            margin-top: 12px;
+        }
+
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            color: #718096;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            color: #4a5568;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 8px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group .helper-text {
+            font-size: 12px;
+            color: #718096;
+            margin-top: 4px;
+        }
+
+        .multi-swap-item {
+            background: #f7fafc;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border: 2px solid #e2e8f0;
+        }
+
+        .multi-swap-item .row {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+        }
+
+        .multi-swap-item .row > div {
+            flex: 1;
+        }
+
+        .multi-swap-item .btn-remove {
+            background: #fc8181;
+            color: white;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .multi-swap-item .btn-remove:hover {
+            background: #f56565;
+        }
+
+        .btn-add {
+            background: #48bb78;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+        .btn-add:hover {
+            background: #38a169;
+        }
+
+        .balance-display {
+            background: #f7fafc;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            color: #4a5568;
+        }
+
+        .balance-display strong {
+            color: #2d3748;
+        }
+
+        .spinner {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .tx-link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .tx-link:hover {
+            text-decoration: underline;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .summary-box {
+            background: #f7fafc;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .summary-box .title {
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 8px;
+        }
+
+        .summary-box .item {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 14px;
+            color: #4a5568;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <div class="header">
+            <h1>🔧 Swap Configuration</h1>
+            <p class="subtitle">Owner-only swap management interface</p>
+        </div>
+
+        <!-- CONNECT SECTION -->
+        <div id="connectSection">
+            <div class="alert alert-info">
+                ⚠️ This interface is restricted to the contract owner only.
+            </div>
+            <button class="btn btn-primary" onclick="connectWallet()">
+                Connect Wallet
+            </button>
+        </div>
+
+        <!-- UNAUTHORIZED SECTION -->
+        <div id="unauthorizedSection" class="hidden">
+            <div class="alert alert-error">
+                ❌ Access Denied: You are not the contract owner.
+            </div>
+            <div style="text-align: center; color: #718096; font-size: 14px; margin-top: 16px;">
+                <p><strong>Your Address:</strong><br><span id="userAddress"></span></p>
+                <p style="margin-top: 8px;"><strong>Owner Address:</strong><br><span id="ownerAddress"></span></p>
+            </div>
+            <button class="btn btn-secondary" onclick="disconnectWallet()">
+                Disconnect
+            </button>
+        </div>
+
+        <!-- LOADING SECTION -->
+        <div id="loadingSection" class="hidden">
+            <div class="spinner"></div>
+            <p style="text-align: center; color: #718096; margin-top: 16px;">
+                Verifying ownership...
+            </p>
+        </div>
+
+        <!-- MAIN INTERFACE (Owner Only) -->
+        <div id="mainInterface" class="hidden">
+            <div class="alert alert-success">
+                ✅ Connected as Owner
+            </div>
+
+            <!-- TABS -->
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('single')">
+                    Single Swap
+                </button>
+                <button class="tab" onclick="switchTab('multi')">
+                    Multi Swap
+                </button>
+            </div>
+
+            <!-- SINGLE SWAP TAB -->
+            <div id="singleTab" class="tab-content active">
+                <form onsubmit="executeSingleSwap(event)">
+                    <div class="form-group">
+                        <label>Token From</label>
+                        <select id="tokenFrom" required>
+                            <option value="WETH">WETH</option>
+                            <option value="USDC">USDC</option>
+                            <option value="WBTC">WBTC</option>
+                            <option value="USDT">USDT</option>
+                        </select>
+                    </div>
+
+                    <div id="balanceFrom" class="balance-display hidden">
+                        Pool balance: <strong id="balanceFromValue">-</strong>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Token To</label>
+                        <select id="tokenTo" required>
+                            <option value="USDC">USDC</option>
+                            <option value="WETH">WETH</option>
+                            <option value="WBTC">WBTC</option>
+                            <option value="USDT">USDT</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Percentage to Swap</label>
+                        <input type="number" id="percentage" min="1" max="100" value="50" required>
+                        <div class="helper-text">Enter percentage of pool balance to swap (1-100)</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Slippage Tolerance (%)</label>
+                        <input type="number" id="slippage" min="0.1" max="50" step="0.1" value="3" required>
+                        <div class="helper-text">Maximum acceptable slippage</div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="btnSingleSwap">
+                        Execute Single Swap
+                    </button>
+                </form>
+            </div>
+
+            <!-- MULTI SWAP TAB -->
+            <div id="multiTab" class="tab-content">
+                <form onsubmit="executeMultiSwap(event)">
+                    <div class="form-group">
+                        <label>Token From</label>
+                        <select id="multiTokenFrom" required>
+                            <option value="WETH">WETH</option>
+                            <option value="USDC">USDC</option>
+                            <option value="WBTC">WBTC</option>
+                            <option value="USDT">USDT</option>
+                        </select>
+                    </div>
+
+                    <div id="multiBalanceFrom" class="balance-display hidden">
+                        Pool balance: <strong id="multiBalanceFromValue">-</strong>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Total Percentage to Swap</label>
+                        <input type="number" id="multiTotalPercentage" min="1" max="100" value="60" required>
+                        <div class="helper-text">Total % of pool balance to distribute across swaps</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Slippage Tolerance (%)</label>
+                        <input type="number" id="multiSlippage" min="0.1" max="50" step="0.1" value="3" required>
+                    </div>
+
+                    <label style="display: block; font-size: 14px; font-weight: 600; color: #2d3748; margin-bottom: 12px;">
+                        Swap Allocations
+                    </label>
+
+                    <div id="swapAllocations">
+                        <!-- Dynamic swap items will be added here -->
+                    </div>
+
+                    <button type="button" class="btn-add" onclick="addSwapAllocation()">
+                        + Add Token
+                    </button>
+
+                    <div id="multiSummary" class="summary-box hidden">
+                        <div class="title">Summary</div>
+                        <div class="item">
+                            <span>Total Allocation:</span>
+                            <strong id="totalAllocation">0%</strong>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="btnMultiSwap">
+                        Execute Multi Swap
+                    </button>
+                </form>
+            </div>
+
+            <!-- STATUS MESSAGE -->
+            <div id="statusMessage" class="hidden" style="margin-top: 20px;"></div>
+
+            <button class="btn btn-secondary" onclick="disconnectWallet()">
+                Disconnect Wallet
+            </button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { web3Manager } from './src/utils/web3.js';
+        import { CONFIG, ABIS } from './src/config/contracts.js';
+        import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.min.js';
+
+        let userAccount = null;
+        let ownerAccount = null;
+        let contracts = {};
+        let provider = null;
+        let signer = null;
+
+        // Contract ABIs
+        const SWAP_MANAGER_ABI = [
+            "function performSwap(string tokenFrom, string tokenTo, uint256 amountIn, uint256 deadline) external returns (uint256)",
+            "function swapsEnabled() view returns (bool)",
+            "function activeSwapPlugin() view returns (string)",
+            "function calculateMinAmountOut(string tokenFrom, string tokenTo, uint256 amountIn, uint256 slippageBasisPoints) view returns (uint256)",
+            "function canSwap(string tokenFrom, string tokenTo, uint256 amount) view returns (bool, string)",
+            "event SwapExecuted(address indexed user, address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut)"
+        ];
+
+        const TOKEN_MANAGER_ABI = [
+            "function getTokenAddress(string code) view returns (address)"
+        ];
+
+        const BEACON_ABI = [
+            "function getImplementation(string name) view returns (address)"
+        ];
+
+        const ERC20_ABI = [
+            "function balanceOf(address) view returns (uint256)",
+            "function decimals() view returns (uint8)"
+        ];
+
+        // Make functions available globally
+        window.connectWallet = connectWallet;
+        window.disconnectWallet = disconnectWallet;
+        window.switchTab = switchTab;
+        window.executeSingleSwap = executeSingleSwap;
+        window.executeMultiSwap = executeMultiSwap;
+        window.addSwapAllocation = addSwapAllocation;
+        window.removeSwapAllocation = removeSwapAllocation;
+
+        // Initialize
+        async function connectWallet() {
+            try {
+                showSection('loadingSection');
+
+                // Connect using web3Manager
+                const state = await web3Manager.connect();
+                userAccount = state.address;
+                provider = state.provider;
+                signer = state.signer;
+
+                // Get Beacon first
+                contracts.beacon = new ethers.Contract(
+                    CONFIG.CONTRACTS.BEACON,
+                    BEACON_ABI,
+                    signer
+                );
+
+                // Get implementation addresses from Beacon
+                const swapManagerAddress = await contracts.beacon.getImplementation("SwapManager");
+                const tokenManagerAddress = await contracts.beacon.getImplementation("TokenManager");
+
+                contracts.liquidityManager = new ethers.Contract(
+                    CONFIG.CONTRACTS.LIQUIDITY_MANAGER,
+                    ABIS.LIQUIDITY_MANAGER,
+                    signer
+                );
+
+                contracts.swapManager = new ethers.Contract(
+                    swapManagerAddress,
+                    SWAP_MANAGER_ABI,
+                    signer
+                );
+
+                contracts.tokenManager = new ethers.Contract(
+                    tokenManagerAddress,
+                    TOKEN_MANAGER_ABI,
+                    signer
+                );
+
+                // Get owner address
+                ownerAccount = await contracts.liquidityManager.owner();
+
+                // Check if user is owner
+                if (userAccount.toLowerCase() !== ownerAccount.toLowerCase()) {
+                    document.getElementById('userAddress').textContent = userAccount;
+                    document.getElementById('ownerAddress').textContent = ownerAccount;
+                    showSection('unauthorizedSection');
+                    return;
+                }
+
+                // User is owner - show main interface
+                showSection('mainInterface');
+                
+                // Initialize multi-swap with 2 default allocations
+                initializeMultiSwap();
+
+                // Load initial balances
+                await updateBalances();
+
+            } catch (error) {
+                console.error('Connection error:', error);
+                alert('Failed to connect: ' + error.message);
+                showSection('connectSection');
+            }
+        }
+
+        async function disconnectWallet() {
+            web3Manager.disconnect();
+            userAccount = null;
+            ownerAccount = null;
+            contracts = {};
+            provider = null;
+            signer = null;
+            showSection('connectSection');
+        }
+
+        function showSection(sectionId) {
+            const sections = ['connectSection', 'unauthorizedSection', 'loadingSection', 'mainInterface'];
+            sections.forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            document.getElementById(sectionId).classList.remove('hidden');
+        }
+
+        function switchTab(tab) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Update tab content
+            document.getElementById('singleTab').classList.remove('active');
+            document.getElementById('multiTab').classList.remove('active');
+
+            if (tab === 'single') {
+                document.getElementById('singleTab').classList.add('active');
+                updateBalances();
+            } else {
+                document.getElementById('multiTab').classList.add('active');
+                updateMultiBalances();
+            }
+        }
+
+        async function updateBalances() {
+            const tokenFrom = document.getElementById('tokenFrom').value;
+            await loadTokenBalance('balanceFrom', 'balanceFromValue', tokenFrom);
+        }
+
+        async function updateMultiBalances() {
+            const tokenFrom = document.getElementById('multiTokenFrom').value;
+            await loadTokenBalance('multiBalanceFrom', 'multiBalanceFromValue', tokenFrom);
+        }
+
+        async function loadTokenBalance(containerId, valueId, tokenCode) {
+            try {
+                const proxyAddress = await contracts.beacon.getImplementation("ProxyGeneral");
+                let tokenAddress;
+
+                if (tokenCode === "WETH") {
+                    tokenAddress = await contracts.beacon.getImplementation("WETH");
+                } else {
+                    tokenAddress = await contracts.tokenManager.getTokenAddress(tokenCode);
+                }
+
+                const tokenContract = new ethers.Contract(
+                    tokenAddress,
+                    ERC20_ABI,
+                    provider
+                );
+
+                const balance = await tokenContract.balanceOf(proxyAddress);
+                const decimals = await tokenContract.decimals();
+
+                document.getElementById(containerId).classList.remove('hidden');
+                document.getElementById(valueId).textContent = `${ethers.formatUnits(balance, decimals)} ${tokenCode}`;
+
+            } catch (error) {
+                console.error('Error loading balance:', error);
+            }
+        }
+
+        // Listen to token changes
+        document.getElementById('tokenFrom').addEventListener('change', updateBalances);
+        document.getElementById('multiTokenFrom').addEventListener('change', updateMultiBalances);
+
+        // SINGLE SWAP
+        async function executeSingleSwap(event) {
+            event.preventDefault();
+
+            const tokenFrom = document.getElementById('tokenFrom').value;
+            const tokenTo = document.getElementById('tokenTo').value;
+            const percentage = parseFloat(document.getElementById('percentage').value);
+            const slippage = parseFloat(document.getElementById('slippage').value);
+
+            if (tokenFrom === tokenTo) {
+                showStatus('error', 'Cannot swap same token!');
+                return;
+            }
+
+            try {
+                document.getElementById('btnSingleSwap').disabled = true;
+                document.getElementById('btnSingleSwap').textContent = 'Executing...';
+
+                showStatus('info', 'Preparing swap...');
+
+                // Get token address and balance
+                const proxyAddress = await contracts.beacon.getImplementation("ProxyGeneral");
+                let tokenFromAddress = tokenFrom === "WETH" 
+                    ? await contracts.beacon.getImplementation("WETH")
+                    : await contracts.tokenManager.getTokenAddress(tokenFrom);
+
+                const tokenContract = new ethers.Contract(
+                    tokenFromAddress,
+                    ERC20_ABI,
+                    provider
+                );
+
+                const balance = await tokenContract.balanceOf(proxyAddress);
+                const swapAmount = (balance * BigInt(Math.floor(percentage))) / 100n;
+
+                if (swapAmount === 0n) {
+                    throw new Error('Swap amount is 0!');
+                }
+
+                // Calculate deadline (20 minutes from now)
+                const deadline = Math.floor(Date.now() / 1000) + (20 * 60);
+
+                showStatus('info', `Swapping ${ethers.formatUnits(swapAmount, 18)} ${tokenFrom} to ${tokenTo}...`);
+
+                // Execute swap
+                const tx = await contracts.swapManager.performSwap(
+                    tokenFrom,
+                    tokenTo,
+                    swapAmount,
+                    deadline,
+                    { gasLimit: 2000000 }
+                );
+
+                showStatus('info', `Transaction sent: ${tx.hash.slice(0, 10)}... Waiting for confirmation...`);
+
+                const receipt = await tx.wait();
+
+                showStatus('success', `
+                    ✅ Swap completed successfully!<br>
+                    <a href="https://arbiscan.io/tx/${receipt.hash}" target="_blank" class="tx-link">
+                        View on Arbiscan →
+                    </a>
+                `);
+
+                // Update balance
+                await updateBalances();
+
+            } catch (error) {
+                console.error('Swap error:', error);
+                showStatus('error', 'Swap failed: ' + (error.reason || error.message));
+            } finally {
+                document.getElementById('btnSingleSwap').disabled = false;
+                document.getElementById('btnSingleSwap').textContent = 'Execute Single Swap';
+            }
+        }
+
+        // MULTI SWAP
+        let swapAllocationCounter = 0;
+
+        function initializeMultiSwap() {
+            document.getElementById('swapAllocations').innerHTML = '';
+            swapAllocationCounter = 0;
+            addSwapAllocation('USDC', 50);
+            addSwapAllocation('WBTC', 50);
+        }
+
+        function addSwapAllocation(defaultToken = 'USDC', defaultPercentage = 0) {
+            const id = swapAllocationCounter++;
+            const container = document.getElementById('swapAllocations');
+
+            const div = document.createElement('div');
+            div.className = 'multi-swap-item';
+            div.id = `swap-${id}`;
+            div.innerHTML = `
+                <div class="row">
+                    <div>
+                        <label style="font-size: 12px; color: #718096; margin-bottom: 4px; display: block;">Token</label>
+                        <select class="swap-token" data-id="${id}" onchange="updateMultiSummary()" required>
+                            <option value="USDC" ${defaultToken === 'USDC' ? 'selected' : ''}>USDC</option>
+                            <option value="WBTC" ${defaultToken === 'WBTC' ? 'selected' : ''}>WBTC</option>
+                            <option value="USDT" ${defaultToken === 'USDT' ? 'selected' : ''}>USDT</option>
+                            <option value="WETH" ${defaultToken === 'WETH' ? 'selected' : ''}>WETH</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 12px; color: #718096; margin-bottom: 4px; display: block;">Percentage</label>
+                        <input type="number" class="swap-percentage" data-id="${id}" min="0" max="100" value="${defaultPercentage}" onchange="updateMultiSummary()" required>
+                    </div>
+                    <button type="button" class="btn-remove" onclick="removeSwapAllocation(${id})">×</button>
+                </div>
+            `;
+
+            container.appendChild(div);
+            updateMultiSummary();
+        }
+
+        function removeSwapAllocation(id) {
+            const element = document.getElementById(`swap-${id}`);
+            if (element) {
+                element.remove();
+                updateMultiSummary();
+            }
+        }
+
+        window.updateMultiSummary = function() {
+            const allocations = document.querySelectorAll('.swap-percentage');
+            let total = 0;
+            allocations.forEach(input => {
+                total += parseFloat(input.value || 0);
+            });
+
+            document.getElementById('totalAllocation').textContent = total.toFixed(1) + '%';
+            document.getElementById('multiSummary').classList.remove('hidden');
+
+            // Validate
+            const btn = document.getElementById('btnMultiSwap');
+            if (Math.abs(total - 100) > 0.1) {
+                document.getElementById('totalAllocation').style.color = '#e53e3e';
+                btn.disabled = true;
+                btn.textContent = `Allocations must sum to 100% (currently ${total.toFixed(1)}%)`;
+            } else {
+                document.getElementById('totalAllocation').style.color = '#38a169';
+                btn.disabled = false;
+                btn.textContent = 'Execute Multi Swap';
+            }
+        };
+
+        async function executeMultiSwap(event) {
+            event.preventDefault();
+
+            const tokenFrom = document.getElementById('multiTokenFrom').value;
+            const totalPercentage = parseFloat(document.getElementById('multiTotalPercentage').value);
+            const slippage = parseFloat(document.getElementById('multiSlippage').value);
+
+            // Get allocations
+            const allocations = [];
+            const tokens = document.querySelectorAll('.swap-token');
+            const percentages = document.querySelectorAll('.swap-percentage');
+
+            for (let i = 0; i < tokens.length; i++) {
+                const token = tokens[i].value;
+                const percentage = parseFloat(percentages[i].value);
+
+                if (token === tokenFrom) {
+                    showStatus('error', 'Cannot swap token into itself!');
+                    return;
+                }
+
+                allocations.push({ token, percentage });
+            }
+
+            try {
+                document.getElementById('btnMultiSwap').disabled = true;
+                document.getElementById('btnMultiSwap').textContent = 'Executing...';
+
+                showStatus('info', 'Preparing multi-swap...');
+
+                // Get balance
+                const proxyAddress = await contracts.beacon.getImplementation("ProxyGeneral");
+                let tokenFromAddress = tokenFrom === "WETH" 
+                    ? await contracts.beacon.getImplementation("WETH")
+                    : await contracts.tokenManager.getTokenAddress(tokenFrom);
+
+                const tokenContract = new ethers.Contract(
+                    tokenFromAddress,
+                    ERC20_ABI,
+                    provider
+                );
+
+                const balance = await tokenContract.balanceOf(proxyAddress);
+                const decimals = await tokenContract.decimals();
+                const totalSwapAmount = (balance * BigInt(Math.floor(totalPercentage))) / 100n;
+
+                if (totalSwapAmount === 0n) {
+                    throw new Error('Total swap amount is 0!');
+                }
+
+                const deadline = Math.floor(Date.now() / 1000) + (20 * 60);
+
+                let successCount = 0;
+                let results = [];
+
+                // Execute swaps sequentially
+                for (let i = 0; i < allocations.length; i++) {
+                    const alloc = allocations[i];
+                    const swapAmount = (totalSwapAmount * BigInt(Math.floor(alloc.percentage))) / 100n;
+
+                    if (swapAmount === 0n) continue;
+
+                    try {
+                        showStatus('info', `[${i + 1}/${allocations.length}] Swapping ${ethers.formatUnits(swapAmount, decimals)} ${tokenFrom} → ${alloc.token}...`);
+
+                        const tx = await contracts.swapManager.performSwap(
+                            tokenFrom,
+                            alloc.token,
+                            swapAmount,
+                            deadline,
+                            { gasLimit: 2000000 }
+                        );
+
+                        const receipt = await tx.wait();
+                        successCount++;
+                        results.push(`✅ ${alloc.token}: ${receipt.hash.slice(0, 10)}...`);
+
+                        // Small delay between swaps
+                        if (i < allocations.length - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                        }
+
+                    } catch (error) {
+                        console.error(`Swap ${i + 1} failed:`, error);
+                        results.push(`❌ ${alloc.token}: Failed`);
+                    }
+                }
+
+                // Show results
+                showStatus('success', `
+                    Multi-swap completed: ${successCount}/${allocations.length} successful<br>
+                    ${results.join('<br>')}
+                `);
+
+                await updateMultiBalances();
+
+            } catch (error) {
+                console.error('Multi-swap error:', error);
+                showStatus('error', 'Multi-swap failed: ' + (error.reason || error.message));
+            } finally {
+                document.getElementById('btnMultiSwap').disabled = false;
+                updateMultiSummary();
+            }
+        }
+
+        function showStatus(type, message) {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.className = `alert alert-${type}`;
+            statusDiv.innerHTML = message;
+            statusDiv.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>

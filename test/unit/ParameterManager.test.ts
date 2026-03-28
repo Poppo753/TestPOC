@@ -95,9 +95,18 @@ describe("ParameterManager Contract", function () {
 
   describe("📋 Deployment", function () {
     it("should deploy with correct initial state", async function () {
-      expect(await parameterManager.beacon()).to.equal(beacon.target);
-      expect(await parameterManager.owner()).to.equal(await owner.getAddress());
-      expect(await parameterManager.parameterTimelock()).to.equal(TIMELOCK_DURATION);
+      const pmAddress = await parameterManager.getAddress();
+      const beaconAddress = await parameterManager.beacon();
+      const ownerAddress = await parameterManager.owner();
+      const timelock = await parameterManager.parameterTimelock();
+      
+      expect(beaconAddress).to.equal(beacon.target);
+      expect(ownerAddress).to.equal(await owner.getAddress());
+      expect(timelock).to.equal(TIMELOCK_DURATION);
+      
+      if (this.test) {
+        this.test.title += ` [Address: ${pmAddress.slice(0, 10)}...${pmAddress.slice(-8)} | Timelock: ${timelock}s | Beacon: ${beaconAddress.slice(0, 6)}...${beaconAddress.slice(-4)}]`;
+      }
     });
 
     it("should have expected function signatures", async function () {

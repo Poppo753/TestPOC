@@ -10,6 +10,34 @@
  * - Price impact analysis and protection
  * - Execution safeguards and reversal mechanisms
  * - User-defined slippage tolerance enforcement
+ * 
+ * ⚠️ CURRENT LIMITATION - PHASE A DOCUMENTATION:
+ * ========================================================================
+ * NOTE: These integration tests currently SIMULATE slippage scenarios using
+ * direct token transfers instead of calling SwapManager.performSwap().
+ * 
+ * Current Approach (Simulated):
+ * - Direct transfers simulate various slippage conditions
+ * - Slippage protection logic NOT exercised through real swaps
+ * - Price impact calculations tested in isolation, not E2E
+ * 
+ * Coverage Status:
+ * ✅ Slippage calculation logic: TESTED (functional)
+ * ✅ Protection thresholds: TESTED (unit level)
+ * ❌ Real swap slippage protection: NOT TESTED E2E
+ * ❌ Actual price impact in live swap: NOT VERIFIED
+ * ❌ Revert behavior on slippage exceeded: NOT TESTED WITH REAL ROUTER
+ * 
+ * Reason: MockSimpleSwap implementation pending (Phase B)
+ * 
+ * TODO - Phase B: Test slippage protection with real SwapManager calls
+ * - Configure MockSimpleSwap to simulate various slippage scenarios
+ * - Execute real swaps with slippage protection enabled
+ * - Verify revert behavior when slippage exceeds limits
+ * - Test dynamic slippage calculation with actual router prices
+ * 
+ * Expected Coverage Improvement: Calculation logic → Full protection E2E
+ * ========================================================================
  */
 
 import { expect } from "chai";

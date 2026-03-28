@@ -45,12 +45,18 @@ describe("Integration: Emergency Flow", function () {
     const beacon = await Beacon.deploy();
     await beacon.updateImplementation("WETH", mockWETH.target);
 
+    // Deploy ChainlinkAdapter
+    const ChainlinkAdapter = await ethers.getContractFactory("ChainlinkAdapter");
+    const chainlinkAdapter = await ChainlinkAdapter.deploy();
+    await chainlinkAdapter.setPriceFeed("USDC", mockOracle.target, 8, 3600);
+    await chainlinkAdapter.setPriceFeed("WBTC", mockOracle.target, 8, 3600);
+
     // Deploy core contracts
     const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
     const proxyGeneral = await ProxyGeneral.deploy(beacon.target);
 
     const TokenManager = await ethers.getContractFactory("TokenManager");
-    const tokenManager = await TokenManager.deploy(beacon.target);
+    const tokenManager = await TokenManager.deploy(beacon.target, chainlinkAdapter.target);
 
     const ValueCalculator = await ethers.getContractFactory("ValueCalculator");
     const valueCalculator = await ValueCalculator.deploy(beacon.target);

@@ -8,6 +8,7 @@ node_modules
 # TypeChain files
 /typechain
 /typechain-types
+/old
 
 # solidity-coverage files
 /coverage
@@ -15,3 +16,6 @@ node_modules
 
 # Hardhat Ignition default folder for deployments against a local node
 ignition/deployments/chain-31337
+
+*.svg
+*.png

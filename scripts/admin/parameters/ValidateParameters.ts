@@ -455,7 +455,7 @@ export class ValidateParameters extends BaseScript {
             this.beacon = this.contracts.beacon;
             
             // Get ParameterManager
-            const paramManagerAddress = await this.beacon.getModule("ParameterManager");
+            const paramManagerAddress = await this.beacon.getImplementation("ParameterManager");
             this.parameterManager = await ethers.getContractAt("ParameterManager", paramManagerAddress);
             
             if (this.options.verbose) {

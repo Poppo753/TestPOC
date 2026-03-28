@@ -7,6 +7,8 @@ import "./interfaces/IBeacon.sol";
 import "./interfaces/ITokenManagerForModules.sol";
 import "./interfaces/IProxyGeneral.sol";
 import "./interfaces/IWETH.sol";
+import "./interfaces/IEulerLensAdapter.sol";
+import "./interfaces/IProtocolManager.sol";
 
 /**
  * @title ValueCalculator
@@ -84,36 +86,66 @@ contract ValueCalculator is Ownable {
     // ==================== TOKEN VALUE CALCULATION ====================
 
     /**
-     * @notice Calcola il valore di un token con cache system
+     * @notice Calcola il valore di un token (PURE VIEW - no cache update)
+     * @dev Funzione pubblica view per calcoli senza side effects
      * @param _tokenCode Codice del token
      * @return Valore totale della posizione in ETH
      */
-    function calculateTokenValue(string memory _tokenCode) public returns (uint256) {
+    function calculateTokenValuePure(string memory _tokenCode) public view returns (uint256) {
         // CHECK CACHE FIRST
         (uint256 cachedValue, bool isCacheValid) = getCachedTokenValue(_tokenCode);
         if (isCacheValid) {
             return cachedValue;
         }
         
-        // GET FRESH PRICE
+        // GET FRESH PRICE (no cache update)
         ITokenManagerForModules tokenManager = ITokenManagerForModules(IBeacon(beacon).getImplementation("TokenManager"));
         
-        try tokenManager.getTokenPrice(_tokenCode) returns (uint256 price, uint256 timestamp, bool isStale) {
-            // VALIDATE PRICE AGE
-            require(!isStale && block.timestamp - timestamp <= maxPriceAge, "Price too old");
+        (uint256 price, uint256 timestamp, bool isStale) = tokenManager.getTokenPrice(_tokenCode);
+        require(!isStale && block.timestamp - timestamp <= maxPriceAge, "Price too old");
+        
+        // GET TOKEN BALANCE FROM PROXYGENERAL
+        address tokenAddress = tokenManager.getTokenAddress(_tokenCode);
+        address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
+        uint256 tokenBalance = IERC20(tokenAddress).balanceOf(proxyGeneral);
+        
+        // GET TOKEN INFO TO ACCESS TOKEN DECIMALS
+        ITokenManagerForModules.TokenInfo memory tokenInfo = tokenManager.getTokenInfo(_tokenCode);
+        
+        // CALCULATE VALUE
+        // tokenBalance: base units (e.g., 3564923 for 3.564923 USDC with 6 decimals)
+        // price: ETH wei per 1 whole token (e.g., 339263172768298 wei = 0.000339 ETH per 1 USDC)
+        // Expected result: value in wei
+        //
+        // Math: value_eth = (tokenBalance / 10^decimals) * (price / 1e18)
+        //       value_wei = value_eth * 1e18
+        //       value_wei = (tokenBalance / 10^decimals) * price
+        //       value_wei = (tokenBalance * price) / 10^decimals
+        //
+        // Example: 3564923 * 339263172768298 / 10^6 = 1209449877645000554 / 10^6 
+        //                                              = 1209449877645 wei = 0.001209 ETH ✅
+        uint256 value = (tokenBalance * price) / (10 ** tokenInfo.tokenDecimals);
+        
+        return value;
+    }
+
+    /**
+     * @notice Calcola il valore di un token con cache system update
+     * @dev Usa _calculateTokenValueView e poi aggiorna la cache
+     * @param _tokenCode Codice del token
+     * @return Valore totale della posizione in ETH
+     */
+    function calculateTokenValue(string memory _tokenCode) public returns (uint256) {
+        // CALCULATE VALUE usando funzione view
+        uint256 value;
+        
+        try this.calculateTokenValuePure(_tokenCode) returns (uint256 calculatedValue) {
+            value = calculatedValue;
             
-            // GET TOKEN BALANCE FROM PROXYGENERAL
-            address tokenAddress = tokenManager.getTokenAddress(_tokenCode);
-            address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
-            uint256 tokenBalance = IERC20(tokenAddress).balanceOf(proxyGeneral);
+            // UPDATE CACHE AFTER SUCCESSFUL CALCULATION
+            ITokenManagerForModules tokenManager = ITokenManagerForModules(IBeacon(beacon).getImplementation("TokenManager"));
+            (uint256 price, , ) = tokenManager.getTokenPrice(_tokenCode);
             
-            // GET TOKEN INFO FOR DECIMALS
-            ITokenManagerForModules.TokenInfo memory tokenInfo = tokenManager.getTokenInfo(_tokenCode);
-            
-            // CALCULATE VALUE (normalize by price feed decimals)
-            uint256 value = (tokenBalance * price) / (10 ** tokenInfo.priceFeedDecimals);
-            
-            // UPDATE CACHE
             tokenValueCache[_tokenCode] = TokenValueCache({
                 value: value,
                 pricePerToken: price,
@@ -165,15 +197,17 @@ contract ValueCalculator is Ownable {
         address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
         uint256 tokenBalance = IERC20(tokenAddress).balanceOf(proxyGeneral);
         
+        // GET TOKEN INFO TO ACCESS TOKEN DECIMALS
         ITokenManagerForModules.TokenInfo memory tokenInfo = tokenManager.getTokenInfo(_tokenCode);
-        return (tokenBalance * price) / (10 ** tokenInfo.priceFeedDecimals);
+        return (tokenBalance * price) / (10 ** tokenInfo.tokenDecimals);
     }
 
     /**
-     * @notice Calcola il valore totale del pool con percentuali
+     * @notice Calcola il valore totale del pool con percentuali (PURE VIEW)
+     * @dev Ora è funzione view - non modifica stato, non aggiorna cache
      * @return PoolValueInfo con valore totale e breakdown per token
      */
-    function getTotalPoolValue() external returns (PoolValueInfo memory) {
+    function getTotalPoolValue() external view returns (PoolValueInfo memory) {
         ITokenManagerForModules tokenManager = ITokenManagerForModules(IBeacon(beacon).getImplementation("TokenManager"));
         address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
         address wethAddress = IBeacon(beacon).getImplementation("WETH");
@@ -197,15 +231,16 @@ contract ValueCalculator is Ownable {
             percentage: 0 // Will be calculated after total
         });
         
-        // CALCULATE EACH TOKEN VALUE
+        // CALCULATE EACH TOKEN VALUE usando funzione view pura
         for (uint256 i = 0; i < activeTokens.length; i++) {
             string memory tokenCode = activeTokens[i];
             
-            try this.calculateTokenValue(tokenCode) returns (uint256 tokenValue) {
+            try this.calculateTokenValuePure(tokenCode) returns (uint256 tokenValue) {
                 // GET ADDITIONAL INFO
                 address tokenAddress = tokenManager.getTokenAddress(tokenCode);
                 uint256 tokenBalance = IERC20(tokenAddress).balanceOf(proxyGeneral);
                 
+                // Get cached price if available (no update)
                 TokenValueCache memory cache = tokenValueCache[tokenCode];
                 uint256 pricePerToken = cache.isValid ? cache.pricePerToken : 0;
                 
@@ -219,10 +254,8 @@ contract ValueCalculator is Ownable {
                 
                 totalValue += tokenValue;
                 
-            } catch Error(string memory reason) {
-                // Log error but continue with other tokens
-                emit TokenError(tokenCode, reason);
-                
+            } catch {
+                // Skip failed tokens silently in view mode
                 tokenValues[i + 1] = TokenValueInfo({
                     tokenCode: tokenCode,
                     value: 0,
@@ -233,6 +266,9 @@ contract ValueCalculator is Ownable {
             }
         }
         
+        // ADD ALL REGISTERED PROTOCOLS VALUE (MODULAR)
+        totalValue += _getAllProtocolsValue();
+        
         // CALCULATE PERCENTAGES (basis points)
         if (totalValue > 0) {
             for (uint256 i = 0; i < tokenValues.length; i++) {
@@ -240,7 +276,7 @@ contract ValueCalculator is Ownable {
             }
         }
         
-        emit PoolValueUpdated(totalValue);
+        // NOTE: No event emission in view function
         
         return PoolValueInfo({
             totalValue: totalValue,
@@ -269,7 +305,121 @@ contract ValueCalculator is Ownable {
             }
         }
         
+        // ADD ALL REGISTERED PROTOCOLS VALUE (MODULAR)
+        totalValue += _getAllProtocolsValue();
+        
         return totalValue;
+    }
+
+    // ==================== PROTOCOL INTEGRATION (MODULAR) ====================
+
+    /**
+     * @notice Get total value across ALL registered protocols (MODULAR)
+     * @dev Delegates to ProtocolManager which loops through all active LensAdapters
+     * @dev This replaces the old hardcoded _getEulerPositionValue() approach
+     * @return protocolsValue Net value of all protocol positions in ETH
+     * 
+     * Flow:
+     * ```
+     * ValueCalculator._getAllProtocolsValue()
+     *     └── ProtocolManager.getAllProtocolsValue()
+     *         ├── EulerLensAdapter.getTotalValue()
+     *         ├── MorphoLensAdapter.getTotalValue() [FUTURE]
+     *         └── DolomiteLensAdapter.getTotalValue() [FUTURE]
+     * ```
+     */
+    function _getAllProtocolsValue() internal view returns (uint256 protocolsValue) {
+        // Try to get ProtocolManager from Beacon
+        try IBeacon(beacon).getImplementation("ProtocolManager") returns (address protocolManager) {
+            if (protocolManager != address(0)) {
+                // Query total value across all protocols
+                try IProtocolManager(protocolManager).getAllProtocolsValue() returns (uint256 value) {
+                    return value;
+                } catch {
+                    // If query fails, fallback to legacy Euler-only calculation
+                    return _getEulerPositionValue();
+                }
+            }
+        } catch {
+            // ProtocolManager not registered, fallback to legacy
+            return _getEulerPositionValue();
+        }
+        
+        return 0;
+    }
+    
+    /**
+     * @notice Get position breakdown for a specific protocol
+     * @dev Delegates to ProtocolManager.getProtocolPositionBreakdown()
+     * @param protocolName Name of the protocol (e.g., "EulerV2", "Morpho", "Dolomite")
+     * @return collateral Total collateral value in ETH
+     * @return debt Total debt value in ETH
+     * @return netValue Net value (collateral - debt) in ETH
+     */
+    function getProtocolPositionBreakdown(string memory protocolName) 
+        external 
+        view 
+        returns (uint256 collateral, uint256 debt, uint256 netValue) 
+    {
+        address protocolManager = IBeacon(beacon).getImplementation("ProtocolManager");
+        if (protocolManager != address(0)) {
+            try IProtocolManager(protocolManager).getProtocolPositionBreakdown(protocolName) 
+                returns (uint256 col, uint256 dbt, uint256 net) 
+            {
+                return (col, dbt, net);
+            } catch {
+                return (0, 0, 0);
+            }
+        }
+        return (0, 0, 0);
+    }
+
+    // ==================== LEGACY EULER INTEGRATION (DEPRECATED) ====================
+
+    /**
+     * @notice DEPRECATED - Use _getAllProtocolsValue() instead
+     * @dev Kept for backward compatibility as fallback when ProtocolManager is not available
+     * @dev Queries EulerLensAdapter if registered in Beacon
+     * @return eulerValue Net value of all Euler positions (collateral - debt) in ETH
+     */
+    function _getEulerPositionValue() internal view returns (uint256 eulerValue) {
+        // Try to get EulerLensAdapter from Beacon
+        try IBeacon(beacon).getImplementation("EulerLensAdapter") returns (address eulerLensAdapter) {
+            if (eulerLensAdapter != address(0)) {
+                // Query Euler position value
+                try IEulerLensAdapter(eulerLensAdapter).getTotalEulerValue() returns (uint256 value) {
+                    return value;
+                } catch {
+                    // If query fails, return 0 (don't block pool value calculation)
+                    return 0;
+                }
+            }
+        } catch {
+            // EulerLensAdapter not registered, return 0
+            return 0;
+        }
+        
+        return 0;
+    }
+
+    /**
+     * @notice DEPRECATED - Use getProtocolPositionBreakdown("EulerV2") instead
+     * @dev Kept for backward compatibility
+     * @dev Returns collateral, debt, and net value from EulerLensAdapter
+     * @return collateral Total collateral value in ETH
+     * @return debt Total debt value in ETH
+     * @return netValue Net value (collateral - debt) in ETH
+     */
+    function getEulerPositionBreakdown() external view returns (
+        uint256 collateral,
+        uint256 debt,
+        uint256 netValue
+    ) {
+        address eulerLensAdapter = IBeacon(beacon).getImplementation("EulerLensAdapter");
+        if (eulerLensAdapter != address(0)) {
+            return IEulerLensAdapter(eulerLensAdapter).getEulerPositionValues();
+        }
+        return (0, 0, 0);
     }
 
     // ==================== CACHE MANAGEMENT ====================
@@ -361,12 +511,14 @@ contract ValueCalculator is Ownable {
         require(activeTokens.length > 0, "No swappable tokens");
         
         // GET TOTAL POOL VALUE FOR PERCENTAGE CALCULATION
+        // NOTE: We'll calculate swappable value (excluding WETH) separately
         uint256 totalPoolValue = this.getTotalPoolValueView();
         require(totalPoolValue > 0, "Pool has no value");
         
         // BUILD TOKEN INFO ARRAY
         TokenValueInfo[] memory tokenInfos = new TokenValueInfo[](activeTokens.length);
         uint256 validTokenCount = 0;
+        uint256 swappableValue = 0; // Total value of swappable tokens (non-WETH)
         
         for (uint256 i = 0; i < activeTokens.length; i++) {
             string memory currentToken = activeTokens[i];
@@ -391,9 +543,11 @@ contract ValueCalculator is Ownable {
                 continue; // Skip tokens with stale/invalid prices
             }
             
-            // CALCULATE VALUE
+            // GET TOKEN INFO TO ACCESS TOKEN DECIMALS
             ITokenManagerForModules.TokenInfo memory tokenInfo = tokenManager.getTokenInfo(currentToken);
-            uint256 tokenValue = (tokenBalance * price) / (10 ** tokenInfo.priceFeedDecimals);
+            
+            // CALCULATE VALUE using token decimals (not price decimals)
+            uint256 tokenValue = (tokenBalance * price) / (10 ** tokenInfo.tokenDecimals);
             
             // CALCULATE PERCENTAGE (basis points: 10000 = 100%)
             uint256 percentage = (tokenValue * 10000) / totalPoolValue;
@@ -406,10 +560,18 @@ contract ValueCalculator is Ownable {
                 pricePerToken: price,
                 percentage: percentage
             });
+            swappableValue += tokenValue; // Accumulate total swappable value
             validTokenCount++;
         }
         
         require(validTokenCount > 0, "Insufficient liquidity");
+        
+        // RECALCULATE PERCENTAGES based on swappable value only (not total pool including WETH)
+        if (swappableValue > 0) {
+            for (uint256 i = 0; i < validTokenCount; i++) {
+                tokenInfos[i].percentage = (tokenInfos[i].value * 10000) / swappableValue;
+            }
+        }
         
         // SORT BY PERCENTAGE (ASCENDING - lowest first)
         // Simple bubble sort - OK for small arrays (typically < 10 tokens)
@@ -428,23 +590,64 @@ contract ValueCalculator is Ownable {
         for (uint256 i = 0; i < validTokenCount; i++) {
             TokenValueInfo memory candidateToken = tokenInfos[i];
             
-            // CALCULATE REQUIRED AMOUNT WITH 10% BUFFER
-            // Formula: amount = (targetValue * 1.1 * 10^priceFeedDecimals) / price
-            uint256 targetWithBuffer = (targetValue * 110) / 100; // +10% buffer
-            
+            // GET TOKEN INFO TO ACCESS TOKEN DECIMALS
             ITokenManagerForModules.TokenInfo memory tokenInfo = tokenManager.getTokenInfo(candidateToken.tokenCode);
-            uint256 requiredAmount = (targetWithBuffer * (10 ** tokenInfo.priceFeedDecimals)) / candidateToken.pricePerToken;
             
-            // CHECK IF TOKEN HAS SUFFICIENT BALANCE
+            // CALCULATE REQUIRED AMOUNT WITH 10% BUFFER
+            // Formula: amount = (targetValue * 1.1 * 10^tokenDecimals) / price
+            uint256 targetWithBuffer = (targetValue * 110) / 100; // +10% buffer
+            uint256 requiredAmount = (targetWithBuffer * (10 ** tokenInfo.tokenDecimals)) / candidateToken.pricePerToken;
+            
+            // CHECK IF TOKEN HAS SUFFICIENT BALANCE WITH BUFFER
             if (requiredAmount <= candidateToken.balance) {
                 return (candidateToken.tokenCode, requiredAmount);
             }
             
-            // If insufficient, try next token (higher percentage but might have more balance)
+            // If not enough with buffer, try with 5% buffer
+            uint256 targetWithSmallBuffer = (targetValue * 105) / 100;
+            uint256 requiredAmountSmallBuffer = (targetWithSmallBuffer * (10 ** tokenInfo.tokenDecimals)) / candidateToken.pricePerToken;
+            
+            if (requiredAmountSmallBuffer <= candidateToken.balance) {
+                return (candidateToken.tokenCode, requiredAmountSmallBuffer);
+            }
+            
+            // If still not enough, try with NO buffer (exact amount)
+            uint256 requiredAmountExact = (targetValue * (10 ** tokenInfo.tokenDecimals)) / candidateToken.pricePerToken;
+            
+            if (requiredAmountExact <= candidateToken.balance) {
+                return (candidateToken.tokenCode, requiredAmountExact);
+            }
+            
+            // If token value is >= 95% of target, use ALL available balance
+            if (candidateToken.value >= (targetValue * 95) / 100) {
+                return (candidateToken.tokenCode, candidateToken.balance);
+            }
+            
+            // Try next token (higher percentage but might have more balance)
         }
         
-        // NO TOKEN HAS SUFFICIENT BALANCE
-        revert("Insufficient liquidity for target value");
+        // LAST RESORT: If we have ANY tokens with value, return the one with highest value
+        // This allows multi-swap to use all available liquidity
+        if (validTokenCount > 0) {
+            // Find token with highest value
+            uint256 maxValueIndex = 0;
+            uint256 maxValue = tokenInfos[0].value;
+            
+            for (uint256 i = 1; i < validTokenCount; i++) {
+                if (tokenInfos[i].value > maxValue) {
+                    maxValue = tokenInfos[i].value;
+                    maxValueIndex = i;
+                }
+            }
+            
+            // Use ALL balance of this token
+            if (tokenInfos[maxValueIndex].balance > 0) {
+                return (tokenInfos[maxValueIndex].tokenCode, tokenInfos[maxValueIndex].balance);
+            }
+        }
+        
+        // NO TOKENS AVAILABLE AT ALL - return empty to signal to caller
+        return ("", 0);
     }
 
     /**

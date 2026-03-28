@@ -31,6 +31,15 @@ Questo sistema sostituisce l'attuale architettura monolitica di SwapManager con 
 - ✅ **Interfaccia Standardizzata**: API uniforme per tutti i plugin
 - ✅ **Aggiunta Incrementale**: Nuovi protocolli senza breaking changes
 - ✅ **Isolamento Rischi**: Failure di un plugin non impatta altri
+- ✅ **Beacon Integration**: Plugin registrati nel Beacon come tutti gli altri moduli
+- ✅ **Automatic Best Price**: SwapManager seleziona automaticamente il plugin con miglior prezzo
+
+### **Chi Usa il Sistema**:
+⚠️ **IMPORTANTE**: Gli swap NON sono chiamati da utenti esterni, ma solo da:
+- **LiquidityManager** durante operazioni di rebalancing
+- **Altri moduli autorizzati** del protocollo
+
+Solo **indirizzi autorizzati** possono chiamare SwapManager.
 
 ---
 
@@ -62,20 +71,30 @@ interface ISwapPlugin {
 ### **Plugin Manager**:
 ```solidity
 contract SwapManager {
-    // Plugin registry
-    mapping(string => address) public plugins;
-    mapping(address => bool) public authorizedPlugins;
-    string[] public activePlugins;
+    // ⚠️ UPDATED ARCHITECTURE: Plugins sono gestiti dal Beacon, non da SwapManager
+    Beacon public immutable beacon;
     
-    // Plugin management
-    function addPlugin(string memory name, address plugin) external onlyOwner;
-    function removePlugin(string memory name) external onlyOwner;
-    function enablePlugin(string memory name, bool enabled) external onlyOwner;
+    // Autorizzazioni per chiamanti (es: LiquidityManager)
+    mapping(address => bool) public authorizedCallers;
+    
+    modifier onlyAuthorized() {
+        require(authorizedCallers[msg.sender], "Not authorized");
+        _;
+    }
     
     // Swap execution
-    function swapViaPlugin(string memory pluginName, SwapParams memory params) external;
-    function swapWithBestPlugin(SwapParams memory params) external;
-    function getAllQuotes(SwapParams memory params) external view returns (Quote[] memory);
+    function swapViaPlugin(string memory pluginName, SwapParams memory params) 
+        external onlyAuthorized returns (uint256);
+    
+    function swapWithBestPlugin(SwapParams memory params) 
+        external onlyAuthorized returns (uint256);
+    
+    function getBestQuote(QuoteParams memory params) 
+        external view returns (string memory bestPlugin, uint256 bestQuote);
+    
+    // Authorization management
+    function authorizeCaller(address caller) external onlyOwner;
+    function revokeCaller(address caller) external onlyOwner;
 }
 ```
 
@@ -134,8 +153,9 @@ contract SwapManager {
 ## 📚 **DOCUMENTI TECNICI**
 
 ### **Architettura e Design**:
-- [`PLUGIN_ARCHITECTURE.md`](./PLUGIN_ARCHITECTURE.md) - Architettura dettagliata sistema plugin
+- [`PLUGIN_ARCHITECTURE.md`](./PLUGIN_ARCHITECTURE.md) - Architettura dettagliata sistema plugin (**UPDATED**: Beacon integration)
 - [`INTERFACE_SPECIFICATION.md`](./INTERFACE_SPECIFICATION.md) - Specifica completa ISwapPlugin
+- [`LIQUIDITY_MANAGER_INTEGRATION.md`](./LIQUIDITY_MANAGER_INTEGRATION.md) - **NEW**: Come LiquidityManager usa il sistema plugin
 - [`INTEGRATION_PATTERNS.md`](./INTEGRATION_PATTERNS.md) - Pattern integrazione protocolli
 
 ### **Implementazione Plugin Specifici**:

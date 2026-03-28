@@ -42,7 +42,23 @@ describe("LF-003: Deposit-Withdraw Cycle Testing", function () {
 
         // Deploy all modules
         const TokenManagerFactory = await ethers.getContractFactory("TokenManager");
-        const tokenManager = await TokenManagerFactory.deploy(await beacon.getAddress());
+        // Deploy MockOracleAdapter for TokenManager
+
+        const MockOracleAdapterFactory = await ethers.getContractFactory("MockOracleAdapter");
+
+        const mockOracleAdapter = await MockOracleAdapterFactory.deploy();
+
+        await mockOracleAdapter.waitForDeployment();
+
+        
+
+        const tokenManager = await TokenManagerFactory.deploy(
+
+          await beacon.getAddress(),
+
+          await mockOracleAdapter.getAddress()
+
+        );
         console.log(`🪙 TokenManager deployed: ${await tokenManager.getAddress()}`);
 
         const ParameterManagerFactory = await ethers.getContractFactory("ParameterManager");

@@ -28,13 +28,9 @@ describe("ProxyGeneral Contract - Core Tests", function () {
     mockWBTC = await MockERC20.deploy("Wrapped Bitcoin", "WBTC", 8);
     mockWETH = await MockERC20.deploy("Wrapped Ether", "WETH", 18);
 
-    // Deploy MockChainlinkOracle
-    const MockChainlinkOracle = await ethers.getContractFactory("MockChainlinkOracle");
-    mockOracle = await MockChainlinkOracle.deploy(
-      ethers.parseUnits("2000", 8),
-      8,
-      "ETH/USD"
-    );
+    // Deploy MockOracleAdapter for TokenManager
+    const MockOracleAdapter = await ethers.getContractFactory("MockOracleAdapter");
+    const mockOracleAdapter = await MockOracleAdapter.deploy();
 
     // Deploy Beacon
     const Beacon = await ethers.getContractFactory("Beacon");
@@ -47,7 +43,7 @@ describe("ProxyGeneral Contract - Core Tests", function () {
 
     // Deploy TokenManager
     const TokenManager = await ethers.getContractFactory("TokenManager");
-    tokenManager = await TokenManager.deploy(beacon.target);
+    tokenManager = await TokenManager.deploy(beacon.target, mockOracleAdapter.target);
 
     // Authorize TokenManager
     await proxyGeneral.authorizeModule(tokenManager.target, "TokenManager");
@@ -59,12 +55,24 @@ describe("ProxyGeneral Contract - Core Tests", function () {
 
   describe("📋 Deployment & Basic Properties", function () {
     it("should deploy with correct initial state", async function () {
-      expect(await proxyGeneral.name()).to.equal("LP Token");
-      expect(await proxyGeneral.symbol()).to.equal("LPT");
-      expect(await proxyGeneral.owner()).to.equal(owner.address);
-      expect(await proxyGeneral.beacon()).to.equal(beacon.target);
-      expect(await proxyGeneral.totalSupply()).to.equal(0);
-      expect(await proxyGeneral.paused()).to.be.false;
+      const pgAddress = await proxyGeneral.getAddress();
+      const name = await proxyGeneral.name();
+      const symbol = await proxyGeneral.symbol();
+      const ownerAddress = await proxyGeneral.owner();
+      const beaconAddress = await proxyGeneral.beacon();
+      const totalSupply = await proxyGeneral.totalSupply();
+      const isPaused = await proxyGeneral.paused();
+      
+      expect(name).to.equal("LP Token");
+      expect(symbol).to.equal("LPT");
+      expect(ownerAddress).to.equal(owner.address);
+      expect(beaconAddress).to.equal(beacon.target);
+      expect(totalSupply).to.equal(0);
+      expect(isPaused).to.be.false;
+      
+      if (this.test) {
+        this.test.title += ` [Address: ${pgAddress.slice(0, 10)}...${pgAddress.slice(-8)} | ${name} (${symbol}) | Supply: ${totalSupply} | Paused: ${isPaused}]`;
+      }
     });
 
     it("should have correct ERC20 properties", async function () {

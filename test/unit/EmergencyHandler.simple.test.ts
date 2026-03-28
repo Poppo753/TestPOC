@@ -42,13 +42,9 @@ describe("EmergencyHandler Contract - Core Tests", function () {
     const mockUSDC = await MockERC20.deploy("USD Coin", "USDC", 6);
     const mockWETH = await MockERC20.deploy("Wrapped Ether", "WETH", 18);
 
-    // Deploy MockChainlinkOracle
-    const MockChainlinkOracle = await ethers.getContractFactory("MockChainlinkOracle");
-    const mockOracle = await MockChainlinkOracle.deploy(
-      ethers.parseUnits("2000", 8), // $2000
-      8,
-      "ETH/USD"
-    );
+    // Deploy MockOracleAdapter for TokenManager
+    const MockOracleAdapter = await ethers.getContractFactory("MockOracleAdapter");
+    const mockOracleAdapter = await MockOracleAdapter.deploy();
 
     // Deploy Beacon
     const Beacon = await ethers.getContractFactory("Beacon");
@@ -61,7 +57,7 @@ describe("EmergencyHandler Contract - Core Tests", function () {
 
     // Deploy TokenManager
     const TokenManager = await ethers.getContractFactory("TokenManager");
-    const tokenManager = await TokenManager.deploy(beacon.target);
+    const tokenManager = await TokenManager.deploy(beacon.target, mockOracleAdapter.target);
 
     // Deploy EmergencyHandler
     const EmergencyHandler = await ethers.getContractFactory("EmergencyHandler");
@@ -80,10 +76,11 @@ describe("EmergencyHandler Contract - Core Tests", function () {
     // Authorize EmergencyHandler in ProxyGeneral for pause operations
     await proxyGeneral.authorizeModule(emergencyHandler.target, "EmergencyHandler");
 
-    // Setup tokens in TokenManager
-    await tokenManager.manageTokenData(
-      "USDC", mockUSDC.target, mockOracle.target, 6, 8, 3600
-    );
+    // Setup tokens in MockOracleAdapter
+    await mockOracleAdapter.setupToken("USDC", ethers.parseUnits("1", 8), 8, true);
+
+    // Setup tokens in TokenManager (NEW SIGNATURE: 4 params)
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"]("USDC", mockUSDC.target, 6, 3600);
 
     // Mint some tokens to ProxyGeneral for testing
     await mockUSDC.mint(proxyGeneral.target, ethers.parseUnits("10000", 6));
@@ -96,7 +93,7 @@ describe("EmergencyHandler Contract - Core Tests", function () {
       tokenManager,
       mockUSDC,
       mockWETH,
-      mockOracle,
+      mockOracleAdapter,
       owner,
       emergencyContact1,
       emergencyContact2,
@@ -120,13 +117,22 @@ describe("EmergencyHandler Contract - Core Tests", function () {
 
   describe("📋 Deployment & Basic Functions", function () {
     it("should deploy with correct initial state", async function () {
-      expect(await emergencyHandler.beacon()).to.equal(beacon.target);
-      expect(await emergencyHandler.owner()).to.equal(await owner.getAddress());
-      expect(await emergencyHandler.unpauseTimelock()).to.equal(TIMELOCK_DURATION);
+      const ehAddress = await emergencyHandler.getAddress();
+      const beaconAddress = await emergencyHandler.beacon();
+      const ownerAddress = await emergencyHandler.owner();
+      const unpauseTimelock = await emergencyHandler.unpauseTimelock();
+      
+      expect(beaconAddress).to.equal(beacon.target);
+      expect(ownerAddress).to.equal(await owner.getAddress());
+      expect(unpauseTimelock).to.equal(TIMELOCK_DURATION);
       
       const state = await emergencyHandler.getEmergencyState();
       expect(state.isActive).to.be.false;
       expect(state.activatedAt).to.equal(0);
+      
+      if (this.test) {
+        this.test.title += ` [Address: ${ehAddress.slice(0, 10)}...${ehAddress.slice(-8)} | Paused: ${state.isActive} | Timelock: ${Number(unpauseTimelock)/3600}h]`;
+      }
     });
 
     it("should have expected function signatures", async function () {

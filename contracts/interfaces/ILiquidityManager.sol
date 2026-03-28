@@ -162,4 +162,85 @@ interface ILiquidityManager {
     event FeeRecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
     event DepositsEnabledChanged(bool enabled);
     event WithdrawsEnabledChanged(bool enabled);
+    
+    // ==================== DEADLINE MONITORING EVENTS ====================
+    
+    /// @notice Emitted when withdrawal starts with deadline
+    event WithdrawalStarted(
+        address indexed user,
+        uint256 shares,
+        uint256 deadline,
+        uint256 timeRemaining,
+        bool requiresSwap
+    );
+    
+    /// @notice Emitted when automatic swap is triggered during withdrawal
+    event AutomaticSwapTriggered(
+        address indexed user,
+        string tokenToSwap,
+        uint256 amountToSwap,
+        uint256 wethNeeded,
+        uint256 deadline,
+        uint256 timeRemaining
+    );
+    
+    /// @notice Emitted when withdrawal completes with timing info
+    event WithdrawalCompleted(
+        address indexed user,
+        uint256 shares,
+        uint256 ethReceived,
+        uint256 deadline,
+        uint256 timeUsed,
+        bool swapExecuted
+    );
+    
+    /// @notice Emitted when deadline is critical during withdrawal (< 3 min)
+    event WithdrawalDeadlineCritical(
+        address indexed user,
+        uint256 deadline,
+        uint256 timeRemaining,
+        string stage
+    );
+    
+    // ==================== MULTI-SWAP EVENTS ====================
+    
+    /// @notice Emitted when multi-swap process starts
+    event MultiSwapStarted(
+        address indexed user,
+        uint256 wethNeeded,
+        uint256 maxIterations
+    );
+    
+    /// @notice Emitted for each iteration of multi-swap
+    event MultiSwapIteration(
+        address indexed user,
+        uint256 iteration,
+        string tokenCode,
+        uint256 amountSwapped,
+        uint256 wethReceived,
+        uint256 wethStillNeeded
+    );
+    
+    /// @notice Emitted when multi-swap process completes
+    event MultiSwapCompleted(
+        address indexed user,
+        uint256 totalIterations,
+        uint256 totalWethObtained
+    );
+
+    // ==================== PROTOCOL INTEGRATION EVENTS ====================
+
+    /// @notice Emitted when protocol positions are closed to obtain WETH for withdrawal
+    /// @dev This is the modular version - works with ANY protocol via IProtocolAdapter
+    event ProtocolPositionsClosedForWeth(
+        uint256 positionsClosed,
+        uint256 wethObtained
+    );
+    
+    /// @notice Emitted when liquid tokens are swapped to WETH during withdrawal
+    event LiquidTokenSwappedForWeth(
+        string indexed tokenCode,
+        uint256 tokenAmount,
+        uint256 wethObtained
+    );
 }

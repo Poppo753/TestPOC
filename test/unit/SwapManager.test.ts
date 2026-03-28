@@ -46,13 +46,9 @@ describe("SwapManager Contract", function () {
     const mockWBTC = await MockERC20.deploy("Wrapped Bitcoin", "WBTC", 8);
     const mockWETH = await MockERC20.deploy("Wrapped Ether", "WETH", 18);
 
-    // Deploy MockChainlinkOracle
-    const MockChainlinkOracle = await ethers.getContractFactory("MockChainlinkOracle");
-    const mockOracle = await MockChainlinkOracle.deploy(
-      ethers.parseUnits("2000", 8), // $2000
-      8,
-      "ETH/USD"
-    );
+    // Deploy MockOracleAdapter for TokenManager
+    const MockOracleAdapter = await ethers.getContractFactory("MockOracleAdapter");
+    const mockOracleAdapter = await MockOracleAdapter.deploy();
 
     // Deploy Beacon
     const Beacon = await ethers.getContractFactory("Beacon");
@@ -64,7 +60,7 @@ describe("SwapManager Contract", function () {
     const proxyGeneral = await ProxyGeneral.deploy(beacon.target);
 
     const TokenManager = await ethers.getContractFactory("TokenManager");
-    const tokenManager = await TokenManager.deploy(beacon.target);
+    const tokenManager = await TokenManager.deploy(beacon.target, mockOracleAdapter.target);
 
     // Deploy MockSimpleSwap router
     const MockSimpleSwap = await ethers.getContractFactory("MockSimpleSwap");
@@ -79,13 +75,13 @@ describe("SwapManager Contract", function () {
     await beacon.updateImplementation("TokenManager", tokenManager.target);
     await beacon.updateImplementation("SwapManager", swapManager.target);
 
-    // Setup tokens in TokenManager (WETH is NOT registered - handled via Beacon)
-    await tokenManager.manageTokenData(
-      "USDC", mockUSDC.target, mockOracle.target, 6, 8, 3600
-    );
-    await tokenManager.manageTokenData(
-      "WBTC", mockWBTC.target, mockOracle.target, 8, 8, 3600
-    );
+    // Setup tokens in MockOracleAdapter
+    await mockOracleAdapter.setupToken("USDC", ethers.parseUnits("1", 8), 8, true);
+    await mockOracleAdapter.setupToken("WBTC", ethers.parseUnits("30000", 8), 8, true);
+
+    // Setup tokens in TokenManager (NEW SIGNATURE: 4 params)
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"]("USDC", mockUSDC.target, 6, 3600);
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"]("WBTC", mockWBTC.target, 8, 3600);
 
     // Set router address to MockSimpleSwap
     await swapManager.setSimpleSwapRouter(mockSimpleSwap.target);
@@ -156,19 +152,24 @@ describe("SwapManager Contract", function () {
 
   describe("📋 Deployment & Basic Functions", function () {
     it("should deploy with correct initial state", async function () {
+      const smAddress = await swapManager.getAddress();
+      const maxSlippage = await swapManager.maxSlippage();
+      const swapsEnabled = await swapManager.swapsEnabled();
+      
       expect(await swapManager.beacon()).to.equal(beacon.target);
       expect(await swapManager.owner()).to.equal(await owner.getAddress());
-      expect(await swapManager.maxSlippage()).to.equal(DEFAULT_MAX_SLIPPAGE);
-      expect(await swapManager.swapsEnabled()).to.be.true;
-      // Note: simpleSwapRouter should be mockSimpleSwap.target but we don't have it in scope here
-      // expect(await swapManager.simpleSwapRouter()).to.equal(mockSimpleSwap.target);
+      expect(maxSlippage).to.equal(DEFAULT_MAX_SLIPPAGE);
+      expect(swapsEnabled).to.be.true;
+      
+      if (this.test) {
+        this.test.title += ` [Address: ${smAddress.slice(0, 10)}...${smAddress.slice(-8)} | Slippage: ${Number(maxSlippage)/100}% | Enabled: ${swapsEnabled}]`;
+      }
     });
 
     it("should have expected function signatures", async function () {
       const expectedFunctions = [
-        "swapTokenForWETH",
-        "swapWETHForToken",
         "performSwap",
+        "performSwapAuto",
         "validateSwapParameters",
         "getExpectedSwapOutput",
         "getSwapStats",
@@ -198,10 +199,15 @@ describe("SwapManager Contract", function () {
   describe("🔧 Administrative Functions", function () {
     describe("setMaxSlippage", function () {
       it("should allow owner to update max slippage", async function () {
+        const oldSlippage = await swapManager.maxSlippage();
         const newSlippage = 500; // 5%
+        
+        console.log(`    🔄 Updating slippage: ${Number(oldSlippage) / 100}% → ${newSlippage / 100}%`);
         
         await swapManager.setMaxSlippage(newSlippage);
         expect(await swapManager.maxSlippage()).to.equal(newSlippage);
+        
+        console.log(`    ✅ Slippage updated successfully`);
       });
 
       it("should prevent non-owner from updating slippage", async function () {
@@ -354,8 +360,10 @@ describe("SwapManager Contract", function () {
         );
         
         expect(validation.isValid).to.be.false;
-        // Error could be either "maximum" or "Insufficient balance" depending on implementation
+        // Validation should fail with error reason (can be limit or balance related)
+        // Note: Specific error message will be standardized in Phase C (custom errors)
         expect(validation.errorReason.length).to.be.greaterThan(0);
+        expect(validation.errorReason).to.match(/maximum|limit|exceed|insufficient|balance/i);
       });
 
       it("should reject swapping same token", async function () {
@@ -366,8 +374,10 @@ describe("SwapManager Contract", function () {
         );
         
         expect(validation.isValid).to.be.false;
-        // Error could be "same" or "Expected output is zero" depending on implementation  
+        // Validation should fail with error reason (can be about identical tokens or zero output)
+        // Note: Specific error message will be standardized in Phase C (custom errors)
         expect(validation.errorReason.length).to.be.greaterThan(0);
+        expect(validation.errorReason).to.match(/same|identical|equal|zero|output/i);
       });
     });
   });
@@ -1162,8 +1172,8 @@ describe("SwapManager Contract", function () {
       const estimatedGas = await ethers.provider.estimateGas(deployTx);
       console.log(`✅ SwapManager deployment gas usage: ${estimatedGas}`);
       
-      // Should deploy under 5M gas
-      expect(estimatedGas).to.be.lessThan(5000000);
+      // Should deploy under 5.1M gas (updated after oracle modularity)
+      expect(estimatedGas).to.be.lessThan(5100000);
     });
 
     it("should have reasonable gas for validation", async function () {
@@ -1348,7 +1358,9 @@ describe("SwapManager Contract", function () {
         0, 
         300
       );
-      expect(zeroOutput).to.be.greaterThanOrEqual(0); // Can be 0 or positive depending on router
+      // Zero input amount should return zero or minimal output
+      // Exact behavior depends on router implementation but should not revert
+      expect(zeroOutput).to.be.greaterThanOrEqual(0);
       
       const maxSlippageCalc = await swapManager.calculateMinAmountOut(
         "USDC",
@@ -1437,8 +1449,8 @@ describe("SwapManager Contract", function () {
       ).to.be.revertedWith("Receive token is inactive");
       
       // Restore WBTC
-      await tokenManager.manageTokenData(
-        "WBTC", mockWBTC.target, mockOracle.target, 8, 8, 3600
+      await tokenManager["manageTokenData(string,address,uint8,uint256)"](
+        "WBTC", mockWBTC.target, 8, 3600
       );
       
       console.log("✅ Token validation working correctly");

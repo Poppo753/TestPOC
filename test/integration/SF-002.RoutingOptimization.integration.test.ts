@@ -10,6 +10,33 @@
  * - Multi-hop route comparison
  * - Liquidity depth analysis for routing
  * - Route efficiency optimization
+ * 
+ * ⚠️ CURRENT LIMITATION - PHASE A DOCUMENTATION:
+ * ========================================================================
+ * NOTE: These integration tests currently SIMULATE swap operations using
+ * direct token transfers instead of calling SwapManager.performSwap().
+ * 
+ * Current Approach (Simulated):
+ * - Direct token transfers to simulate routing results
+ * - Routing optimization logic NOT tested through actual SwapManager
+ * - Multi-hop path execution is SIMULATED, not real
+ * 
+ * Coverage Status:
+ * ✅ Routing logic and path selection: TESTED (functional)
+ * ❌ Real multi-hop swap execution: NOT TESTED
+ * ❌ Router path optimization E2E: NOT TESTED
+ * ❌ Actual gas costs per route: NOT MEASURED
+ * 
+ * Reason: MockSimpleSwap implementation pending (Phase B)
+ * 
+ * TODO - Phase B: Replace simulated routing with real SwapManager calls
+ * - Configure MockSimpleSwap for multi-hop scenarios
+ * - Update tests to execute real routing decisions
+ * - Measure actual gas costs and route efficiency
+ * - Verify optimal path selection E2E
+ * 
+ * Expected Coverage Improvement: Routing simulation → Real execution
+ * ========================================================================
  */
 
 import { expect } from "chai";
@@ -46,9 +73,15 @@ describe("SF-002: Routing Optimization (Multi-Path Analysis)", function () {
     await beacon.waitForDeployment();
     console.log(`📡 Beacon deployed: ${await beacon.getAddress()}`);
 
+    // Deploy MockOracleAdapter
+    const MockOracleAdapterFactory = await ethers.getContractFactory("MockOracleAdapter");
+    const mockOracleAdapter = await MockOracleAdapterFactory.deploy();
+    await mockOracleAdapter.waitForDeployment();
+    console.log(`🔗 MockOracleAdapter deployed: ${await mockOracleAdapter.getAddress()}`);
+
     // Deploy all modules
     const TokenManagerFactory = await ethers.getContractFactory("TokenManager");
-    tokenManager = await TokenManagerFactory.deploy(await beacon.getAddress());
+    tokenManager = await TokenManagerFactory.deploy(await beacon.getAddress(), await mockOracleAdapter.getAddress());
     await tokenManager.waitForDeployment();
     console.log(`🪙 TokenManager deployed: ${await tokenManager.getAddress()}`);
 

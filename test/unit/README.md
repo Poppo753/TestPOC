@@ -4,6 +4,10 @@
 
 npx hardhat test test/unit/Beacon.test.ts test/unit/TokenManager.test.ts test/unit/ParameterManager.test.ts test/unit/ValueCalculator.test.ts test/unit/ProxyGeneral.simple.test.ts test/unit/LiquidityManager.test.ts test/unit/LiquidityManager.simple.test.ts test/unit/SwapManager.test.ts test/unit/SwapManager.simple.test.ts test/unit/EmergencyHandler.test.ts test/unit/EmergencyHandler.simple.test.ts  
 
+final:
+
+npx hardhat test test\unit\Beacon.test.ts test\unit\ChainlinkAdapter.test.ts test\unit\EmergencyHandler.simple.test.ts test\unit\EmergencyHandler.test.ts test\unit\LiquidityManager.simple.test.ts test\unit\LiquidityManager.test.ts test\unit\ParameterManager.test.ts test\unit\ProxyGeneral.simple.test.ts test\unit\SwapManager.Phase1A-1B.Integration.test.ts test\unit\SwapManager.Phase1B.test.ts test\unit\SwapManager.simple.test.ts test\unit\SwapManager.test.ts test\unit\TokenManager.test.ts test\unit\UniswapV3Plugin.test.ts test\unit\ValueCalculator.test.ts
+
 ## Scopo
 Test unitari per ogni singola funzione di ogni modulo del sistema.
 

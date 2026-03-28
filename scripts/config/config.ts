@@ -95,6 +95,10 @@ export class Logger {
     console.error(`❌ ${message}`);
   }
 
+  static warn(message: string) {
+    console.warn(`⚠️  ${message}`);
+  }
+
   static debug(message: string) {
     if (OPERATIONAL_CONFIG.logLevel === "debug" || OPERATIONAL_CONFIG.verboseLogging) {
       console.log(`🔍 ${message}`);

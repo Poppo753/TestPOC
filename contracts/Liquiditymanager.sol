@@ -12,6 +12,7 @@ import "./interfaces/IValueCalculatorForModules.sol";
 import "./interfaces/ISwapManagerForModules.sol";
 import "./interfaces/IParameterManagerForModules.sol";
 import "./interfaces/IWETH.sol";
+import "./interfaces/IProtocolManager.sol";
 
 /**
  * @title LiquidityManager
@@ -244,6 +245,10 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
      * @return ethAmount ETH effettivamente prelevato
      */
     function _withdrawInternal(uint256 _shares, uint256 deadline) internal returns (uint256 ethAmount) {
+        // STORE START TIME FOR DURATION TRACKING
+        uint256 startTime = block.timestamp;
+        uint256 timeRemaining = deadline - block.timestamp;
+        
         // INITIAL VALIDATION
         require(_shares > 0, "Invalid shares amount");
         
@@ -301,20 +306,44 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
         reserveCheck.currentReserveRatio = (validation.poolEthBalance * 10000) / validation.totalValue;
         require(reserveCheck.currentReserveRatio >= poolReserveRatio, "Insufficient pool reserves");
         
+        // EMIT WITHDRAWAL STARTED EVENT
+        emit WithdrawalStarted(
+            msg.sender,
+            _shares,
+            deadline,
+            deadline - block.timestamp,
+            validation.poolEthBalance < netWithdraw
+        );
+        
+        // CHECK DEADLINE CRITICAL (< 3 min remaining)
+        if (deadline - block.timestamp < 3 minutes) {
+            emit WithdrawalDeadlineCritical(
+                msg.sender,
+                deadline,
+                deadline - block.timestamp,
+                "validation"
+            );
+        }
+        
         // CHECK IF SWAP IS REQUIRED (for net withdraw amount)
         if (validation.poolEthBalance < netWithdraw) {
             validation.requiresSwap = true;
             validation.wethNeeded = netWithdraw - validation.poolEthBalance;
             
             // EXECUTE AUTOMATIC SWAP CON DEADLINE PROPAGATION
+            // Multi-swap handles slippage tolerance internally
             _executeAutomaticSwap(validation.wethNeeded, calculator, deadline);
             
-            // VERIFY SWAP SUCCESS
+            // GET ACTUAL WETH BALANCE AFTER ALL SWAPS
             uint256 newWethBalance = IERC20(wethAddress).balanceOf(proxyGeneral);
-            require(
-                newWethBalance >= netWithdraw,
-                "Swap didn't provide enough WETH"
-            );
+            
+            // Adjust netWithdraw to what we actually have (multi-swap gave us the best possible)
+            if (newWethBalance < netWithdraw) {
+                netWithdraw = newWethBalance;
+            }
+            
+            // UPDATE poolEthBalance after swap
+            validation.poolEthBalance = newWethBalance;
         }
         
         // VALIDATE POST-WITHDRAW RESERVE RATIO
@@ -360,6 +389,16 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
             "Invalid supply change"
         );
         
+        // CHECK DEADLINE CRITICAL BEFORE FINAL TRANSFER
+        if (deadline - block.timestamp < 3 minutes) {
+            emit WithdrawalDeadlineCritical(
+                msg.sender,
+                deadline,
+                deadline - block.timestamp,
+                "transfer"
+            );
+        }
+        
         emit Withdrawn(
             msg.sender,
             _shares,
@@ -368,12 +407,22 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
             IERC20(wethAddress).balanceOf(proxyGeneral)
         );
         
+        // EMIT WITHDRAWAL COMPLETED EVENT WITH TIMING
+        emit WithdrawalCompleted(
+            msg.sender,
+            _shares,
+            netWithdraw,
+            deadline,
+            block.timestamp - startTime,
+            validation.requiresSwap
+        );
+        
         return netWithdraw;
     }
 
     /**
-     * @notice Esegue automatic swap per ottenere WETH necessario
-     * @dev Con deadline propagation per protezione MEV
+     * @notice Esegue automatic swap multipli per ottenere WETH necessario
+     * @dev Loop intelligente con slippage tolerance - swappa token finché target raggiunto
      * @param wethNeeded Quantità di WETH necessaria
      * @param calculator Reference al ValueCalculator
      * @param deadline Timestamp massimo per swap
@@ -383,33 +432,324 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
         IValueCalculatorForModules calculator,
         uint256 deadline
     ) internal {
-        // SELEZIONA TOKEN CON PERCENTUALE PIÙ BASSA
-        (string memory tokenToSwap, uint256 amountToSwap) = calculator.selectTokenForSwap(wethNeeded);
+        uint256 wethStillNeeded = wethNeeded;
+        uint256 maxIterations = 10; // Safety limit
+        uint256 iteration = 0;
+        uint256 totalWethObtained = 0;
         
-        require(bytes(tokenToSwap).length > 0, "No suitable token for swap");
-        require(amountToSwap > 0, "Invalid swap amount calculated");
-        
-        // EXECUTE SWAP VIA SWAPMANAGER
+        address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
+        address wethAddress = IBeacon(beacon).getImplementation("WETH");
         address swapManager = IBeacon(beacon).getImplementation("SwapManager");
         ISwapManagerForModules swapper = ISwapManagerForModules(swapManager);
         
-        // VALIDATE SWAP PARAMETERS
-        (bool isValid, string memory errorReason) = swapper.validateSwapParameters(
-            tokenToSwap,
-            "WETH",
-            amountToSwap
-        );
-        require(isValid, string(abi.encodePacked("Swap validation failed: ", errorReason)));
+        emit MultiSwapStarted(msg.sender, wethNeeded, maxIterations);
         
-        // PERFORM THE SWAP CON DEADLINE (MEV PROTECTED)
-        uint256 receivedWeth = swapper.performSwap(tokenToSwap, "WETH", amountToSwap, deadline);
+        while (wethStillNeeded > 0 && iteration < maxIterations) {
+            iteration++;
+            
+            // Check current WETH balance in ProxyGeneral
+            uint256 currentWeth = IERC20(wethAddress).balanceOf(proxyGeneral);
+            
+            // If current balance is enough for our original target, stop
+            if (currentWeth >= wethNeeded) {
+                emit MultiSwapCompleted(msg.sender, iteration - 1, totalWethObtained);
+                return;
+            }
+            
+            // Check deadline critical
+            uint256 timeRemaining = deadline - block.timestamp;
+            if (timeRemaining < 3 minutes) {
+                emit WithdrawalDeadlineCritical(
+                    msg.sender,
+                    deadline,
+                    timeRemaining,
+                    "multi-swap"
+                );
+            }
+            
+            // Select next token to swap
+            (string memory tokenToSwap, uint256 amountToSwap) = calculator.selectTokenForSwap(wethStillNeeded);
+            
+            // No more tokens available from regular swap selection
+            if (bytes(tokenToSwap).length == 0 || amountToSwap == 0) {
+                // WITHDRAWAL PRIORITY ORDER:
+                // 1. Swap any remaining liquid tokens (non-WETH) to WETH
+                // 2. Close protocol positions via ProtocolManager (modular - handles all plugins)
+                
+                // STEP 1: Swap liquid tokens
+                uint256 fromLiquidSwap = _swapLiquidTokensForWeth(wethStillNeeded, proxyGeneral, wethAddress);
+                if (fromLiquidSwap > 0) {
+                    totalWethObtained += fromLiquidSwap;
+                    if (fromLiquidSwap >= wethStillNeeded) {
+                        wethStillNeeded = 0;
+                    } else {
+                        wethStillNeeded -= fromLiquidSwap;
+                    }
+                    
+                    // Check if we have enough now
+                    uint256 newWethBalance = IERC20(wethAddress).balanceOf(proxyGeneral);
+                    if (newWethBalance >= wethNeeded) {
+                        emit MultiSwapCompleted(msg.sender, iteration, totalWethObtained);
+                        return;
+                    }
+                }
+                
+                // STEP 2: Close protocol positions via ProtocolManager (modular for ALL plugins)
+                if (wethStillNeeded > 0) {
+                    uint256 fromProtocols = _closeProtocolPositionsForWeth(wethStillNeeded, proxyGeneral, wethAddress);
+                    if (fromProtocols > 0) {
+                        totalWethObtained += fromProtocols;
+                        if (fromProtocols >= wethStillNeeded) {
+                            wethStillNeeded = 0;
+                        } else {
+                            wethStillNeeded -= fromProtocols;
+                        }
+                        // Check if we have enough now
+                        uint256 newWethBalance = IERC20(wethAddress).balanceOf(proxyGeneral);
+                        if (newWethBalance >= wethNeeded) {
+                            emit MultiSwapCompleted(msg.sender, iteration, totalWethObtained);
+                            return;
+                        }
+                    }
+                }
+                
+                // Check if we have at least 97% of target (slippage tolerance)
+                uint256 minAcceptable = (wethNeeded * 97) / 100;
+                if (totalWethObtained >= minAcceptable) {
+                    emit MultiSwapCompleted(msg.sender, iteration - 1, totalWethObtained);
+                    return;
+                }
+                
+                revert("Insufficient total liquidity across all available tokens");
+            }
+            
+            // Emit swap trigger for this iteration
+            emit AutomaticSwapTriggered(
+                msg.sender,
+                tokenToSwap,
+                amountToSwap,
+                wethStillNeeded,
+                deadline,
+                timeRemaining
+            );
+            
+            // Validate swap parameters
+            (bool isValid, string memory errorReason) = swapper.validateSwapParameters(
+                tokenToSwap,
+                "WETH",
+                amountToSwap
+            );
+            require(isValid, string(abi.encodePacked("Swap validation failed: ", errorReason)));
+            
+            // Execute swap
+            uint256 receivedWeth = swapper.performSwap(tokenToSwap, "WETH", amountToSwap, deadline);
+            require(receivedWeth > 0, "Swap returned zero WETH");
+            
+            // Update counters
+            totalWethObtained += receivedWeth;
+            
+            if (receivedWeth >= wethStillNeeded) {
+                wethStillNeeded = 0;
+            } else {
+                wethStillNeeded -= receivedWeth;
+            }
+            
+            // Emit events for this iteration
+            emit MultiSwapIteration(
+                msg.sender,
+                iteration,
+                tokenToSwap,
+                amountToSwap,
+                receivedWeth,
+                wethStillNeeded
+            );
+            emit TokenSwappedForWithdraw(tokenToSwap, amountToSwap, receivedWeth);
+        }
         
-        // VALIDATE RECEIVED AMOUNT
-        require(receivedWeth > 0, "Swap returned zero WETH");
-        
-        // EMIT TOKEN SWAPPED EVENT
-        emit TokenSwappedForWithdraw(tokenToSwap, amountToSwap, receivedWeth);
+        // Final check
+        require(wethStillNeeded == 0, "Could not obtain enough WETH after multiple swaps");
+        emit MultiSwapCompleted(msg.sender, iteration, totalWethObtained);
     }
+
+    // ==================== EULER INTEGRATION ====================
+
+    /**
+     * @notice Close positions across ALL registered protocols to obtain WETH
+     * @dev Delegates to ProtocolManager which loops through all registered protocol adapters
+     * @dev This is the MODULAR version - works with ANY protocol that implements IProtocolAdapter
+     * 
+     * @param wethNeeded Amount of WETH still needed
+     * @param proxyGeneral ProxyGeneral address (for balance tracking - not used directly)
+     * @param wethAddress WETH token address (for balance tracking - not used directly)
+     * @return wethObtained Amount of WETH obtained from closing positions
+     * 
+     * FLOW:
+     * LiquidityManager._closeProtocolPositionsForWeth(5 WETH)
+     *     └── ProtocolManager.closePositionsForWeth(5 WETH)
+     *         ├── EulerV2Plugin.closePositionsForWeth() → 3 WETH
+     *         ├── AavePlugin.closePositionsForWeth()    → 2 WETH (future)
+     *         └── CompoundPlugin.closePositionsForWeth() → (not needed)
+     * 
+     * BENEFITS:
+     * - No Euler-specific code in LiquidityManager
+     * - Adding new protocol = just register in ProtocolManager
+     * - Each plugin handles its own normal deposits + leverage positions
+     */
+    function _closeProtocolPositionsForWeth(
+        uint256 wethNeeded,
+        address proxyGeneral,
+        address wethAddress
+    ) internal returns (uint256 wethObtained) {
+        // Get ProtocolManager from Beacon
+        address protocolManager;
+        try IBeacon(beacon).getImplementation("ProtocolManager") returns (address pm) {
+            protocolManager = pm;
+        } catch {
+            return 0;
+        }
+        
+        if (protocolManager == address(0)) return 0;
+        
+        // Track WETH balance before
+        uint256 wethBefore = IERC20(wethAddress).balanceOf(proxyGeneral);
+        
+        // Delegate to ProtocolManager - it will loop through ALL registered protocols
+        try IProtocolManager(protocolManager).closePositionsForWeth(wethNeeded) 
+            returns (uint256 obtained, uint256 positionsClosed) 
+        {
+            // Calculate actual WETH obtained (verify via balance)
+            uint256 wethAfter = IERC20(wethAddress).balanceOf(proxyGeneral);
+            wethObtained = wethAfter > wethBefore ? wethAfter - wethBefore : obtained;
+            
+            if (positionsClosed > 0) {
+                emit ProtocolPositionsClosedForWeth(positionsClosed, wethObtained);
+            }
+        } catch {
+            // ProtocolManager call failed
+            return 0;
+        }
+        
+        return wethObtained;
+    }
+    
+    /**
+     * @notice DEPRECATED - Use _closeProtocolPositionsForWeth instead
+     * @dev Kept for reference - will be removed in future version
+     * 
+     * Old Euler-specific function that is now replaced by the modular version above.
+     * The new architecture uses ProtocolManager to loop through ALL registered protocols,
+     * making the system extensible for future protocols (Aave, Compound, etc.)
+     */
+    // function _closeEulerPositionsForWeth(...) - REMOVED, see _closeProtocolPositionsForWeth
+    
+    /**
+     * @notice Swap liquid tokens (non-WETH) to WETH for withdrawal
+     * @dev Called before closing Euler positions - swaps any available liquid tokens first
+     * 
+     * STRATEGY:
+     * 1. Get all active tokens from TokenManager
+     * 2. For each token with balance > 0 (excluding WETH), swap to WETH
+     * 3. Stop when enough WETH is obtained
+     * 
+     * @param wethNeeded Amount of WETH still needed
+     * @param proxyGeneral Address of ProxyGeneral holding assets
+     * @param wethAddress Address of WETH token
+     * @return wethObtained Amount of WETH obtained from swaps
+     */
+    function _swapLiquidTokensForWeth(
+        uint256 wethNeeded,
+        address proxyGeneral,
+        address wethAddress
+    ) internal returns (uint256 wethObtained) {
+        // Get TokenManager
+        address tokenManager;
+        try IBeacon(beacon).getImplementation("TokenManager") returns (address tm) {
+            tokenManager = tm;
+        } catch {
+            return 0;
+        }
+        
+        if (tokenManager == address(0)) return 0;
+        
+        // Get SwapManager
+        address swapManager;
+        try IBeacon(beacon).getImplementation("SwapManager") returns (address sm) {
+            swapManager = sm;
+        } catch {
+            return 0;
+        }
+        
+        if (swapManager == address(0)) return 0;
+        
+        // Get all active tokens
+        string[] memory activeTokens;
+        try ITokenManagerForModules(tokenManager).getActiveTokens() returns (string[] memory tokens) {
+            activeTokens = tokens;
+        } catch {
+            return 0;
+        }
+        
+        // Track WETH balance
+        uint256 wethBefore = IERC20(wethAddress).balanceOf(proxyGeneral);
+        
+        // Swap each token with balance > 0 (excluding WETH)
+        for (uint256 i = 0; i < activeTokens.length && wethObtained < wethNeeded; i++) {
+            string memory tokenCode = activeTokens[i];
+            
+            // Skip WETH
+            if (keccak256(bytes(tokenCode)) == keccak256(bytes("WETH"))) {
+                continue;
+            }
+            
+            // Get token address and balance
+            address tokenAddr;
+            try ITokenManagerForModules(tokenManager).getTokenAddress(tokenCode) returns (address addr) {
+                tokenAddr = addr;
+            } catch {
+                continue;
+            }
+            
+            uint256 balance = IERC20(tokenAddr).balanceOf(proxyGeneral);
+            if (balance == 0) continue;
+            
+            // Calculate how much we need to swap
+            // If we need 1 WETH and this token can provide 2 WETH worth, only swap half
+            // For simplicity, we swap all available (can optimize later)
+            uint256 amountToSwap = balance;
+            
+            // Try to swap
+            try ISwapManagerForModules(swapManager).performSwapAuto(
+                tokenCode,
+                "WETH",
+                amountToSwap
+            ) returns (uint256 amountOut) {
+                if (amountOut > 0) {
+                    wethObtained += amountOut;
+                    emit LiquidTokenSwappedForWeth(tokenCode, amountToSwap, amountOut);
+                }
+            } catch {
+                // Swap failed, continue with next token
+                continue;
+            }
+        }
+        
+        return wethObtained;
+    }
+    
+    /**
+     * @notice DEPRECATED - Normal deposits are now handled by _closeProtocolPositionsForWeth
+     * @dev Each plugin's closePositionsForWeth() should handle both normal deposits AND leverage positions
+     * 
+     * The EulerV2Plugin.closePositionsForWeth() now:
+     * 1. First closes normal deposits (no debt)
+     * 2. Then closes leverage positions (sorted by risk)
+     * 
+     * This modular approach means:
+     * - LiquidityManager doesn't need Euler-specific code
+     * - Adding new protocols = implement IProtocolAdapter.closePositionsForWeth
+     * - Each protocol handles its own deposit/position types internally
+     */
+    // function _closeEulerNormalDepositsForWeth(...) - REMOVED, see _closeProtocolPositionsForWeth
 
     // ==================== VIEW FUNCTIONS ====================
 

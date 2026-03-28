@@ -143,7 +143,9 @@ contract MockSimpleSwap is ISimpleSwap {
     function getExpectedOutput(
         address spendToken,
         address receiveToken,
-        uint256 /* amountIn */
+        uint256 amountIn,
+        uint8 /* decimalsIn */,
+        uint8 /* decimalsOut */
     ) external view override returns (uint256) {
         uint256 baseOutput = expectedOutputs[spendToken][receiveToken];
         

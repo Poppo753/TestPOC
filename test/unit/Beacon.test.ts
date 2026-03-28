@@ -43,8 +43,15 @@ describe("Beacon Contract", function () {
 
   describe("📋 Deployment", function () {
     it("should deploy with correct initial state", async function () {
-      expect(await beacon.getAddress()).to.be.properAddress;
-      expect(await beacon.owner()).to.equal(owner.address);
+      const beaconAddress = await beacon.getAddress();
+      const ownerAddress = await beacon.owner();
+      
+      expect(beaconAddress).to.be.properAddress;
+      expect(ownerAddress).to.equal(owner.address);
+      
+      if (this.test) {
+        this.test.title += ` [Address: ${beaconAddress.slice(0, 10)}...${beaconAddress.slice(-8)} | Owner: ${ownerAddress.slice(0, 10)}...${ownerAddress.slice(-8)}]`;
+      }
     });
 
     it("should have expected function signatures", async function () {
