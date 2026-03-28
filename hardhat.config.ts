@@ -13,7 +13,7 @@ const config: HardhatUserConfig = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 1000, // Higher runs = smaller bytecode (for EulerV2Plugin 24KB limit)
+        runs: 200, // Higher runs = smaller bytecode (for EulerV2Plugin 24KB limit)
       },
       viaIR: true, // Enable IR optimizer to avoid "stack too deep" errors
     },

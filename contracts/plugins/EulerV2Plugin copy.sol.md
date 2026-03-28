@@ -39,46 +39,6 @@ interface IFlashLoanService {
  * - Operazioni comuni: deposit, withdraw, borrow, repay (via ILendingProtocol)
  * - Operazioni leverage ATOMICHE: openLeverageAtomic, closeLeverageAtomic (via FlashLoanService)
  * 
- * SUB-ACCOUNT ALLOCATION STRATEGY (Opzione C - Lazy On-Demand):
- * 
- * EVC (Ethereum Vault Connector) requires unique addresses for each position:
- *   address = address(this) XOR subAccountId
- * 
- * DESIGN DECISION (June 2024):
- * Previous approach: Manual allocation in plugin (nextSubAccountId counter)
- * Current approach: Lazy allocation in EulerRegistry via createPositionOnDemand()
- * 
- * Benefits:
- * 1. Sub-account reuse: Same vault pair → same sub-account
- *    - First open: 42k gas (allocate + create position)
- *    - Re-open: 27k gas (reuse sub-account, -36%)
- * 
- * 2. Centralized management: EulerRegistry owns allocation logic
- *    - Single source of truth for position → sub-account mapping
- *    - EulerLensAdapter, ProtocolManager remain unchanged
- * 
- * 3. Safety: No race conditions on shared counter
- *    - Hash-based allocation: keccak256(abi.encode(collateralVault, borrowVault))
- *    - Deterministic: same pair always gets same sub-account
- * 
- * 4. Code size: -3.3 KB net (-7.7 KB plugin, +4.4 KB registry)
- * 
- * Implementation:
- * - EulerRegistry.positionKeyToSubAccount: mapping(bytes32 => uint8)
- * - createPositionOnDemand(): allocates on first use, reuses on subsequent opens
- * - Helper functions: getSubAccountForPair(), hasActivePositionForPair()
- * 
- * Alternatives considered:
- * - Opzione A (Pool): Pre-allocated 10 sub-accounts with manual reuse
- *   Rejected: Complex pool management, 20k gas overhead per allocation check
- * 
- * - Opzione B (Main-Only): No sub-accounts, single position only
- *   Rejected: No parallel positions, breaks multi-collateral use cases
- * 
- * See: contracts/plugins/EulerRegistry.sol for allocation implementation
- *      GMX_V2_INTEGRATION_STRATEGY.md for full analysis
-
- * 
  * EULER V2 SPECIFICO:
  * - EVC (Ethereum Vault Connector): Hub per batching e sub-accounts
  * - Sub-account 0: Depositi semplici (yield farming)
@@ -123,15 +83,16 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     /// @notice Sub-account ID per depositi semplici
     uint8 public constant MAIN_SUB_ACCOUNT = 0;
     
-    // Removed: LEVERAGE_SUB_ACCOUNT_START - allocation managed by EulerRegistry (Opzione C)
+    /// @notice Primo sub-account ID per posizioni leverage
+    uint8 public constant LEVERAGE_SUB_ACCOUNT_START = 1;
     
     // ==================== STATE VARIABLES ====================
     
     /// @notice Circuit breaker flag (emergency stop)
     bool public override circuitBreakerTripped;
     
-    /// @dev Sub-account allocation removed - now managed by EulerRegistry (Opzione C)
-    /// @dev See EulerRegistry.createPositionOnDemand() for lazy allocation logic
+    /// @notice Prossimo sub-account ID disponibile per leverage
+    uint8 public nextSubAccountId;
     
     /// @notice Flag per verificare callback flash loan legittimo
     bool private _inFlashLoanCallback;
@@ -144,14 +105,15 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     /// @notice Tipo di operazione flash loan
     enum FlashLoanOperation { OPEN, CLOSE }
     
-    /// @notice Contesto per callback flash loan (semplificato per Opzione C)
-    /// @dev Removed targetLeverageX100, minHealthFactor - only used for validation, not in callback
+    /// @notice Contesto per callback flash loan
     struct FlashLoanCallbackContext {
         FlashLoanOperation operation;   // OPEN o CLOSE
         address user;
         address collateralVault;
         address borrowVault;
+        uint256 targetLeverageX100;      // Solo per OPEN
         uint256 initialCollateral;       // Solo per OPEN
+        uint256 minHealthFactor;         // Solo per OPEN
         uint256 maxSlippageBps;          // Solo per CLOSE (basis points, e.g., 100 = 1%)
     }
     
@@ -266,7 +228,7 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         
         beacon = _beacon;
         evc = IEVC(EVC_ADDRESS);
-        // Sub-account allocation removed - now managed by EulerRegistry (Opzione C)
+        nextSubAccountId = LEVERAGE_SUB_ACCOUNT_START;
     }
     
     // ==================== IProtocolManager: DEPOSIT/WITHDRAW ====================
@@ -336,11 +298,31 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
             revert InsufficientBalance(0, amount);
         }
         
-        // 3. Auto-disable collateral REMOVED - should be done via batch operation
-        // Disabling collateral while controller is enabled can cause issues with EVC
-        // This should be handled externally with proper sequencing or EVC.batch()
+        uint256 totalAssets = IEVault(vault).convertToAssets(totalShares);
+        bool isFullWithdrawal = (amount == 0 || amount >= totalAssets);
         
-        // 4. Verifica balance disponibile
+        // 3. Auto-disable collaterale PRIMA di maxWithdraw se full withdrawal e no debiti
+        if (isFullWithdrawal && evc.isCollateralEnabled(address(this), vault)) {
+            // Verifica che non ci siano debiti attivi
+            bool hasActiveDebt = false;
+            address[] memory controllers = evc.getControllers(address(this));
+            for (uint256 i = 0; i < controllers.length; i++) {
+                if (controllers[i] != address(0)) {
+                    uint256 debt = IEVault(controllers[i]).debtOf(address(this));
+                    if (debt > 0) {
+                        hasActiveDebt = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Disabilita collaterale solo se non ci sono debiti (PRIMA di maxWithdraw check!)
+            if (!hasActiveDebt) {
+                evc.disableCollateral(address(this), vault);
+            }
+        }
+        
+        // 4. Verifica balance disponibile (DOPO auto-disable)
         uint256 maxWithdraw = IEVault(vault).maxWithdraw(address(this));
         
         // Se amount = 0, withdraw all
@@ -439,74 +421,14 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         IERC20(token).safeIncreaseAllowance(vault, repayAmount);
         IEVault(vault).repay(repayAmount, address(this));
         
-        // 6. Handle interest dust that accrued during transaction
+        // 6. Auto-disable controller se debt = 0
         uint256 remainingDebt = IEVault(vault).debtOf(address(this));
-        
-        // If there's minimal dust (< 1000 wei), repay it too to fully close position
-        if (remainingDebt > 0 && remainingDebt < 1000) {
-            uint256 dustBalance = IERC20(token).balanceOf(address(this));
-            if (dustBalance >= remainingDebt) {
-                IERC20(token).safeIncreaseAllowance(vault, remainingDebt);
-                IEVault(vault).repay(remainingDebt, address(this));
-                remainingDebt = 0; // Force to 0 after dust repay
-            }
+        if (remainingDebt == 0 && evc.isControllerEnabled(address(this), vault)) {
+            evc.disableController(address(this), vault);
         }
-        
-        // 7. Auto-disable controller REMOVED - should be done via batch operation
-        // The EVC doesn't allow disabling controller while collateral is still enabled
-        // This should be handled externally with proper sequencing:
-        // 1. Repay debt
-        // 2. Withdraw collateral (if any)
-        // 3. Disable collateral
-        // 4. Disable controller
-        // OR use EVC.batch() to do atomic operations
         
         emit EulerRepay(tokenCode, vault, repayAmount);
         emit Repaid(tokenCode, repayAmount, 0);
-        
-        return true;
-    }
-    
-    /**
-     * @notice Close a complete position: repay all debt, disable controller, withdraw collateral, disable collateral
-     * @dev Atomic operation to fully exit a position in a single transaction
-     * @param debtTokenCode Token code for debt (e.g., "USDC")
-     * @param collateralTokenCode Token code for collateral (e.g., "WETH")
-     * @return success True if position closed successfully
-     */
-    function closePosition(
-        string memory debtTokenCode,
-        string memory collateralTokenCode
-    ) 
-        external 
-        onlyProtocolManager
-        notCircuitBroken
-        nonReentrant
-        returns (bool success) 
-    {
-        // 1. Repay all debt (amount=0 means repay all)
-        bool repaySuccess = this.repay(debtTokenCode, 0);
-        require(repaySuccess, "Repay failed");
-        
-        // 2. Disable controller if debt is 0
-        address debtVault = _getVault(debtTokenCode);
-        uint256 remainingDebt = IEVault(debtVault).debtOf(address(this));
-        
-        if (remainingDebt == 0 && evc.isControllerEnabled(address(this), debtVault)) {
-            evc.disableController(address(this), debtVault);
-        }
-        
-        // 3. Withdraw all collateral (amount=0 means withdraw all)
-        bool withdrawSuccess = this.withdraw(collateralTokenCode, 0);
-        require(withdrawSuccess, "Withdraw failed");
-        
-        // 4. Disable collateral if balance is 0
-        address collateralVault = _getVault(collateralTokenCode);
-        uint256 remainingShares = IEVault(collateralVault).balanceOf(address(this));
-        
-        if (remainingShares == 0 && evc.isCollateralEnabled(address(this), collateralVault)) {
-            evc.disableCollateral(address(this), collateralVault);
-        }
         
         return true;
     }
@@ -528,6 +450,22 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         
         return IEVault(vault).debtOf(address(this));
     }
+    
+    // DEPRECATED: Use getDebt() instead - identical functionality
+    // /**
+    //  * @inheritdoc IEulerV2Plugin
+    //  */
+    // function getBorrowedAmount(string memory tokenCode) 
+    //     external 
+    //     view 
+    //     override 
+    //     returns (uint256) 
+    // {
+    //     address vault = _getVaultSafe(tokenCode);
+    //     if (vault == address(0)) return 0;
+    //     
+    //     return IEVault(vault).debtOf(address(this));
+    // }
     
     /**
      * @inheritdoc IEulerV2Plugin
@@ -572,6 +510,12 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         return (liquidity.collateralValueBorrowing * 1e18) / liquidity.liabilityValueBorrowing;
     }
     
+    // REMOVED: getHealthFactorForVault() - Use EulerLensAdapter.getSubAccountHealth() instead
+    // REMOVED: getTimeToLiquidation() - Use EulerLensAdapter.getTimeToLiquidation() instead
+
+    // REMOVED: getBorrowCapacity() - Was returning 0 with TODO comment
+    // Use EulerLensAdapter for borrow capacity calculations instead
+    
     // ==================== IProtocolManager: VIEW FUNCTIONS ====================
     
     /**
@@ -590,6 +534,8 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         uint256 shares = IEVault(vault).balanceOf(address(this));
         return IEVault(vault).convertToAssets(shares);
     }
+    
+    // REMOVED: getProtocolInfo() - Legacy function, use protocolName() and protocolType() instead
     
     /**
      * @inheritdoc IProtocolAdapter
@@ -686,13 +632,15 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
             leverageMultiplier
         );
         
-        // Salva contesto per callback (semplificato per Opzione C)
+        // Salva contesto per callback
         _flashLoanContext = FlashLoanCallbackContext({
             operation: FlashLoanOperation.OPEN,
             user: msg.sender,
             collateralVault: collateralVault,
             borrowVault: borrowVault,
+            targetLeverageX100: params.targetLeverageX100,
             initialCollateral: params.collateralAmount,
+            minHealthFactor: params.minHealthFactor > 0 ? params.minHealthFactor : MIN_HEALTH_FACTOR,
             maxSlippageBps: 0  // Non usato per OPEN
         });
         
@@ -722,15 +670,15 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         (totalCollateral, totalDebt, healthFactor) = _getPositionState(collateralVault, borrowVault);
         
         // Verifica health factor
-        uint256 minHF = params.minHealthFactor > 0 ? params.minHealthFactor : MIN_HEALTH_FACTOR;
+        uint256 minHF = _flashLoanContext.minHealthFactor;
         if (healthFactor < minHF) {
             revert HealthFactorTooLow(healthFactor, minHF);
         }
         
-        // Registra posizione con lazy allocation (Opzione C)
-        // createPositionOnDemand allocates sub-account on-demand and reuses for same vault pair
+        // Registra posizione per tracking nel Registry
         address registry = _getVaultRegistry();
-        IEulerRegistry(registry).createPositionOnDemand(
+        uint256 positionId = IEulerRegistry(registry).createPosition(
+            0, // subAccountId (main account per atomic leverage)
             collateralVault,
             borrowVault,
             params.collateralAmount,
@@ -794,13 +742,15 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         uint256 currentDebt = IEVault(borrowVault).debtOf(address(this));
         if (currentDebt == 0) revert NoPositionToClose();
         
-        // Salva contesto per callback (semplificato per Opzione C)
+        // Salva contesto per callback
         _flashLoanContext = FlashLoanCallbackContext({
             operation: FlashLoanOperation.CLOSE,
             user: msg.sender,
             collateralVault: collateralVault,
             borrowVault: borrowVault,
+            targetLeverageX100: 0,  // Non usato per CLOSE
             initialCollateral: 0,   // Non usato per CLOSE
+            minHealthFactor: 0,     // Non usato per CLOSE
             maxSlippageBps: params.maxSlippageBps > 0 ? params.maxSlippageBps : 100  // Default 1%
         });
         
@@ -1131,6 +1081,28 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     }
     
     /**
+     * @notice Converte posizione interna in formato esterno
+     */
+    function _toExternalPosition(uint256 positionId) 
+        internal 
+        view 
+        returns (LeveragePosition memory) 
+    {
+        address registry = _getVaultRegistry();
+        IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPosition(positionId);
+        return LeveragePosition({
+            positionId: positionId,
+            subAccountId: pos.subAccountId,
+            collateralVault: pos.collateralVault,
+            borrowVault: pos.borrowVault,
+            initialCollateral: pos.initialCollateral,
+            borrowedAmount: pos.borrowedAmount,
+            isActive: pos.isActive,
+            createdAt: pos.createdAt
+        });
+    }
+    
+    /**
      * @notice Deriva indirizzo sub-account
      * @dev Formula Euler: address XOR subAccountId
      */
@@ -1144,9 +1116,12 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
      * @notice Ottiene FlashLoanService da Beacon
      */
     function _getFlashLoanService() internal view returns (address) {
-        address service = IBeacon(beacon).getImplementation("FlashLoanService");
-        if (service == address(0)) revert FlashLoanServiceNotFound();
-        return service;
+        try IBeacon(beacon).getImplementation("FlashLoanService") returns (address service) {
+            if (service == address(0)) revert FlashLoanServiceNotFound();
+            return service;
+        } catch {
+            revert FlashLoanServiceNotFound();
+        }
     }
     
 
@@ -1163,7 +1138,18 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         uint256 collateralAmount,
         uint256 leverageMultiplier
     ) internal view returns (uint256) {
-        address flashLoanService = _getFlashLoanService();
+        // Ottieni FlashLoanService per quotazione
+        address flashLoanService;
+        try IBeacon(beacon).getImplementation("FlashLoanService") returns (address service) {
+            flashLoanService = service;
+        } catch {
+            // Fallback a stima semplice
+            return _estimateFlashLoanAmount(collateralAmount, leverageMultiplier);
+        }
+        
+        if (flashLoanService == address(0)) {
+            return _estimateFlashLoanAmount(collateralAmount, leverageMultiplier);
+        }
         
         // Calcola valore collaterale in borrow token
         uint256 collateralValueInBorrow = IFlashLoanService(flashLoanService).getExpectedOutput(
@@ -1172,13 +1158,28 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
             collateralAmount
         );
         
+        if (collateralValueInBorrow == 0) {
+            return _estimateFlashLoanAmount(collateralAmount, leverageMultiplier);
+        }
+        
         // Flash loan = collateralValue * (leverageMultiplier / 100)
         return (collateralValueInBorrow * leverageMultiplier) / 100;
     }
     
     /**
+     * @notice Stima fallback per flash loan amount
+     */
+    function _estimateFlashLoanAmount(
+        uint256 collateralAmount,
+        uint256 leverageMultiplier
+    ) internal pure returns (uint256) {
+        // Assume ETH = 3000 USDC
+        uint256 collateralValueUSDC = (collateralAmount * 3000e6) / 1e18;
+        return (collateralValueUSDC * leverageMultiplier) / 100;
+    }
+    
+    /**
      * @notice Ottiene stato posizione corrente
-     * @dev Usa getHealthFactor() per evitare duplicazione logica
      */
     function _getPositionState(
         address collateralVault,
@@ -1195,8 +1196,16 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         // Debito
         totalDebt = IEVault(borrowVault).debtOf(address(this));
         
-        // Health factor - riusa logica esistente invece di duplicare
-        healthFactor = this.getHealthFactor();
+        // Health factor via AccountLens
+        IAccountLens lens = IAccountLens(ACCOUNT_LENS_ADDRESS);
+        IAccountLens.AccountLiquidityInfo memory liquidity = 
+            lens.getAccountLiquidityInfo(address(this), borrowVault);
+        
+        if (liquidity.queryFailure || liquidity.liabilityValueBorrowing == 0) {
+            healthFactor = type(uint256).max;
+        } else {
+            healthFactor = (liquidity.collateralValueBorrowing * 1e18) / liquidity.liabilityValueBorrowing;
+        }
     }
     
     // ==================== IProtocolAdapter IMPLEMENTATION ====================
@@ -1254,6 +1263,8 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         }
         
         // STEP 2: Close leverage positions (sorted by risk, riskiest first)
+        uint256 stillNeeded = targetWethAmount - wethObtained;
+        
         // Get sorted positions from LensAdapter
         address lensAdapter = IBeacon(beacon).getImplementation("EulerLensAdapter");
         ILensAdapter.PositionWithRisk[] memory sortedPositions = ILensAdapter(lensAdapter).getPositionsSortedByRisk();
@@ -1307,7 +1318,7 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         if (vaultRegistry == address(0)) return (0, 0);
         
         // Get all registered vaults
-        (, address[] memory vaults) = IEulerRegistry(vaultRegistry).getAllVaults();
+        (string[] memory tokenCodes, address[] memory vaults) = IEulerRegistry(vaultRegistry).getAllVaults();
         
         for (uint256 i = 0; i < vaults.length && wethObtained < targetWethAmount; i++) {
             address vault = vaults[i];
@@ -1390,13 +1401,15 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
             return wethReturned;
         }
         
-        // Save context for callback (semplificato per Opzione C)
+        // Save context for callback - use CLOSE_FOR_WETH operation
         _flashLoanContext = FlashLoanCallbackContext({
             operation: FlashLoanOperation.CLOSE,
             user: address(this), // WETH goes to this contract, not external user
             collateralVault: collateralVault,
             borrowVault: borrowVault,
+            targetLeverageX100: 0,
             initialCollateral: 0,
+            minHealthFactor: 0,
             maxSlippageBps: 100
         });
         
@@ -1448,6 +1461,45 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     function activateCircuitBreaker() external override onlyOwner {
         circuitBreakerTripped = true;
         emit CircuitBreakerSet(true);
+    }
+    
+    // ==================== INTERNAL HELPERS ====================
+    
+    /**
+     * @notice Convert internal position to IProtocolAdapter.Position format
+     */
+    function _convertToStandardPosition(uint256 positionId, IEulerRegistry.LeveragePositionStorage memory pos) 
+        internal view returns (IProtocolAdapter.Position memory) 
+    {
+        address subAccount = _deriveSubAccount(pos.subAccountId);
+        
+        // Get collateral value
+        uint256 collShares = IEVault(pos.collateralVault).balanceOf(subAccount);
+        uint256 collValue = IEVault(pos.collateralVault).convertToAssets(collShares);
+        
+        // Get debt value
+        uint256 debtValue = IEVault(pos.borrowVault).debtOf(subAccount);
+        
+        // Get health factor
+        uint256 hf = type(uint256).max;
+        IAccountLens lens = IAccountLens(ACCOUNT_LENS_ADDRESS);
+        IAccountLens.AccountLiquidityInfo memory liq = lens.getAccountLiquidityInfo(subAccount, pos.borrowVault);
+        if (!liq.queryFailure && liq.liabilityValueBorrowing > 0) {
+            hf = (liq.collateralValueBorrowing * 1e18) / liq.liabilityValueBorrowing;
+        }
+        
+        return IProtocolAdapter.Position({
+            positionId: positionId,
+            protocolName: "Euler",
+            status: pos.isActive ? IProtocolAdapter.PositionStatus.ACTIVE : IProtocolAdapter.PositionStatus.CLOSED,
+            collateralValueEth: collValue,
+            debtValueEth: debtValue,
+            netValueEth: collValue > debtValue ? collValue - debtValue : 0,
+            healthFactor: hf,
+            openTimestamp: pos.createdAt,
+            collateralToken: pos.collateralVault,
+            debtToken: pos.borrowVault
+        });
     }
 }
 

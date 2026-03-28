@@ -110,6 +110,15 @@ interface IEulerV2Plugin is IProtocolAdapter, IEulerV2PluginSpecific {
      */
     function repay(string memory tokenCode, uint256 amount) external returns (bool success);
     
+    /**
+     * @notice Close a complete position atomically
+     * @dev Repays all debt, disables controller, withdraws all collateral, disables collateral
+     * @param debtTokenCode Token code for debt (e.g., "USDC")
+     * @param collateralTokenCode Token code for collateral (e.g., "WETH")
+     * @return success True if successful
+     */
+    function closePosition(string memory debtTokenCode, string memory collateralTokenCode) external returns (bool success);
+    
     // DEPRECATED: Use getDebt() instead - same functionality
     // /**
     //  * @notice Get borrowed amount for a token

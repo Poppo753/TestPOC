@@ -16,15 +16,31 @@
     "uniswapV3Plugin": "0x7ec91aEc1bD85E63D671b23E5deC8157D1f8aE01"
   },
   "status": "✅ ALL DEPLOYED SUCCESSFULLY",
-  "EulerV2Plugin": {
-    "address": "0xaDcbAad4b427FacCc19d9Da91360327577B8fa8B",
+  "EulerRegistry": {
+    "address": "0xa2bE49a4b89F7e7131f8e72015E8a6CD20201BC6",
     "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
-    "timestamp": "2026-02-01T18:06:35.565Z",
+    "timestamp": "2026-02-02T00:00:00.000Z"
+  },
+  "EulerLensAdapter": {
+    "address": "0x55d4dC6536Ddcb62AeDd4A9275Cf96aa15e24353",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "timestamp": "2026-02-02T00:00:00.000Z",
+    "dependencies": {
+      "eulerRegistry": "0xa2bE49a4b89F7e7131f8e72015E8a6CD20201BC6"
+    }
+  },
+  "EulerV2Plugin": {
+    "address": "0x490139F3b29786D64056a236a0062CA23A7313f6",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "timestamp": "2026-02-02T00:00:00.000Z",
     "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
     "evc": "0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066",
-    "size": 24527,
+    "size": 24530,
+    "optimized": true,
+    "dustFix": true,
     "dependencies": {
-      "eulerRegistry": "0x52c2D0645f5Bea7fE159d9Db9C27Ba6b50D1bAe3"
+      "eulerRegistry": "0xa2bE49a4b89F7e7131f8e72015E8a6CD20201BC6",
+      "eulerLens": "0x55d4dC6536Ddcb62AeDd4A9275Cf96aa15e24353"
     }
   }
 }

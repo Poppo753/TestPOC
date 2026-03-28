@@ -107,7 +107,7 @@ export async function saveDeployment(
  * Load deployment address from mainnet-latest.json
  */
 export function loadDeployment(contractName: string): string | null {
-    const deploymentPath = path.join(__dirname, "../../deployments/mainnet-latest.json");
+    const deploymentPath = path.join(__dirname, "../../../../deployments/mainnet-latest.json");
     
     if (!fs.existsSync(deploymentPath)) {
         return null;

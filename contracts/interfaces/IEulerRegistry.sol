@@ -93,6 +93,25 @@ interface IEulerRegistry {
     ) external returns (uint256 positionId);
     
     /**
+     * @notice Create a new leverage position with on-demand sub-account allocation (Opzione C)
+     * @dev Uses lazy allocation: allocates sub-account only when needed for a new vault pair
+     *      If a position for this pair already exists and is active, reverts
+     *      If a position existed but was closed, reuses the same sub-account ID
+     * @param collateralVault Collateral vault address
+     * @param borrowVault Borrow vault address
+     * @param initialCollateral Initial collateral amount
+     * @param borrowedAmount Borrowed amount
+     * @return positionId Created position ID
+     * @return subAccountId Allocated sub-account ID (new or reused)
+     */
+    function createPositionOnDemand(
+        address collateralVault,
+        address borrowVault,
+        uint256 initialCollateral,
+        uint256 borrowedAmount
+    ) external returns (uint256 positionId, uint8 subAccountId);
+    
+    /**
      * @notice Update position borrowed amount
      * @param positionId Position ID
      * @param newBorrowedAmount New borrowed amount
@@ -138,5 +157,26 @@ interface IEulerRegistry {
      * @param positionId Position ID
      * @return active True if active
      */
-    function isPositionActive(uint256 positionId) external view returns (bool active);
-}
+    function isPositionActive(uint256 positionId) external view returns (bool active);    
+    /**
+     * @notice Get allocated sub-account ID for a vault pair (Opzione C)
+     * @dev Returns 0 if no sub-account has been allocated for this pair yet
+     * @param collateralVault Collateral vault address
+     * @param borrowVault Borrow vault address
+     * @return subAccountId Allocated sub-account ID (0 if not allocated)
+     */
+    function getSubAccountForPair(
+        address collateralVault,
+        address borrowVault
+    ) external view returns (uint8 subAccountId);
+    
+    /**
+     * @notice Check if an active position exists for a vault pair (Opzione C)
+     * @param collateralVault Collateral vault address
+     * @param borrowVault Borrow vault address
+     * @return exists True if an active position exists for this pair
+     */
+    function hasActivePositionForPair(
+        address collateralVault,
+        address borrowVault
+    ) external view returns (bool exists);}

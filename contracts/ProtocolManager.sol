@@ -356,6 +356,39 @@ contract ProtocolManager is Ownable {
     }
     
     /**
+     * @notice Close a complete position atomically (repay + disable controller + withdraw + disable collateral)
+     * @param protocolName Nome del protocollo (es. "Euler")
+     * @param debtTokenCode Codice del token di debito (es. "USDC")
+     * @param collateralTokenCode Codice del token collaterale (es. "WETH")
+     */
+    function closePosition(
+        string memory protocolName,
+        string memory debtTokenCode,
+        string memory collateralTokenCode
+    ) external onlyOwner {
+        if (bytes(debtTokenCode).length == 0) revert InvalidTokenCode(debtTokenCode);
+        if (bytes(collateralTokenCode).length == 0) revert InvalidTokenCode(collateralTokenCode);
+        
+        // 1. Resolve plugin
+        address plugin = _resolvePlugin(protocolName);
+        _validateProtocol(plugin);
+        
+        // 2. Call plugin.closePosition()
+        (bool success, ) = plugin.call(
+            abi.encodeWithSignature(
+                "closePosition(string,string)",
+                debtTokenCode,
+                collateralTokenCode
+            )
+        );
+        
+        if (!success) revert OperationFailed("closePosition", "Plugin closePosition failed");
+        
+        // 3. Emit event
+        emit LendingOperationExecuted(protocolName, "closePosition", debtTokenCode, 0);
+    }
+    
+    /**
      * @notice Ottiene il debito corrente per un token
      * @param protocolName Nome del protocollo
      * @param tokenCode Codice del token
