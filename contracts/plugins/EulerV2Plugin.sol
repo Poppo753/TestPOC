@@ -178,6 +178,7 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     error UnauthorizedFlashLoanCallback();
     error FlashLoanServiceNotFound();
     error SwapFailed();
+    error BatchOperationFailed();
     
     // ==================== EVENTS ====================
     // Note: EulerDeposit, EulerWithdrawal, EulerBorrow, EulerRepay are defined in IEulerV2Plugin
@@ -295,17 +296,30 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
             revert InsufficientBalance(balance, amount);
         }
         
-        // 3. Auto-abilita vault come collaterale se non già fatto
-        if (!evc.isCollateralEnabled(address(this), vault)) {
-            evc.enableCollateral(address(this), vault);
-        }
-        
-        // 4. Approva vault
+        // 3. Approva vault
         IERC20(token).safeIncreaseAllowance(vault, amount);
         
-        // 5. Deposita nel vault Euler (riceve shares)
+        // 4. Deposita nel vault Euler via EVC batch (Euler official pattern)
+        // Enable collateral + deposit in the same atomic batch to defer status checks
+        IEVC.BatchItem[] memory items = evc.isCollateralEnabled(address(this), vault)
+            ? new IEVC.BatchItem[](1)
+            : new IEVC.BatchItem[](2);
+        
+        uint256 cursor;
+        if (items.length == 2) {
+            items[cursor++] = _buildBatchItem(
+                address(evc),
+                abi.encodeWithSelector(IEVC.enableCollateral.selector, address(this), vault)
+            );
+        }
+        
+        items[cursor] = _buildBatchItem(
+            vault,
+            abi.encodeWithSelector(IEVault.deposit.selector, amount, address(this))
+        );
+        
         uint256 sharesBefore = IEVault(vault).balanceOf(address(this));
-        IEVault(vault).deposit(amount, address(this));
+        _executeBatch(items);
         uint256 sharesReceived = IEVault(vault).balanceOf(address(this)) - sharesBefore;
         
         emit EulerDeposit(tokenCode, vault, amount, sharesReceived);
@@ -336,11 +350,7 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
             revert InsufficientBalance(0, amount);
         }
         
-        // 3. Auto-disable collateral REMOVED - should be done via batch operation
-        // Disabling collateral while controller is enabled can cause issues with EVC
-        // This should be handled externally with proper sequencing or EVC.batch()
-        
-        // 4. Verifica balance disponibile
+        // 3. Verifica balance disponibile
         uint256 maxWithdraw = IEVault(vault).maxWithdraw(address(this));
         
         // Se amount = 0, withdraw all
@@ -350,12 +360,34 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
             revert InsufficientBalance(0, amount);
         }
         
-        // 5. Preleva da Euler
+        // 4. Preleva da Euler via EVC batch
+        // If we are fully exiting and no debt remains, disable collateral in same batch.
+        bool withdrawingAll = withdrawAmount == maxWithdraw;
+        bool canDisableCollateral = withdrawingAll &&
+            IEVault(vault).debtOf(address(this)) == 0 &&
+            evc.isCollateralEnabled(address(this), vault);
+        
+        IEVC.BatchItem[] memory items = canDisableCollateral
+            ? new IEVC.BatchItem[](2)
+            : new IEVC.BatchItem[](1);
+        
+        items[0] = _buildBatchItem(
+            vault,
+            abi.encodeWithSelector(IEVault.withdraw.selector, withdrawAmount, address(this), address(this))
+        );
+        
+        if (canDisableCollateral) {
+            items[1] = _buildBatchItem(
+                address(evc),
+                abi.encodeWithSelector(IEVC.disableCollateral.selector, address(this), vault)
+            );
+        }
+        
         uint256 sharesBefore = IEVault(vault).balanceOf(address(this));
-        IEVault(vault).withdraw(withdrawAmount, address(this), address(this));
+        _executeBatch(items);
         uint256 sharesBurned = sharesBefore - IEVault(vault).balanceOf(address(this));
         
-        // 6. Trasferisci a ProxyGeneral (CRITICO per custody)
+        // 5. Trasferisci a ProxyGeneral (CRITICO per custody)
         address proxyGeneral = _getProxyGeneral();
         IERC20(token).safeTransfer(proxyGeneral, withdrawAmount);
         
@@ -384,15 +416,27 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         address token = _resolveToken(tokenCode);
         address vault = _getVault(tokenCode);
         
-        // 2. Auto-abilita vault come controller se non già fatto
-        if (!evc.isControllerEnabled(address(this), vault)) {
-            evc.enableController(address(this), vault);
+        // 2. Borrow da Euler via EVC batch (enable controller + borrow)
+        IEVC.BatchItem[] memory items = evc.isControllerEnabled(address(this), vault)
+            ? new IEVC.BatchItem[](1)
+            : new IEVC.BatchItem[](2);
+        
+        uint256 cursor;
+        if (items.length == 2) {
+            items[cursor++] = _buildBatchItem(
+                address(evc),
+                abi.encodeWithSelector(IEVC.enableController.selector, address(this), vault)
+            );
         }
         
-        // 3. Borrow da Euler
-        IEVault(vault).borrow(amount, address(this));
+        items[cursor] = _buildBatchItem(
+            vault,
+            abi.encodeWithSelector(IEVault.borrow.selector, amount, address(this))
+        );
         
-        // 4. Trasferisci a ProxyGeneral
+        _executeBatch(items);
+        
+        // 3. Trasferisci a ProxyGeneral
         address proxyGeneral = _getProxyGeneral();
         IERC20(token).safeTransfer(proxyGeneral, amount);
         
@@ -435,9 +479,15 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
             revert InsufficientBalance(balance, repayAmount);
         }
         
-        // 5. Approva e ripaga
+        // 5. Approva e ripaga via EVC batch
         IERC20(token).safeIncreaseAllowance(vault, repayAmount);
-        IEVault(vault).repay(repayAmount, address(this));
+        
+        IEVC.BatchItem[] memory repayItems = new IEVC.BatchItem[](1);
+        repayItems[0] = _buildBatchItem(
+            vault,
+            abi.encodeWithSelector(IEVault.repay.selector, repayAmount, address(this))
+        );
+        _executeBatch(repayItems);
         
         // 6. Handle interest dust that accrued during transaction
         uint256 remainingDebt = IEVault(vault).debtOf(address(this));
@@ -447,7 +497,12 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
             uint256 dustBalance = IERC20(token).balanceOf(address(this));
             if (dustBalance >= remainingDebt) {
                 IERC20(token).safeIncreaseAllowance(vault, remainingDebt);
-                IEVault(vault).repay(remainingDebt, address(this));
+                IEVC.BatchItem[] memory dustItems = new IEVC.BatchItem[](1);
+                dustItems[0] = _buildBatchItem(
+                    vault,
+                    abi.encodeWithSelector(IEVault.repay.selector, remainingDebt, address(this))
+                );
+                _executeBatch(dustItems);
                 remainingDebt = 0; // Force to 0 after dust repay
             }
         }
@@ -484,28 +539,67 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         nonReentrant
         returns (bool success) 
     {
-        // 1. Repay all debt (amount=0 means repay all)
-        bool repaySuccess = this.repay(debtTokenCode, 0);
-        require(repaySuccess, "Repay failed");
-        
-        // 2. Disable controller if debt is 0
+        // 1. Resolve vaults/tokens and debt
+        address debtToken = _resolveToken(debtTokenCode);
         address debtVault = _getVault(debtTokenCode);
-        uint256 remainingDebt = IEVault(debtVault).debtOf(address(this));
+        address collateralToken = _resolveToken(collateralTokenCode);
+        address collateralVault = _getVault(collateralTokenCode);
         
-        if (remainingDebt == 0 && evc.isControllerEnabled(address(this), debtVault)) {
-            evc.disableController(address(this), debtVault);
+        uint256 repayAmount = IEVault(debtVault).debtOf(address(this));
+        if (repayAmount > 0) {
+            uint256 debtBalance = IERC20(debtToken).balanceOf(address(this));
+            if (debtBalance < repayAmount) revert InsufficientBalance(debtBalance, repayAmount);
+            IERC20(debtToken).safeIncreaseAllowance(debtVault, repayAmount);
         }
         
-        // 3. Withdraw all collateral (amount=0 means withdraw all)
-        bool withdrawSuccess = this.withdraw(collateralTokenCode, 0);
-        require(withdrawSuccess, "Withdraw failed");
+        uint256 maxWithdraw = IEVault(collateralVault).maxWithdraw(address(this));
         
-        // 4. Disable collateral if balance is 0
-        address collateralVault = _getVault(collateralTokenCode);
-        uint256 remainingShares = IEVault(collateralVault).balanceOf(address(this));
+        // 2. Build single atomic batch with official Euler sequencing
+        uint256 steps = 0;
+        if (repayAmount > 0) steps += 1;
+        if (repayAmount > 0 && evc.isControllerEnabled(address(this), debtVault)) steps += 1;
+        if (maxWithdraw > 0) steps += 1;
+        if (evc.isCollateralEnabled(address(this), collateralVault)) steps += 1;
         
-        if (remainingShares == 0 && evc.isCollateralEnabled(address(this), collateralVault)) {
-            evc.disableCollateral(address(this), collateralVault);
+        if (steps == 0) return true;
+        
+        IEVC.BatchItem[] memory items = new IEVC.BatchItem[](steps);
+        uint256 cursor;
+        
+        if (repayAmount > 0) {
+            items[cursor++] = _buildBatchItem(
+                debtVault,
+                abi.encodeWithSelector(IEVault.repay.selector, repayAmount, address(this))
+            );
+            
+            if (evc.isControllerEnabled(address(this), debtVault)) {
+                items[cursor++] = _buildBatchItem(
+                    address(evc),
+                    abi.encodeWithSelector(IEVC.disableController.selector, address(this), debtVault)
+                );
+            }
+        }
+        
+        if (maxWithdraw > 0) {
+            items[cursor++] = _buildBatchItem(
+                collateralVault,
+                abi.encodeWithSelector(IEVault.withdraw.selector, maxWithdraw, address(this), address(this))
+            );
+        }
+        
+        if (evc.isCollateralEnabled(address(this), collateralVault)) {
+            items[cursor] = _buildBatchItem(
+                address(evc),
+                abi.encodeWithSelector(IEVC.disableCollateral.selector, address(this), collateralVault)
+            );
+        }
+        
+        _executeBatch(items);
+        
+        // 3. Transfer returned collateral to ProxyGeneral
+        uint256 collateralBalance = IERC20(collateralToken).balanceOf(address(this));
+        if (collateralBalance > 0) {
+            IERC20(collateralToken).safeTransfer(_getProxyGeneral(), collateralBalance);
         }
         
         return true;
@@ -916,17 +1010,39 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         // Step 2: Deposita TUTTO il collaterale (iniziale + da swap) in Euler
         uint256 totalCollateral = ctx.initialCollateral + collateralFromSwap;
         IERC20(collateralToken).safeIncreaseAllowance(ctx.collateralVault, totalCollateral);
-        IEVault(ctx.collateralVault).deposit(totalCollateral, address(this));
-        
-        // Step 3: Abilita collateral vault come collaterale in EVC
-        evc.enableCollateral(address(this), ctx.collateralVault);
-        
-        // Step 4: Abilita borrow vault come controller in EVC
-        evc.enableController(address(this), ctx.borrowVault);
-        
-        // Step 5: Borrow da Euler per ripagare flash loan
+
+        // Step 3/4/5: Official Euler atomic path via EVC.batch:
+        // enable collateral -> enable controller -> deposit -> borrow
         uint256 borrowAmount = flashLoanAmount + feeAmount;
-        IEVault(ctx.borrowVault).borrow(borrowAmount, address(this));
+        uint256 steps = 2; // deposit + borrow
+        bool needsCollateralEnable = !evc.isCollateralEnabled(address(this), ctx.collateralVault);
+        bool needsControllerEnable = !evc.isControllerEnabled(address(this), ctx.borrowVault);
+        if (needsCollateralEnable) steps += 1;
+        if (needsControllerEnable) steps += 1;
+        
+        IEVC.BatchItem[] memory items = new IEVC.BatchItem[](steps);
+        uint256 cursor;
+        if (needsCollateralEnable) {
+            items[cursor++] = _buildBatchItem(
+                address(evc),
+                abi.encodeWithSelector(IEVC.enableCollateral.selector, address(this), ctx.collateralVault)
+            );
+        }
+        if (needsControllerEnable) {
+            items[cursor++] = _buildBatchItem(
+                address(evc),
+                abi.encodeWithSelector(IEVC.enableController.selector, address(this), ctx.borrowVault)
+            );
+        }
+        items[cursor++] = _buildBatchItem(
+            ctx.collateralVault,
+            abi.encodeWithSelector(IEVault.deposit.selector, totalCollateral, address(this))
+        );
+        items[cursor] = _buildBatchItem(
+            ctx.borrowVault,
+            abi.encodeWithSelector(IEVault.borrow.selector, borrowAmount, address(this))
+        );
+        _executeBatch(items);
         
         // Step 6: Trasferisci token al FlashLoanService per ripagare
         IERC20(borrowToken).safeTransfer(flashLoanService, borrowAmount);
@@ -957,18 +1073,46 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         
         // Step 1: Repay tutto il debito su Euler
         IERC20(borrowToken).safeIncreaseAllowance(ctx.borrowVault, flashLoanAmount);
-        IEVault(ctx.borrowVault).repay(flashLoanAmount, address(this));
         
-        // Step 2: Withdraw tutto il collaterale usando redeem (più sicuro di withdraw)
-        uint256 shares = IEVault(ctx.collateralVault).balanceOf(address(this));
+        // Step 2: Use official Euler exit sequence in one batch:
+        // repay -> disable controller -> withdraw all -> disable collateral
         uint256 collateralWithdrawn = 0;
-        if (shares > 0) {
-            collateralWithdrawn = IEVault(ctx.collateralVault).redeem(
-                shares,
-                address(this),
-                address(this)
+        uint256 maxWithdraw = IEVault(ctx.collateralVault).maxWithdraw(address(this));
+        bool hasControllerEnabled = evc.isControllerEnabled(address(this), ctx.borrowVault);
+        bool hasCollateralEnabled = evc.isCollateralEnabled(address(this), ctx.collateralVault);
+        uint256 steps = 1; // repay
+        if (hasControllerEnabled) steps += 1;
+        if (maxWithdraw > 0) steps += 1;
+        if (hasCollateralEnabled) steps += 1;
+        
+        IEVC.BatchItem[] memory items = new IEVC.BatchItem[](steps);
+        uint256 cursor;
+        items[cursor++] = _buildBatchItem(
+            ctx.borrowVault,
+            abi.encodeWithSelector(IEVault.repay.selector, flashLoanAmount, address(this))
+        );
+        if (hasControllerEnabled) {
+            items[cursor++] = _buildBatchItem(
+                address(evc),
+                abi.encodeWithSelector(IEVC.disableController.selector, address(this), ctx.borrowVault)
             );
         }
+        if (maxWithdraw > 0) {
+            items[cursor++] = _buildBatchItem(
+                ctx.collateralVault,
+                abi.encodeWithSelector(IEVault.withdraw.selector, maxWithdraw, address(this), address(this))
+            );
+        }
+        if (hasCollateralEnabled) {
+            items[cursor] = _buildBatchItem(
+                address(evc),
+                abi.encodeWithSelector(IEVC.disableCollateral.selector, address(this), ctx.collateralVault)
+            );
+        }
+        
+        uint256 collateralBalanceBefore = IERC20(collateralToken).balanceOf(address(this));
+        _executeBatch(items);
+        collateralWithdrawn = IERC20(collateralToken).balanceOf(address(this)) - collateralBalanceBefore;
         
         // Step 3: Calcola quanto USDC serve per ripagare Balancer
         uint256 repayAmount = flashLoanAmount + feeAmount;
@@ -1136,6 +1280,32 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
      */
     function _deriveSubAccount(uint8 subAccountId) internal view returns (address) {
         return address(uint160(address(this)) ^ uint160(subAccountId));
+    }
+    
+    /**
+     * @notice Build a single EVC batch item for main account operations
+     * @param targetContract Contract to call inside batch
+     * @param data Encoded calldata
+     */
+    function _buildBatchItem(
+        address targetContract,
+        bytes memory data
+    ) internal view returns (IEVC.BatchItem memory item) {
+        item = IEVC.BatchItem({
+            targetContract: targetContract,
+            onBehalfOfAccount: address(this),
+            value: 0,
+            data: data
+        });
+    }
+    
+    /**
+     * @notice Execute EVC batch and bubble a generic error on failure
+     */
+    function _executeBatch(IEVC.BatchItem[] memory items) internal {
+        try evc.batch(items) {} catch {
+            revert BatchOperationFailed();
+        }
     }
     
     // ==================== FLASH LOAN HELPERS ====================
@@ -1450,4 +1620,3 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         emit CircuitBreakerSet(true);
     }
 }
-
