@@ -9,6 +9,7 @@ pragma solidity ^0.8.27;
 contract MockTokenManager {
     mapping(string => address) private tokenAddresses;
     mapping(address => string) private tokenCodes;
+    mapping(string => uint256) private tokenPrices;
     
     function setTokenAddress(string memory tokenCode, address tokenAddress) external {
         tokenAddresses[tokenCode] = tokenAddress;
@@ -25,5 +26,13 @@ contract MockTokenManager {
     
     function isTokenRegistered(string memory tokenCode) external view returns (bool) {
         return tokenAddresses[tokenCode] != address(0);
+    }
+
+    function setTokenPrice(string memory tokenCode, uint256 price) external {
+        tokenPrices[tokenCode] = price;
+    }
+
+    function getTokenPriceForModule(string memory tokenCode) external view returns (uint256) {
+        return tokenPrices[tokenCode];
     }
 }

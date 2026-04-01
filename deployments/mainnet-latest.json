@@ -55,5 +55,51 @@
     "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
     "balancerVault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
     "simpleSwap": "0xa0DB78167CBAccD47524a261b7741C6B41Bbd096"
+  },
+  "AaveV3Registry": {
+    "address": "0xEeb0EA1C430E956266C8027E39cA7A5C855B1a73",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "owner": "0x4cFDCb4215F562DC3Bc36D28fCf093E993AdC026",
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+    "tokens": {
+      "WETH": {
+        "underlying": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+        "aToken": "0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8",
+        "variableDebtToken": "0x0c84331e39d6658Cd6e6b9ba04736cC4c4734351"
+      },
+      "USDC": {
+        "underlying": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+        "aToken": "0x724dc807b04555b71ed48a6896b6F41593b8C637",
+        "variableDebtToken": "0xf611aEb5013fD2c0511c9CD55c7dc5C1140741A6"
+      },
+      "USDT": {
+        "underlying": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+        "aToken": "0x6ab707Aca953eDAeFBc4fD23bA73294241490620",
+        "variableDebtToken": "0xfb00AC187a8Eb5AFAE4eACE434F493Eb62672df7"
+      },
+      "WBTC": {
+        "underlying": "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f",
+        "aToken": "0x078f358208685046a11C85e8ad32895DED33A249",
+        "variableDebtToken": "0x92b42c66840C7AD907b4BF74879FF3eF7c529473"
+      }
+    }
+  },
+  "AaveV3Plugin": {
+    "address": "0x4cFDCb4215F562DC3Bc36D28fCf093E993AdC026",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "owner": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+    "aavePool": "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
+    "proxyGeneral": "0x8750344c6cf493f4F5d13F52b7F7Bf1d285978e1",
+    "authorizedInProxyGeneral": true
+  },
+  "AaveV3LensAdapter": {
+    "address": "0xF9d5Cb5a86f0aD469f37F08B27AEf7FdF46ac3E3",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+    "dependencies": {
+      "aaveV3Registry": "0xEeb0EA1C430E956266C8027E39cA7A5C855B1a73",
+      "aaveV3Plugin": "0x4cFDCb4215F562DC3Bc36D28fCf093E993AdC026"
+    }
   }
 }
