@@ -11,16 +11,17 @@
 2. [Step 1: Registry (La Mappa)](#2-step-1-registry)
 3. [Step 2: Plugin (Il Braccio)](#3-step-2-plugin)
 4. [Step 3: LensAdapter (Gli Occhi)](#4-step-3-lensadapter)
-5. [Step 4: Deploy e Registrazione](#5-step-4-deploy-e-registrazione)
-6. [Step 5: Test](#6-step-5-test)
-7. [Checklist Finale](#7-checklist-finale)
-8. [Esempio Concreto: Aave V3](#8-esempio-concreto-aave-v3)
+5. [Step 4: Leverage via FlashLoanService](#5-step-4-leverage-via-flashloanservice)
+6. [Step 5: Deploy e Registrazione](#6-step-5-deploy-e-registrazione)
+7. [Step 6: Test](#7-step-6-test)
+8. [Checklist Finale](#8-checklist-finale)
+9. [Esempio Concreto: Aave V3](#9-esempio-concreto-aave-v3)
 
 ---
 
 ## 1. Panoramica: Cosa Serve
 
-Ogni integrazione richiede esattamente **3 contratti** (il pattern "3 Musketeers"):
+Ogni integrazione richiede **3 contratti** (pattern "3 Musketeers") + integrazione con il **FlashLoanService** condiviso per leverage:
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
@@ -29,22 +30,26 @@ Ogni integrazione richiede esattamente **3 contratti** (il pattern "3 Musketeers
 │                  │     │                   │     │                  │
 │ token → vault    │◄────│ deposit/withdraw  │     │ getTotalValue()  │
 │ posizioni        │     │ borrow/repay      │────►│ getHealthFactor()│
-│ sub-accounts     │     │ leverage          │     │ getPositionsAtRisk│
-└─────────────────┘     └──────────────────┘     └─────────────────┘
-                              │     ▲
-                              ▼     │
-                        ┌──────────────┐
-                        │  Protocollo   │
-                        │   Esterno     │
-                        │ (Aave, Comp.) │
-                        └──────────────┘
+│ sub-accounts     │     │ leverage ←─────┐ │     │ getPositionsAtRisk│
+└─────────────────┘     └────────────────┼─┘     └─────────────────┘
+                              │     ▲    │
+                              ▼     │    │
+                        ┌──────────────┐ │  ┌──────────────────┐
+                        │  Protocollo   │ │  │ FlashLoanService  │
+                        │   Esterno     │ └──│  (Condiviso)      │
+                        │ (Aave, Comp.) │    │ Balancer 0% fee   │
+                        └──────────────┘    └──────────────────┘
 ```
+
+> **FlashLoanService** è un servizio **condiviso** già deployato. Non va ricreato per ogni plugin.
+> Ogni plugin che vuole supportare leverage deve implementare `IFlashLoanCallback`
+> e aggiungere la propria logica protocollo-specifica dentro il callback.
 
 ### Interfacce da implementare
 
 | Contratto | Interfaccia | File di Riferimento |
 |-----------|------------|---------------------|
-| Plugin | `IProtocolAdapter` + `ILendingProtocol` | `contracts/interfaces/IProtocolAdapter.sol`, `ILendingProtocol.sol` |
+| Plugin | `IProtocolAdapter` + `ILendingProtocol` + `IFlashLoanCallback` | `contracts/interfaces/IProtocolAdapter.sol`, `ILendingProtocol.sol`, `IFlashLoanCallback.sol` |
 | LensAdapter | `ILensAdapter` | `contracts/interfaces/ILensAdapter.sol` |
 | Registry | Nessuna (custom per protocollo) | `contracts/plugins/EulerRegistry.sol` come esempio |
 
@@ -277,6 +282,9 @@ contract NuovoProtocolloPlugin is Ownable, ReentrancyGuard {
         // TODO: Query balance dal protocollo esterno
     }
     
+    // ===== Leverage via FlashLoanService =====
+    // (Vedi Step 4 per il template completo)
+    
     // ===== Emergency =====
     
     function setCircuitBreaker(bool active) external onlyOwner {
@@ -450,7 +458,388 @@ contract NuovoProtocolloLensAdapter {
 
 ---
 
-## 5. Step 4: Deploy e Registrazione
+## 5. Step 4: Leverage via FlashLoanService
+
+Ogni plugin di lending **deve** implementare il supporto leverage usando il `FlashLoanService` condiviso.
+
+### Architettura Flash Loan Leverage
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│         FlashLoanService (CONDIVISO, già deployato)              │
+│                                                                  │
+│  executeFlashLoan()   → Richiede flash loan a Balancer V2       │
+│  receiveFlashLoan()   → Callback Balancer, inoltra al plugin    │
+│  swap()               → Servizio swap via Uniswap V3            │
+│  getExpectedOutput()  → Stima output swap                       │
+│                                                                  │
+│  Indirizzo Arbitrum: 0x638C0175a1883063F22fc2439C85364e4aC27b03 │
+│  Bytecode: ~5.7 KB (23% del limite)                             │
+│  Balancer Vault: 0xBA12222222228d8Ba445958a75a0704d566BF2C8     │
+│  Fee: 0% (Balancer V2!)                                         │
+└─────────────────────────────────────────────────────────────────┘
+         ▲                              │
+         │ executeFlashLoan()           │ onFlashLoanReceived()
+         │                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│         Plugin (LOGICA SPECIFICA PER PROTOCOLLO)                │
+│                                                                  │
+│  Deve implementare IFlashLoanCallback:                          │
+│    onFlashLoanReceived(tokens, amounts, fees, data)             │
+│                                                                  │
+│  Deve esporre:                                                  │
+│    openLeverageAtomic(params)  → Apre posizione leverage        │
+│    closeLeverageAtomic(params) → Chiude posizione leverage      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Principio Fondamentale
+
+| Responsabilità | Dove vive |
+|---|---|
+| Richiedere flash loan a Balancer | FlashLoanService (generico) |
+| Ricevere callback da Balancer | FlashLoanService (generico) |
+| Servizio swap (Uniswap V3) | FlashLoanService (generico) |
+| Deposit/supply su protocollo | Plugin (specifico) |
+| Borrow da protocollo | Plugin (specifico) |
+| Repay debito su protocollo | Plugin (specifico) |
+| Withdraw collaterale | Plugin (specifico) |
+| Enable/disable collateral (se necessario) | Plugin (specifico) |
+
+### Requisiti per il Plugin
+
+1. **Implementare `IFlashLoanCallback`** — per ricevere il callback dal FlashLoanService
+2. **Essere registrato nel Beacon** — FlashLoanService verifica via Beacon check
+3. **Aggiornare `_isRegisteredPlugin` in FlashLoanService** — aggiungere il nome del plugin
+
+### Template Leverage nel Plugin
+
+```solidity
+import "../interfaces/IFlashLoanCallback.sol";
+
+// Interfaccia FlashLoanService (inline, non serve file separato)
+interface IFlashLoanService {
+    function executeFlashLoan(
+        address[] calldata tokens, uint256[] calldata amounts, bytes calldata callbackData
+    ) external;
+    function swap(
+        address tokenIn, address tokenOut, uint256 amountIn
+    ) external returns (uint256);
+    function getExpectedOutput(
+        address tokenIn, address tokenOut, uint256 amountIn
+    ) external view returns (uint256);
+}
+
+contract NuovoProtocolloPlugin is IFlashLoanCallback, Ownable, ReentrancyGuard {
+    
+    // ===== Stato Flash Loan =====
+    
+    enum FlashLoanOperation { OPEN, CLOSE }
+    
+    struct FlashLoanCallbackContext {
+        FlashLoanOperation operation;
+        address user;
+        uint256 initialCollateral;   // Solo per OPEN
+        uint256 maxSlippageBps;      // Solo per CLOSE
+        string collateralTokenCode;
+        string borrowTokenCode;
+    }
+    
+    FlashLoanCallbackContext private _flashLoanContext;
+    bool private _inFlashLoanCallback;
+    
+    // ===== Parametri Leverage =====
+    
+    struct OpenLeverageAtomicParams {
+        string collateralToken;       // e.g., "WETH"
+        string borrowToken;           // e.g., "USDC"
+        uint256 collateralAmount;     // Importo collaterale iniziale
+        uint256 targetLeverageX100;   // Target leverage × 100 (200 = 2x, 300 = 3x)
+        uint256 minHealthFactor;      // Soglia sicurezza minima
+        uint256 deadline;             // Block timestamp scadenza
+    }
+    
+    struct CloseLeverageAtomicParams {
+        string collateralToken;
+        string borrowToken;
+        uint256 maxSlippageBps;       // Slippage massimo in basis points (100 = 1%)
+        uint256 deadline;
+    }
+    
+    // ===== Open Leverage =====
+    
+    function openLeverageAtomic(
+        OpenLeverageAtomicParams calldata params
+    ) external onlyOwner notCircuitBroken nonReentrant returns (
+        uint256 totalCollateral, uint256 totalDebt, uint256 healthFactor
+    ) {
+        // 1. Validazioni
+        require(block.timestamp <= params.deadline, "Deadline expired");
+        require(params.targetLeverageX100 >= 110 && params.targetLeverageX100 <= 500, "Invalid leverage");
+        
+        // 2. Risolvi token address
+        address collateralToken = _resolveToken(params.collateralToken);
+        address borrowToken = _resolveToken(params.borrowToken);
+        
+        // 3. Trasferisci collaterale iniziale dall'utente
+        IERC20(collateralToken).safeTransferFrom(msg.sender, address(this), params.collateralAmount);
+        
+        // 4. Calcola importo flash loan
+        uint256 leverageMultiplier = params.targetLeverageX100 - 100;
+        uint256 flashLoanAmount = _calculateFlashLoanAmount(
+            collateralToken, borrowToken, params.collateralAmount, leverageMultiplier
+        );
+        
+        // 5. Salva contesto per callback
+        _flashLoanContext = FlashLoanCallbackContext({
+            operation: FlashLoanOperation.OPEN,
+            user: msg.sender,
+            initialCollateral: params.collateralAmount,
+            maxSlippageBps: 0,
+            collateralTokenCode: params.collateralToken,
+            borrowTokenCode: params.borrowToken
+        });
+        
+        // 6. Esegui flash loan
+        address flashLoanService = _getFlashLoanService();
+        address[] memory tokens = new address[](1);
+        tokens[0] = borrowToken;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = flashLoanAmount;
+        
+        _inFlashLoanCallback = true;
+        IFlashLoanService(flashLoanService).executeFlashLoan(tokens, amounts, "");
+        _inFlashLoanCallback = false;
+        
+        // 7. Verifica stato finale e health factor
+        // TODO: Implementare query protocollo-specifica per:
+        //       totalCollateral, totalDebt, healthFactor
+        
+        // 8. Pulizia
+        delete _flashLoanContext;
+        return (totalCollateral, totalDebt, healthFactor);
+    }
+    
+    // ===== Close Leverage =====
+    
+    function closeLeverageAtomic(
+        CloseLeverageAtomicParams calldata params
+    ) external onlyOwnerOrLiquidityManager notCircuitBroken nonReentrant returns (uint256 collateralReturned) {
+        require(block.timestamp <= params.deadline, "Deadline expired");
+        
+        address borrowToken = _resolveToken(params.borrowToken);
+        
+        // 1. Ottieni debito corrente
+        // TODO: Query protocollo-specifica per debito corrente
+        uint256 currentDebt = ...;
+        require(currentDebt > 0, "No position to close");
+        
+        // 2. Salva contesto
+        _flashLoanContext = FlashLoanCallbackContext({
+            operation: FlashLoanOperation.CLOSE,
+            user: msg.sender,
+            initialCollateral: 0,
+            maxSlippageBps: params.maxSlippageBps > 0 ? params.maxSlippageBps : 100,
+            collateralTokenCode: params.collateralToken,
+            borrowTokenCode: params.borrowToken
+        });
+        
+        // 3. Flash loan = importo debito
+        address flashLoanService = _getFlashLoanService();
+        address[] memory tokens = new address[](1);
+        tokens[0] = borrowToken;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = currentDebt;
+        
+        _inFlashLoanCallback = true;
+        IFlashLoanService(flashLoanService).executeFlashLoan(tokens, amounts, "");
+        _inFlashLoanCallback = false;
+        
+        // 4. Trasferisci collaterale rimanente all'utente
+        address collateralToken = _resolveToken(params.collateralToken);
+        collateralReturned = IERC20(collateralToken).balanceOf(address(this));
+        if (collateralReturned > 0) {
+            IERC20(collateralToken).safeTransfer(msg.sender, collateralReturned);
+        }
+        
+        delete _flashLoanContext;
+    }
+    
+    // ===== Flash Loan Callback =====
+    
+    function onFlashLoanReceived(
+        IERC20[] memory tokens,
+        uint256[] memory amounts,
+        uint256[] memory feeAmounts,
+        bytes memory /* callbackData */
+    ) external override {
+        // SICUREZZA: verifica caller
+        address flashLoanService = _getFlashLoanService();
+        require(msg.sender == flashLoanService, "Unauthorized callback");
+        require(_inFlashLoanCallback, "Not in flash loan");
+        
+        FlashLoanCallbackContext memory ctx = _flashLoanContext;
+        
+        if (ctx.operation == FlashLoanOperation.OPEN) {
+            _handleOpenLeverageCallback(tokens, amounts, feeAmounts, ctx, flashLoanService);
+        } else {
+            _handleCloseLeverageCallback(tokens, amounts, feeAmounts, ctx, flashLoanService);
+        }
+    }
+    
+    // ===== Callback Handlers (PROTOCOLLO-SPECIFICI) =====
+    
+    function _handleOpenLeverageCallback(
+        IERC20[] memory tokens,
+        uint256[] memory amounts,
+        uint256[] memory feeAmounts,
+        FlashLoanCallbackContext memory ctx,
+        address flashLoanService
+    ) internal {
+        address collateralToken = _resolveToken(ctx.collateralTokenCode);
+        address borrowToken = address(tokens[0]);
+        uint256 flashLoanAmount = amounts[0];
+        uint256 feeAmount = feeAmounts[0];
+        
+        // Step 1: Swap borrow → collateral (USDC → WETH)
+        IERC20(borrowToken).safeIncreaseAllowance(flashLoanService, flashLoanAmount);
+        uint256 collateralFromSwap = IFlashLoanService(flashLoanService).swap(
+            borrowToken, collateralToken, flashLoanAmount
+        );
+        
+        // Step 2: Deposita tutto il collaterale nel protocollo
+        uint256 totalCollateral = ctx.initialCollateral + collateralFromSwap;
+        // TODO: Chiamare funzione deposit del protocollo esterno
+        // Es. Aave: pool.supply(collateralToken, totalCollateral, address(this), 0)
+        // Es. Compound: cToken.mint(totalCollateral)
+        
+        // Step 3: Borrow per ripagare flash loan
+        uint256 borrowAmount = flashLoanAmount + feeAmount;
+        // TODO: Chiamare funzione borrow del protocollo esterno
+        // Es. Aave: pool.borrow(borrowToken, borrowAmount, 2, 0, address(this))
+        // Es. Compound: cToken.borrow(borrowAmount)
+        
+        // Step 4: Trasferisci al FlashLoanService per ripagare Balancer
+        IERC20(borrowToken).safeTransfer(flashLoanService, borrowAmount);
+    }
+    
+    function _handleCloseLeverageCallback(
+        IERC20[] memory tokens,
+        uint256[] memory amounts,
+        uint256[] memory feeAmounts,
+        FlashLoanCallbackContext memory ctx,
+        address flashLoanService
+    ) internal {
+        address collateralToken = _resolveToken(ctx.collateralTokenCode);
+        address borrowToken = address(tokens[0]);
+        uint256 flashLoanAmount = amounts[0];
+        uint256 feeAmount = feeAmounts[0];
+        
+        // Step 1: Ripaga debito
+        // TODO: Chiamare funzione repay del protocollo esterno
+        // Es. Aave: pool.repay(borrowToken, flashLoanAmount, 2, address(this))
+        
+        // Step 2: Ritira tutto il collaterale
+        // TODO: Chiamare funzione withdraw del protocollo esterno
+        // Es. Aave: pool.withdraw(collateralToken, max, address(this))
+        
+        // Step 3: Swap collaterale → borrow token per ripagare flash loan
+        uint256 repayAmount = flashLoanAmount + feeAmount;
+        uint256 collateralBalance = IERC20(collateralToken).balanceOf(address(this));
+        IERC20(collateralToken).safeIncreaseAllowance(flashLoanService, collateralBalance);
+        uint256 borrowReceived = IFlashLoanService(flashLoanService).swap(
+            collateralToken, borrowToken, collateralBalance
+        );
+        require(borrowReceived >= repayAmount, "Slippage exceeded");
+        
+        // Step 4: Trasferisci al FlashLoanService per ripagare Balancer
+        IERC20(borrowToken).safeTransfer(flashLoanService, repayAmount);
+    }
+    
+    // ===== Helpers Flash Loan =====
+    
+    function _getFlashLoanService() internal view returns (address) {
+        address service = IBeacon(beacon).getImplementation("FlashLoanService");
+        require(service != address(0), "FlashLoanService not found");
+        return service;
+    }
+    
+    function _calculateFlashLoanAmount(
+        address collateralToken,
+        address borrowToken,
+        uint256 collateralAmount,
+        uint256 leverageMultiplier
+    ) internal view returns (uint256) {
+        address flashLoanService = _getFlashLoanService();
+        uint256 collateralValueInBorrow = IFlashLoanService(flashLoanService)
+            .getExpectedOutput(collateralToken, borrowToken, collateralAmount);
+        return (collateralValueInBorrow * leverageMultiplier) / 100;
+    }
+}
+```
+
+### Flusso Open Leverage (generico)
+
+```
+1. Plugin.openLeverageAtomic({WETH, USDC, 1 ETH, 200, 1.3e18})
+   ↓
+2. Plugin → FlashLoanService.executeFlashLoan([USDC], [~$3000])
+   ↓
+3. FlashLoanService → Balancer.flashLoan(USDC, $3000)
+   ↓
+4. Balancer → FlashLoanService.receiveFlashLoan()
+   ↓
+5. FlashLoanService → Plugin.onFlashLoanReceived([USDC], [$3000])
+   ↓
+6. Plugin callback:
+   ├── FlashLoanService.swap(USDC → WETH)  →  ~1 WETH
+   ├── Protocollo.deposit(2 WETH)           →  collaterale
+   ├── Protocollo.borrow($3000 USDC)        →  debito
+   └── IERC20(USDC).transfer(FlashLoanService, $3000)
+   ↓
+7. FlashLoanService → Balancer.transfer($3000 USDC)  ← ripaga flash loan
+   ↓
+8. Risultato: 2 WETH collaterale, $3000 debito, ~1.5 HF
+```
+
+### ⚠️ Punti Chiave per Leverage
+
+| Punto | Dettaglio |
+|---|---|
+| **FlashLoanService è condiviso** | NON creare un nuovo servizio per ogni plugin |
+| **Fee Balancer = 0%** | Flash loan gratuiti |
+| **IFlashLoanCallback** | Il plugin DEVE implementare `onFlashLoanReceived()` |
+| **Trasferimento token** | I token flash loan sono GIA' nel plugin quando parte il callback |
+| **Ripagamento** | Il plugin deve `safeTransfer(flashLoanService, amount+fee)` alla fine del callback |
+| **Registrazione Beacon** | Il plugin DEVE essere registrato nel Beacon per autorizzazione |
+| **Swap via service** | Usare `FlashLoanService.swap()` per gli swap, NON implementare swap nel plugin |
+| **Bytecode** | La logica leverage aggiunge ~6-7 KB. Tenere sotto 24,576 bytes totali |
+
+### FlashLoanService: Registrazione Plugin
+
+Il FlashLoanService verifica i plugin autorizzati **dinamicamente** tramite `_isRegisteredPlugin()` che itera su tutti i moduli registrati nel Beacon. **Non serve aggiornare o rideployare FlashLoanService quando si aggiunge un nuovo plugin** — basta registrarlo nel Beacon.
+
+Nel file `contracts/services/FlashLoanService.sol`:
+
+```solidity
+function _isRegisteredPlugin(address plugin) internal view returns (bool) {
+    // Dinamico: legge TUTTI i moduli dal Beacon
+    string[] memory moduleNames = beacon.getRegisteredModules();
+    
+    for (uint256 i = 0; i < moduleNames.length; i++) {
+        try beacon.getImplementation(moduleNames[i]) returns (address registered) {
+            if (registered == plugin) return true;
+        } catch {}
+    }
+    return false;
+}
+```
+
+> ✅ Il Beacon è la **single source of truth**. Registra il plugin nel Beacon e FlashLoanService lo riconosce automaticamente.
+
+---
+
+## 6. Step 5: Deploy e Registrazione
 
 ### Script di Deploy
 
@@ -517,7 +906,7 @@ async function main() {
 
 ---
 
-## 6. Step 5: Test
+## 7. Step 6: Test
 
 ### Struttura Raccomandata
 
@@ -525,6 +914,7 @@ async function main() {
 test/integration/
     NuovoProtocollo.test.ts          ← Unit test con mock (essenziale)
     NuovoProtocollo.fork.test.ts     ← Fork test su mainnet (essenziale)
+    NuovoProtocollo.leverage.test.ts ← Test leverage via flash loan (essenziale)
     NuovoProtocollo.e2e.test.ts      ← E2E con fondi reali (opzionale)
 ```
 
@@ -627,6 +1017,7 @@ describe("NuovoProtocolloPlugin", function () {
 
 ### Cosa Testare (Checklist)
 
+**Operazioni Base:**
 - [ ] Deposit trasferisce fondi al protocollo esterno
 - [ ] Withdraw riporta fondi a ProxyGeneral (NON al caller)
 - [ ] Borrow riporta token prestati a ProxyGeneral
@@ -639,20 +1030,35 @@ describe("NuovoProtocolloPlugin", function () {
 - [ ] LensAdapter.getTotalValue() corrisponde a (collateral - debt)
 - [ ] emergencyWithdrawAll recupera tutti i fondi
 
+**Leverage via FlashLoanService:**
+- [ ] openLeverageAtomic deposita collaterale amplificato
+- [ ] openLeverageAtomic genera debito corretto
+- [ ] openLeverageAtomic rispetta minHealthFactor
+- [ ] openLeverageAtomic rifiuta leverage > 5x e < 1.1x
+- [ ] openLeverageAtomic rifiuta deadline scaduto
+- [ ] closeLeverageAtomic ripaga debito completamente
+- [ ] closeLeverageAtomic restituisce collaterale all'utente
+- [ ] closeLeverageAtomic rifiuta se non c'è posizione
+- [ ] onFlashLoanReceived rifiuta caller non autorizzato
+- [ ] Circuit breaker blocca operazioni leverage
+- [ ] Plugin non trattiene token dopo operazione leverage
+
 ---
 
-## 7. Checklist Finale
+## 8. Checklist Finale
 
 Prima del deploy su mainnet, verifica ogni punto:
 
 ### Contratti
 
 - [ ] Registry: vault configurati per tutti i token supportati
-- [ ] Plugin: implementa `IProtocolAdapter` + `ILendingProtocol`  
+- [ ] Plugin: implementa `IProtocolAdapter` + `ILendingProtocol` + `IFlashLoanCallback`
 - [ ] Plugin: `withdraw` e `borrow` trasferiscono a ProxyGeneral
 - [ ] Plugin: non trattiene fondi tra transazioni
 - [ ] Plugin: tutte le funzioni hanno `onlyOwner` + `nonReentrant`
 - [ ] Plugin: circuit breaker funzionante
+- [ ] Plugin: `openLeverageAtomic()` e `closeLeverageAtomic()` funzionanti
+- [ ] Plugin: `onFlashLoanReceived()` verifica `msg.sender == FlashLoanService`
 - [ ] LensAdapter: `getTotalValue()` ritorna valore in ETH
 - [ ] LensAdapter: `getPositionsAtRisk()` identifica posizioni pericolose
 - [ ] Compilazione senza errori/warning
@@ -663,18 +1069,21 @@ Prima del deploy su mainnet, verifica ogni punto:
 - [ ] Registry: ownership trasferita al Plugin
 - [ ] Beacon: tutti e 3 i contratti registrati
 - [ ] ProxyGeneral: Plugin autorizzato
+- [ ] FlashLoanService: plugin registrato nel Beacon (rilevamento automatico)
 - [ ] Bytecode < 24,576 bytes (limite EVM)
 
 ### Test
 
 - [ ] Unit test: tutte le operazioni base passano
 - [ ] Fork test: operazioni reali su Arbitrum fork
+- [ ] Leverage test: open/close via FlashLoanService su Arbitrum fork
 - [ ] Access control: non-owner viene rifiutato
 - [ ] Edge case: health factor senza debito = max
+- [ ] Callback security: onFlashLoanReceived rifiuta caller non autorizzato
 
 ---
 
-## 8. Esempio Concreto: Aave V3
+## 9. Esempio Concreto: Aave V3
 
 Per capire come applicare il template, ecco come sarebbe un'integrazione Aave V3 su Arbitrum:
 
@@ -711,15 +1120,28 @@ address constant variableDebtUSDC = 0xFCCf3cAbbe80101232d343252614b6A3eE81C989;
 - Health factor è nativo in Aave → non serve calcolarlo manualmente
 - `getUserAccountData()` ritorna tutto in un colpo: collateral, debt, available borrow, LTV, health factor
 
-### Differenze Chiave vs Euler V2
+### Leverage Aave V3 vs Euler V2
+
+**Aave V3** è significativamente più semplice di Euler V2 per il leverage:
 
 | Aspetto | Euler V2 | Aave V3 |
-|---------|----------|---------|
+|---------|----------|---------|  
 | Architettura | Vault per token (EVC) | Pool unico condiviso |
 | Sub-accounts | Sì (fino a 256 via EVC) | No (1 account per address) |
 | Collateral enable | Serve EVC batch | Automatico al primo supply |
-| Flash Loans | Via Balancer (FlashLoanService) | Nativo in Aave Pool |
-| Health Factor | Calcolato via LensAdapter | Nativo `getUserAccountData()` |
+| Flash Loans | Via Balancer (FlashLoanService) | Via Balancer (FlashLoanService) |
+| Health Factor | Calcolato via AccountLens | Nativo `getUserAccountData()` |
+| Batch atomico | Obbligatorio (EVC.batch) | Non necessario (sequenziale) |
+| Open leverage callback | 4-step EVC batch | 3 chiamate sequenziali (supply, borrow, transfer) |
+| Close leverage callback | 4-step EVC batch + cleanup | 4 chiamate sequenziali (repay, withdraw, swap, transfer) |
+
+### Bytecode Comparison
+
+| Contratto | Bytes | % Limite | Margine |
+|---|---|---|---|
+| EulerV2Plugin (con leverage + EVC batch) | 22,538 | 91.7% | 2,038 |
+| AaveV3Plugin (con leverage) | 17,183 | 69.9% | 7,393 |
+| FlashLoanService (condiviso) | 5,766 | 23.5% | 18,810 |
 
 ---
 
@@ -731,6 +1153,7 @@ address constant variableDebtUSDC = 0xFCCf3cAbbe80101232d343252614b6A3eE81C989;
                     │  "NuovoProtocolloRegistry"  → 0x...      │
                     │  "NuovoProtocolloPlugin"    → 0x...      │
                     │  "NuovoProtocolloLensAdapter"→ 0x...     │
+                    │  "FlashLoanService"         → 0x638...   │
                     │  "WETH"                     → 0x82a...   │
                     │  "TokenManager"             → 0xc4c...   │
                     │  "ProxyGeneral"             → 0x875...   │
@@ -744,14 +1167,17 @@ address constant variableDebtUSDC = 0xFCCf3cAbbe80101232d343252614b6A3eE81C989;
               │ Mappa     │  │ Esegue    │  │ Legge        │
               │ token→vault│ │ operazioni│  │ stato        │
               │           │  │ su proto. │  │ posizioni    │
-              └──────────┘  │ esterno   │  └──────────────┘
-                    ▲        └──────────┘          │
+              └──────────┘  │ esterno + │  └──────────────┘
+                    ▲        │ LEVERAGE  │         │
+                    │        └─────┬────┘          │
                     │              │                │
                     └──────────────┘                │
-                    read vault addr                 │
-                                                    ▼
-                                            ┌──────────────┐
-                                            │ValueCalculator│
-                                            │ getTotalValue│
-                                            └──────────────┘
+                    read vault addr    ┌────────────┘
+                                       │
+              ┌─────────────────┐      ▼
+              │FlashLoanService │  ┌──────────────┐
+              │  (Condiviso)    │  │ValueCalculator│
+              │  Balancer 0%    │  │ getTotalValue│
+              │  Swap service   │  └──────────────┘
+              └─────────────────┘
 ```

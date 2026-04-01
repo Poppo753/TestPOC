@@ -323,12 +323,11 @@ contract FlashLoanService is IFlashLoanRecipient, ReentrancyGuard {
      * @param plugin Indirizzo da verificare
      * @return isRegistered True se è un plugin registrato
      * 
-     * @dev Usa getImplementation del Beacon per verificare.
-     *      Controlla i moduli noti: EulerV2Plugin, MorphoPlugin, etc.
+     * @dev Completamente dinamico: itera su TUTTI i moduli registrati nel Beacon.
+     *      Non serve aggiornare/rideployare FlashLoanService quando si aggiunge un nuovo plugin.
      */
     function _isRegisteredPlugin(address plugin) internal view returns (bool) {
-        // Lista moduli da controllare
-        string[3] memory moduleNames = ["EulerV2Plugin", "MorphoPlugin", "AavePlugin"];
+        string[] memory moduleNames = beacon.getRegisteredModules();
         
         for (uint256 i = 0; i < moduleNames.length; i++) {
             try beacon.getImplementation(moduleNames[i]) returns (address registered) {
@@ -336,7 +335,7 @@ contract FlashLoanService is IFlashLoanRecipient, ReentrancyGuard {
                     return true;
                 }
             } catch {
-                // Modulo non registrato, continua
+                // Modulo frozen o errore, continua
             }
         }
         

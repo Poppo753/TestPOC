@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-01T02:30:00.000Z",
+  "timestamp": "2026-04-01T15:03:08.080Z",
   "network": "arbitrum-mainnet",
   "chainId": 42161,
   "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
@@ -14,7 +14,9 @@
     "emergencyHandler": "0xcaf7DD1cA3A5857893D97BA3A9C029986A5CAc66",
     "liquidityManager": "0xfb26C7A0CF5b4e86Dcf870b2349A29DA4F630150",
     "protocolManager": "0x5b8314319CB56864b002caFEB92540B7A7559fBB",
-    "uniswapV3Plugin": "0x7ec91aEc1bD85E63D671b23E5deC8157D1f8aE01"
+    "uniswapV3Plugin": "0x7ec91aEc1bD85E63D671b23E5deC8157D1f8aE01",
+    "aaveV3Plugin": "0x7aEA35f66d054bB6C68957A8A27b10F08c33aA7A",
+    "flashLoanService": "0x3486b561CA1E3Dc146F97D8Ed4B9e4f2cd10822d"
   },
   "status": "✅ ALL DEPLOYED SUCCESSFULLY",
   "EulerRegistry": {
@@ -49,12 +51,14 @@
     }
   },
   "FlashLoanService": {
-    "address": "0x638C0175a1883063F22fc2439C85364e4aC27b03",
+    "address": "0x3486b561CA1E3Dc146F97D8Ed4B9e4f2cd10822d",
     "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
-    "timestamp": "2026-04-01T00:00:00.000Z",
+    "timestamp": "2026-04-01T15:03:08.080Z",
     "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
     "balancerVault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
-    "simpleSwap": "0xa0DB78167CBAccD47524a261b7741C6B41Bbd096"
+    "simpleSwap": "0xa0DB78167CBAccD47524a261b7741C6B41Bbd096",
+    "previousVersion": "0x638C0175a1883063F22fc2439C85364e4aC27b03",
+    "upgradeReason": "Dynamic _isRegisteredPlugin via beacon.getRegisteredModules()"
   },
   "AaveV3Registry": {
     "address": "0xEeb0EA1C430E956266C8027E39cA7A5C855B1a73",
@@ -85,13 +89,16 @@
     }
   },
   "AaveV3Plugin": {
-    "address": "0x4cFDCb4215F562DC3Bc36D28fCf093E993AdC026",
+    "address": "0x7aEA35f66d054bB6C68957A8A27b10F08c33aA7A",
     "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
     "owner": "0x8390e98483a9b39265428c8610371134B5d11C3F",
     "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
     "aavePool": "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
     "proxyGeneral": "0x8750344c6cf493f4F5d13F52b7F7Bf1d285978e1",
-    "authorizedInProxyGeneral": true
+    "authorizedInProxyGeneral": true,
+    "timestamp": "2026-04-01T15:03:08.080Z",
+    "previousVersion": "0x4cFDCb4215F562DC3Bc36D28fCf093E993AdC026",
+    "upgradeReason": "Added leverage: openLeverageAtomic, closeLeverageAtomic"
   },
   "AaveV3LensAdapter": {
     "address": "0xF9d5Cb5a86f0aD469f37F08B27AEf7FdF46ac3E3",

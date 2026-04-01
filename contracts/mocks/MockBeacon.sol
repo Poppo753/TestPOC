@@ -8,8 +8,14 @@ pragma solidity ^0.8.27;
  */
 contract MockBeacon {
     mapping(string => address) private implementations;
+    string[] private moduleNames;
+    mapping(string => bool) private moduleExists;
     
     function setImplementation(string memory moduleName, address implementation) external {
+        if (!moduleExists[moduleName]) {
+            moduleNames.push(moduleName);
+            moduleExists[moduleName] = true;
+        }
         implementations[moduleName] = implementation;
     }
     
@@ -19,5 +25,9 @@ contract MockBeacon {
     
     function getAddress(string memory moduleName) external view returns (address) {
         return implementations[moduleName];
+    }
+
+    function getRegisteredModules() external view returns (string[] memory) {
+        return moduleNames;
     }
 }

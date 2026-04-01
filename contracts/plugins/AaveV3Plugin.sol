@@ -11,6 +11,17 @@ import "../interfaces/IBeacon.sol";
 import "../interfaces/IProxyGeneral.sol";
 import "../interfaces/ITokenManagerForModules.sol";
 import "../interfaces/aave/IAaveV3Pool.sol";
+import "../interfaces/IFlashLoanCallback.sol";
+
+/**
+ * @title IFlashLoanService
+ * @notice Interface per il servizio flash loan centralizzato
+ */
+interface IFlashLoanService {
+    function executeFlashLoan(address[] calldata tokens, uint256[] calldata amounts, bytes calldata callbackData) external;
+    function swap(address tokenIn, address tokenOut, uint256 amountIn) external returns (uint256);
+    function getExpectedOutput(address tokenIn, address tokenOut, uint256 amountIn) external view returns (uint256);
+}
 
 /**
  * @title AaveV3Plugin
@@ -43,7 +54,7 @@ import "../interfaces/aave/IAaveV3Pool.sol";
  * @author Project4 Team
  * @custom:version 1.0.0
  */
-contract AaveV3Plugin is IAaveV3Plugin, Ownable, ReentrancyGuard {
+contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // ==================== IMMUTABLES ====================
@@ -70,6 +81,41 @@ contract AaveV3Plugin is IAaveV3Plugin, Ownable, ReentrancyGuard {
     /// @notice Circuit breaker flag (emergency stop)
     bool public override circuitBreakerTripped;
 
+    /// @notice Flash loan callback context (temporary, cleared after each operation)
+    FlashLoanCallbackContext private _flashLoanContext;
+
+    /// @notice Reentrancy guard for flash loan callbacks
+    bool private _inFlashLoanCallback;
+
+    // ==================== ENUMS & STRUCTS ====================
+
+    enum FlashLoanOperation { OPEN, CLOSE }
+
+    struct FlashLoanCallbackContext {
+        FlashLoanOperation operation;
+        address user;
+        uint256 initialCollateral;    // Solo per OPEN
+        uint256 maxSlippageBps;       // Solo per CLOSE
+        string collateralTokenCode;
+        string borrowTokenCode;
+    }
+
+    struct OpenLeverageAtomicParams {
+        string collateralToken;       // e.g., "WETH"
+        string borrowToken;           // e.g., "USDC"
+        uint256 collateralAmount;     // Initial collateral amount
+        uint256 targetLeverageX100;   // Target leverage * 100 (e.g., 200 = 2x)
+        uint256 minHealthFactor;      // Minimum acceptable health factor
+        uint256 deadline;             // Transaction deadline
+    }
+
+    struct CloseLeverageAtomicParams {
+        string collateralToken;       // e.g., "WETH"
+        string borrowToken;           // e.g., "USDC"
+        uint256 maxSlippageBps;       // Max slippage in basis points (e.g., 100 = 1%)
+        uint256 deadline;             // Transaction deadline
+    }
+
     // ==================== ERRORS ====================
 
     error InvalidAddress();
@@ -79,10 +125,34 @@ contract AaveV3Plugin is IAaveV3Plugin, Ownable, ReentrancyGuard {
     error OnlyProtocolManager();
     error HealthFactorTooLow(uint256 current, uint256 minimum);
     error NoDebtToRepay();
+    error DeadlineExpired();
+    error InvalidLeverage();
+    error NoPositionToClose();
+    error SwapFailed();
+    error SlippageExceeded(uint256 required, uint256 received);
+    error UnauthorizedFlashLoanCallback();
+    error FlashLoanServiceNotFound();
 
     // ==================== EVENTS ====================
 
     event EmergencyWithdraw(string indexed tokenCode, uint256 amount);
+    event LeverageOpenedAtomic(
+        address indexed user,
+        address collateralToken,
+        address borrowToken,
+        uint256 initialCollateral,
+        uint256 totalCollateral,
+        uint256 totalDebt,
+        uint256 healthFactor,
+        uint256 leverageX100
+    );
+    event LeverageClosedAtomic(
+        address indexed user,
+        address collateralToken,
+        address borrowToken,
+        uint256 debtRepaid,
+        uint256 collateralReturned
+    );
 
     // ==================== MODIFIERS ====================
 
@@ -472,6 +542,288 @@ contract AaveV3Plugin is IAaveV3Plugin, Ownable, ReentrancyGuard {
         address aToken = _getATokenSafe(tokenCode);
         if (aToken == address(0)) return 0;
         return IERC20(aToken).balanceOf(address(this));
+    }
+
+    // ==================== ATOMIC LEVERAGE VIA FLASH LOAN SERVICE ====================
+
+    /**
+     * @notice Apre una posizione leverage ATOMICA usando FlashLoanService
+     * @param params Parametri per l'apertura leverage
+     * @return totalCollateral Collaterale finale depositato
+     * @return totalDebt Debito totale
+     * @return healthFactor Health factor finale
+     *
+     * @dev Flusso atomico:
+     * 1. Flash loan USDC da Balancer (0% fee)
+     * 2. Swap USDC → WETH
+     * 3. pool.supply(WETH totale) → deposita come collaterale (auto-enabled)
+     * 4. pool.borrow(USDC) → genera debito per ripagare flash loan
+     * 5. Trasferisci USDC al FlashLoanService → ripaga Balancer
+     */
+    function openLeverageAtomic(
+        OpenLeverageAtomicParams calldata params
+    ) external onlyOwner notCircuitBroken nonReentrant returns (
+        uint256 totalCollateral,
+        uint256 totalDebt,
+        uint256 healthFactor
+    ) {
+        if (block.timestamp > params.deadline) revert DeadlineExpired();
+        if (params.targetLeverageX100 < 110 || params.targetLeverageX100 > 500) {
+            revert InvalidLeverage();
+        }
+
+        address collateralToken = _resolveToken(params.collateralToken);
+        address borrowToken = _resolveToken(params.borrowToken);
+
+        // Trasferisci collaterale iniziale dall'utente
+        IERC20(collateralToken).safeTransferFrom(msg.sender, address(this), params.collateralAmount);
+
+        // Calcola importo flash loan
+        uint256 leverageMultiplier = params.targetLeverageX100 - 100;
+        uint256 flashLoanAmount = _calculateFlashLoanAmount(
+            collateralToken, borrowToken, params.collateralAmount, leverageMultiplier
+        );
+
+        // Salva contesto per callback
+        _flashLoanContext = FlashLoanCallbackContext({
+            operation: FlashLoanOperation.OPEN,
+            user: msg.sender,
+            initialCollateral: params.collateralAmount,
+            maxSlippageBps: 0,
+            collateralTokenCode: params.collateralToken,
+            borrowTokenCode: params.borrowToken
+        });
+
+        // Esegui flash loan
+        address flashLoanService = _getFlashLoanService();
+        address[] memory tokens = new address[](1);
+        tokens[0] = borrowToken;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = flashLoanAmount;
+
+        _inFlashLoanCallback = true;
+        IFlashLoanService(flashLoanService).executeFlashLoan(tokens, amounts, "");
+        _inFlashLoanCallback = false;
+
+        // Ottieni stato finale
+        address aToken = _getAToken(params.collateralToken);
+        totalCollateral = IERC20(aToken).balanceOf(address(this));
+
+        address variableDebtToken = _getVariableDebtToken(params.borrowToken);
+        totalDebt = IERC20(variableDebtToken).balanceOf(address(this));
+
+        (, , , , , healthFactor) = aavePool.getUserAccountData(address(this));
+
+        // Verifica health factor
+        uint256 minHF = params.minHealthFactor > 0 ? params.minHealthFactor : MIN_HEALTH_FACTOR;
+        if (healthFactor < minHF) {
+            revert HealthFactorTooLow(healthFactor, minHF);
+        }
+
+        emit LeverageOpenedAtomic(
+            msg.sender, collateralToken, borrowToken,
+            params.collateralAmount, totalCollateral, totalDebt,
+            healthFactor, params.targetLeverageX100
+        );
+
+        delete _flashLoanContext;
+    }
+
+    /**
+     * @notice Chiude una posizione leverage ATOMICA usando FlashLoanService
+     * @param params Parametri per la chiusura
+     * @return collateralReturned Collaterale restituito all'utente
+     *
+     * @dev Flusso atomico:
+     * 1. Flash loan USDC (= debito corrente) da Balancer
+     * 2. pool.repay(USDC) → ripaga tutto il debito
+     * 3. pool.withdraw(WETH, max) → ritira tutto il collaterale
+     * 4. Swap parte WETH → USDC per ripagare flash loan
+     * 5. Trasferisci USDC al FlashLoanService → ripaga Balancer
+     * 6. WETH rimanente → utente
+     */
+    function closeLeverageAtomic(
+        CloseLeverageAtomicParams calldata params
+    ) external onlyOwnerOrLiquidityManager notCircuitBroken nonReentrant returns (uint256 collateralReturned) {
+        if (block.timestamp > params.deadline) revert DeadlineExpired();
+
+        address borrowToken = _resolveToken(params.borrowToken);
+        address variableDebtToken = _getVariableDebtToken(params.borrowToken);
+
+        uint256 currentDebt = IERC20(variableDebtToken).balanceOf(address(this));
+        if (currentDebt == 0) revert NoPositionToClose();
+
+        // Salva contesto per callback
+        _flashLoanContext = FlashLoanCallbackContext({
+            operation: FlashLoanOperation.CLOSE,
+            user: msg.sender,
+            initialCollateral: 0,
+            maxSlippageBps: params.maxSlippageBps > 0 ? params.maxSlippageBps : 100,
+            collateralTokenCode: params.collateralToken,
+            borrowTokenCode: params.borrowToken
+        });
+
+        // Flash loan per importo = debito corrente
+        address flashLoanService = _getFlashLoanService();
+        address[] memory tokens = new address[](1);
+        tokens[0] = borrowToken;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = currentDebt;
+
+        _inFlashLoanCallback = true;
+        IFlashLoanService(flashLoanService).executeFlashLoan(tokens, amounts, "");
+        _inFlashLoanCallback = false;
+
+        // Trasferisci collaterale rimanente all'utente
+        address collateralToken = _resolveToken(params.collateralToken);
+        collateralReturned = IERC20(collateralToken).balanceOf(address(this));
+        if (collateralReturned > 0) {
+            IERC20(collateralToken).safeTransfer(msg.sender, collateralReturned);
+        }
+
+        // Trasferisci eventuale eccesso di borrow token all'utente
+        uint256 borrowExcess = IERC20(borrowToken).balanceOf(address(this));
+        if (borrowExcess > 0) {
+            IERC20(borrowToken).safeTransfer(msg.sender, borrowExcess);
+        }
+
+        emit LeverageClosedAtomic(
+            msg.sender, collateralToken, borrowToken, currentDebt, collateralReturned
+        );
+
+        delete _flashLoanContext;
+    }
+
+    /**
+     * @notice Callback chiamato da FlashLoanService
+     * @dev Implementa IFlashLoanCallback. Gestisce sia OPEN che CLOSE leverage.
+     *      I token flash loan sono GIA' nel plugin quando viene chiamato.
+     */
+    function onFlashLoanReceived(
+        IERC20[] memory tokens,
+        uint256[] memory amounts,
+        uint256[] memory feeAmounts,
+        bytes memory /* callbackData */
+    ) external override {
+        address flashLoanService = _getFlashLoanService();
+        if (msg.sender != flashLoanService) revert UnauthorizedFlashLoanCallback();
+        if (!_inFlashLoanCallback) revert UnauthorizedFlashLoanCallback();
+
+        FlashLoanCallbackContext memory ctx = _flashLoanContext;
+
+        if (ctx.operation == FlashLoanOperation.OPEN) {
+            _handleOpenLeverageCallback(tokens, amounts, feeAmounts, ctx, flashLoanService);
+        } else {
+            _handleCloseLeverageCallback(tokens, amounts, feeAmounts, ctx, flashLoanService);
+        }
+    }
+
+    /**
+     * @notice Gestisce callback per apertura leverage
+     * @dev Flusso: swap borrow→collateral, supply al Pool, borrow per ripagare flash loan
+     *      Aave V3 non richiede EVC batch — operazioni sequenziali dirette sul Pool
+     */
+    function _handleOpenLeverageCallback(
+        IERC20[] memory tokens,
+        uint256[] memory amounts,
+        uint256[] memory feeAmounts,
+        FlashLoanCallbackContext memory ctx,
+        address flashLoanService
+    ) internal {
+        address collateralToken = _resolveToken(ctx.collateralTokenCode);
+        address borrowToken = address(tokens[0]);
+        uint256 flashLoanAmount = amounts[0];
+        uint256 feeAmount = feeAmounts[0];
+
+        // Step 1: Swap borrow token → collateral token (USDC → WETH)
+        IERC20(borrowToken).safeIncreaseAllowance(flashLoanService, flashLoanAmount);
+        uint256 collateralFromSwap = IFlashLoanService(flashLoanService).swap(
+            borrowToken, collateralToken, flashLoanAmount
+        );
+        if (collateralFromSwap == 0) revert SwapFailed();
+
+        // Step 2: Supply tutto il collaterale al Pool Aave
+        //         Aave abilita automaticamente il collaterale al primo supply
+        uint256 totalCollateral = ctx.initialCollateral + collateralFromSwap;
+        IERC20(collateralToken).safeIncreaseAllowance(address(aavePool), totalCollateral);
+        aavePool.supply(collateralToken, totalCollateral, address(this), 0);
+
+        // Step 3: Borrow per ripagare flash loan
+        uint256 borrowAmount = flashLoanAmount + feeAmount;
+        aavePool.borrow(borrowToken, borrowAmount, VARIABLE_RATE_MODE, 0, address(this));
+
+        // Step 4: Trasferisci al FlashLoanService per ripagare Balancer
+        IERC20(borrowToken).safeTransfer(flashLoanService, borrowAmount);
+    }
+
+    /**
+     * @notice Gestisce callback per chiusura leverage
+     * @dev Flusso: repay debito, withdraw collaterale, swap per ripagare flash loan
+     */
+    function _handleCloseLeverageCallback(
+        IERC20[] memory tokens,
+        uint256[] memory amounts,
+        uint256[] memory feeAmounts,
+        FlashLoanCallbackContext memory ctx,
+        address flashLoanService
+    ) internal {
+        address collateralToken = _resolveToken(ctx.collateralTokenCode);
+        address borrowToken = address(tokens[0]);
+        uint256 flashLoanAmount = amounts[0];
+        uint256 feeAmount = feeAmounts[0];
+
+        // Step 1: Ripaga tutto il debito
+        IERC20(borrowToken).safeIncreaseAllowance(address(aavePool), flashLoanAmount);
+        aavePool.repay(borrowToken, flashLoanAmount, VARIABLE_RATE_MODE, address(this));
+
+        // Step 2: Ritira tutto il collaterale (a noi stessi, non a ProxyGeneral)
+        aavePool.withdraw(collateralToken, type(uint256).max, address(this));
+
+        // Step 3: Swap collaterale → borrow token per ripagare flash loan
+        uint256 repayAmount = flashLoanAmount + feeAmount;
+        uint256 collateralBalance = IERC20(collateralToken).balanceOf(address(this));
+        IERC20(collateralToken).safeIncreaseAllowance(flashLoanService, collateralBalance);
+        uint256 borrowReceived = IFlashLoanService(flashLoanService).swap(
+            collateralToken, borrowToken, collateralBalance
+        );
+
+        if (borrowReceived < repayAmount) {
+            revert SlippageExceeded(repayAmount, borrowReceived);
+        }
+
+        // Step 4: Trasferisci al FlashLoanService per ripagare Balancer
+        IERC20(borrowToken).safeTransfer(flashLoanService, repayAmount);
+    }
+
+    // ==================== FLASH LOAN HELPERS ====================
+
+    /**
+     * @notice Ottiene FlashLoanService da Beacon
+     */
+    function _getFlashLoanService() internal view returns (address) {
+        address service = IBeacon(beacon).getImplementation("FlashLoanService");
+        if (service == address(0)) revert FlashLoanServiceNotFound();
+        return service;
+    }
+
+    /**
+     * @notice Calcola importo flash loan necessario per leverage target
+     * @param collateralToken Token collaterale
+     * @param borrowToken Token da prendere in prestito
+     * @param collateralAmount Importo collaterale iniziale
+     * @param leverageMultiplier Moltiplicatore leverage (100 = 1x additional)
+     */
+    function _calculateFlashLoanAmount(
+        address collateralToken,
+        address borrowToken,
+        uint256 collateralAmount,
+        uint256 leverageMultiplier
+    ) internal view returns (uint256) {
+        address flashLoanService = _getFlashLoanService();
+        uint256 collateralValueInBorrow = IFlashLoanService(flashLoanService).getExpectedOutput(
+            collateralToken, borrowToken, collateralAmount
+        );
+        return (collateralValueInBorrow * leverageMultiplier) / 100;
     }
 
     // ==================== EMERGENCY ====================
