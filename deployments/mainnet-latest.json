@@ -17,9 +17,14 @@
   },
   "status": "✅ ALL DEPLOYED SUCCESSFULLY",
   "EulerRegistry": {
-    "address": "0xa2bE49a4b89F7e7131f8e72015E8a6CD20201BC6",
+    "address": "0xe55c78577c84E2cB6E71F8Eb134a66e7B1d9fd56",
     "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
-    "timestamp": "2026-02-02T00:00:00.000Z"
+    "timestamp": "2026-04-01T01:53:57.300Z",
+    "vaults": {
+      "WETH": "0x78E3E051D32157AACD550fBB78458762d8f7edFF",
+      "USDC": "0x0a1eCC5Fe8C9be3C809844fcBe615B46A869b899"
+    },
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870"
   },
   "EulerLensAdapter": {
     "address": "0x55d4dC6536Ddcb62AeDd4A9275Cf96aa15e24353",
@@ -30,17 +35,24 @@
     }
   },
   "EulerV2Plugin": {
-    "address": "0x490139F3b29786D64056a236a0062CA23A7313f6",
+    "address": "0x383cc6487772bc1AABd2e74884ad23F313005ACB",
     "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
-    "timestamp": "2026-02-02T00:00:00.000Z",
+    "timestamp": "2026-04-01T01:50:09.629Z",
     "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
     "evc": "0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066",
-    "size": 24530,
-    "optimized": true,
-    "dustFix": true,
+    "size": 22538,
+    "previousVersion": "0x46B5f0D51311c09e9d93be7d16fA75BECC654D5b",
+    "upgradeType": "EVC Batch Refactor (fifthPhase)",
     "dependencies": {
-      "eulerRegistry": "0xa2bE49a4b89F7e7131f8e72015E8a6CD20201BC6",
-      "eulerLens": "0x55d4dC6536Ddcb62AeDd4A9275Cf96aa15e24353"
+      "eulerRegistry": "0x52c2D0645f5Bea7fE159d9Db9C27Ba6b50D1bAe3"
     }
+  },
+  "FlashLoanService": {
+    "address": "0x638C0175a1883063F22fc2439C85364e4aC27b03",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "timestamp": "2026-04-01T00:00:00.000Z",
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+    "balancerVault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+    "simpleSwap": "0xa0DB78167CBAccD47524a261b7741C6B41Bbd096"
   }
 }

@@ -18,7 +18,7 @@
 
 import { ethers } from "hardhat";
 import { ARBITRUM_ADDRESSES } from "../../config/arbitrum.config";
-import { saveDeployment, verifyArbitrumMainnet, checkSignerBalance } from "../../utils/euler-helpers";
+import { saveDeployment, verifyArbitrumMainnet, checkSignerBalance } from "../../utils/plugins/euler/euler-helpers";
 
 async function main() {
     console.log("\n" + "=".repeat(70));

@@ -18,7 +18,7 @@
 
 import { ethers } from "hardhat";
 import { ARBITRUM_ADDRESSES, EULER_VAULTS } from "../../config/arbitrum.config";
-import { saveDeployment, verifyArbitrumMainnet, checkSignerBalance } from "../../utils/euler-helpers";
+import { saveDeployment, verifyArbitrumMainnet, checkSignerBalance } from "../../utils/plugins/euler/euler-helpers";
 
 async function main() {
     console.log("\n" + "=".repeat(70));
@@ -115,6 +115,27 @@ async function main() {
         console.log("   ⚠️  MANUAL ACTION REQUIRED:");
         console.log(`   Call beacon.updateImplementation("EulerRegistry", "${registryAddress}")`);
         console.log(`   From Beacon owner: ${beaconOwner}`);
+    }
+
+    // ==================== TRANSFER OWNERSHIP TO PLUGIN ====================
+    console.log("\n🔑 Transferring ownership to EulerV2Plugin...");
+    
+    try {
+        const pluginAddress = await beacon.getImplementation("EulerV2Plugin");
+        console.log(`   Plugin: ${pluginAddress}`);
+        
+        const transferTx = await eulerRegistry.transferOwnership(pluginAddress);
+        await transferTx.wait();
+        
+        const newOwner = await eulerRegistry.owner();
+        if (newOwner.toLowerCase() === pluginAddress.toLowerCase()) {
+            console.log(`   ✅ Ownership transferred to plugin`);
+        } else {
+            console.log(`   ⚠️  Ownership is ${newOwner}, expected ${pluginAddress}`);
+        }
+    } catch (e: any) {
+        console.log(`   ⚠️  Could not transfer ownership: ${e.message?.substring(0, 100)}`);
+        console.log(`   Transfer ownership manually after EulerV2Plugin is deployed`);
     }
 
     // ==================== SAVE DEPLOYMENT ====================

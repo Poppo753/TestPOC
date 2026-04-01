@@ -140,11 +140,14 @@ interface IEVC {
     function enableController(address account, address vault) external payable;
     
     /**
-     * @notice Disabilita un controller
-     * @param account Account
-     * @param vault Vault controller da disabilitare
+     * @notice Disabilita msg.sender come controller per un account
+     * @dev Solo il controller stesso (msg.sender) può disabilitarsi.
+     *      Per disabilitare un controller, chiamare la funzione disableController()
+     *      direttamente sul vault (che internamente chiama evc.disableController(account))
+     *      oppure usare evc.batch con target=vault e data=IEVault.disableController.selector
+     * @param account Account da cui rimuovere il controller
      */
-    function disableController(address account, address vault) external payable;
+    function disableController(address account) external payable;
     
     /**
      * @notice Ottiene i collateral abilitati per un account

@@ -137,6 +137,14 @@ interface IEVault {
     function totalBorrows() external view returns (uint256);
     
     /**
+     * @notice Disabilita questo vault come controller per il caller
+     * @dev Chiama internamente evc.disableController(account) dove msg.sender è il vault.
+     *      Richiede che il debito dell'account sia 0 (altrimenti reverte con E_OutstandingDebt).
+     *      Questo è il modo corretto per rilasciare il controller status in Euler V2.
+     */
+    function disableController() external;
+    
+    /**
      * @notice Verifica se un account è in stato di violazione (liquidabile)
      * @param account Indirizzo da verificare
      * @return True se l'account è in violazione

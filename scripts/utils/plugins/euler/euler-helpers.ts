@@ -80,7 +80,7 @@ export async function saveDeployment(
     deployer: string,
     extraData?: any
 ): Promise<void> {
-    const deploymentPath = path.join(__dirname, "../../deployments/mainnet-latest.json");
+    const deploymentPath = path.join(__dirname, "../../../../deployments/mainnet-latest.json");
     
     let deployment: any = {};
     

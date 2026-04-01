@@ -523,8 +523,8 @@ contract FlashLoanPlugin is IFlashLoanRecipient, Ownable, ReentrancyGuard {
         uint256 debtAfter = IEVault(ctx.borrowVault).debtOf(address(this));
         require(debtAfter == 0, "FL: Debt not fully repaid");
         
-        // Step 2: Disable controller (no more debt)
-        evc.disableController(address(this), ctx.borrowVault);
+        // Step 2: Disable controller via vault (correct pattern: vault calls evc.disableController)
+        IEVault(ctx.borrowVault).disableController();
         
         // Step 3: Withdraw all collateral from Euler
         uint256 shares = IEVault(ctx.collateralVault).balanceOf(address(this));
