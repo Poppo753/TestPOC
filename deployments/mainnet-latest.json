@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-11-15T00:00:00.787Z",
+  "timestamp": "2026-04-01T02:30:00.000Z",
   "network": "arbitrum-mainnet",
   "chainId": 42161,
   "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
@@ -8,11 +8,12 @@
     "proxyGeneral": "0x8750344c6cf493f4F5d13F52b7F7Bf1d285978e1",
     "chainlinkAdapter": "0x018f6392eb912624930d68c3c226b707B1D8B2A7",
     "tokenManager": "0xc4c8581a7Cbb4e046adB6A6e9008375F38441517",
-    "swapManager": "0x01269d496E957A54e02cdcd5888957baf317A947",
-    "valueCalculator": "0xE06882B8a0Bb46dE28a4aa4694d41822C255457B",
+    "swapManager": "0xA1b7B8C442c3c1F342BB9C44b7d0733D0c9Ff357",
+    "valueCalculator": "0x2E042874BcFc6bE51e0D6b23F8Da22bDd8B215B0",
     "parameterManager": "0xe5401565c77B41A5206e3E1b6A2b7F54E93bED5e",
     "emergencyHandler": "0xcaf7DD1cA3A5857893D97BA3A9C029986A5CAc66",
-    "liquidityManager": "0x545b79254F74Ba33958290BB73F2a338509c975d",
+    "liquidityManager": "0xfb26C7A0CF5b4e86Dcf870b2349A29DA4F630150",
+    "protocolManager": "0x5b8314319CB56864b002caFEB92540B7A7559fBB",
     "uniswapV3Plugin": "0x7ec91aEc1bD85E63D671b23E5deC8157D1f8aE01"
   },
   "status": "✅ ALL DEPLOYED SUCCESSFULLY",
@@ -27,7 +28,7 @@
     "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870"
   },
   "EulerLensAdapter": {
-    "address": "0x55d4dC6536Ddcb62AeDd4A9275Cf96aa15e24353",
+    "address": "0xfb76C4475149F1843bdF1d327569A12a027Be833",
     "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
     "timestamp": "2026-02-02T00:00:00.000Z",
     "dependencies": {

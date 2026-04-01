@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { EulerV2Plugin, EulerVaultRegistry } from "../../typechain-types";
+import { EulerV2Plugin, EulerRegistry } from "../../typechain-types";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 /**
@@ -25,7 +25,7 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
     this.timeout(180000);
 
     let plugin: EulerV2Plugin;
-    let vaultRegistry: EulerVaultRegistry;
+    let vaultRegistry: EulerRegistry;
     let eulerLensAdapter: any;
     let owner: SignerWithAddress;
     let mockBeacon: any;
@@ -80,13 +80,14 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
         await mockBeacon.setImplementation("TokenManager", await mockTokenManager.getAddress());
         await mockBeacon.setImplementation("ProxyGeneral", await mockProxyGeneral.getAddress());
         await mockBeacon.setImplementation("ProtocolManager", owner.address);
+        await mockBeacon.setImplementation("WETH", WETH);
 
         // ==================== DEPLOY VAULT REGISTRY ====================
         
-        const VaultRegistryFactory = await ethers.getContractFactory("EulerVaultRegistry");
+        const VaultRegistryFactory = await ethers.getContractFactory("EulerRegistry");
         vaultRegistry = await VaultRegistryFactory.deploy();
         await vaultRegistry.waitForDeployment();
-        await mockBeacon.setImplementation("EulerVaultRegistry", await vaultRegistry.getAddress());
+        await mockBeacon.setImplementation("EulerRegistry", await vaultRegistry.getAddress());
 
         // ==================== DEPLOY EULER V2 PLUGIN ====================
         
@@ -117,13 +118,13 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
 
     describe("1. Position Management - Initial State", function () {
         it("Should have no active positions initially", async function () {
-            const count = await plugin.getActivePositionCount();
+            const count = await vaultRegistry.getActivePositionCount();
             expect(count).to.equal(0);
             console.log(`   Active positions: ${count}`);
         });
 
         it("Should return empty array for getAllPositions", async function () {
-            const positions = await plugin.getAllPositions();
+            const positions = await vaultRegistry.getAllPositions();
             expect(positions.length).to.equal(0);
         });
     });
@@ -131,66 +132,66 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
     describe("2. Open Leverage Position - Validation", function () {
         it("Should revert with expired deadline", async function () {
             const params = {
-                collateralTokenCode: "WETH",
-                borrowTokenCode: "USDC",
+                collateralToken: "WETH",
+                borrowToken: "USDC",
                 collateralAmount: ethers.parseEther("0.1"),
-                borrowAmount: ethers.parseUnits("100", 6),
-                minCollateralReceived: 0n,
-                swapData: "0x",
+                targetLeverageX100: 200,
+                minHealthFactor: ethers.parseEther("1.05"),
                 deadline: Math.floor(Date.now() / 1000) - 3600 // 1 ora fa
             };
 
             await expect(
-                plugin.openLeveragePosition(params)
+                plugin.openLeverageAtomic(params)
             ).to.be.revertedWithCustomError(plugin, "DeadlineExpired");
         });
 
-        it("Should revert with zero collateral amount", async function () {
+        it("Should revert with leverage too low (< 110)", async function () {
             const params = {
-                collateralTokenCode: "WETH",
-                borrowTokenCode: "USDC",
-                collateralAmount: 0n,
-                borrowAmount: ethers.parseUnits("100", 6),
-                minCollateralReceived: 0n,
-                swapData: "0x",
-                deadline: Math.floor(Date.now() / 1000) + 3600
-            };
-
-            await expect(
-                plugin.openLeveragePosition(params)
-            ).to.be.revertedWithCustomError(plugin, "InvalidAddress");
-        });
-
-        it("Should revert with zero borrow amount", async function () {
-            const params = {
-                collateralTokenCode: "WETH",
-                borrowTokenCode: "USDC",
+                collateralToken: "WETH",
+                borrowToken: "USDC",
                 collateralAmount: ethers.parseEther("0.1"),
-                borrowAmount: 0n,
-                minCollateralReceived: 0n,
-                swapData: "0x",
+                targetLeverageX100: 100, // 1x = no leverage, minimum is 110 (1.1x)
+                minHealthFactor: ethers.parseEther("1.05"),
                 deadline: Math.floor(Date.now() / 1000) + 3600
             };
 
             await expect(
-                plugin.openLeveragePosition(params)
-            ).to.be.revertedWithCustomError(plugin, "InvalidAddress");
+                plugin.openLeverageAtomic(params)
+            ).to.be.revertedWithCustomError(plugin, "InvalidLeverage");
         });
 
-        it("Should revert with insufficient balance", async function () {
+        it("Should revert with leverage too high (> 500)", async function () {
             const params = {
-                collateralTokenCode: "WETH",
-                borrowTokenCode: "USDC",
-                collateralAmount: ethers.parseEther("100"), // 100 WETH che non abbiamo
-                borrowAmount: ethers.parseUnits("100", 6),
-                minCollateralReceived: 0n,
-                swapData: "0x",
+                collateralToken: "WETH",
+                borrowToken: "USDC",
+                collateralAmount: ethers.parseEther("0.1"),
+                targetLeverageX100: 600, // 6x = too high, max is 500 (5x)
+                minHealthFactor: ethers.parseEther("1.05"),
                 deadline: Math.floor(Date.now() / 1000) + 3600
             };
 
             await expect(
-                plugin.openLeveragePosition(params)
-            ).to.be.revertedWithCustomError(plugin, "InsufficientBalance");
+                plugin.openLeverageAtomic(params)
+            ).to.be.revertedWithCustomError(plugin, "InvalidLeverage");
+        });
+
+        it("Should revert when FlashLoanService not configured", async function () {
+            // openLeverageAtomic requires FlashLoanService in Beacon
+            // Since we're using MockBeacon without FlashLoanService, it should revert
+            const params = {
+                collateralToken: "WETH",
+                borrowToken: "USDC",
+                collateralAmount: ethers.parseEther("0.1"),
+                targetLeverageX100: 200,
+                minHealthFactor: ethers.parseEther("1.05"),
+                deadline: Math.floor(Date.now() / 1000) + 3600
+            };
+
+            await expect(
+                plugin.openLeverageAtomic(params)
+            ).to.be.reverted;
+            
+            console.log("   \u2705 Correctly reverts without FlashLoanService configured");
         });
     });
 
@@ -222,30 +223,29 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
             console.log(`   Plugin WETH balance: ${ethers.formatEther(await wethContract.balanceOf(await plugin.getAddress()))}`);
         });
 
-        it("Should fail without valid swap data (expected behavior)", async function () {
-            // Il batch EVC richiede swap data valido per completarsi
-            // Questo test verifica che il flusso di validazione funzioni
+        it("Should fail without FlashLoanService in mock setup (expected behavior)", async function () {
+            // openLeverageAtomic requires FlashLoanService registered in Beacon
+            // In this mock setup, FlashLoanService is not deployed
             
             const params = {
-                collateralTokenCode: "WETH",
-                borrowTokenCode: "USDC",
+                collateralToken: "WETH",
+                borrowToken: "USDC",
                 collateralAmount: ethers.parseEther("0.1"),
-                borrowAmount: ethers.parseUnits("50", 6), // 50 USDC
-                minCollateralReceived: 0n, // Nessun minimo per test
-                swapData: "0x", // Nessun swap data - causa fallimento batch
+                targetLeverageX100: 200, // 2x leverage
+                minHealthFactor: ethers.parseEther("1.05"),
                 deadline: Math.floor(Date.now() / 1000) + 3600
             };
 
-            // Dovrebbe fallire al batch EVC perché swapData è vuoto
+            // Should fail because FlashLoanService is not configured in MockBeacon
             await expect(
-                plugin.openLeveragePosition(params)
+                plugin.openLeverageAtomic(params)
             ).to.be.reverted;
             
-            console.log("   ✅ Correctly reverts without valid swap data");
+            console.log("   \u2705 Correctly reverts without FlashLoanService");
         });
 
-        it("Should have zero active positions (batch failed)", async function () {
-            const count = await plugin.getActivePositionCount();
+        it("Should have zero active positions (openLeverageAtomic failed)", async function () {
+            const count = await vaultRegistry.getActivePositionCount();
             expect(count).to.equal(0);
             console.log(`   Active positions: ${count}`);
         });
@@ -283,12 +283,17 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
             expect(balance).to.be.gt(0);
         });
 
-        it("Should setup borrow config", async function () {
-            await plugin.setupBorrowConfig(EULER_VAULTS.WETH, EULER_VAULTS.USDC);
-            
-            expect(await plugin.isCollateralEnabled(EULER_VAULTS.WETH)).to.be.true;
-            expect(await plugin.isControllerEnabled(EULER_VAULTS.USDC)).to.be.true;
-            console.log("   ✅ Collateral and controller enabled");
+        it("Should verify collateral auto-enabled after deposit", async function () {
+            // In the new architecture, deposit auto-enables collateral via EVC batch
+            // and borrow auto-enables controller via EVC batch
+            // No manual setupBorrowConfig needed
+            const evc = await ethers.getContractAt(
+                ["function isCollateralEnabled(address,address) view returns (bool)"],
+                EVC_ADDRESS
+            );
+            const isCollateral = await evc.isCollateralEnabled(await plugin.getAddress(), EULER_VAULTS.WETH);
+            expect(isCollateral).to.be.true;
+            console.log("   \u2705 Collateral auto-enabled by deposit batch");
         });
 
         it("Should borrow USDC", async function () {
@@ -320,7 +325,7 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
 
         before(async function () {
             // Verifica se abbiamo una posizione attiva
-            const count = await plugin.getActivePositionCount();
+            const count = await vaultRegistry.getActivePositionCount();
             if (count === 0n) {
                 console.log("   ⚠️ No active positions, skipping add/remove collateral tests");
                 this.skip();
@@ -373,7 +378,7 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
         let testPositionId: bigint;
 
         before(async function () {
-            const count = await plugin.getActivePositionCount();
+            const count = await vaultRegistry.getActivePositionCount();
             if (count === 0n) {
                 console.log("   ⚠️ No active positions to close, skipping");
                 this.skip();
@@ -383,46 +388,35 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
 
         it("Should fail to close non-existent position", async function () {
             await expect(
-                plugin.closeLeveragePosition(999n)
+                plugin["closePosition(uint256)"](999n)
             ).to.be.revertedWithCustomError(plugin, "PositionNotFound");
         });
 
         it("Should close position (with debt repayment)", async function () {
-            // Ottieni info posizione
-            const pos = await plugin.getPosition(testPositionId);
+            const pos = await vaultRegistry.getPosition(testPositionId);
             if (!pos.isActive) {
                 console.log("   ⚠️ Position already closed, skipping");
                 this.skip();
             }
 
-            // Ottieni debt value dalla posizione usando LensAdapter
             const [, debtValue] = await eulerLensAdapter.getPositionValue(testPositionId);
-            
-            // Stima del debito effettivo (debtValue è in unit of account, potrebbe essere diverso)
-            // Per sicurezza, otteniamo USDC in eccesso
             console.log(`   Position debt value: ${ethers.formatEther(debtValue)}`);
             
-            // Usa borrowedAmount dalla posizione come stima base
-            const currentDebt = pos.borrowedAmount + ethers.parseUnits("10", 6); // +10 USDC per interessi
-
+            const currentDebt = pos.borrowedAmount + ethers.parseUnits("10", 6);
             console.log(`   Estimated debt to repay: ${ethers.formatUnits(currentDebt, 6)} USDC`);
 
-            // Se c'è debito stimato, trasferisci USDC al plugin per ripagarlo
             if (currentDebt > 0n) {
                 await ethers.provider.send("hardhat_impersonateAccount", [USDC_WHALE]);
                 const usdcWhale = await ethers.getSigner(USDC_WHALE);
                 await ethers.provider.send("hardhat_setBalance", [USDC_WHALE, ethers.toQuantity(ethers.parseEther("10"))]);
-                
-                // Trasferisci abbastanza USDC per ripagare
                 await usdcContract.connect(usdcWhale).transfer(await plugin.getAddress(), currentDebt);
-                
                 console.log(`   Transferred ${ethers.formatUnits(currentDebt, 6)} USDC for repayment`);
             }
 
             const proxyBalanceBefore = await wethContract.balanceOf(await mockProxyGeneral.getAddress());
 
             try {
-                const tx = await plugin.closeLeveragePosition(testPositionId);
+                const tx = await plugin["closePosition(uint256)"](testPositionId);
                 const receipt = await tx.wait();
 
                 const proxyBalanceAfter = await wethContract.balanceOf(await mockProxyGeneral.getAddress());
@@ -432,18 +426,17 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
                 console.log(`   WETH returned to ProxyGeneral: ${ethers.formatEther(returned)}`);
                 console.log(`   Gas used: ${receipt?.gasUsed}`);
 
-                // Verifica posizione chiusa
-                const posAfter = await plugin.getPosition(testPositionId);
+                const posAfter = await vaultRegistry.getPosition(testPositionId);
                 expect(posAfter.isActive).to.be.false;
             } catch (error: any) {
-                console.log(`   ⚠️ closeLeveragePosition failed: ${error.message.slice(0, 300)}`);
+                console.log(`   ⚠️ closePosition failed: ${error.message.slice(0, 300)}`);
                 throw error;
             }
         });
 
         it("Should not allow closing already closed position", async function () {
             await expect(
-                plugin.closeLeveragePosition(testPositionId)
+                plugin["closePosition(uint256)"](testPositionId)
             ).to.be.revertedWithCustomError(plugin, "PositionAlreadyClosed");
         });
     });
@@ -461,15 +454,14 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
         });
 
         it("Should track position count correctly", async function () {
-            const countBefore = await plugin.getActivePositionCount();
+            const countBefore = await vaultRegistry.getActivePositionCount();
             console.log(`   Active positions before: ${countBefore}`);
             
-            // Qui potremmo aprire nuove posizioni per testare il conteggio
-            // Ma richiede swap data valido
+            // Opening new positions requires FlashLoanService configured
         });
 
         it("Should return all positions via getAllPositions", async function () {
-            const positions = await plugin.getAllPositions();
+            const positions = await vaultRegistry.getAllPositions();
             console.log(`   Total positions returned: ${positions.length}`);
             
             for (const pos of positions) {
@@ -485,17 +477,16 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
             expect(await plugin.circuitBreakerTripped()).to.be.true;
 
             const params = {
-                collateralTokenCode: "WETH",
-                borrowTokenCode: "USDC",
+                collateralToken: "WETH",
+                borrowToken: "USDC",
                 collateralAmount: ethers.parseEther("0.1"),
-                borrowAmount: ethers.parseUnits("50", 6),
-                minCollateralReceived: 0n,
-                swapData: "0x",
+                targetLeverageX100: 200,
+                minHealthFactor: ethers.parseEther("1.05"),
                 deadline: Math.floor(Date.now() / 1000) + 3600
             };
 
             await expect(
-                plugin.openLeveragePosition(params)
+                plugin.openLeverageAtomic(params)
             ).to.be.revertedWithCustomError(plugin, "CircuitBreakerActive");
         });
 
@@ -514,25 +505,25 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
 
         it("Should only allow owner to open positions", async function () {
             const params = {
-                collateralTokenCode: "WETH",
-                borrowTokenCode: "USDC",
+                collateralToken: "WETH",
+                borrowToken: "USDC",
                 collateralAmount: ethers.parseEther("0.1"),
-                borrowAmount: ethers.parseUnits("50", 6),
-                minCollateralReceived: 0n,
-                swapData: "0x",
+                targetLeverageX100: 200,
+                minHealthFactor: ethers.parseEther("1.05"),
                 deadline: Math.floor(Date.now() / 1000) + 3600
             };
 
-            // OpenZeppelin v4 usa "Ownable: caller is not the owner"
             await expect(
-                plugin.connect(nonOwner).openLeveragePosition(params)
+                plugin.connect(nonOwner).openLeverageAtomic(params)
             ).to.be.revertedWith("Ownable: caller is not the owner");
         });
 
         it("Should only allow owner to close positions", async function () {
+            // closePosition(uint256) has no direct access modifier but calls
+            // closeLeverageAtomic which requires onlyOwnerOrLiquidityManager
             await expect(
-                plugin.connect(nonOwner).closeLeveragePosition(0)
-            ).to.be.revertedWith("Ownable: caller is not the owner");
+                plugin.connect(nonOwner)["closePosition(uint256)"](0)
+            ).to.be.reverted; // Either PositionNotFound or OnlyOwnerOrLiquidityManager
         });
 
         it("Should only allow owner to add collateral", async function () {

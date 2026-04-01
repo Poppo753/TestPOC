@@ -10,7 +10,7 @@
  * 
  * INTEGRAZIONE:
  * - EulerV2Plugin: Per creare posizioni leverage da monitorare
- * - EulerVaultRegistry: Per lookup vault addresses
+ * - EulerRegistry: Per lookup vault addresses
  * - TokenManager: Per conversione prezzi a ETH
  * - FlashLoanService: Per operazioni leverage atomiche
  * 
@@ -62,7 +62,7 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
     let beacon: Contract;
     let eulerLensAdapter: Contract;
     let eulerV2Plugin: Contract;
-    let eulerVaultRegistry: Contract;
+    let EulerRegistry: Contract;
     let flashLoanService: Contract;
     let tokenManager: Contract;
     let weth: Contract;
@@ -215,22 +215,22 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
         console.log(`   ✅ TokenManager configured with USDC (WETH is base asset)`);
         await sleep(2000);
 
-        // Deploy EulerVaultRegistry
-        const EulerVaultRegistryFactory = await ethers.getContractFactory("EulerVaultRegistry");
-        eulerVaultRegistry = await EulerVaultRegistryFactory.deploy();
-        await eulerVaultRegistry.waitForDeployment();
-        console.log(`   ✅ EulerVaultRegistry deployed: ${await eulerVaultRegistry.getAddress()}`);
+        // Deploy EulerRegistry
+        const EulerRegistryFactory = await ethers.getContractFactory("EulerRegistry");
+        EulerRegistry = await EulerRegistryFactory.deploy();
+        await EulerRegistry.waitForDeployment();
+        console.log(`   ✅ EulerRegistry deployed: ${await EulerRegistry.getAddress()}`);
         await sleep(2000);
 
         // Configure vaults in registry
-        await eulerVaultRegistry.setVault("WETH", ADDRESSES.WETH_VAULT);
+        await EulerRegistry.setVault("WETH", ADDRESSES.WETH_VAULT);
         await sleep(1500);
-        await eulerVaultRegistry.setVault("USDC", ADDRESSES.USDC_VAULT);
-        console.log(`   ✅ EulerVaultRegistry configured with WETH and USDC vaults`);
+        await EulerRegistry.setVault("USDC", ADDRESSES.USDC_VAULT);
+        console.log(`   ✅ EulerRegistry configured with WETH and USDC vaults`);
         await sleep(2000);
 
-        // Register EulerVaultRegistry in Beacon
-        await beacon.updateImplementation("EulerVaultRegistry", await eulerVaultRegistry.getAddress());
+        // Register EulerRegistry in Beacon
+        await beacon.updateImplementation("EulerRegistry", await EulerRegistry.getAddress());
         await sleep(1500);
 
         // Deploy FlashLoanService

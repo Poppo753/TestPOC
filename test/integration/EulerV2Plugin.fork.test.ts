@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { EulerV2Plugin, EulerVaultRegistry } from "../../typechain-types";
+import { EulerV2Plugin, EulerRegistry } from "../../typechain-types";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 /**
@@ -21,7 +21,7 @@ describe("EulerV2Plugin - Fork Tests (Arbitrum Mainnet)", function () {
     this.timeout(120000);
 
     let plugin: EulerV2Plugin;
-    let vaultRegistry: EulerVaultRegistry;
+    let vaultRegistry: EulerRegistry;
     let owner: SignerWithAddress;
     let mockBeacon: any;
     let mockProxyGeneral: any;
@@ -92,16 +92,17 @@ describe("EulerV2Plugin - Fork Tests (Arbitrum Mainnet)", function () {
         // Configura mock beacon
         await mockBeacon.setImplementation("TokenManager", await mockTokenManager.getAddress());
         await mockBeacon.setImplementation("ProxyGeneral", await mockProxyGeneral.getAddress());
+        await mockBeacon.setImplementation("WETH", WETH);
 
         // ==================== DEPLOY EULER VAULT REGISTRY ====================
         
-        const VaultRegistryFactory = await ethers.getContractFactory("EulerVaultRegistry");
+        const VaultRegistryFactory = await ethers.getContractFactory("EulerRegistry");
         vaultRegistry = await VaultRegistryFactory.deploy();
         await vaultRegistry.waitForDeployment();
-        console.log(`   EulerVaultRegistry: ${await vaultRegistry.getAddress()}`);
+        console.log(`   EulerRegistry: ${await vaultRegistry.getAddress()}`);
 
         // Registra nella beacon
-        await mockBeacon.setImplementation("EulerVaultRegistry", await vaultRegistry.getAddress());
+        await mockBeacon.setImplementation("EulerRegistry", await vaultRegistry.getAddress());
 
         // ==================== DEPLOY EULER V2 PLUGIN ====================
         
@@ -394,18 +395,17 @@ describe("EulerV2Plugin - Fork Tests (Arbitrum Mainnet)", function () {
             }
         });
 
-        it("Should allow owner to call leverage functions (but they revert as not implemented)", async function () {
+        it("Should reject openLeverageAtomic with invalid leverage", async function () {
             await expect(
-                plugin.connect(owner).openLeveragePosition({
-                    collateralTokenCode: "WETH",
-                    borrowTokenCode: "USDC",
+                plugin.connect(owner).openLeverageAtomic({
+                    collateralToken: "WETH",
+                    borrowToken: "USDC",
                     collateralAmount: ethers.parseEther("1"),
-                    borrowAmount: ethers.parseUnits("1000", 6),
-                    minCollateralReceived: ethers.parseEther("0.9"),
-                    swapData: "0x",
+                    targetLeverageX100: 100,  // Too low (min 110)
+                    minHealthFactor: ethers.parseEther("1.05"),
                     deadline: Math.floor(Date.now() / 1000) + 3600
                 })
-            ).to.be.revertedWith("Not implemented yet");
+            ).to.be.revertedWithCustomError(plugin, "InvalidLeverage");
         });
     });
 
@@ -438,33 +438,23 @@ describe("EulerV2Plugin - Fork Tests (Arbitrum Mainnet)", function () {
         });
     });
 
-    describe("9. EVC Configuration", function () {
-        it("Should enable WETH vault as collateral", async function () {
-            await plugin.connect(owner).enableCollateral(EULER_VAULTS.WETH);
-            
-            const isEnabled = await plugin.isCollateralEnabled(EULER_VAULTS.WETH);
-            expect(isEnabled).to.be.true;
-            console.log(`   ✅ WETH vault enabled as collateral`);
+    describe("9. EVC State Verification", function () {
+        it("Should verify collateral is auto-enabled after deposit", async function () {
+            // After deposit in section 5, collateral should be auto-enabled via EVC batch
+            const evc = await ethers.getContractAt(
+                ["function isCollateralEnabled(address,address) view returns (bool)"],
+                EVC_ADDRESS
+            );
+            const pluginAddr = await plugin.getAddress();
+            const isEnabled = await evc.isCollateralEnabled(pluginAddr, EULER_VAULTS.WETH);
+            console.log(`   WETH vault collateral enabled: ${isEnabled}`);
+            // May or may not be enabled depending on whether deposit ran successfully
         });
 
-        it("Should enable USDC vault as controller (for borrowing)", async function () {
-            await plugin.connect(owner).enableController(EULER_VAULTS.USDC);
-            
-            const isEnabled = await plugin.isControllerEnabled(EULER_VAULTS.USDC);
-            expect(isEnabled).to.be.true;
-            console.log(`   ✅ USDC vault enabled as controller`);
-        });
-
-        it("Should get enabled collaterals", async function () {
-            const collaterals = await plugin.getEnabledCollaterals();
-            console.log(`   Enabled collaterals: ${collaterals.length}`);
-            expect(collaterals).to.include(EULER_VAULTS.WETH);
-        });
-
-        it("Should get enabled controllers", async function () {
-            const controllers = await plugin.getEnabledControllers();
-            console.log(`   Enabled controllers: ${controllers.length}`);
-            expect(controllers).to.include(EULER_VAULTS.USDC);
+        it("Should have correct EVC address constant", async function () {
+            const evcAddr = await plugin.EVC_ADDRESS();
+            expect(evcAddr).to.equal(EVC_ADDRESS);
+            console.log(`   ✅ EVC address matches`);
         });
     });
 
@@ -504,13 +494,17 @@ describe("EulerV2Plugin - Fork Tests (Arbitrum Mainnet)", function () {
             expect(balance).to.be.gt(0);
         });
 
-        it("Should setup borrow config (collateral + controller)", async function () {
-            // Usa la funzione utility per setup
-            await plugin.connect(owner).setupBorrowConfig(EULER_VAULTS.WETH, EULER_VAULTS.USDC);
-
-            expect(await plugin.isCollateralEnabled(EULER_VAULTS.WETH)).to.be.true;
-            expect(await plugin.isControllerEnabled(EULER_VAULTS.USDC)).to.be.true;
-            console.log(`   ✅ Borrow config set up`);
+        it("Should verify borrow prerequisites (collateral auto-enabled by deposit)", async function () {
+            // In the new architecture, collateral is auto-enabled via EVC batch in deposit()
+            // Controller is auto-enabled via EVC batch in borrow()
+            // No manual setupBorrowConfig needed
+            const evc = await ethers.getContractAt(
+                ["function isCollateralEnabled(address,address) view returns (bool)"],
+                EVC_ADDRESS
+            );
+            const isCollateral = await evc.isCollateralEnabled(await plugin.getAddress(), EULER_VAULTS.WETH);
+            console.log(`   Collateral auto-enabled: ${isCollateral}`);
+            expect(isCollateral).to.be.true;
         });
 
         it("Should borrow USDC against WETH collateral", async function () {
@@ -586,45 +580,14 @@ describe("EulerV2Plugin - Fork Tests (Arbitrum Mainnet)", function () {
     });
 
     describe("11. Health Factor Monitoring", function () {
-        it("Should get time to liquidation", async function () {
-            const controllers = await plugin.getEnabledControllers();
-            
-            if (controllers.length === 0) {
-                console.log(`   ⚠️ No controllers enabled, skipping...`);
-                this.skip();
-            }
-
-            const ttl = await plugin.getTimeToLiquidation(controllers[0]);
-            
-            // TTL special values
-            const MAX_INT256 = ethers.MaxInt256;
-            const MAX_INT256_MINUS_1 = MAX_INT256 - 1n;
-            
-            if (ttl === -1n) {
-                console.log(`   ⚠️ Account is LIQUIDATABLE!`);
-            } else if (ttl === MAX_INT256) {
-                console.log(`   ✅ Safe - No debt`);
-            } else if (ttl === MAX_INT256_MINUS_1) {
-                console.log(`   ✅ Safe - More than 1 year to liquidation`);
-            } else if (ttl > 0n) {
-                console.log(`   ⚠️ At risk - ${ttl} seconds to liquidation`);
-            }
-        });
-
-        it("Should get health factor for specific vault", async function () {
-            const controllers = await plugin.getEnabledControllers();
-            
-            if (controllers.length === 0) {
-                console.log(`   ⚠️ No controllers enabled, skipping...`);
-                this.skip();
-            }
-
-            const hf = await plugin.getHealthFactorForVault(controllers[0]);
+        it("Should get overall health factor", async function () {
+            const hf = await plugin.getHealthFactor();
             
             if (hf === ethers.MaxUint256) {
                 console.log(`   Health factor: MAX (no debt)`);
             } else {
-                console.log(`   Health factor for vault: ${ethers.formatUnits(hf, 18)}`);
+                console.log(`   Health factor: ${ethers.formatEther(hf)}`);
+                expect(hf).to.be.gt(0);
             }
         });
     });

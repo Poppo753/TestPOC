@@ -2,7 +2,7 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { 
     EulerV2Plugin, 
-    EulerVaultRegistry, 
+    EulerRegistry, 
     ProtocolManager,
     MockBeacon,
     MockProxyGeneral,
@@ -27,7 +27,7 @@ describe("ProtocolManager + EulerV2Plugin Integration", function () {
     // Contracts
     let protocolManager: ProtocolManager;
     let eulerPlugin: EulerV2Plugin;
-    let vaultRegistry: EulerVaultRegistry;
+    let vaultRegistry: EulerRegistry;
     let mockBeacon: MockBeacon;
     let mockProxyGeneral: MockProxyGeneral;
     let mockTokenManager: MockTokenManager;
@@ -87,14 +87,14 @@ describe("ProtocolManager + EulerV2Plugin Integration", function () {
 
         // ==================== DEPLOY EULER VAULT REGISTRY ====================
         
-        const VaultRegistryFactory = await ethers.getContractFactory("EulerVaultRegistry");
+        const VaultRegistryFactory = await ethers.getContractFactory("EulerRegistry");
         vaultRegistry = await VaultRegistryFactory.deploy();
         await vaultRegistry.waitForDeployment();
         
         // Registra vaults
         await vaultRegistry.setVault("WETH", EULER_VAULTS.WETH);
         await vaultRegistry.setVault("USDC", EULER_VAULTS.USDC);
-        console.log(`   EulerVaultRegistry: ${await vaultRegistry.getAddress()}`);
+        console.log(`   EulerRegistry: ${await vaultRegistry.getAddress()}`);
 
         // ==================== DEPLOY EULER V2 PLUGIN ====================
         
@@ -114,7 +114,8 @@ describe("ProtocolManager + EulerV2Plugin Integration", function () {
         
         await mockBeacon.setImplementation("TokenManager", await mockTokenManager.getAddress());
         await mockBeacon.setImplementation("ProxyGeneral", await mockProxyGeneral.getAddress());
-        await mockBeacon.setImplementation("EulerVaultRegistry", await vaultRegistry.getAddress());
+        await mockBeacon.setImplementation("WETH", WETH);
+        await mockBeacon.setImplementation("EulerRegistry", await vaultRegistry.getAddress());
         await mockBeacon.setImplementation("EulerV2Plugin", await eulerPlugin.getAddress());
         await mockBeacon.setImplementation("ProtocolManager", await protocolManager.getAddress());
         
@@ -223,9 +224,10 @@ describe("ProtocolManager + EulerV2Plugin Integration", function () {
 
     describe("4. Borrow Flow: ProtocolManager → EulerV2Plugin → Euler V2", function () {
         before(async function () {
-            // Setup: Enable collateral and controller per il borrow
-            await eulerPlugin.connect(owner).setupBorrowConfig(EULER_VAULTS.WETH, EULER_VAULTS.USDC);
-            console.log("   ✅ Borrow config set (WETH collateral, USDC controller)");
+            // In the new architecture, collateral is auto-enabled by deposit (section 2)
+            // and controller is auto-enabled by borrow (via EVC batch)
+            // No manual setupBorrowConfig needed anymore
+            console.log("   ℹ️  Borrow config auto-managed by EVC batch operations");
         });
 
         it("Should borrow USDC via ProtocolManager", async function () {
