@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-01T15:03:08.080Z",
+  "timestamp": "2026-04-02T14:44:31.304Z",
   "network": "arbitrum-mainnet",
   "chainId": 42161,
   "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
@@ -16,7 +16,10 @@
     "protocolManager": "0x5b8314319CB56864b002caFEB92540B7A7559fBB",
     "uniswapV3Plugin": "0x7ec91aEc1bD85E63D671b23E5deC8157D1f8aE01",
     "aaveV3Plugin": "0x7aEA35f66d054bB6C68957A8A27b10F08c33aA7A",
-    "flashLoanService": "0x3486b561CA1E3Dc146F97D8Ed4B9e4f2cd10822d"
+    "flashLoanService": "0x3486b561CA1E3Dc146F97D8Ed4B9e4f2cd10822d",
+    "morphoRegistry": "0xe2e3a074aC000c087fCa87ae2fe0741139660f94",
+    "morphoVaultPlugin": "0x118fd15a78C0Dada24c49343A55142938Ca1868E",
+    "morphoVaultLensAdapter": "0xd5dE87464d1C77417f5a47C8B5F73f7B351F47Cc"
   },
   "status": "✅ ALL DEPLOYED SUCCESSFULLY",
   "EulerRegistry": {
@@ -108,5 +111,52 @@
       "aaveV3Registry": "0xEeb0EA1C430E956266C8027E39cA7A5C855B1a73",
       "aaveV3Plugin": "0x4cFDCb4215F562DC3Bc36D28fCf093E993AdC026"
     }
+  },
+  "MorphoRegistry": {
+    "address": "0xe2e3a074aC000c087fCa87ae2fe0741139660f94",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "owner": "0xf653f0E3FddA2937C2A76C385FA381599BDb65dB",
+    "markets": [
+      "WETH/USDC"
+    ],
+    "vaults": [
+      {
+        "name": "HexaOne USDC",
+        "address": "0xaE73875437c86abb60cD7fA77286D63cb94F9a25",
+        "assetCode": "USDC"
+      },
+      {
+        "name": "Clearstar USDC Reactor",
+        "address": "0xa53Cf822FE93002aEaE16d395CD823Ece161a6AC",
+        "assetCode": "USDC"
+      },
+      {
+        "name": "usdc staging",
+        "address": "0xd2d46099B70880e268B0c7557b9D22d3AA848654",
+        "assetCode": "USDC"
+      }
+    ],
+    "defaultVaults": {
+      "USDC": "0xaE73875437c86abb60cD7fA77286D63cb94F9a25"
+    },
+    "previousVersion": "0x9370CC33F5336186849a4bAA2ecD3dd75263d86d",
+    "upgradeReason": "Added vault config methods (configureVault, setDefaultVault, etc.)"
+  },
+  "MorphoVaultPlugin": {
+    "address": "0x118fd15a78C0Dada24c49343A55142938Ca1868E",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+    "timestamp": "2026-04-02T14:44:31.304Z",
+    "vaults": [
+      "0xaE73875437c86abb60cD7fA77286D63cb94F9a25",
+      "0xa53Cf822FE93002aEaE16d395CD823Ece161a6AC",
+      "0xd2d46099B70880e268B0c7557b9D22d3AA848654"
+    ]
+  },
+  "MorphoVaultLensAdapter": {
+    "address": "0xd5dE87464d1C77417f5a47C8B5F73f7B351F47Cc",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+    "timestamp": "2026-04-02T14:44:31.304Z"
   }
 }
