@@ -118,7 +118,7 @@ export class DashboardTemplate {
 
   renderHeader() {
     const header = document.createElement('header');
-    header.className = 'mb-8 flex items-center justify-between';
+    header.className = 'mb-8';
 
     const titleSection = document.createElement('div');
     
@@ -128,18 +128,11 @@ export class DashboardTemplate {
 
     const subtitle = document.createElement('p');
     subtitle.className = 'text-lg text-purple-100';
-    subtitle.textContent = 'DeFi Strategy • ETH Stablecoin';
+    subtitle.textContent = 'DeFi Strategy Dashboard • Arbitrum';
 
     titleSection.appendChild(title);
     titleSection.appendChild(subtitle);
     header.appendChild(titleSection);
-    
-    // Portfolio button
-    const portfolioBtn = document.createElement('a');
-    portfolioBtn.href = 'portfolio.html';
-    portfolioBtn.className = 'px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl font-medium transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl flex items-center gap-2';
-    portfolioBtn.innerHTML = '📊 View Portfolio';
-    header.appendChild(portfolioBtn);
 
     return header;
   }

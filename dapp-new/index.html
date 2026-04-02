@@ -236,10 +236,14 @@
     #app {
       position: relative;
       z-index: 1;
+      padding-top: 64px; /* Space for fixed navbar */
     }
   </style>
 </head>
 <body>
+  <!-- NavBar -->
+  <div id="navbar-root"></div>
+
   <!-- Video Background -->
   <video id="video-background" autoplay loop muted playsinline>
     <source src="./20s slowed compolex backgound.mp4" type="video/mp4">
@@ -258,6 +262,13 @@
       </div>
     </div>
   </div>
+
+  <!-- NavBar Script -->
+  <script type="module">
+    import { NavBar } from './src/organisms/NavBar.js';
+    const navbar = new NavBar({ activePage: 'app', transparent: false });
+    document.getElementById('navbar-root').appendChild(navbar.render());
+  </script>
 
   <!-- Import Scripts -->
   <script type="module" src="./main.js"></script>

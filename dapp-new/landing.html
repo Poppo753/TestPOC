@@ -1,0 +1,1943 @@
+<!DOCTYPE html>
+<html lang="en" class="dark scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jethos Protocol — Modular ETH Yield on Arbitrum</title>
+    <meta name="description" content="Deposit ETH. Let Jethos allocate across battle-tested DeFi strategies automatically. Modular, audited, non-custodial.">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        purple: {
+                            50: '#faf5ff', 100: '#f3e8ff', 200: '#e9d5ff', 300: '#d8b4fe',
+                            400: '#c084fc', 500: '#a855f7', 600: '#9333ea', 700: '#7e22ce',
+                            800: '#6b21a8', 900: '#581c87', 950: '#3b0764',
+                        },
+                    },
+                    animation: {
+                        'float': 'float 6s ease-in-out infinite',
+                        'float-delayed': 'float 6s ease-in-out 2s infinite',
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4,0,0.6,1) infinite',
+                        'count-up': 'countUp 2s ease-out forwards',
+                        'fade-in-up': 'fadeInUp 0.8s ease-out forwards',
+                        'fade-in-up-delayed': 'fadeInUp 0.8s ease-out 0.2s forwards',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0px)' },
+                            '50%': { transform: 'translateY(-20px)' },
+                        },
+                        fadeInUp: {
+                            '0%': { opacity: '0', transform: 'translateY(30px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                    },
+                },
+            },
+        }
+    </script>
+
+    <!-- Three.js (required by Vanta) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <!-- Vanta.js WAVES effect -->
+    <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.waves.min.js"></script>
+
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            background: #0b0f1a;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+        ::-webkit-scrollbar-thumb { background: rgba(147,51,234,0.5); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(147,51,234,0.8); }
+
+        /* Hero Vanta container */
+        #hero-bg {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+        }
+
+        /* Gradient overlay on hero */
+        .hero-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(11,15,26,0.3) 0%, rgba(11,15,26,0.0) 30%, rgba(11,15,26,0.7) 80%, rgba(11,15,26,1) 100%);
+            z-index: 1;
+        }
+
+        /* 3D card tilt on hover */
+        .card-3d {
+            transform-style: preserve-3d;
+            transition: transform 0.4s ease, box-shadow 0.4s ease;
+            will-change: transform;
+        }
+        .card-3d:hover {
+            transform: perspective(800px) rotateX(4deg) rotateY(-4deg) translateZ(12px);
+            box-shadow: 0 25px 60px -15px rgba(147,51,234,0.3);
+        }
+
+        /* Scroll reveal */
+        .reveal {
+            opacity: 0;
+            transform: translateY(40px);
+            transition: opacity 0.7s ease, transform 0.7s ease;
+        }
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Animated gradient border */
+        @keyframes borderGlow {
+            0%, 100% { border-color: rgba(147,51,234,0.5); }
+            50% { border-color: rgba(99,102,241,0.8); }
+        }
+        .glow-border {
+            animation: borderGlow 3s ease-in-out infinite;
+        }
+
+        /* Status dot pulse */
+        @keyframes statusPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.5); }
+        }
+        .status-pulse { animation: statusPulse 2s ease-in-out infinite; }
+
+        /* Timeline connector (mobile only) */
+        .timeline-connector {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(147,51,234,0.6), rgba(99,102,241,0.6), rgba(147,51,234,0.3));
+            z-index: 0;
+        }
+
+        /* F1 Track checkpoint labels */
+        .f1-checkpoint-label {
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+        .f1-checkpoint-label.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* F1 milestone card */
+        .f1-card {
+            opacity: 0;
+            transform: translateY(20px) scale(0.95);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+        .f1-card.visible {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        /* Animated number counter */
+        .counter { font-variant-numeric: tabular-nums; }
+
+        a { color: inherit; text-decoration: none; }
+
+        /* ── Phase 2: Conveyor belt station reveal ── */
+        .conveyor-station {
+            opacity: 0;
+            transform: translateY(15px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+        .conveyor-station.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Step card entrance with stagger */
+        .step-card {
+            opacity: 0;
+            transform: translateY(40px) scale(0.95);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+        .step-card.visible {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        /* Step icon pulse on visible */
+        .step-card.visible .step-icon {
+            animation: stepPulse 0.6s ease-out 0.3s forwards;
+        }
+        @keyframes stepPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+            100% { transform: scale(1); }
+        }
+
+        /* F1 car scroll animation */
+        #f1-car {
+            transition: transform 0.1s linear;
+        }
+
+        /* Roadmap card entrance */
+        .roadmap-card {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+        .roadmap-card.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Milestone check animation */
+        .milestone-item {
+            opacity: 0;
+            transform: translateX(-10px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .milestone-item.visible {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        /* Security card hover glow */
+        .security-card {
+            position: relative;
+            overflow: hidden;
+        }
+        .security-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(99,102,241,0.08) 0%, transparent 60%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+        .security-card:hover::before {
+            opacity: 1;
+        }
+
+        /* Audit badge pulse */
+        @keyframes auditGlow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.4); }
+            50% { box-shadow: 0 0 20px 4px rgba(34,197,94,0.15); }
+        }
+        .audit-badge { animation: auditGlow 3s ease-in-out infinite; }
+
+        /* ── Phase 3: Three.js Sphere (fixed, full-page) ── */
+        #hero-sphere {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* ── Phase 3: JS-based card tilt ── */
+        .tilt-active {
+            transform-style: preserve-3d;
+            will-change: transform;
+            transition: box-shadow 0.3s ease;
+        }
+
+        /* ── Phase 3: Magnetic button effect ── */
+        .magnetic-btn {
+            transition: transform 0.25s cubic-bezier(0.23, 1, 0.32, 1), box-shadow 0.3s ease;
+        }
+
+        /* ── Phase 3: Counter grow animation ── */
+        @keyframes counterPop {
+            0% { transform: scale(0.8); opacity: 0.3; }
+            60% { transform: scale(1.05); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .counter-animate {
+            animation: counterPop 0.6s ease-out forwards;
+        }
+
+        /* ── Phase 3: Section parallax scroll ── */
+        .parallax-section {
+            will-change: transform;
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     NAVBAR
+     ═══════════════════════════════════════════════════════════════ -->
+<nav id="jethos-navbar" class="fixed top-0 left-0 right-0 z-50 transition-all duration-300" style="background:transparent">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+            <a href="landing.html" class="flex items-center gap-2 group">
+                <span class="text-2xl">🌊</span>
+                <span class="text-lg font-bold text-white group-hover:text-purple-300 transition-colors">Jethos</span>
+                <span class="hidden sm:inline text-xs text-purple-400 font-medium bg-purple-500/20 px-2 py-0.5 rounded-full border border-purple-500/30">Protocol</span>
+            </a>
+            <div class="hidden md:flex items-center gap-1">
+                <a href="#how-it-works" class="px-3 py-1.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all">How It Works</a>
+                <a href="#plugins" class="px-3 py-1.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all">Plugins</a>
+                <a href="#roadmap" class="px-3 py-1.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all">Roadmap</a>
+                <a href="#security" class="px-3 py-1.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all">Security</a>
+                <a href="documentation.html" class="px-3 py-1.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all">Docs</a>
+                <a href="index.html" class="ml-2 px-4 py-1.5 rounded-lg text-sm font-semibold bg-purple-600/80 text-white hover:bg-purple-500 hover:shadow-lg hover:shadow-purple-500/25 transition-all">Launch App</a>
+            </div>
+            <button id="mobile-toggle" class="md:hidden p-2 text-white/70 hover:text-white rounded-lg hover:bg-white/10 transition-colors" aria-label="Menu">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+        </div>
+    </div>
+    <div id="mobile-menu" class="md:hidden hidden bg-gray-900/98 backdrop-blur-xl border-t border-white/10">
+        <div class="px-4 py-3 space-y-1">
+            <a href="#how-it-works" class="block px-4 py-3 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10">How It Works</a>
+            <a href="#plugins" class="block px-4 py-3 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10">Plugins</a>
+            <a href="#roadmap" class="block px-4 py-3 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10">Roadmap</a>
+            <a href="#security" class="block px-4 py-3 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10">Security</a>
+            <a href="documentation.html" class="block px-4 py-3 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10">Docs</a>
+            <a href="index.html" class="block px-4 py-3 rounded-lg text-sm font-semibold bg-purple-600/70 text-white hover:bg-purple-500">Launch App</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Three.js sphere canvas — fixed, follows scroll across all sections -->
+<canvas id="hero-sphere"></canvas>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 1 — HERO
+     ═══════════════════════════════════════════════════════════════ -->
+<section id="hero" class="relative min-h-screen flex items-center justify-center overflow-hidden">
+    <div id="hero-bg"></div>
+    <div class="hero-overlay"></div>
+
+    <div class="relative z-10 text-center px-4 sm:px-6 max-w-4xl mx-auto">
+        <h1 class="text-4xl sm:text-5xl lg:text-7xl font-extrabold text-white mb-6 leading-tight opacity-0 animate-fade-in-up" style="animation-fill-mode:forwards">
+            The Modular ETH Yield<br>
+            <span class="bg-gradient-to-r from-purple-400 via-indigo-400 to-blue-400 bg-clip-text text-transparent">Protocol on Arbitrum</span>
+        </h1>
+        <p class="text-lg sm:text-xl text-white/70 max-w-2xl mx-auto mb-10 opacity-0 animate-fade-in-up-delayed" style="animation-fill-mode:forwards">
+            Deposit ETH. Let Jethos allocate across battle-tested DeFi strategies automatically.<br class="hidden sm:inline">
+            Modular. Audited. Non-custodial.
+        </p>
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+            <a href="index.html"
+               class="magnetic-btn px-8 py-3.5 rounded-xl text-lg font-bold bg-purple-600 text-white hover:bg-purple-500 
+                      shadow-xl shadow-purple-500/30 hover:shadow-purple-500/50 transition-all duration-300 hover:-translate-y-0.5">
+                Launch App →
+            </a>
+            <a href="documentation.html"
+               class="magnetic-btn px-8 py-3.5 rounded-xl text-lg font-semibold border border-white/20 text-white/90 
+                      hover:bg-white/10 hover:border-white/40 transition-all duration-300">
+                Read Docs
+            </a>
+        </div>
+    </div>
+
+    <!-- Scroll indicator -->
+    <div class="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 animate-bounce">
+        <svg class="w-6 h-6 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 2 — LIVE STATS BAR
+     ═══════════════════════════════════════════════════════════════ -->
+<section id="stats-bar" class="relative -mt-20 z-20 max-w-5xl mx-auto px-4">
+    <div class="bg-gray-900/80 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 shadow-2xl">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-6 text-center">
+            <div>
+                <p class="text-xs uppercase tracking-wider text-white/50 mb-1">Total Value Locked</p>
+                <p id="stat-tvl" class="text-2xl sm:text-3xl font-bold text-white counter">—</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-white/50 mb-1">Current APY</p>
+                <p id="stat-apy" class="text-2xl sm:text-3xl font-bold text-green-400 counter">—</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-white/50 mb-1">Active Plugins</p>
+                <p id="stat-plugins" class="text-2xl sm:text-3xl font-bold text-purple-400 counter">5</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-white/50 mb-1">Network</p>
+                <p class="text-2xl sm:text-3xl font-bold text-blue-400 flex items-center justify-center gap-2">
+                    <span class="w-2.5 h-2.5 bg-blue-400 rounded-full status-pulse"></span>
+                    Arbitrum
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 3 — HOW IT WORKS (Animated SVG Flow)
+     ═══════════════════════════════════════════════════════════════ -->
+<section id="how-it-works" class="py-24 sm:py-32 px-4">
+    <div class="max-w-6xl mx-auto">
+        <div class="text-center mb-16 reveal">
+            <p class="text-purple-400 font-semibold text-sm uppercase tracking-widest mb-3">Simple & Transparent</p>
+            <h2 class="text-3xl sm:text-5xl font-bold text-white mb-4">How It Works</h2>
+            <p class="text-white/50 max-w-xl mx-auto">Three steps. No complexity. Your ETH works across the best DeFi protocols simultaneously.</p>
+        </div>
+
+        <!-- Desktop: Animated conveyor-belt pipeline -->
+        <div class="hidden md:block relative mb-8" id="conveyor-belt">
+            <svg class="w-full" viewBox="0 0 1200 380" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <!-- Conveyor belt track gradient -->
+                    <linearGradient id="belt-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#9333ea" stop-opacity="0.6"/>
+                        <stop offset="50%" stop-color="#818cf8" stop-opacity="0.6"/>
+                        <stop offset="100%" stop-color="#34d399" stop-opacity="0.6"/>
+                    </linearGradient>
+                    <!-- Arrow glow filter -->
+                    <filter id="glow-f">
+                        <feGaussianBlur stdDeviation="3" result="blur"/>
+                        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                    </filter>
+                    <!-- Token glow -->
+                    <filter id="token-glow">
+                        <feGaussianBlur stdDeviation="4" result="blur"/>
+                        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                    </filter>
+                    <!-- Animating dashes for belt -->
+                    <pattern id="belt-dashes" x="0" y="0" width="24" height="6" patternUnits="userSpaceOnUse">
+                        <rect x="0" y="0" width="14" height="6" rx="3" fill="rgba(147,51,234,0.3)">
+                            <animate attributeName="x" values="0;24" dur="0.8s" repeatCount="indefinite"/>
+                        </rect>
+                    </pattern>
+                </defs>
+
+                <!-- ═══ CONVEYOR BELT TRACK ═══ -->
+                <!-- Main belt path (slightly curved) -->
+                <path id="belt-path" d="M 60 190 C 200 190, 280 140, 400 140 C 520 140, 520 240, 600 240 C 680 240, 680 140, 800 140 C 920 140, 1000 190, 1140 190"
+                      fill="none" stroke="url(#belt-grad)" stroke-width="3" stroke-opacity="0.4"/>
+                <!-- Animated dashes overlay (conveyor movement) -->
+                <path d="M 60 190 C 200 190, 280 140, 400 140 C 520 140, 520 240, 600 240 C 680 240, 680 140, 800 140 C 920 140, 1000 190, 1140 190"
+                      fill="none" stroke="url(#belt-dashes)" stroke-width="6" opacity="0.5"/>
+
+                <!-- ═══ STATION 1: DEPOSIT ═══ -->
+                <g class="conveyor-station" data-station="1">
+                    <!-- Station box -->
+                    <rect x="80" y="110" width="160" height="160" rx="16" fill="rgba(147,51,234,0.08)" stroke="rgba(147,51,234,0.3)" stroke-width="1.5"/>
+                    <!-- Funnel icon (deposit) -->
+                    <g transform="translate(160,155)">
+                        <polygon points="-20,-25 20,-25 12,0 -12,0" fill="none" stroke="#a855f7" stroke-width="1.5" opacity="0.8"/>
+                        <rect x="-6" y="0" width="12" height="15" rx="3" fill="none" stroke="#a855f7" stroke-width="1.5" opacity="0.8"/>
+                        <!-- Animated token falling in -->
+                        <circle r="5" fill="#c084fc" filter="url(#token-glow)" opacity="0.9">
+                            <animate attributeName="cy" values="-40;-25;5" dur="2s" repeatCount="indefinite" keyTimes="0;0.4;1" calcMode="spline" keySplines="0.4 0 1 1;0.4 0 1 1"/>
+                            <animate attributeName="opacity" values="0;0.9;0" dur="2s" repeatCount="indefinite"/>
+                        </circle>
+                    </g>
+                    <!-- Label -->
+                    <text x="160" y="235" text-anchor="middle" fill="#c084fc" font-size="12" font-weight="700" letter-spacing="2">DEPOSIT</text>
+                    <text x="160" y="253" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="10">ETH → JHETH</text>
+                </g>
+
+                <!-- ═══ STATION 2: ROUTING ENGINE ═══ -->
+                <g class="conveyor-station" data-station="2">
+                    <rect x="420" y="110" width="180" height="160" rx="16" fill="rgba(99,102,241,0.08)" stroke="rgba(99,102,241,0.3)" stroke-width="1.5"/>
+                    <!-- Gear icon (routing/processing) -->
+                    <g transform="translate(510,170)">
+                        <!-- Outer gear -->
+                        <circle r="22" fill="none" stroke="#818cf8" stroke-width="1.5" opacity="0.7">
+                            <animateTransform attributeName="transform" type="rotate" values="0;360" dur="8s" repeatCount="indefinite"/>
+                        </circle>
+                        <!-- Gear teeth -->
+                        <g opacity="0.6">
+                            <animateTransform attributeName="transform" type="rotate" values="0;360" dur="8s" repeatCount="indefinite"/>
+                            <rect x="-3" y="-28" width="6" height="8" rx="1" fill="#818cf8"/>
+                            <rect x="-3" y="20" width="6" height="8" rx="1" fill="#818cf8"/>
+                            <rect x="-28" y="-3" width="8" height="6" rx="1" fill="#818cf8"/>
+                            <rect x="20" y="-3" width="8" height="6" rx="1" fill="#818cf8"/>
+                            <rect x="15" y="-21" width="6" height="8" rx="1" fill="#818cf8" transform="rotate(45)"/>
+                            <rect x="-21" y="13" width="6" height="8" rx="1" fill="#818cf8" transform="rotate(45)"/>
+                            <rect x="13" y="15" width="6" height="8" rx="1" fill="#818cf8" transform="rotate(-45)"/>
+                            <rect x="-21" y="-21" width="6" height="8" rx="1" fill="#818cf8" transform="rotate(-45)"/>
+                        </g>
+                        <!-- Inner gear (counter-rotate) -->
+                        <circle r="11" fill="none" stroke="#a5b4fc" stroke-width="1.2" opacity="0.6">
+                            <animateTransform attributeName="transform" type="rotate" values="360;0" dur="5s" repeatCount="indefinite"/>
+                        </circle>
+                        <circle r="4" fill="#818cf8" opacity="0.4"/>
+                    </g>
+                    <!-- Protocol badges -->
+                    <g transform="translate(510,215)">
+                        <text x="-30" y="0" fill="rgba(255,255,255,0.35)" font-size="8">Morpho</text>
+                        <text x="8" y="0" fill="rgba(255,255,255,0.35)" font-size="8">Euler</text>
+                        <text x="-30" y="12" fill="rgba(255,255,255,0.35)" font-size="8">Aave</text>
+                        <text x="8" y="12" fill="rgba(255,255,255,0.35)" font-size="8">Uni</text>
+                    </g>
+                    <text x="510" y="250" text-anchor="middle" fill="#a5b4fc" font-size="12" font-weight="700" letter-spacing="2">ROUTE</text>
+                    <text x="510" y="265" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="10">Beacon Engine</text>
+                </g>
+
+                <!-- ═══ STATION 3: YIELD OUTPUT ═══ -->
+                <g class="conveyor-station" data-station="3">
+                    <rect x="860" y="110" width="160" height="160" rx="16" fill="rgba(52,211,153,0.08)" stroke="rgba(52,211,153,0.3)" stroke-width="1.5"/>
+                    <!-- Chart icon (yield) -->
+                    <g transform="translate(940, 180)">
+                        <!-- Rising bars -->
+                        <rect x="-25" y="0" width="10" height="-15" rx="2" fill="#34d399" opacity="0.5">
+                            <animate attributeName="height" values="-15;-22;-15" dur="2s" repeatCount="indefinite"/>
+                        </rect>
+                        <rect x="-10" y="0" width="10" height="-25" rx="2" fill="#34d399" opacity="0.65">
+                            <animate attributeName="height" values="-25;-18;-25" dur="2.3s" repeatCount="indefinite"/>
+                        </rect>
+                        <rect x="5" y="0" width="10" height="-30" rx="2" fill="#34d399" opacity="0.8">
+                            <animate attributeName="height" values="-30;-38;-30" dur="1.8s" repeatCount="indefinite"/>
+                        </rect>
+                        <rect x="20" y="0" width="10" height="-40" rx="2" fill="#34d399" opacity="0.95">
+                            <animate attributeName="height" values="-40;-48;-40" dur="2.5s" repeatCount="indefinite"/>
+                        </rect>
+                        <!-- Base line -->
+                        <line x1="-30" y1="2" x2="35" y2="2" stroke="#34d399" stroke-width="1" opacity="0.4"/>
+                    </g>
+                    <text x="940" y="235" text-anchor="middle" fill="#34d399" font-size="12" font-weight="700" letter-spacing="2">EARN</text>
+                    <text x="940" y="253" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="10">Auto-compound</text>
+                </g>
+
+                <!-- ═══ FLOWING TOKENS along belt ═══ -->
+                <!-- Token 1 (main, larger) -->
+                <circle r="7" fill="#c084fc" filter="url(#token-glow)" opacity="0.8">
+                    <animateMotion dur="4s" repeatCount="indefinite"
+                        path="M 60 190 C 200 190, 280 140, 400 140 C 520 140, 520 240, 600 240 C 680 240, 680 140, 800 140 C 920 140, 1000 190, 1140 190"/>
+                </circle>
+                <!-- Token 2 (delayed) -->
+                <circle r="5" fill="#a855f7" filter="url(#token-glow)" opacity="0.6">
+                    <animateMotion dur="4s" repeatCount="indefinite" begin="1.3s"
+                        path="M 60 190 C 200 190, 280 140, 400 140 C 520 140, 520 240, 600 240 C 680 240, 680 140, 800 140 C 920 140, 1000 190, 1140 190"/>
+                </circle>
+                <!-- Token 3 (more delayed) -->
+                <circle r="4" fill="#818cf8" filter="url(#token-glow)" opacity="0.5">
+                    <animateMotion dur="4s" repeatCount="indefinite" begin="2.6s"
+                        path="M 60 190 C 200 190, 280 140, 400 140 C 520 140, 520 240, 600 240 C 680 240, 680 140, 800 140 C 920 140, 1000 190, 1140 190"/>
+                </circle>
+
+                <!-- ═══ DIRECTIONAL ARROWS between stations ═══ -->
+                <g filter="url(#glow-f)" opacity="0.6">
+                    <!-- Arrow 1→2 -->
+                    <polygon points="350,155 365,165 350,175" fill="#a855f7"/>
+                    <!-- Arrow 2→3 -->
+                    <polygon points="770,155 785,165 770,175" fill="#34d399"/>
+                </g>
+            </svg>
+        </div>
+        <!-- Desktop step cards (below conveyor) -->
+        <div class="hidden md:grid grid-cols-3 gap-8 lg:gap-12 mt-8">
+                <div class="step-card text-center group" data-step="1">
+                    <div class="step-icon w-24 h-24 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-purple-500/20 to-indigo-500/20 
+                                border border-purple-500/30 flex items-center justify-center 
+                                group-hover:scale-110 group-hover:border-purple-400/60 group-hover:shadow-lg group-hover:shadow-purple-500/20 transition-all duration-300">
+                        <span class="text-5xl">💰</span>
+                    </div>
+                    <div class="inline-flex items-center gap-2 bg-purple-500/10 border border-purple-500/30 rounded-full px-3 py-1 text-xs text-purple-400 font-bold mb-3">
+                        <span class="w-5 h-5 bg-purple-500/30 rounded-full flex items-center justify-center text-[10px] font-bold">1</span>
+                        DEPOSIT
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-3">Deposit ETH</h3>
+                    <p class="text-white/50 text-sm leading-relaxed">
+                        Connect your wallet and deposit ETH. You receive <strong class="text-purple-300">JHETH</strong> tokens representing your share of the pool.
+                    </p>
+                    <div class="mt-4 flex items-center justify-center gap-2 text-xs text-white/30">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                        Non-custodial • Instant
+                    </div>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="step-card text-center group" data-step="2" style="transition-delay:0.2s">
+                    <div class="step-icon w-24 h-24 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-blue-500/20 
+                                border border-indigo-500/30 flex items-center justify-center
+                                group-hover:scale-110 group-hover:border-indigo-400/60 group-hover:shadow-lg group-hover:shadow-indigo-500/20 transition-all duration-300">
+                        <span class="text-5xl">⚡</span>
+                    </div>
+                    <div class="inline-flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/30 rounded-full px-3 py-1 text-xs text-indigo-400 font-bold mb-3">
+                        <span class="w-5 h-5 bg-indigo-500/30 rounded-full flex items-center justify-center text-[10px] font-bold">2</span>
+                        ALLOCATE
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-3">Strategies Execute</h3>
+                    <p class="text-white/50 text-sm leading-relaxed">
+                        Jethos routes funds via <strong class="text-indigo-300">modular plugins</strong> — Morpho, Euler, Aave, Uniswap — for optimized, diversified yield.
+                    </p>
+                    <div class="mt-4 flex flex-wrap items-center justify-center gap-1.5">
+                        <span class="text-[10px] bg-white/5 text-white/40 rounded px-1.5 py-0.5 border border-white/10">Morpho</span>
+                        <span class="text-[10px] bg-white/5 text-white/40 rounded px-1.5 py-0.5 border border-white/10">Euler</span>
+                        <span class="text-[10px] bg-white/5 text-white/40 rounded px-1.5 py-0.5 border border-white/10">Aave</span>
+                        <span class="text-[10px] bg-white/5 text-white/40 rounded px-1.5 py-0.5 border border-white/10">Uniswap</span>
+                    </div>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="step-card text-center group" data-step="3" style="transition-delay:0.4s">
+                    <div class="step-icon w-24 h-24 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 
+                                border border-green-500/30 flex items-center justify-center
+                                group-hover:scale-110 group-hover:border-green-400/60 group-hover:shadow-lg group-hover:shadow-green-500/20 transition-all duration-300">
+                        <span class="text-5xl">📈</span>
+                    </div>
+                    <div class="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/30 rounded-full px-3 py-1 text-xs text-green-400 font-bold mb-3">
+                        <span class="w-5 h-5 bg-green-500/30 rounded-full flex items-center justify-center text-[10px] font-bold">3</span>
+                        EARN
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-3">Earn Yield</h3>
+                    <p class="text-white/50 text-sm leading-relaxed">
+                        Withdraw anytime. Your <strong class="text-green-300">JHETH grows in value</strong> as strategies generate returns. No lock-ups.
+                    </p>
+                    <div class="mt-4 flex items-center justify-center gap-2 text-xs text-white/30">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+                        Auto-compounding • No lock
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile: Vertical flow with animated connectors -->
+        <div class="md:hidden space-y-2">
+            <!-- Step 1 Mobile -->
+            <div class="step-card group p-6 bg-white/5 border border-white/10 rounded-xl" data-step="1">
+                <div class="flex items-start gap-4">
+                    <div class="step-icon w-16 h-16 flex-shrink-0 rounded-xl bg-gradient-to-br from-purple-500/20 to-indigo-500/20 
+                                border border-purple-500/30 flex items-center justify-center">
+                        <span class="text-3xl">💰</span>
+                    </div>
+                    <div>
+                        <div class="text-purple-400 font-bold text-xs mb-1">STEP 1 — DEPOSIT</div>
+                        <h3 class="text-lg font-bold text-white mb-1">Deposit ETH</h3>
+                        <p class="text-white/50 text-sm">Connect wallet, deposit ETH, receive <strong class="text-purple-300">JHETH</strong> tokens.</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Mobile connector arrow -->
+            <div class="flex justify-center py-1">
+                <svg class="w-6 h-8 text-purple-500/50" fill="none" stroke="currentColor" viewBox="0 0 24 32"><path stroke-linecap="round" stroke-width="2" d="M12 2v26m0 0l-5-5m5 5l5-5"/></svg>
+            </div>
+            <!-- Step 2 Mobile -->
+            <div class="step-card group p-6 bg-white/5 border border-white/10 rounded-xl" data-step="2" style="transition-delay:0.15s">
+                <div class="flex items-start gap-4">
+                    <div class="step-icon w-16 h-16 flex-shrink-0 rounded-xl bg-gradient-to-br from-indigo-500/20 to-blue-500/20 
+                                border border-indigo-500/30 flex items-center justify-center">
+                        <span class="text-3xl">⚡</span>
+                    </div>
+                    <div>
+                        <div class="text-indigo-400 font-bold text-xs mb-1">STEP 2 — ALLOCATE</div>
+                        <h3 class="text-lg font-bold text-white mb-1">Strategies Execute</h3>
+                        <p class="text-white/50 text-sm">Funds routed via <strong class="text-indigo-300">modular plugins</strong> for diversified yield.</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Mobile connector arrow -->
+            <div class="flex justify-center py-1">
+                <svg class="w-6 h-8 text-indigo-500/50" fill="none" stroke="currentColor" viewBox="0 0 24 32"><path stroke-linecap="round" stroke-width="2" d="M12 2v26m0 0l-5-5m5 5l5-5"/></svg>
+            </div>
+            <!-- Step 3 Mobile -->
+            <div class="step-card group p-6 bg-white/5 border border-white/10 rounded-xl" data-step="3" style="transition-delay:0.3s">
+                <div class="flex items-start gap-4">
+                    <div class="step-icon w-16 h-16 flex-shrink-0 rounded-xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 
+                                border border-green-500/30 flex items-center justify-center">
+                        <span class="text-3xl">📈</span>
+                    </div>
+                    <div>
+                        <div class="text-green-400 font-bold text-xs mb-1">STEP 3 — EARN</div>
+                        <h3 class="text-lg font-bold text-white mb-1">Earn Yield</h3>
+                        <p class="text-white/50 text-sm"><strong class="text-green-300">JHETH grows</strong> as strategies generate returns. No lock-ups.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary flow bar (replaces old text arrows) -->
+        <div class="mt-12 reveal">
+            <div class="bg-white/5 border border-white/10 rounded-xl p-4 sm:p-6 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 text-sm">
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 bg-purple-500/20 border border-purple-500/30 rounded-lg flex items-center justify-center text-purple-400 font-bold text-xs">ETH</span>
+                    <span class="text-white/60">deposited</span>
+                </div>
+                <svg class="w-6 h-4 text-white/20 hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 16"><path stroke-linecap="round" stroke-width="2" d="M1 8h20m0 0l-5-5m5 5l-5 5"/></svg>
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 bg-indigo-500/20 border border-indigo-500/30 rounded-lg flex items-center justify-center text-indigo-400 text-xs">⚡</span>
+                    <span class="text-white/60">Beacon routes to plugins</span>
+                </div>
+                <svg class="w-6 h-4 text-white/20 hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 16"><path stroke-linecap="round" stroke-width="2" d="M1 8h20m0 0l-5-5m5 5l-5 5"/></svg>
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 bg-green-500/20 border border-green-500/30 rounded-lg flex items-center justify-center text-green-400 font-bold text-xs">↑</span>
+                    <span class="text-white/60">JHETH value increases</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 4 — PLUGIN ECOSYSTEM
+     ═══════════════════════════════════════════════════════════════ -->
+<section id="plugins" class="py-24 sm:py-32 px-4 bg-gradient-to-b from-transparent via-purple-950/20 to-transparent">
+    <div class="max-w-6xl mx-auto">
+        <div class="text-center mb-6 reveal">
+            <p class="text-purple-400 font-semibold text-sm uppercase tracking-widest mb-3">Modular Architecture</p>
+            <h2 class="text-3xl sm:text-5xl font-bold text-white mb-4">Plugin Ecosystem</h2>
+            <p class="text-white/50 max-w-2xl mx-auto">
+                The <strong class="text-purple-300">Beacon System</strong> lets Jethos add new yield sources without changing the core contract. 
+                Each plugin is an independent, auditable strategy module.
+            </p>
+        </div>
+
+        <!-- Beacon explainer badge -->
+        <div class="flex justify-center mb-12 reveal">
+            <div class="inline-flex items-center gap-2 bg-purple-500/10 border border-purple-500/30 rounded-full px-5 py-2 text-sm text-purple-300">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                Upgradeable via Beacon pattern — zero downtime, zero migration
+            </div>
+        </div>
+
+        <!-- Plugin Grid -->
+        <div id="plugin-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Populated by JS -->
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 5 — ROADMAP (loaded from roadmap.json)
+     ═══════════════════════════════════════════════════════════════ -->
+<section id="roadmap" class="py-24 sm:py-32 px-4">
+    <div class="max-w-6xl mx-auto">
+        <div class="text-center mb-6 reveal">
+            <p class="text-purple-400 font-semibold text-sm uppercase tracking-widest mb-3">The Path Forward</p>
+            <h2 class="text-3xl sm:text-5xl font-bold text-white mb-4">Roadmap</h2>
+            <p class="text-white/50 max-w-xl mx-auto">Building the most modular and capital-efficient yield protocol on Arbitrum.</p>
+        </div>
+
+        <!-- F1 TRACK (Desktop) — populated & animated by JS -->
+        <div id="roadmap-track-wrapper" class="hidden lg:block relative reveal">
+            <svg id="roadmap-track-svg" class="w-full" viewBox="0 0 1200 520" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="track-grad-done" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#22c55e" stop-opacity="0.7"/>
+                        <stop offset="100%" stop-color="#a855f7" stop-opacity="0.7"/>
+                    </linearGradient>
+                    <linearGradient id="track-grad-future" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="rgba(255,255,255,0.12)"/>
+                        <stop offset="100%" stop-color="rgba(255,255,255,0.06)"/>
+                    </linearGradient>
+                    <filter id="car-glow">
+                        <feGaussianBlur stdDeviation="6" result="blur"/>
+                        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                    </filter>
+                    <!-- Road dashes (animated) -->
+                    <pattern id="road-dashes" x="0" y="0" width="30" height="4" patternUnits="userSpaceOnUse">
+                        <rect x="0" y="0" width="16" height="4" rx="2" fill="rgba(255,255,255,0.08)"/>
+                    </pattern>
+                </defs>
+
+                <!-- ROAD (track path) — winding S-curve left to right -->
+                <path id="f1-track-path"
+                      d="M 40 400 C 160 400, 200 120, 340 120 C 480 120, 480 360, 600 360 C 720 360, 720 100, 860 100 C 1000 100, 1040 300, 1160 300"
+                      fill="none" stroke="url(#track-grad-future)" stroke-width="42" stroke-linecap="round"/>
+                <!-- Road center dashes -->
+                <path d="M 40 400 C 160 400, 200 120, 340 120 C 480 120, 480 360, 600 360 C 720 360, 720 100, 860 100 C 1000 100, 1040 300, 1160 300"
+                      fill="none" stroke="url(#road-dashes)" stroke-width="3"/>
+                <!-- Completed road overlay (clipped by JS) -->
+                <path id="f1-track-done"
+                      d="M 40 400 C 160 400, 200 120, 340 120 C 480 120, 480 360, 600 360 C 720 360, 720 100, 860 100 C 1000 100, 1040 300, 1160 300"
+                      fill="none" stroke="url(#track-grad-done)" stroke-width="42" stroke-linecap="round"
+                      stroke-dasharray="0 9999"/>
+                <!-- Road edge lines -->
+                <path d="M 40 400 C 160 400, 200 120, 340 120 C 480 120, 480 360, 600 360 C 720 360, 720 100, 860 100 C 1000 100, 1040 300, 1160 300"
+                      fill="none" stroke="rgba(147,51,234,0.15)" stroke-width="44" stroke-linecap="round" style="stroke-dasharray: 4 8"/>
+
+                <!-- CHECKPOINTS (populated by JS) -->
+                <g id="f1-checkpoints"></g>
+
+                <!-- F1 CAR (SVG icon, positioned by JS) -->
+                <g id="f1-car" filter="url(#car-glow)" transform="translate(40,400)">
+                    <!-- Car body -->
+                    <rect x="-18" y="-8" width="36" height="16" rx="6" fill="#a855f7" opacity="0.9"/>
+                    <!-- Cockpit -->
+                    <rect x="-6" y="-6" width="14" height="12" rx="3" fill="#7c3aed"/>
+                    <!-- Front wing -->
+                    <polygon points="18,-10 24,-6 18,-2" fill="#c084fc" opacity="0.8"/>
+                    <!-- Rear wing -->
+                    <rect x="-22" y="-10" width="4" height="20" rx="1" fill="#c084fc" opacity="0.7"/>
+                    <!-- Wheels -->
+                    <circle cx="-12" cy="-9" r="3.5" fill="#e9d5ff" opacity="0.7"/>
+                    <circle cx="-12" cy="9" r="3.5" fill="#e9d5ff" opacity="0.7"/>
+                    <circle cx="12" cy="-9" r="3.5" fill="#e9d5ff" opacity="0.7"/>
+                    <circle cx="12" cy="9" r="3.5" fill="#e9d5ff" opacity="0.7"/>
+                    <!-- Exhaust glow -->
+                    <ellipse cx="-26" cy="0" rx="8" ry="4" fill="#9333ea" opacity="0.5">
+                        <animate attributeName="rx" values="6;10;6" dur="0.4s" repeatCount="indefinite"/>
+                        <animate attributeName="opacity" values="0.3;0.6;0.3" dur="0.4s" repeatCount="indefinite"/>
+                    </ellipse>
+                </g>
+            </svg>
+
+            <!-- Milestone cards (positioned absolutely by JS under each checkpoint) -->
+            <div id="f1-milestone-cards" class="relative" style="margin-top: -40px;"></div>
+        </div>
+
+        <!-- Mobile vertical timeline (populated by JS) -->
+        <div id="roadmap-mobile" class="lg:hidden space-y-6">
+            <!-- Populated by JS -->
+        </div>
+
+        <!-- Last updated -->
+        <div class="text-center mt-10 reveal">
+            <p id="roadmap-updated" class="text-xs text-white/20"></p>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 6 — SECURITY & TRUST (Enhanced)
+     ═══════════════════════════════════════════════════════════════ -->
+<section id="security" class="py-24 sm:py-32 px-4 bg-gradient-to-b from-transparent via-indigo-950/15 to-transparent">
+    <div class="max-w-5xl mx-auto">
+        <div class="text-center mb-16 reveal">
+            <p class="text-indigo-400 font-semibold text-sm uppercase tracking-widest mb-3">Battle-Tested</p>
+            <h2 class="text-3xl sm:text-5xl font-bold text-white mb-4">Security First</h2>
+            <p class="text-white/50 max-w-xl mx-auto">Your funds are protected by multiple layers of security, transparency, and battle-tested smart contract patterns.</p>
+        </div>
+
+        <!-- Audit badges row -->
+        <div class="flex flex-wrap items-center justify-center gap-4 mb-12 reveal">
+            <div class="audit-badge inline-flex items-center gap-2 bg-green-500/10 border border-green-500/30 rounded-full px-5 py-2.5">
+                <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                <span class="text-green-400 text-sm font-semibold">Smart Contract Patterns Audited</span>
+            </div>
+            <div class="inline-flex items-center gap-2 bg-purple-500/10 border border-purple-500/30 rounded-full px-5 py-2.5">
+                <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+                <span class="text-purple-400 text-sm font-semibold">Open Source • Verified</span>
+            </div>
+            <div class="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/30 rounded-full px-5 py-2.5">
+                <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                <span class="text-blue-400 text-sm font-semibold">Non-Custodial</span>
+            </div>
+        </div>
+
+        <!-- How We Protect Your Funds -->
+        <div class="mb-12 reveal">
+            <div class="bg-gradient-to-r from-indigo-500/5 to-purple-500/5 border border-white/10 rounded-2xl p-6 sm:p-8">
+                <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                    <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                    How We Protect Your Funds
+                </h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="flex items-start gap-3">
+                        <span class="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <svg class="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        <div>
+                            <p class="text-white text-sm font-semibold">Beacon Proxy Pattern</p>
+                            <p class="text-white/40 text-xs mt-0.5">Upgradeable plugins without migrating user funds. Core contracts remain immutable.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <span class="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <svg class="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        <div>
+                            <p class="text-white text-sm font-semibold">Emergency Handler</p>
+                            <p class="text-white/40 text-xs mt-0.5">Built-in circuit breaker. Automatic pause on anomalous activity with emergency withdrawal.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <span class="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <svg class="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        <div>
+                            <p class="text-white text-sm font-semibold">Rate Limiting</p>
+                            <p class="text-white/40 text-xs mt-0.5">ParameterManager enforces deposit/withdraw limits to protect against flash-loan attacks.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <span class="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <svg class="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        <div>
+                            <p class="text-white text-sm font-semibold">Lens Monitoring</p>
+                            <p class="text-white/40 text-xs mt-0.5">Real-time risk monitoring via dedicated Lens adapter contracts for each integrated protocol.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Security feature cards with mouse-tracking glow -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+            <div class="security-card reveal bg-white/5 border border-white/10 rounded-xl p-6 hover:border-indigo-500/40 transition-colors">
+                <div class="text-3xl mb-4">🛡️</div>
+                <h3 class="text-lg font-bold text-white mb-2">Audited Patterns</h3>
+                <p class="text-white/50 text-sm">Built on top of OpenZeppelin, battle-tested proxy patterns. Underlying protocol integrations (Morpho, Euler, Aave) are independently audited.</p>
+            </div>
+            <div class="security-card reveal bg-white/5 border border-white/10 rounded-xl p-6 hover:border-indigo-500/40 transition-colors" style="transition-delay:0.1s">
+                <div class="text-3xl mb-4">🔓</div>
+                <h3 class="text-lg font-bold text-white mb-2">Non-Custodial</h3>
+                <p class="text-white/50 text-sm">Your ETH stays in smart contracts on Arbitrum. No centralized custody. Withdraw anytime, no lock-ups, no permissions needed.</p>
+            </div>
+            <div class="security-card reveal bg-white/5 border border-white/10 rounded-xl p-6 hover:border-indigo-500/40 transition-colors" style="transition-delay:0.2s">
+                <div class="text-3xl mb-4">🔍</div>
+                <h3 class="text-lg font-bold text-white mb-2">Open Source</h3>
+                <p class="text-white/50 text-sm">All contracts verified on Arbiscan. Full source code available for review and community auditing.</p>
+            </div>
+            <div class="security-card reveal bg-white/5 border border-white/10 rounded-xl p-6 hover:border-indigo-500/40 transition-colors" style="transition-delay:0.1s">
+                <div class="text-3xl mb-4">⚡</div>
+                <h3 class="text-lg font-bold text-white mb-2">Beacon Upgrades</h3>
+                <p class="text-white/50 text-sm">Modular upgrades via Beacon pattern. Add new strategies without migrating funds or changing core contracts.</p>
+            </div>
+            <div class="security-card reveal bg-white/5 border border-white/10 rounded-xl p-6 hover:border-indigo-500/40 transition-colors" style="transition-delay:0.2s">
+                <div class="text-3xl mb-4">🚨</div>
+                <h3 class="text-lg font-bold text-white mb-2">Emergency Handler</h3>
+                <p class="text-white/50 text-sm">Built-in emergency withdrawal mechanism. Rate limiting and parameter controls protect against flash-loan attacks.</p>
+            </div>
+            <div class="security-card reveal bg-white/5 border border-white/10 rounded-xl p-6 hover:border-indigo-500/40 transition-colors" style="transition-delay:0.3s">
+                <div class="text-3xl mb-4">📊</div>
+                <h3 class="text-lg font-bold text-white mb-2">Lens Adapters</h3>
+                <p class="text-white/50 text-sm">Real-time risk monitoring via dedicated Lens contracts for each protocol (Morpho, Euler, Aave).</p>
+            </div>
+        </div>
+
+        <!-- Audit Reports -->
+        <div class="reveal bg-gradient-to-r from-green-500/5 to-emerald-500/5 border border-green-500/20 rounded-2xl p-6 sm:p-8 mb-8">
+            <h3 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                <span class="text-2xl">📄</span>
+                Audit Reports & References
+            </h3>
+            <p class="text-white/40 text-sm mb-5">Jethos integrates with protocols that have been independently audited. Review the underlying security documentation:</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <a href="https://docs.morpho.org/security/audits" target="_blank" rel="noopener noreferrer"
+                   class="flex items-center justify-between bg-white/5 rounded-lg px-4 py-3 border border-white/10 hover:border-green-500/40 hover:bg-green-500/5 transition-all group">
+                    <div class="flex items-center gap-3">
+                        <span class="text-lg">🏦</span>
+                        <div>
+                            <p class="text-white text-sm font-semibold">Morpho Protocol Audits</p>
+                            <p class="text-white/30 text-xs">Multiple audits by Spearbit, Trail of Bits</p>
+                        </div>
+                    </div>
+                    <span class="text-white/30 group-hover:text-green-400 transition-colors">↗</span>
+                </a>
+                <a href="https://docs.euler.finance/security/audits" target="_blank" rel="noopener noreferrer"
+                   class="flex items-center justify-between bg-white/5 rounded-lg px-4 py-3 border border-white/10 hover:border-green-500/40 hover:bg-green-500/5 transition-all group">
+                    <div class="flex items-center gap-3">
+                        <span class="text-lg">🔷</span>
+                        <div>
+                            <p class="text-white text-sm font-semibold">Euler V2 Audits</p>
+                            <p class="text-white/30 text-xs">Audited by Certora, Spearbit, Chain Security</p>
+                        </div>
+                    </div>
+                    <span class="text-white/30 group-hover:text-green-400 transition-colors">↗</span>
+                </a>
+                <a href="https://docs.aave.com/developers/deployed-contracts/security-and-audits" target="_blank" rel="noopener noreferrer"
+                   class="flex items-center justify-between bg-white/5 rounded-lg px-4 py-3 border border-white/10 hover:border-green-500/40 hover:bg-green-500/5 transition-all group">
+                    <div class="flex items-center gap-3">
+                        <span class="text-lg">👻</span>
+                        <div>
+                            <p class="text-white text-sm font-semibold">Aave V3 Audits</p>
+                            <p class="text-white/30 text-xs">Audited by SigmaPrime, Trail of Bits, ABDK</p>
+                        </div>
+                    </div>
+                    <span class="text-white/30 group-hover:text-green-400 transition-colors">↗</span>
+                </a>
+                <a href="https://docs.openzeppelin.com/contracts/5.x/" target="_blank" rel="noopener noreferrer"
+                   class="flex items-center justify-between bg-white/5 rounded-lg px-4 py-3 border border-white/10 hover:border-green-500/40 hover:bg-green-500/5 transition-all group">
+                    <div class="flex items-center gap-3">
+                        <span class="text-lg">🏗️</span>
+                        <div>
+                            <p class="text-white text-sm font-semibold">OpenZeppelin Contracts</p>
+                            <p class="text-white/30 text-xs">Industry-standard battle-tested libraries</p>
+                        </div>
+                    </div>
+                    <span class="text-white/30 group-hover:text-green-400 transition-colors">↗</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Contract Addresses -->
+        <div class="reveal bg-white/5 border border-white/10 rounded-xl p-6">
+            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Verified Contracts on Arbitrum
+            </h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <div class="flex items-center justify-between bg-white/5 rounded-lg px-4 py-2.5 group hover:bg-purple-500/5 transition-colors">
+                    <span class="text-white/60">Beacon</span>
+                    <a href="https://arbiscan.io/address/0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870" target="_blank" rel="noopener noreferrer" class="text-purple-400 font-mono text-xs hover:text-purple-300 flex items-center gap-1">0xdB99...4870 <span class="text-white/20 group-hover:text-purple-400 transition-colors">↗</span></a>
+                </div>
+                <div class="flex items-center justify-between bg-white/5 rounded-lg px-4 py-2.5 group hover:bg-purple-500/5 transition-colors">
+                    <span class="text-white/60">LiquidityManager</span>
+                    <a href="https://arbiscan.io/address/0xfb26C7A0CF5b4e86Dcf870b2349A29DA4F630150" target="_blank" rel="noopener noreferrer" class="text-purple-400 font-mono text-xs hover:text-purple-300 flex items-center gap-1">0xfb26...0150 <span class="text-white/20 group-hover:text-purple-400 transition-colors">↗</span></a>
+                </div>
+                <div class="flex items-center justify-between bg-white/5 rounded-lg px-4 py-2.5 group hover:bg-purple-500/5 transition-colors">
+                    <span class="text-white/60">ProxyGeneral (JHETH)</span>
+                    <a href="https://arbiscan.io/address/0x8750344c6cf493f4F5d13F52b7F7Bf1d285978e1" target="_blank" rel="noopener noreferrer" class="text-purple-400 font-mono text-xs hover:text-purple-300 flex items-center gap-1">0x8750...78e1 <span class="text-white/20 group-hover:text-purple-400 transition-colors">↗</span></a>
+                </div>
+                <div class="flex items-center justify-between bg-white/5 rounded-lg px-4 py-2.5 group hover:bg-purple-500/5 transition-colors">
+                    <span class="text-white/60">ValueCalculator</span>
+                    <a href="https://arbiscan.io/address/0x2E042874BcFc6bE51e0D6b23F8Da22bDd8B215B0" target="_blank" rel="noopener noreferrer" class="text-purple-400 font-mono text-xs hover:text-purple-300 flex items-center gap-1">0x2E04...15B0 <span class="text-white/20 group-hover:text-purple-400 transition-colors">↗</span></a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════════════════════════ -->
+<footer class="border-t border-white/10 py-12 px-4">
+    <div class="max-w-6xl mx-auto">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-8 mb-8">
+            <div>
+                <div class="flex items-center gap-2 mb-4">
+                    <span class="text-2xl">🌊</span>
+                    <span class="text-lg font-bold text-white">Jethos Protocol</span>
+                </div>
+                <p class="text-white/40 text-sm">Modular ETH yield strategies on Arbitrum. Non-custodial. Audited. Open source.</p>
+            </div>
+            <div>
+                <h4 class="text-white font-semibold mb-3">Protocol</h4>
+                <ul class="space-y-2 text-sm text-white/40">
+                    <li><a href="index.html" class="hover:text-white transition-colors">Launch App</a></li>
+                    <li><a href="portfolio.html" class="hover:text-white transition-colors">Portfolio</a></li>
+                    <li><a href="documentation.html" class="hover:text-white transition-colors">Documentation</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="text-white font-semibold mb-3">Resources</h4>
+                <ul class="space-y-2 text-sm text-white/40">
+                    <li><a href="https://arbiscan.io/address/0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">Arbiscan ↗</a></li>
+                    <li><a href="#security" class="hover:text-white transition-colors">Security</a></li>
+                    <li><a href="#roadmap" class="hover:text-white transition-colors">Roadmap</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="border-t border-white/10 pt-6 text-center text-xs text-white/30">
+            © 2026 Jethos Protocol. All rights reserved. Built on Arbitrum.
+        </div>
+    </div>
+</footer>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SCRIPTS
+     ═══════════════════════════════════════════════════════════════ -->
+<script type="module">
+    // ── Vanta.js 3D Background ──────────────────────────────────
+    try {
+        VANTA.WAVES({
+            el: '#hero-bg',
+            THREE: THREE,
+            mouseControls: true,
+            touchControls: true,
+            gyroControls: false,
+            minHeight: 200.00,
+            minWidth: 200.00,
+            scale: 1.00,
+            scaleMobile: 1.00,
+            color: 0x0b0f1a,
+            shininess: 35,
+            waveHeight: 20,
+            waveSpeed: 0.7,
+            zoom: 0.85,
+        });
+    } catch (e) {
+        console.warn('Vanta.js init failed, fallback to gradient bg:', e);
+        document.getElementById('hero-bg').style.background = 'linear-gradient(135deg, #0b0f1a 0%, #1a1040 50%, #0b0f1a 100%)';
+    }
+
+    // ── Navbar scroll behavior ──────────────────────────────────
+    const navbar = document.getElementById('jethos-navbar');
+    window.addEventListener('scroll', () => {
+        if (window.scrollY > 60) {
+            navbar.style.background = 'rgba(11,15,26,0.92)';
+            navbar.style.backdropFilter = 'blur(16px)';
+            navbar.style.borderBottom = '1px solid rgba(255,255,255,0.08)';
+        } else {
+            navbar.style.background = 'transparent';
+            navbar.style.backdropFilter = 'none';
+            navbar.style.borderBottom = 'none';
+        }
+    }, { passive: true });
+
+    // ── Mobile menu toggle ──────────────────────────────────────
+    document.getElementById('mobile-toggle')?.addEventListener('click', () => {
+        document.getElementById('mobile-menu')?.classList.toggle('hidden');
+    });
+
+    // ── Scroll reveal (Intersection Observer) ───────────────────
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('visible');
+            }
+        });
+    }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+    // ═══════════════════════════════════════════════════════════
+    // PHASE 2: Step cards observer with stagger
+    // ═══════════════════════════════════════════════════════════
+    const stepObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('visible');
+                stepObserver.unobserve(entry.target);
+            }
+        });
+    }, { threshold: 0.2, rootMargin: '0px 0px -30px 0px' });
+
+    document.querySelectorAll('.step-card').forEach(el => stepObserver.observe(el));
+
+    // ═══════════════════════════════════════════════════════════
+    // PHASE 2: Conveyor belt stations reveal-on-scroll
+    // ═══════════════════════════════════════════════════════════
+    const conveyorBelt = document.getElementById('conveyor-belt');
+    if (conveyorBelt) {
+        const conveyorObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const stations = conveyorBelt.querySelectorAll('.conveyor-station');
+                    stations.forEach((s, i) => {
+                        setTimeout(() => s.classList.add('visible'), i * 400);
+                    });
+                    conveyorObserver.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.2 });
+        conveyorObserver.observe(conveyorBelt);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PHASE 2: Roadmap loaded from roadmap.json
+    // ═══════════════════════════════════════════════════════════
+    async function loadRoadmap() {
+        try {
+            const res = await fetch('roadmap.json');
+            const data = await res.json();
+            if (!data.phases) return;
+
+            const phases = data.phases;
+            const statusConfig = {
+                'completed':   { fill: '#22c55e', text: 'text-green-400', border: 'border-green-500/30', bg: 'bg-green-500/10', icon: '✅', flag: '🏁' },
+                'in-progress': { fill: '#3b82f6', text: 'text-blue-400',  border: 'border-blue-500/30',  bg: 'bg-blue-500/10',  icon: '🔄', flag: '🏎️' },
+                'planned':     { fill: '#6b7280', text: 'text-white/50',  border: 'border-white/10',      bg: 'bg-white/5',     icon: '⏳', flag: '🚩' },
+                'vision':      { fill: '#4b5563', text: 'text-white/40',  border: 'border-white/10',      bg: 'bg-white/5',     icon: '🚀', flag: '🌟' },
+            };
+
+            // Updated date
+            const updatedEl = document.getElementById('roadmap-updated');
+            if (updatedEl && data.lastUpdated) {
+                updatedEl.textContent = `Last updated: ${new Date(data.lastUpdated).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`;
+            }
+
+            // ═══ F1 TRACK (Desktop) ═══
+            const trackPath = document.getElementById('f1-track-path');
+            const trackDone = document.getElementById('f1-track-done');
+            const checkpointsG = document.getElementById('f1-checkpoints');
+            const car = document.getElementById('f1-car');
+            const cardsContainer = document.getElementById('f1-milestone-cards');
+            const svgEl = document.getElementById('roadmap-track-svg');
+
+            if (trackPath && checkpointsG && car && cardsContainer && svgEl) {
+                const totalLen = trackPath.getTotalLength();
+                const n = phases.length;
+
+                // Calculate car stop position (furthest completed or midway through in-progress)
+                const completedCount = phases.filter(p => p.status === 'completed').length;
+                const hasInProgress = phases.some(p => p.status === 'in-progress');
+                let carStopFraction = completedCount / n;
+                if (hasInProgress) carStopFraction += 0.5 / n;
+                const carStopLen = carStopFraction * totalLen;
+
+                // Draw the completed road portion
+                trackDone.setAttribute('stroke-dasharray', `${carStopLen} ${totalLen}`);
+
+                // Place checkpoints along the path
+                phases.forEach((phase, i) => {
+                    const frac = (i + 0.5) / n; // center of each segment
+                    const len = frac * totalLen;
+                    const pt = trackPath.getPointAtLength(len);
+                    const cfg = statusConfig[phase.status] || statusConfig.planned;
+
+                    // Checkpoint circle on SVG
+                    const outer = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    outer.setAttribute('cx', pt.x);
+                    outer.setAttribute('cy', pt.y);
+                    outer.setAttribute('r', '16');
+                    outer.setAttribute('fill', 'rgba(11,15,26,0.9)');
+                    outer.setAttribute('stroke', cfg.fill);
+                    outer.setAttribute('stroke-width', '2.5');
+                    checkpointsG.appendChild(outer);
+
+                    // Inner icon (flag emoji via foreignObject)
+                    const fo = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+                    fo.setAttribute('x', pt.x - 10);
+                    fo.setAttribute('y', pt.y - 10);
+                    fo.setAttribute('width', '20');
+                    fo.setAttribute('height', '20');
+                    fo.innerHTML = `<div xmlns="http://www.w3.org/1999/xhtml" style="font-size:14px;text-align:center;line-height:20px">${cfg.flag}</div>`;
+                    checkpointsG.appendChild(fo);
+
+                    // Label above/below the checkpoint (alternate)
+                    const isAbove = i % 2 === 0;
+                    const labelY = isAbove ? pt.y - 30 : pt.y + 36;
+                    const statusLabel = phase.status === 'completed' ? 'Completed' :
+                                        phase.status === 'in-progress' ? 'In Progress' :
+                                        phase.status === 'vision' ? 'Vision' : 'Planned';
+                    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    label.setAttribute('x', pt.x);
+                    label.setAttribute('y', labelY);
+                    label.setAttribute('text-anchor', 'middle');
+                    label.setAttribute('fill', cfg.fill);
+                    label.setAttribute('font-size', '11');
+                    label.setAttribute('font-weight', '700');
+                    label.setAttribute('letter-spacing', '1');
+                    label.setAttribute('class', 'f1-checkpoint-label');
+                    label.style.transitionDelay = `${i * 0.15}s`;
+                    label.textContent = `${phase.title} — ${statusLabel}`;
+                    checkpointsG.appendChild(label);
+
+                    // HTML milestone card (positioned under the SVG via CSS grid)
+                    const card = document.createElement('div');
+                    // Use percentages based on SVG viewBox (1200 wide)
+                    const leftPct = (pt.x / 1200) * 100;
+                    card.className = `f1-card absolute ${cfg.bg} ${cfg.border} border rounded-xl p-4 w-48`;
+                    card.style.left = `${leftPct}%`;
+                    card.style.transform = 'translateX(-50%)';
+                    card.style.transitionDelay = `${i * 0.15 + 0.3}s`;
+
+                    const milestoneHTML = phase.milestones.slice(0, 4).map(m => {
+                        const mIcon = m.done ? '✅' : cfg.icon;
+                        const mTextClass = m.done ? 'text-white/60' : 'text-white/40';
+                        return `<li class="${mTextClass} text-xs">${mIcon} ${m.text}</li>`;
+                    }).join('');
+
+                    card.innerHTML = `
+                        <p class="${cfg.text} font-bold text-xs mb-1">${phase.label || phase.title}</p>
+                        <p class="text-white/30 text-[10px] mb-2">${phase.description}</p>
+                        <ul class="space-y-1">${milestoneHTML}</ul>
+                    `;
+                    cardsContainer.appendChild(card);
+                });
+
+                // ═══ SCROLL-DRIVEN CAR ANIMATION ═══
+                let carAnimated = false;
+                const roadmapSection = document.getElementById('roadmap');
+
+                function animateCarOnScroll() {
+                    if (!roadmapSection) return;
+                    const rect = roadmapSection.getBoundingClientRect();
+                    const sectionH = rect.height;
+                    const viewH = window.innerHeight;
+                    // Progress: 0 when section top hits viewport bottom, 1 when section bottom hits viewport top
+                    const progress = Math.max(0, Math.min(1, (viewH - rect.top) / (sectionH + viewH)));
+                    // Map progress to car position along the done portion of the track
+                    const currentLen = progress * carStopLen;
+                    const pt = trackPath.getPointAtLength(currentLen);
+
+                    // Get tangent for rotation
+                    const pt2 = trackPath.getPointAtLength(Math.min(currentLen + 2, totalLen));
+                    const angle = Math.atan2(pt2.y - pt.y, pt2.x - pt.x) * (180 / Math.PI);
+
+                    car.setAttribute('transform', `translate(${pt.x},${pt.y}) rotate(${angle})`);
+
+                    // Reveal checkpoints and cards as car passes
+                    if (!carAnimated && progress > 0.1) {
+                        carAnimated = true;
+                        checkpointsG.querySelectorAll('.f1-checkpoint-label').forEach(l => l.classList.add('visible'));
+                        cardsContainer.querySelectorAll('.f1-card').forEach(c => c.classList.add('visible'));
+                    }
+                }
+
+                window.addEventListener('scroll', animateCarOnScroll, { passive: true });
+                animateCarOnScroll(); // initial position
+            }
+
+            // ═══ Mobile timeline (keep existing) ═══
+            const mobileContainer = document.getElementById('roadmap-mobile');
+            if (mobileContainer) {
+                phases.forEach((phase, i) => {
+                    const cfg = statusConfig[phase.status] || statusConfig.planned;
+                    const borderColor = phase.status === 'completed' ? 'border-green-500/50' :
+                                        phase.status === 'in-progress' ? 'border-blue-500/50' : 'border-white/20';
+
+                    const item = document.createElement('div');
+                    item.className = `roadmap-card border-l-2 ${borderColor} pl-6 relative`;
+                    item.style.transitionDelay = `${i * 0.1}s`;
+
+                    const dot = document.createElement('div');
+                    dot.className = `absolute left-0 top-0 w-3 h-3 ${phase.status === 'completed' ? 'bg-green-500' : phase.status === 'in-progress' ? 'bg-blue-500' : 'bg-gray-500'} rounded-full -translate-x-[7px]`;
+                    item.appendChild(dot);
+
+                    const statusLabel = phase.status === 'completed' ? 'Completed' :
+                                        phase.status === 'in-progress' ? 'In Progress' :
+                                        phase.status === 'vision' ? 'Vision' : 'Planned';
+                    const title = document.createElement('p');
+                    title.className = `${cfg.text} font-bold text-sm mb-2`;
+                    title.textContent = `${phase.title} — ${statusLabel}`;
+                    item.appendChild(title);
+
+                    const ul = document.createElement('ul');
+                    ul.className = 'text-sm space-y-1';
+                    phase.milestones.slice(0, 4).forEach(m => {
+                        const li = document.createElement('li');
+                        const mIcon = m.done ? '✅' : cfg.icon;
+                        li.className = m.done ? 'text-white/60' : 'text-white/40';
+                        li.textContent = `${mIcon} ${m.text}`;
+                        ul.appendChild(li);
+                    });
+                    item.appendChild(ul);
+                    mobileContainer.appendChild(item);
+                });
+
+                const mobileRmObserver = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            entry.target.classList.add('visible');
+                            mobileRmObserver.unobserve(entry.target);
+                        }
+                    });
+                }, { threshold: 0.15 });
+                mobileContainer.querySelectorAll('.roadmap-card').forEach(el => mobileRmObserver.observe(el));
+            }
+
+        } catch (e) {
+            console.warn('Failed to load roadmap.json:', e);
+        }
+    }
+
+    loadRoadmap();
+
+    // ═══════════════════════════════════════════════════════════
+    // PHASE 2: Security card mouse-tracking glow
+    // ═══════════════════════════════════════════════════════════
+    document.querySelectorAll('.security-card').forEach(card => {
+        card.addEventListener('mousemove', (e) => {
+            const rect = card.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+            card.style.setProperty('--mouse-x', x + '%');
+            card.style.setProperty('--mouse-y', y + '%');
+        });
+    });
+
+    // ── Load Plugin Cards from JSON ─────────────────────────────
+    async function loadPlugins() {
+        try {
+            const res = await fetch('plugins.json');
+            const data = await res.json();
+            const grid = document.getElementById('plugin-grid');
+            if (!grid || !data.plugins) return;
+
+            data.plugins.forEach((plugin, i) => {
+                const statusColors = {
+                    active:  { bg: 'bg-green-500/15', text: 'text-green-400', border: 'border-green-500/30', dot: 'bg-green-400' },
+                    planned: { bg: 'bg-gray-500/15',  text: 'text-gray-400',  border: 'border-gray-500/30',  dot: 'bg-gray-400' },
+                };
+                const sc = statusColors[plugin.status] || statusColors.planned;
+
+                const card = document.createElement('div');
+                card.className = `reveal card-3d bg-white/5 border border-white/10 rounded-xl p-6 hover:border-purple-500/40 transition-all duration-300`;
+                card.style.transitionDelay = `${i * 0.07}s`;
+
+                card.innerHTML = `
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <span class="text-3xl">${plugin.icon}</span>
+                            <div>
+                                <h3 class="text-lg font-bold text-white">${plugin.name}</h3>
+                                <span class="text-xs text-white/40">${plugin.category}</span>
+                            </div>
+                        </div>
+                        <div class="${sc.bg} ${sc.border} border rounded-full px-3 py-1 flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full ${sc.dot} ${plugin.status === 'active' ? 'status-pulse' : ''}"></span>
+                            <span class="${sc.text} text-xs font-semibold">${plugin.statusLabel || (plugin.status === 'active' ? 'Active' : 'Planned')}</span>
+                        </div>
+                    </div>
+                    <p class="text-white/50 text-sm leading-relaxed mb-4">${plugin.description}</p>
+                    <div class="flex flex-wrap gap-1.5 mb-4">
+                        ${plugin.features.map(f => `<span class="text-xs bg-white/5 text-white/50 rounded-md px-2 py-0.5 border border-white/10">${f}</span>`).join('')}
+                    </div>
+                    ${plugin.apy ? `<div class="text-sm"><span class="text-white/40">Est. APY: </span><span class="text-green-400 font-semibold">${plugin.apy}</span></div>` : ''}
+                `;
+
+                grid.appendChild(card);
+                observer.observe(card);
+            });
+        } catch (e) {
+            console.warn('Failed to load plugins.json:', e);
+        }
+    }
+
+    loadPlugins();
+
+    // ── Live Stats (read-only, no wallet needed) ────────────────
+    async function loadLiveStats() {
+        try {
+            const { ethers } = await import('https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.min.js');
+
+            const provider = new ethers.JsonRpcProvider('https://arb1.arbitrum.io/rpc');
+
+            const vc = new ethers.Contract(
+                '0x2E042874BcFc6bE51e0D6b23F8Da22bDd8B215B0',
+                ['function getTotalPoolValueView() external view returns (uint256)'],
+                provider
+            );
+
+            const poolValueWei = await vc.getTotalPoolValueView();
+            const poolValueETH = parseFloat(ethers.formatEther(poolValueWei));
+
+            const { getETHPriceUSD, getTotalPoolValueUSD } = await import('./src/utils/quoter.js');
+            const ethPrice = await getETHPriceUSD(provider);
+            
+            const knownTokens = [
+                { address: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1', decimals: 18, symbol: 'WETH' },
+                { address: '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8', decimals: 6, symbol: 'USDC.e' },
+                { address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', decimals: 6, symbol: 'USDC' },
+                { address: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', decimals: 6, symbol: 'USDT' },
+                { address: '0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f', decimals: 8, symbol: 'WBTC' },
+                { address: '0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1', decimals: 18, symbol: 'DAI' },
+            ];
+
+            const tvlUSD = await getTotalPoolValueUSD(provider, '0x8750344c6cf493f4F5d13F52b7F7Bf1d285978e1', knownTokens);
+
+            const tvlEl = document.getElementById('stat-tvl');
+            if (tvlEl && tvlUSD > 0) {
+                tvlEl.textContent = '$' + tvlUSD.toLocaleString('en-US', { maximumFractionDigits: 0 });
+            } else if (tvlEl && poolValueETH > 0) {
+                const usdValue = poolValueETH * (ethPrice || 2000);
+                tvlEl.textContent = '$' + usdValue.toLocaleString('en-US', { maximumFractionDigits: 0 });
+            }
+
+            const apyEl = document.getElementById('stat-apy');
+            if (apyEl) apyEl.textContent = '—';
+
+        } catch (e) {
+            console.warn('Failed to load live stats (non-critical):', e);
+        }
+    }
+
+    loadLiveStats();
+    setInterval(loadLiveStats, 60000);
+
+    // ═══════════════════════════════════════════════════════════
+    // PHASE 3: Three.js — 3 shapes, 3 zones, smooth diagonal travel
+    // ═══════════════════════════════════════════════════════════
+    (function initSphere() {
+        const canvas = document.getElementById('hero-sphere');
+        if (!canvas || typeof THREE === 'undefined') return;
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.z = 4.5;
+
+        const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        const group = new THREE.Group();
+        scene.add(group);
+
+        // ── Helper: wireframe material ──
+        const wireMat = (hex, op) => new THREE.MeshBasicMaterial({
+            color: hex, wireframe: true, transparent: true, opacity: op
+        });
+
+        // ══ 3 RADICALLY DIFFERENT shapes ══
+        // Zone A (Hero): Smooth sphere — clean, approachable
+        // Zone B (How-It-Works): TorusKnot — complex, interlocking, "machinery"
+        // Zone C (Roadmap/Security): Atom — 3 orbital rings + glowing core
+
+        // ── Shape 0: Smooth HD Sphere ──
+        const shape0group = new THREE.Group();
+        const s0OuterMat = wireMat(0x9333ea, 0);
+        const s0InnerMat = wireMat(0x6366f1, 0);
+        shape0group.add(new THREE.Mesh(new THREE.IcosahedronGeometry(1.3, 3), s0OuterMat));
+        shape0group.add(new THREE.Mesh(new THREE.IcosahedronGeometry(1.0, 2), s0InnerMat));
+        group.add(shape0group);
+
+        // ── Shape 1: TorusKnot (complex, swirling) ──
+        const shape1group = new THREE.Group();
+        const s1OuterMat = wireMat(0x8b5cf6, 0);
+        const s1InnerMat = wireMat(0xa78bfa, 0);
+        shape1group.add(new THREE.Mesh(new THREE.TorusKnotGeometry(0.85, 0.28, 128, 16, 2, 3), s1OuterMat));
+        shape1group.add(new THREE.Mesh(new THREE.TorusKnotGeometry(0.65, 0.18, 64, 12, 2, 3), s1InnerMat));
+        group.add(shape1group);
+
+        // ── Shape 2: Atom (core + 3 orbital rings) ──
+        const shape2group = new THREE.Group();
+        const s2CoreMat = wireMat(0xc084fc, 0);
+        const s2RingMat1 = wireMat(0x6d28d9, 0);
+        const s2RingMat2 = wireMat(0x818cf8, 0);
+        const s2RingMat3 = wireMat(0xa78bfa, 0);
+        // Core
+        const atomCore = new THREE.Mesh(new THREE.IcosahedronGeometry(0.45, 2), s2CoreMat);
+        shape2group.add(atomCore);
+        // Ring 1 (XY plane)
+        const ring1 = new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.035, 8, 64), s2RingMat1);
+        shape2group.add(ring1);
+        // Ring 2 (tilted 60°)
+        const ring2 = new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.035, 8, 64), s2RingMat2);
+        ring2.rotation.x = Math.PI / 3;
+        ring2.rotation.z = Math.PI / 6;
+        shape2group.add(ring2);
+        // Ring 3 (tilted -60°)
+        const ring3 = new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.035, 8, 64), s2RingMat3);
+        ring3.rotation.x = -Math.PI / 3;
+        ring3.rotation.z = -Math.PI / 6;
+        shape2group.add(ring3);
+        group.add(shape2group);
+
+        // ── Shape 3: F1 CAR — realistic profile silhouette (faces LEFT) ──
+        const shape3group = new THREE.Group();
+        const s3BodyMat = wireMat(0xf43f5e, 0);   // red body
+        const s3WingMat = wireMat(0xfb923c, 0);    // orange wings
+        const s3WheelMat = wireMat(0xe2e8f0, 0);   // white wheels
+        const s3GlowMat = wireMat(0xc084fc, 0);    // purple glow
+
+        // ═══ BODY — 2D profile extruded for depth ═══
+        // Car faces LEFT (nose at -X). Y=0 is ground level.
+        const bp = new THREE.Shape();
+        // Start rear-bottom, trace clockwise
+        bp.moveTo(1.05, 0.0);        // rear floor
+        bp.lineTo(-1.05, 0.0);       // front floor
+        bp.lineTo(-1.35, 0.02);      // nose lower slope
+        bp.lineTo(-1.55, 0.08);      // nose tip
+        bp.lineTo(-1.35, 0.14);      // nose top
+        bp.lineTo(-1.05, 0.16);      // front of monocoque
+        bp.lineTo(-0.55, 0.17);      // monocoque flat
+        bp.lineTo(-0.30, 0.17);      // pre-cockpit
+        bp.lineTo(-0.25, 0.32);      // cockpit front wall (halo)
+        bp.lineTo(0.05, 0.32);       // cockpit rear / airbox front
+        bp.lineTo(0.10, 0.42);       // airbox peak
+        bp.lineTo(0.25, 0.40);       // airbox top
+        bp.lineTo(0.50, 0.32);       // engine cover start
+        bp.lineTo(0.80, 0.22);       // engine cover slopes
+        bp.lineTo(1.00, 0.16);       // rear end top
+        bp.lineTo(1.05, 0.12);       // rear face
+        bp.lineTo(1.05, 0.0);        // close
+
+        const bodyGeo = new THREE.ExtrudeGeometry(bp, {
+            depth: 0.35, bevelEnabled: false, steps: 1
+        });
+        bodyGeo.center();
+        bodyGeo.translate(0, 0.15, 0);
+        shape3group.add(new THREE.Mesh(bodyGeo, s3BodyMat));
+
+        // ═══ FRONT WING (low, wide, thin plate) ═══
+        const fwShape = new THREE.Shape();
+        fwShape.moveTo(-1.55, 0.0);
+        fwShape.lineTo(-1.80, -0.04);  // wing tip goes down and forward
+        fwShape.lineTo(-1.80, -0.02);
+        fwShape.lineTo(-1.55, 0.04);
+        fwShape.lineTo(-1.55, 0.0);
+        const fwGeo = new THREE.ExtrudeGeometry(fwShape, { depth: 0.50, bevelEnabled: false });
+        fwGeo.translate(0, 0, -0.25);
+        shape3group.add(new THREE.Mesh(fwGeo, s3WingMat));
+
+        // Front wing endplates (vertical fins)
+        const fwpGeo = new THREE.BoxGeometry(0.30, 0.10, 0.02);
+        const fwp1 = new THREE.Mesh(fwpGeo, s3WingMat);
+        fwp1.position.set(-1.65, 0.0, 0.25);
+        shape3group.add(fwp1);
+        const fwp2 = new THREE.Mesh(fwpGeo, s3WingMat);
+        fwp2.position.set(-1.65, 0.0, -0.25);
+        shape3group.add(fwp2);
+
+        // ═══ REAR WING (high, wide) ═══
+        const rwMainGeo = new THREE.BoxGeometry(0.03, 0.14, 0.50, 1, 2, 2);
+        const rwMain = new THREE.Mesh(rwMainGeo, s3WingMat);
+        rwMain.position.set(1.08, 0.50, 0);
+        shape3group.add(rwMain);
+        // Rear wing pillar
+        const rwPillarGeo = new THREE.BoxGeometry(0.02, 0.28, 0.03);
+        const rwP1 = new THREE.Mesh(rwPillarGeo, s3WingMat);
+        rwP1.position.set(1.05, 0.36, 0.12);
+        shape3group.add(rwP1);
+        const rwP2 = new THREE.Mesh(rwPillarGeo, s3WingMat);
+        rwP2.position.set(1.05, 0.36, -0.12);
+        shape3group.add(rwP2);
+
+        // ═══ WHEELS (4 torus = tire profile) ═══
+        const wheelGeo = new THREE.TorusGeometry(0.16, 0.065, 8, 16);
+        const f1Wheels = [];
+        [[-0.75, 0.0, 0.30], [-0.75, 0.0, -0.30],   // front wheels
+         [0.80, 0.0, 0.30],  [0.80, 0.0, -0.30]      // rear wheels
+        ].forEach(pos => {
+            const wheel = new THREE.Mesh(wheelGeo, s3WheelMat);
+            wheel.position.set(pos[0], pos[1], pos[2]);
+            wheel.rotation.y = Math.PI / 2;
+            f1Wheels.push(wheel);
+            shape3group.add(wheel);
+        });
+
+        // ═══ EXHAUST GLOW (pulsing icosahedron at rear) ═══
+        const engineGlow = new THREE.Mesh(new THREE.IcosahedronGeometry(0.12, 1), s3GlowMat);
+        engineGlow.position.set(1.15, 0.10, 0);
+        shape3group.add(engineGlow);
+
+        // Scale & rotate to show PROFILE view (looking from side = rotated so Z faces camera)
+        shape3group.scale.setScalar(0.75);
+        group.add(shape3group);
+
+        // Mesh references for the animation loop
+        const meshes = [
+            { group: shape0group, mats: [s0OuterMat, s0InnerMat] },
+            { group: shape1group, mats: [s1OuterMat, s1InnerMat] },
+            { group: shape2group, mats: [s2CoreMat, s2RingMat1, s2RingMat2, s2RingMat3] },
+            { group: shape3group, mats: [s3BodyMat, s3WingMat, s3WheelMat, s3GlowMat] },
+        ];
+
+        // Orbiting particles
+        const particleCount = 100;
+        const pPos = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount; i++) {
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const r = 1.6 + Math.random() * 0.8;
+            pPos[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
+            pPos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+            pPos[i * 3 + 2] = r * Math.cos(phi);
+        }
+        const particleGeo = new THREE.BufferGeometry();
+        particleGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+        const particleMat = new THREE.PointsMaterial({
+            color: 0xc084fc, size: 0.025, transparent: true, opacity: 0.5,
+            blending: THREE.AdditiveBlending, depthWrite: false,
+        });
+        const particles = new THREE.Points(particleGeo, particleMat);
+        group.add(particles);
+
+        // ── Position waypoints (diagonal path, shape index) ──
+        // Only 4 waypoints across entire page → long smooth transitions
+        const waypoints = [
+            { id: 'hero',         x:  1.8, y:  1.0, scale: 1.0,  shape: 0, op: 0.22 },
+            { id: 'how-it-works', x: -1.6, y: -0.8, scale: 0.85, shape: 1, op: 0.20 },
+            { id: 'roadmap',      x:  1.8, y:  0.6, scale: 0.85, shape: 3, op: 0.25 },
+            { id: 'security',     x: -1.4, y: -0.6, scale: 0.75, shape: 2, op: 0.18 },
+        ];
+
+        // ── Scroll interpolation state ──
+        let targetX = 1.8, targetY = 1.0, targetScale = 1.0, targetOp = 0.18;
+        let curX = 1.8, curY = 1.0, curScale = 1.0;
+        // Shape blend: [0,1,2,3] target weights
+        let targetWeights = [1, 0, 0, 0];
+        let smoothWeights = [1, 0, 0, 0];
+
+        function updateScroll() {
+            const scrollY = window.scrollY;
+            const resolved = [];
+            for (const wp of waypoints) {
+                const el = document.getElementById(wp.id);
+                if (!el) continue;
+                resolved.push({ ...wp, top: el.offsetTop });
+            }
+            if (resolved.length < 2) return;
+
+            // Find current segment
+            let a = resolved[0], b = resolved[1];
+            for (let i = 0; i < resolved.length - 1; i++) {
+                if (scrollY >= resolved[i].top) {
+                    a = resolved[i]; b = resolved[i + 1];
+                }
+            }
+            if (scrollY >= resolved[resolved.length - 1].top) {
+                a = b = resolved[resolved.length - 1];
+            }
+
+            const range = b.top - a.top;
+            const t = range > 0 ? Math.max(0, Math.min(1, (scrollY - a.top) / range)) : 0;
+            const s = t * t * (3 - 2 * t); // smoothstep
+
+            targetX     = a.x     + (b.x     - a.x)     * s;
+            targetY     = a.y     + (b.y     - a.y)     * s;
+            targetScale = a.scale + (b.scale - a.scale)  * s;
+            targetOp    = a.op    + (b.op    - a.op)     * s;
+
+            // Shape weights: crossfade between a.shape and b.shape
+            targetWeights = [0, 0, 0, 0];
+            if (a.shape === b.shape) {
+                targetWeights[a.shape] = 1;
+            } else {
+                targetWeights[a.shape] = 1 - s;
+                targetWeights[b.shape] = s;
+            }
+        }
+
+        window.addEventListener('scroll', updateScroll, { passive: true });
+        updateScroll();
+
+        // Mouse
+        let mouseX = 0, mouseY = 0, tMX = 0, tMY = 0;
+        document.addEventListener('mousemove', (e) => {
+            tMX = (e.clientX / window.innerWidth  - 0.5) * 2;
+            tMY = (e.clientY / window.innerHeight - 0.5) * 2;
+        }, { passive: true });
+
+        // Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }, { passive: true });
+
+        // ── Animation loop ──
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = performance.now() * 0.001;
+
+            // Smooth position lerp (slow = buttery)
+            const posLerp = 0.035;
+            curX     += (targetX     - curX)     * posLerp;
+            curY     += (targetY     - curY)     * posLerp;
+            curScale += (targetScale - curScale) * posLerp;
+
+            // Smooth mouse
+            mouseX += (tMX - mouseX) * 0.04;
+            mouseY += (tMY - mouseY) * 0.04;
+
+            // Bobbing + sway
+            group.position.x = curX + Math.sin(time * 0.3) * 0.12;
+            group.position.y = curY + Math.sin(time * 0.5) * 0.18;
+            group.scale.setScalar(curScale);
+
+            // ── Shape crossfade (smooth but noticeable) ──
+            const shapeLerp = 0.06;
+            for (let i = 0; i < 4; i++) {
+                smoothWeights[i] += (targetWeights[i] - smoothWeights[i]) * shapeLerp;
+                if (smoothWeights[i] < 0.005) smoothWeights[i] = 0;
+            }
+
+            // Apply to shape groups
+            for (let i = 0; i < 4; i++) {
+                const m = meshes[i];
+                const w = smoothWeights[i];
+
+                // Visibility: hide entire shape group when weight near zero
+                m.group.visible = w > 0.005;
+
+                // Opacity: set all materials in this shape
+                const baseOp = targetOp;
+                const pulse = Math.sin(time * 1.3 + i * 2) * 0.03;
+                m.mats.forEach((mat, mi) => {
+                    mat.opacity = w * (baseOp + pulse * (mi === 0 ? 1 : 0.6));
+                });
+
+                // Shape-specific rotation
+                if (i === 3) {
+                    // F1 Car: show from side angle, slight tilt with mouse
+                    m.group.rotation.y = Math.PI * -0.15 + Math.sin(time * 0.2) * 0.08 + mouseX * 0.15;
+                    m.group.rotation.x = 0.12 + mouseY * 0.08;
+                    m.group.rotation.z = Math.sin(time * 0.4) * 0.03; // subtle roll
+                } else {
+                    const rotSpeed = 0.10 + i * 0.04;
+                    m.group.rotation.y = time * rotSpeed + mouseX * 0.35;
+                    m.group.rotation.x = time * (rotSpeed * 0.6) + mouseY * 0.25;
+                }
+
+                // Scale morph: shrink out / grow in
+                const morphScale = 0.5 + w * 0.5;
+                if (i !== 3) m.group.scale.setScalar(morphScale);
+                else m.group.scale.setScalar(morphScale * 0.8); // car is already 0.8, keep it compact
+            }
+
+            // Extra: Atom rings spin independently when visible
+            if (meshes[2].group.visible) {
+                ring1.rotation.z += 0.008;
+                ring2.rotation.y += 0.006;
+                ring3.rotation.y -= 0.007;
+            }
+
+            // Extra: F1 car wheels spin + engine glow pulse
+            if (meshes[3].group.visible) {
+                f1Wheels.forEach(w => { w.rotation.x += 0.12; });
+                engineGlow.scale.setScalar(1 + Math.sin(time * 6) * 0.2);
+            }
+
+            // Particles
+            particles.rotation.y = time * 0.04 + mouseX * 0.15;
+            particles.rotation.x = time * 0.025 + mouseY * 0.1;
+            const maxW = Math.max(smoothWeights[0], smoothWeights[1], smoothWeights[2], smoothWeights[3]);
+            particleMat.opacity = maxW * (0.4 + Math.sin(time * 1.0) * 0.08);
+
+            renderer.render(scene, camera);
+        }
+        animate();
+    })();
+
+    // ═══════════════════════════════════════════════════════════
+    // PHASE 3: Parallax scroll on sections
+    // ═══════════════════════════════════════════════════════════
+    (function initParallax() {
+        const sections = document.querySelectorAll('#how-it-works, #plugins, #roadmap, #security');
+        sections.forEach(s => s.classList.add('parallax-section'));
+
+        let ticking = false;
+        window.addEventListener('scroll', () => {
+            if (!ticking) {
+                requestAnimationFrame(() => {
+                    const scrollY = window.scrollY;
+                    sections.forEach(section => {
+                        const rect = section.getBoundingClientRect();
+                        const offset = rect.top + scrollY;
+                        const distance = scrollY - offset;
+                        if (Math.abs(distance) < window.innerHeight * 1.5) {
+                            section.style.transform = `translateY(${distance * 0.03}px)`;
+                        }
+                    });
+                    ticking = false;
+                });
+                ticking = true;
+            }
+        }, { passive: true });
+    })();
+
+    // ═══════════════════════════════════════════════════════════
+    // PHASE 3: JS-based card tilt following mouse
+    // ═══════════════════════════════════════════════════════════
+    (function initCardTilt() {
+        function addTilt(card) {
+            card.classList.add('tilt-active');
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = (e.clientX - rect.left) / rect.width - 0.5;
+                const y = (e.clientY - rect.top) / rect.height - 0.5;
+                card.style.transform = `perspective(600px) rotateY(${x * 10}deg) rotateX(${-y * 10}deg) scale(1.02)`;
+                card.style.boxShadow = `${-x * 20}px ${y * 20}px 40px rgba(147,51,234,0.15)`;
+            });
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = '';
+                card.style.boxShadow = '';
+            });
+        }
+
+        // Apply to existing cards
+        document.querySelectorAll('.security-card').forEach(addTilt);
+
+        // For dynamically loaded plugin cards, use MutationObserver
+        const pluginGrid = document.getElementById('plugin-grid');
+        if (pluginGrid) {
+            const mo = new MutationObserver((mutations) => {
+                mutations.forEach(m => {
+                    m.addedNodes.forEach(n => {
+                        if (n.nodeType === 1 && n.classList.contains('card-3d')) {
+                            addTilt(n);
+                        }
+                    });
+                });
+            });
+            mo.observe(pluginGrid, { childList: true });
+        }
+    })();
+
+    // ═══════════════════════════════════════════════════════════
+    // PHASE 3: Magnetic button effect
+    // ═══════════════════════════════════════════════════════════
+    document.querySelectorAll('.magnetic-btn').forEach(btn => {
+        btn.addEventListener('mousemove', (e) => {
+            const rect = btn.getBoundingClientRect();
+            const x = e.clientX - rect.left - rect.width / 2;
+            const y = e.clientY - rect.top - rect.height / 2;
+            btn.style.transform = `translate(${x * 0.2}px, ${y * 0.2}px)`;
+        });
+        btn.addEventListener('mouseleave', () => {
+            btn.style.transform = '';
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════
+    // PHASE 3: Animated number counter for stats bar
+    // ═══════════════════════════════════════════════════════════
+    (function initCounters() {
+        const statsBar = document.getElementById('stats-bar');
+        if (!statsBar) return;
+
+        let counted = false;
+        const counterObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting && !counted) {
+                    counted = true;
+                    animateCounters();
+                    counterObserver.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.5 });
+        counterObserver.observe(statsBar);
+
+        function animateCounters() {
+            const pluginsEl = document.getElementById('stat-plugins');
+            if (pluginsEl && pluginsEl.textContent !== '—') {
+                const target = parseInt(pluginsEl.textContent) || 5;
+                countUp(pluginsEl, 0, target, 800, '');
+            }
+        }
+
+        function countUp(el, from, to, duration, prefix) {
+            const start = performance.now();
+            el.classList.add('counter-animate');
+            function tick(now) {
+                const elapsed = now - start;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+                const current = Math.round(from + (to - from) * eased);
+                el.textContent = prefix + current;
+                if (progress < 1) requestAnimationFrame(tick);
+            }
+            requestAnimationFrame(tick);
+        }
+
+        // When live stats load, animate those too
+        const tvlEl = document.getElementById('stat-tvl');
+        if (tvlEl) {
+            const origSetter = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'textContent').set;
+            let firstSet = true;
+            Object.defineProperty(tvlEl, 'textContent', {
+                set(val) {
+                    origSetter.call(this, val);
+                    if (firstSet && val.startsWith('$') && counted) {
+                        firstSet = false;
+                        this.classList.add('counter-animate');
+                    }
+                },
+                get() { return this.innerText; },
+                configurable: true,
+            });
+        }
+    })();
+
+    // ═══════════════════════════════════════════════════════════
+    // PHASE 3: Smooth anchor scroll with navbar offset
+    // ═══════════════════════════════════════════════════════════
+    document.querySelectorAll('a[href^="#"]').forEach(link => {
+        link.addEventListener('click', (e) => {
+            const targetId = link.getAttribute('href');
+            if (targetId === '#') return;
+            const target = document.querySelector(targetId);
+            if (!target) return;
+            e.preventDefault();
+            const navHeight = document.getElementById('jethos-navbar')?.offsetHeight || 0;
+            const y = target.getBoundingClientRect().top + window.scrollY - navHeight - 16;
+            window.scrollTo({ top: y, behavior: 'smooth' });
+            // Close mobile menu if open
+            document.getElementById('mobile-menu')?.classList.add('hidden');
+        });
+    });
+</script>
+
+</body>
+</html>

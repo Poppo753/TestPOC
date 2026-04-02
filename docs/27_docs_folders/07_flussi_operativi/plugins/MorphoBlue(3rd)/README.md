@@ -2,7 +2,8 @@
 
 > **Stato**: ✅ Deployed su Arbitrum One (Aprile 2026)  
 > **Pattern**: 3 Musketeers (Registry + Plugin + LensAdapter) + FlashLoanService  
-> **Protocollo esterno**: Morpho Blue — Isolated lending markets con singleton contract
+> **Protocollo esterno**: Morpho Blue — Isolated lending markets con singleton contract  
+> **Estensione**: MorphoVaultPlugin — MetaMorpho ERC-4626 vault integration (supply-only, yield passivo)
 
 ---
 
@@ -15,6 +16,8 @@
    - 4.1 [MorphoRegistry](#41-morphoregistry)
    - 4.2 [MorphoPlugin](#42-morphoplugin)
    - 4.3 [MorphoLensAdapter](#43-morpholensadapter)
+   - 4.4 [MorphoVaultPlugin](#44-morphovaultplugin)
+   - 4.5 [MorphoVaultLensAdapter](#45-morphovaultlensadapter)
 5. [Interfacce](#5-interfacce)
 6. [Script di Deploy e Operativi](#6-script-di-deploy-e-operativi)
 7. [Test](#7-test)
@@ -31,9 +34,11 @@ L'integrazione Morpho Blue è la **terza** a seguire il pattern "3 Musketeers". 
 
 | Moschettiere | Contratto | Ruolo |
 |---|---|---|
-| **La Mappa** | MorphoRegistry | Mappa `(collateralCode, loanCode) → MarketParams`, pre-calcola `marketId` |
+| **La Mappa** | MorphoRegistry | Mappa `(collateralCode, loanCode) → MarketParams` + `VaultConfig` per MetaMorpho vault |
 | **Il Braccio** | MorphoPlugin | Esegue supplyCollateral / withdrawCollateral / borrow / repay + leverage atomico via FlashLoan |
 | **Gli Occhi** | MorphoLensAdapter | Letture read-only per ValueCalculator, health monitoring, risk assessment |
+| **Il Braccio (Vault)** | MorphoVaultPlugin | Deposita/preleva da MetaMorpho vault ERC-4626 (supply-only, yield passivo) |
+| **Gli Occhi (Vault)** | MorphoVaultLensAdapter | Letture read-only per posizioni vault (shares, valore, APY) |
 
 > **Componente aggiuntivo** (condiviso con Euler V2):
 
@@ -569,6 +574,92 @@ function _computeMarketHF(plugin, marketParams, marketId) internal view returns 
 
 ---
 
+### 4.4 MorphoVaultPlugin
+
+**File**: `contracts/plugins/MorphoVaultPlugin.sol`  
+**Interfaccia**: Implementa `IProtocolAdapter`  
+**Bytecode**: 10,397 bytes (42.3% del limite)
+
+Plugin dedicato all'interazione con **MetaMorpho vault** (ERC-4626). Separato da MorphoPlugin per ragioni di bytecode (MorphoPlugin = 22,028 bytes → combinarli supererebbe il limite di 24,576).
+
+> **Nessun rischio di liquidazione** — è supply-only, il vault gestisce l'allocazione sui mercati sottostanti.  
+> **Nessun flash loan / leverage** — i vault non hanno meccanismo di borrow, quindi non è possibile chiudere il loop del flash loan.
+
+#### Perché supply-only e senza leva?
+
+Il flash loan richiede di restituire i fondi nella stessa transazione. Sui **market** Morpho Blue, il ciclo si chiude con `morpho.borrow()` → ripaghi il flash loan. Sui **vault**, depositi USDC → ricevi shares ERC-4626, ma le shares non sono USDC: non puoi usarle per ripagare. Dovresti fare withdraw, ma torneresti al punto di partenza.
+
+#### Funzioni Principali
+
+| Funzione | Accesso | Descrizione |
+|---|---|---|
+| `deposit(tokenCode, amount)` | onlyProtocolManager | Deposita nel vault di default per il tokenCode (via Registry) |
+| `withdraw(tokenCode, amount)` | onlyProtocolManager | Preleva dal vault di default (ERC-4626 withdraw) |
+| `vaultDeposit(vaultAddress, amount)` | onlyProtocolManager | Deposita in uno specifico vault MetaMorpho |
+| `vaultWithdraw(vaultAddress, amount)` | onlyProtocolManager | Preleva da uno specifico vault (amount=0 → tutto) |
+| `vaultRedeem(vaultAddress, shares)` | onlyProtocolManager | Redeem di shares specifiche (evita problemi di rounding ERC-4626) |
+| `getBalance(tokenCode)` | view | Valore totale depositato in tutti i vault per il token |
+| `emergencyWithdrawAll(tokenCodes[])` | onlyOwner | Preleva tutto da tutti i vault dei token specificati |
+
+#### Flusso Token
+
+| Operazione | Flusso |
+|---|---|
+| **DEPOSIT** | ProxyGeneral → (withdrawToken) → VaultPlugin → (vault.deposit) → MetaMorpho Vault → shares al Plugin |
+| **WITHDRAW** | MetaMorpho Vault → (vault.withdraw) → VaultPlugin → (safeTransfer) → ProxyGeneral |
+
+#### Particolarità ERC-4626
+
+- **Rounding**: `vault.maxWithdraw()` può restituire 1 wei meno dell'importo depositato. Usare `withdraw(amount - 1)` o `redeem(shares)` per evitare revert `WithdrawExceedsMax`.
+- **Shares dust**: Dopo un withdraw, possono rimanere frazioni minime di shares. È comportamento normale.
+- **Conversione**: `vault.convertToAssets(shares)` per ottenere il valore in asset delle shares possedute.
+
+#### Registry condiviso
+
+MorphoVaultPlugin usa lo **stesso MorphoRegistry** di MorphoPlugin. Il Registry è stato esteso con:
+
+| Funzione | Descrizione |
+|---|---|
+| `configureVault(name, vaultAddress, assetCode)` | Registra un vault MetaMorpho |
+| `setDefaultVault(assetCode, vaultAddress)` | Imposta il vault di default per un asset |
+| `getVaultConfig(vaultAddress)` | Ritorna `VaultConfig(address vault, string assetCode, bool isActive)` |
+| `getDefaultVault(assetCode)` | Ritorna l'indirizzo del vault di default |
+| `getRegisteredVaults()` | Lista tutti i vault registrati |
+| `setVaultStatus(vaultAddress, bool)` | Abilita/disabilita un vault |
+
+---
+
+### 4.5 MorphoVaultLensAdapter
+
+**File**: `contracts/adapters/MorphoVaultLensAdapter.sol`  
+**Bytecode**: 5,297 bytes (21.6% del limite)
+
+Componente read-only per posizioni su MetaMorpho vault. Implementa `ILensAdapter`.
+
+#### Funzioni Principali
+
+| Funzione | Descrizione |
+|---|---|
+| `protocolName()` | Ritorna `"MorphoVault"` |
+| `protocolType()` | Ritorna `ProtocolType.YIELD` |
+| `getTotalValue()` | Valore netto in ETH di tutti i vault deposit |
+| `getValueBreakdown()` | Breakdown per vault: shares, asset value, conversion rate |
+| `getHealthFactor()` | Sempre `MAX_UINT` (nessun rischio liquidazione) |
+| `getYieldInfo(tokenCode)` | APY del vault per il token |
+| `getPlugin()` | Risolve `"MorphoVaultPlugin"` dal Beacon |
+
+#### Confronto con MorphoLensAdapter
+
+| Aspetto | MorphoLensAdapter (Market) | MorphoVaultLensAdapter (Vault) |
+|---|---|---|
+| ProtocolType | LENDING | YIELD |
+| Health Factor | Calcolato (oracle + LLTV) | Sempre MAX_UINT |
+| Risk assessment | Posizioni at-risk, sorting | Non applicabile |
+| Yield | Sempre 0 (collaterale non genera yield) | APY reale del vault |
+| Valore | Collaterale - Debito in ETH | Shares × conversion rate in ETH |
+
+---
+
 ## 5. Interfacce
 
 ### Interfacce del Plugin
@@ -613,8 +704,11 @@ Tutti gli script si trovano in `scripts/`:
 
 | Script | Scopo |
 |---|---|
-| `deploy-morpho-plugin.ts` | Deploy completo dei 3 contratti + configurazione mercati + registrazione Beacon + autorizzazione ProxyGeneral |
+| `deploy-morpho-plugin.ts` | Deploy completo MorphoPlugin (3 contratti + configurazione mercati + registrazione Beacon + autorizzazione ProxyGeneral) |
+| `deploy-morpho-vault-plugin.ts` | Deploy MorphoVaultPlugin + VaultLensAdapter + aggiornamento Registry con vault config |
 | `query-morpho-markets.ts` | Usa Morpho Blue GraphQL API per scoprire mercati disponibili |
+| `e2e-morpho-vault-smoke.ts` | 55 check read-only su mainnet per verificare MorphoVaultPlugin |
+| `check-balances.ts` | Query saldi ProxyGeneral e Plugin |
 
 ### deploy-morpho-plugin.ts — Ordine delle Operazioni
 
@@ -644,6 +738,13 @@ Tutti gli script si trovano in `scripts/`:
 | File | Tipo | Casi | Stato |
 |---|---|---|---|
 | `test/integration/MorphoPlugin.fork.test.ts` | Fork test Arbitrum | 49 | ✅ 49/49 passing |
+| `test/integration/e2e-deposit-withdraw.fork.test.ts` | Fork test Arbitrum | 30 | ✅ 30/30 passing (market + vault lifecycle) |
+
+### E2E Smoke Test (Mainnet)
+
+| File | Tipo | Casi | Stato |
+|---|---|---|---|
+| `scripts/e2e-morpho-vault-smoke.ts` | Read-only mainnet | 55 | ✅ 55/55 passing |
 
 ### Copertura (12 sezioni, 49 test)
 
@@ -661,6 +762,18 @@ Tutti gli script si trovano in `scripts/`:
 | Access Control | 3 | Reject non-owner supplyCollateral, borrow, activateCircuitBreaker |
 | Open Leverage | 5 | 2x atomic, collateral>initial, debt>0, HF validation, deadline check |
 | Close Leverage | 5 | Atomic close, no debt remaining, no collateral, equity returned, no position revert |
+
+### Copertura E2E Deposit/Withdraw (5 sezioni, 30 test)
+
+| Sezione | # Test | Descrizione |
+|---|---|---|
+| Morpho Market WETH supply | 6 | Supply via ProtocolManager, getBalance, getCollateral, getDebt=0 |
+| Morpho Market WETH withdraw | 6 | Withdraw via ProtocolManager, fondi tornano a ProxyGeneral |
+| MetaMorpho Vault USDC deposit | 6 | Deposit via ProtocolManager, shares, valore, conversione |
+| MetaMorpho Vault USDC withdraw | 6 | Withdraw via ProtocolManager, rounding ERC-4626, dust shares |
+| executeProtocolCall vault ops | 3 | Low-level vaultDeposit/vaultRedeem via ProxyGeneral |
+| Combined lifecycle | 2 | Market + Vault simultanei, post-withdrawal verification |
+| Post-test verification | 1 | Verifica posizioni = 0 dopo cleanup |
 
 ### Mock Utilizzati
 
@@ -690,18 +803,35 @@ FORK_ENABLED=true npx hardhat test test/integration/MorphoPlugin.fork.test.ts
 
 ### Contratti Deployed (Arbitrum One)
 
+#### Morpho Market (Lending — con Leva)
+
 | Contratto | Indirizzo |
 |---|---|
-| MorphoRegistry | `0x9370CC33F5336186849a4bAA2ecD3dd75263d86d` |
 | MorphoPlugin | `0xf653f0E3FddA2937C2A76C385FA381599BDb65dB` |
 | MorphoLensAdapter | `0x37CbA12B65fA59f1D242a02c955b0C87db4d5088` |
+
+#### Morpho Vault (Yield — supply-only)
+
+| Contratto | Indirizzo |
+|---|---|
+| MorphoVaultPlugin | `0x118fd15a78C0Dada24c49343A55142938Ca1868E` |
+| MorphoVaultLensAdapter | `0xd5dE87464d1C77417f5a47C8B5F73f7B351F47Cc` |
+
+#### Infrastruttura Condivisa
+
+| Contratto | Indirizzo |
+|---|---|
+| MorphoRegistry (shared) | `0xe2e3a074aC000c087fCa87ae2fe0741139660f94` |
+| FlashLoanService (shared) | `0x3486b561CA1E3Dc146F97D8Ed4B9e4f2cd10822d` |
+
+> **Nota**: Il Registry precedente (`0x9370CC33...`) è stato sostituito con la versione che supporta anche la configurazione vault.
 
 ### Registrazioni
 
 | Sistema | Stato |
 |---|---|
-| Beacon (`0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870`) | ✅ Tutti e 3 registrati via `updateImplementation()` |
-| ProxyGeneral (`0x8750344c6cf493f4F5d13F52b7F7Bf1d285978e1`) | ✅ Plugin autorizzato via `authorizeModule()` |
+| Beacon (`0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870`) | ✅ Tutti e 5 registrati via `updateImplementation()` |
+| ProxyGeneral (`0x8750344c6cf493f4F5d13F52b7F7Bf1d285978e1`) | ✅ MorphoPlugin + MorphoVaultPlugin autorizzati via `authorizeModule()` |
 
 ### Mercati Configurati nel Registry
 
@@ -723,13 +853,23 @@ FORK_ENABLED=true npx hardhat test test/integration/MorphoPlugin.fork.test.ts
 WETH/USDC (86% LLTV): keccak256(abi.encode(MarketParams))
 ```
 
+### MetaMorpho Vault Configurati nel Registry
+
+| Vault | Indirizzo | Asset | Default |
+|---|---|---|---|
+| HexaOne USDC | `0xaE73875437c86abb60cD7fA77286D63cb94F9a25` | USDC | ✅ |
+| Clearstar USDC Reactor | `0xa53Cf822FE93002aEaE16d395CD823Ece161a6AC` | USDC | — |
+| usdc staging | `0xd2d46099B70880e268B0c7557b9D22d3AA848654` | USDC | — |
+
 ### Ownership
 
 | Contratto | Owner |
 |---|---|
-| MorphoRegistry | MorphoPlugin (`0x84824B...`) |
+| MorphoRegistry | MorphoPlugin (`0xf653f0E3...`) |
 | MorphoPlugin | Deployer (`0x8390e98...`) |
 | MorphoLensAdapter | Deployer (`0x8390e98...`) |
+| MorphoVaultPlugin | Deployer (`0x8390e98...`) |
+| MorphoVaultLensAdapter | Deployer (`0x8390e98...`) |
 
 ---
 
@@ -823,12 +963,16 @@ Output: Posizione chiusa, equity WETH restituita
 
 ### Plugin
 
-| Aspetto | MorphoPlugin | AaveV3Plugin | EulerV2Plugin |
-|---|---|---|---|
-| **LOC** | ~1,090 | ~627 | ~1,412 |
-| **Leverage** | Sì (flash loan) | No (esterno) | Sì (flash loan + EVC batch) |
-| **Funzioni firma** | (collateralCode, loanCode, amount) | (tokenCode, amount) | (tokenCode, amount) / leverage struct |
-| **Withdraw target** | Plugin → safeTransfer → ProxyGeneral | Pool.withdraw(to=ProxyGeneral) | Plugin → safeTransfer → ProxyGeneral |
+| Aspetto | MorphoPlugin | MorphoVaultPlugin | AaveV3Plugin | EulerV2Plugin |
+|---|---|---|---|---|
+| **LOC** | ~1,090 | ~350 | ~627 | ~1,412 |
+| **Bytecode** | 22,028 (89.6%) | 10,397 (42.3%) | — | 22,538 (91.7%) |
+| **Tipo** | LENDING | YIELD | LENDING | LENDING |
+| **Leverage** | Sì (flash loan) | No (supply-only) | Sì (flash loan) | Sì (flash loan + EVC batch) |
+| **Flash Loan** | ✅ FlashLoanService | ❌ Non applicabile | ✅ FlashLoanService | ✅ FlashLoanService |
+| **Operazioni** | supply/withdraw/borrow/repay/leverage | deposit/withdraw (ERC-4626) | supply/withdraw/borrow/repay/leverage | supply/withdraw/borrow/repay/leverage |
+| **Funzioni firma** | (collateralCode, loanCode, amount) | (tokenCode, amount) / (vault, amount) | (tokenCode, amount) | (tokenCode, amount) / leverage struct |
+| **Withdraw target** | Plugin → safeTransfer → ProxyGeneral | Plugin → safeTransfer → ProxyGeneral | Pool.withdraw(to=ProxyGeneral) | Plugin → safeTransfer → ProxyGeneral |
 
 ### LensAdapter
 
@@ -890,13 +1034,15 @@ Se si inverte l'ordine 2-4, non sarà più possibile configurare mercati senza p
 ```
 contracts/
 ├── plugins/
-│   ├── MorphoRegistry.sol            ← Registry (162 righe)
-│   └── MorphoPlugin.sol              ← Plugin (1,090 righe)
+│   ├── MorphoRegistry.sol            ← Registry condiviso Market+Vault (esteso con VaultConfig)
+│   ├── MorphoPlugin.sol              ← Plugin Market: lending + leverage (1,090 righe)
+│   └── MorphoVaultPlugin.sol         ← Plugin Vault: ERC-4626 supply-only
 ├── adapters/
-│   └── MorphoLensAdapter.sol         ← LensAdapter (610 righe)
+│   ├── MorphoLensAdapter.sol         ← LensAdapter Market (610 righe)
+│   └── MorphoVaultLensAdapter.sol    ← LensAdapter Vault
 ├── interfaces/
-│   ├── IMorphoPlugin.sol             ← Interfaccia plugin
-│   ├── IMorphoRegistry.sol           ← Interfaccia registry
+│   ├── IMorphoPlugin.sol             ← Interfaccia plugin market
+│   ├── IMorphoRegistry.sol           ← Interfaccia registry (market + vault)
 │   └── morpho/
 │       └── IMorpho.sol               ← Interfaccia Morpho Blue + Oracle + MarketParamsLib
 └── mocks/
@@ -904,13 +1050,17 @@ contracts/
     └── MockFlashLoanService.sol      ← Mock flash loan service per test leverage
 
 scripts/
-├── deploy-morpho-plugin.ts           ← Deploy completo (3 contratti + config + registrazioni)
+├── deploy-morpho-plugin.ts           ← Deploy Market (3 contratti + config + registrazioni)
+├── deploy-morpho-vault-plugin.ts     ← Deploy Vault (2 contratti + Registry update + registrazioni)
+├── e2e-morpho-vault-smoke.ts         ← 55 check mainnet read-only
+├── check-balances.ts                 ← Query saldi protocollo
 └── query-morpho-markets.ts           ← Discovery mercati via GraphQL API
 
 test/
 └── integration/
-    └── MorphoPlugin.fork.test.ts     ← 49 test cases (fork Arbitrum, 12 sezioni)
+    ├── MorphoPlugin.fork.test.ts                ← 49 test (fork Arbitrum, 12 sezioni)
+    └── e2e-deposit-withdraw.fork.test.ts        ← 30 test (market + vault lifecycle)
 
 deployments/
-└── mainnet-latest.json               ← Indirizzi aggiornati (include Morpho)
+└── mainnet-latest.json               ← Indirizzi aggiornati (include tutti i componenti Morpho)
 ```

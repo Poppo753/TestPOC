@@ -1,0 +1,76 @@
+{
+  "lastUpdated": "2026-04-01",
+  "phases": [
+    {
+      "id": "q1-2026",
+      "title": "Q1 2026",
+      "status": "completed",
+      "label": "Foundation",
+      "description": "Core protocol deployment and infrastructure",
+      "milestones": [
+        { "text": "Core protocol deployed on Arbitrum", "done": true },
+        { "text": "Beacon upgrade system live", "done": true },
+        { "text": "ValueCalculator & TokenManager", "done": true },
+        { "text": "EmergencyHandler safeguards", "done": true },
+        { "text": "ParameterManager configuration", "done": true },
+        { "text": "ProxyGeneral (JHETH) token", "done": true }
+      ]
+    },
+    {
+      "id": "q2-2026",
+      "title": "Q2 2026",
+      "status": "in-progress",
+      "label": "Integrations",
+      "description": "DeFi plugin integrations and UI overhaul",
+      "milestones": [
+        { "text": "Morpho lending plugin", "done": true },
+        { "text": "Morpho Vault adapter", "done": true },
+        { "text": "Euler V2 money market plugin", "done": true },
+        { "text": "Aave V3 lending plugin", "done": false },
+        { "text": "Uniswap V3 swap engine", "done": false },
+        { "text": "Landing page & new DApp UI", "done": false },
+        { "text": "Lens adapters for analytics", "done": false }
+      ]
+    },
+    {
+      "id": "q3-2026",
+      "title": "Q3 2026",
+      "status": "planned",
+      "label": "Growth",
+      "description": "Advanced strategies and governance",
+      "milestones": [
+        { "text": "GMX V2 hedging plugin", "done": false },
+        { "text": "Pendle yield tokenization", "done": false },
+        { "text": "Governance framework (veJHETH)", "done": false },
+        { "text": "Bug bounty program launch", "done": false },
+        { "text": "Multi-strategy optimizer", "done": false }
+      ]
+    },
+    {
+      "id": "q4-2026",
+      "title": "Q4 2026",
+      "status": "planned",
+      "label": "Expansion",
+      "description": "Cross-chain expansion and institutional features",
+      "milestones": [
+        { "text": "Multi-chain deployment (Optimism)", "done": false },
+        { "text": "Base network expansion", "done": false },
+        { "text": "Institutional vault tiers", "done": false },
+        { "text": "Advanced risk management", "done": false }
+      ]
+    },
+    {
+      "id": "2027-plus",
+      "title": "2027+",
+      "status": "vision",
+      "label": "Vision",
+      "description": "Long-term protocol evolution",
+      "milestones": [
+        { "text": "Full DAO transition", "done": false },
+        { "text": "Public SDK for plugin developers", "done": false },
+        { "text": "Cross-chain yield aggregation", "done": false },
+        { "text": "Restaking integrations (EigenLayer)", "done": false }
+      ]
+    }
+  ]
+}

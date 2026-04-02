@@ -295,7 +295,16 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <!-- NavBar -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <div id="navbar-root"></div>
+    <script type="module">
+        import { NavBar } from './src/organisms/NavBar.js';
+        const navbar = new NavBar({ activePage: '', transparent: false });
+        document.getElementById('navbar-root').appendChild(navbar.render());
+    </script>
+
+    <div class="container" style="margin-top: 80px;">
         <!-- HEADER -->
         <div class="header">
             <h1>🔧 Swap Configuration</h1>

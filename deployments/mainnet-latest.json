@@ -17,6 +17,8 @@
     "uniswapV3Plugin": "0x7ec91aEc1bD85E63D671b23E5deC8157D1f8aE01",
     "aaveV3Plugin": "0x7aEA35f66d054bB6C68957A8A27b10F08c33aA7A",
     "flashLoanService": "0x3486b561CA1E3Dc146F97D8Ed4B9e4f2cd10822d",
+    "morphoPlugin": "0xf653f0E3FddA2937C2A76C385FA381599BDb65dB",
+    "morphoLensAdapter": "0x37CbA12B65fA59f1D242a02c955b0C87db4d5088",
     "morphoRegistry": "0xe2e3a074aC000c087fCa87ae2fe0741139660f94",
     "morphoVaultPlugin": "0x118fd15a78C0Dada24c49343A55142938Ca1868E",
     "morphoVaultLensAdapter": "0xd5dE87464d1C77417f5a47C8B5F73f7B351F47Cc"
@@ -110,6 +112,26 @@
     "dependencies": {
       "aaveV3Registry": "0xEeb0EA1C430E956266C8027E39cA7A5C855B1a73",
       "aaveV3Plugin": "0x4cFDCb4215F562DC3Bc36D28fCf093E993AdC026"
+    }
+  },
+  "MorphoPlugin": {
+    "address": "0xf653f0E3FddA2937C2A76C385FA381599BDb65dB",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+    "morphoSingleton": "0x6c247b1F6182318877311737BaC0844bAa518F5e",
+    "proxyGeneral": "0x8750344c6cf493f4F5d13F52b7F7Bf1d285978e1",
+    "authorizedInProxyGeneral": true,
+    "flashLoanService": "0x3486b561CA1E3Dc146F97D8Ed4B9e4f2cd10822d",
+    "leverage": true,
+    "markets": ["WETH/USDC"]
+  },
+  "MorphoLensAdapter": {
+    "address": "0x37CbA12B65fA59f1D242a02c955b0C87db4d5088",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+    "dependencies": {
+      "morphoPlugin": "0xf653f0E3FddA2937C2A76C385FA381599BDb65dB",
+      "morphoRegistry": "0xe2e3a074aC000c087fCa87ae2fe0741139660f94"
     }
   },
   "MorphoRegistry": {
