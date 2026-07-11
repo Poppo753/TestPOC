@@ -30,6 +30,9 @@ import * as path from "path";
 const BEACON = "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870";
 const PROXY_GENERAL = "0x8750344c6cf493f4F5d13F52b7F7Bf1d285978e1";
 
+// Base Asset Configuration
+const BASE_ASSET_CODE = "USDC";
+
 // Morpho Blue on Arbitrum (real address — canonical 0xBBBB... not deployed on Arb)
 const MORPHO_ADDRESS = "0x6c247b1F6182318877311737BaC0844bAa518F5e";
 
@@ -128,7 +131,7 @@ async function main() {
 
     console.log("\n📦 Step 3/6: Deploying MorphoPlugin...");
     const PluginFactory = await ethers.getContractFactory("MorphoPlugin");
-    const plugin = await PluginFactory.deploy(BEACON);
+    const plugin = await PluginFactory.deploy(BEACON, BASE_ASSET_CODE, MORPHO_ADDRESS);
     await plugin.waitForDeployment();
     const pluginAddress = await plugin.getAddress();
     console.log(`   ✅ MorphoPlugin deployed: ${pluginAddress}`);
@@ -154,7 +157,7 @@ async function main() {
 
     console.log("\n📦 Step 5/6: Deploying MorphoLensAdapter...");
     const AdapterFactory = await ethers.getContractFactory("MorphoLensAdapter");
-    const lensAdapter = await AdapterFactory.deploy(BEACON);
+    const lensAdapter = await AdapterFactory.deploy(BEACON, BASE_ASSET_CODE, MORPHO_ADDRESS);
     await lensAdapter.waitForDeployment();
     const lensAdapterAddress = await lensAdapter.getAddress();
     console.log(`   ✅ MorphoLensAdapter deployed: ${lensAdapterAddress}`);

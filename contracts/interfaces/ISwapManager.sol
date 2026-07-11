@@ -55,11 +55,11 @@ interface ISwapManager {
     // ==================== PRICE & ESTIMATION ====================
     
     /**
-     * @notice Ottiene prezzo corrente token/WETH
+     * @notice Ottiene prezzo corrente token/base asset
      * @param tokenCode Codice token
-     * @return price Prezzo in WETH per unità token
+     * @return price Prezzo in base asset per unità token
      */
-    function getTokenWETHPrice(string memory tokenCode) external view returns (uint256 price);
+    function getTokenBaseAssetPrice(string memory tokenCode) external view returns (uint256 price);
     
     /**
      * @notice Stima gas per uno swap

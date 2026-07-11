@@ -205,7 +205,7 @@ describe("EulerV2Plugin - Real Funds on Fork", function () {
             console.log("\n📦 Deploying EulerV2Plugin...");
             
             const EulerV2Plugin = await ethers.getContractFactory("EulerV2Plugin", owner);
-            eulerPlugin = await EulerV2Plugin.deploy(ADDRESSES.BEACON);
+            eulerPlugin = await EulerV2Plugin.deploy(ADDRESSES.BEACON, "WETH");
             await eulerPlugin.waitForDeployment();
             
             const pluginAddress = await eulerPlugin.getAddress();
@@ -535,7 +535,7 @@ describe("EulerV2Plugin - Real Funds on Fork", function () {
             
             // Deploy a NEW plugin specifically for leverage test
             const EulerV2Plugin = await ethers.getContractFactory("EulerV2Plugin", owner);
-            leveragePlugin = await EulerV2Plugin.deploy(ADDRESSES.BEACON);
+            leveragePlugin = await EulerV2Plugin.deploy(ADDRESSES.BEACON, "WETH");
             await leveragePlugin.waitForDeployment();
             
             const pluginAddress = await leveragePlugin.getAddress();

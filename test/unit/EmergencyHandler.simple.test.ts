@@ -50,10 +50,11 @@ describe("EmergencyHandler Contract - Core Tests", function () {
     const Beacon = await ethers.getContractFactory("Beacon");
     const beacon = await Beacon.deploy();
     await beacon.updateImplementation("WETH", mockWETH.target);
+    await beacon.updateImplementation("BASE_ASSET", mockWETH.target);
 
     // Deploy ProxyGeneral
     const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
-    const proxyGeneral = await ProxyGeneral.deploy(beacon.target);
+    const proxyGeneral = await ProxyGeneral.deploy(beacon.target, "WETH");
 
     // Deploy TokenManager
     const TokenManager = await ethers.getContractFactory("TokenManager");
@@ -70,7 +71,7 @@ describe("EmergencyHandler Contract - Core Tests", function () {
     
     // Deploy and register ValueCalculator for emergency reports
     const ValueCalculator = await ethers.getContractFactory("ValueCalculator");
-    const valueCalculator = await ValueCalculator.deploy(beacon.target);
+    const valueCalculator = await ValueCalculator.deploy(beacon.target, "WETH");
     await beacon.updateImplementation("ValueCalculator", valueCalculator.target);
 
     // Authorize EmergencyHandler in ProxyGeneral for pause operations

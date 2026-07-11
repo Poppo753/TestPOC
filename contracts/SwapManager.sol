@@ -9,7 +9,6 @@ import "./interfaces/IBeacon.sol";
 import "./interfaces/ITokenManagerForModules.sol";
 import "./interfaces/IProxyGeneral.sol";
 import "./interfaces/ISimpleSwap.sol";
-import "./interfaces/IWETH.sol";
 
 /**
  * @title SwapManager
@@ -22,6 +21,9 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
     
     /// @notice Beacon address per resolution moduli
     address public immutable beacon;
+
+    /// @notice Base asset code for this pool (e.g. "WETH", "USDC", "WBTC")
+    string public baseAssetCode;
     
     /// @notice Slippage massimo (basis points, 10000 = 100%)
     uint256 public maxSlippage = 300; // 3% default
@@ -242,9 +244,11 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
 
     // ==================== CONSTRUCTOR ====================
 
-    constructor(address _beacon) Ownable() {
+    constructor(address _beacon, string memory _baseAssetCode) Ownable() {
         require(_beacon != address(0), "Invalid beacon address");
+        require(bytes(_baseAssetCode).length > 0, "Invalid base asset code");
         beacon = _beacon;
+        baseAssetCode = _baseAssetCode;
     }
 
     // ==================== MAIN SWAP FUNCTIONS ====================
@@ -529,20 +533,20 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         IProxyGeneral proxy = IProxyGeneral(proxyGeneral);
         ISimpleSwap swapper = _getActivePlugin(); // PHASE 1A.4: Use plugin resolution instead of hardcoded
         
-        // SPECIAL HANDLING FOR WETH
-        if (keccak256(bytes(receiveTokenCode)) == keccak256(bytes("WETH"))) {
-            return _swapToWETH(spendTokenCode, amountIn, validation, proxy, swapper);
-        } else if (keccak256(bytes(spendTokenCode)) == keccak256(bytes("WETH"))) {
-            return _swapFromWETH(receiveTokenCode, amountIn, validation, proxy, swapper);
+        // SPECIAL HANDLING FOR BASE ASSET
+        if (keccak256(bytes(receiveTokenCode)) == keccak256(bytes(baseAssetCode))) {
+            return _swapToBaseAsset(spendTokenCode, amountIn, validation, proxy, swapper);
+        } else if (keccak256(bytes(spendTokenCode)) == keccak256(bytes(baseAssetCode))) {
+            return _swapFromBaseAsset(receiveTokenCode, amountIn, validation, proxy, swapper);
         } else {
             return _swapTokenToToken(spendTokenCode, receiveTokenCode, amountIn, validation, proxy, swapper);
         }
     }
 
     /**
-     * @notice Swap da token generico a WETH
+     * @notice Swap da token generico a base asset
      */
-    function _swapToWETH(
+    function _swapToBaseAsset(
         string memory spendTokenCode,
         uint256 amountIn,
         SwapValidation memory validation,
@@ -550,16 +554,15 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         ISimpleSwap swapper
     ) internal returns (uint256 amountReceived) {
         
-        address wethAddress = IBeacon(beacon).getImplementation("WETH");
+        address baseAssetAddr = IBeacon(beacon).getImplementation("BASE_ASSET");
         
         // CAPTURE PRE-SWAP BALANCES
         SwapExecution memory execution;
-        execution.balanceBefore = IWETH(wethAddress).balanceOf(address(proxy));
+        execution.balanceBefore = IERC20(baseAssetAddr).balanceOf(address(proxy));
         
         // CHECK CURRENT ALLOWANCE - only approve if insufficient
         uint256 currentAllowance = IERC20(validation.spendTokenAddress).allowance(address(proxy), address(swapper));
         if (currentAllowance < amountIn) {
-            // APPROVE PLUGIN TO SPEND TOKENS FROM PROXYGENERAL (MAX for efficiency)
             proxy.approveSpender(validation.spendTokenAddress, address(swapper), type(uint256).max);
         }
         
@@ -569,48 +572,39 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             amountIn
         ) returns (uint256 received) {
             
-            // VERIFY ACTUAL RECEIVED AMOUNT
-            execution.balanceAfter = IWETH(wethAddress).balanceOf(address(proxy));
+            execution.balanceAfter = IERC20(baseAssetAddr).balanceOf(address(proxy));
             execution.actualReceived = execution.balanceAfter - execution.balanceBefore;
             
-            // SLIPPAGE CHECK
             require(
                 execution.actualReceived >= validation.minAcceptableOutput,
                 "Slippage exceeds maximum allowed"
             );
             
-            // UPDATE SUCCESS TRACKING
-            bytes32 pairHash = keccak256(abi.encodePacked(spendTokenCode, "WETH"));
+            bytes32 pairHash = keccak256(abi.encodePacked(spendTokenCode, baseAssetCode));
             swapSuccesses[pairHash]++;
             
-            // CALCULATE SLIPPAGE FOR ANALYTICS (avoid underflow if actualReceived > expectedOutput)
             uint256 slippage;
             if (execution.actualReceived >= validation.expectedOutput) {
-                slippage = 0; // No slippage, got more than expected
+                slippage = 0;
             } else {
                 slippage = ((validation.expectedOutput - execution.actualReceived) * 10000) / validation.expectedOutput;
             }
             
-            // EMIT EVENT WITH SLIPPAGE DATA
-            emit SwapExecuted(spendTokenCode, "WETH", amountIn, execution.actualReceived, slippage, msg.sender);
+            emit SwapExecuted(spendTokenCode, baseAssetCode, amountIn, execution.actualReceived, slippage, msg.sender);
             
             return execution.actualReceived;
             
         } catch Error(string memory reason) {
-            // Emit event FIRST (persists through revert)
-            emit SwapFailed(spendTokenCode, "WETH", amountIn, reason, msg.sender, block.timestamp);
-            
-            // Mantieni chiamata a _handleSwapError per compatibilità
-            _handleSwapError(spendTokenCode, "WETH", amountIn, reason);
-            
+            emit SwapFailed(spendTokenCode, baseAssetCode, amountIn, reason, msg.sender, block.timestamp);
+            _handleSwapError(spendTokenCode, baseAssetCode, amountIn, reason);
             revert(reason);
         }
     }
 
     /**
-     * @notice Swap da WETH a token generico
+     * @notice Swap da base asset a token generico
      */
-    function _swapFromWETH(
+    function _swapFromBaseAsset(
         string memory receiveTokenCode,
         uint256 amountIn,
         SwapValidation memory validation,
@@ -622,10 +616,8 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         SwapExecution memory execution;
         execution.balanceBefore = IERC20(validation.receiveTokenAddress).balanceOf(address(proxy));
         
-        // CHECK CURRENT ALLOWANCE - only approve if insufficient
         uint256 currentAllowance = IERC20(validation.spendTokenAddress).allowance(address(proxy), address(swapper));
         if (currentAllowance < amountIn) {
-            // APPROVE PLUGIN TO SPEND WETH FROM PROXYGENERAL (MAX for efficiency)
             proxy.approveSpender(validation.spendTokenAddress, address(swapper), type(uint256).max);
         }
         
@@ -635,40 +627,31 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             amountIn
         ) returns (uint256 received) {
             
-            // VERIFY ACTUAL RECEIVED AMOUNT
             execution.balanceAfter = IERC20(validation.receiveTokenAddress).balanceOf(address(proxy));
             execution.actualReceived = execution.balanceAfter - execution.balanceBefore;
             
-            // SLIPPAGE CHECK
             require(
                 execution.actualReceived >= validation.minAcceptableOutput,
                 "Slippage exceeds maximum allowed"
             );
             
-            // UPDATE SUCCESS TRACKING
-            bytes32 pairHash = keccak256(abi.encodePacked("WETH", receiveTokenCode));
+            bytes32 pairHash = keccak256(abi.encodePacked(baseAssetCode, receiveTokenCode));
             swapSuccesses[pairHash]++;
             
-            // CALCULATE SLIPPAGE FOR ANALYTICS (avoid underflow if actualReceived > expectedOutput)
             uint256 slippage;
             if (execution.actualReceived >= validation.expectedOutput) {
-                slippage = 0; // No slippage, got more than expected
+                slippage = 0;
             } else {
                 slippage = ((validation.expectedOutput - execution.actualReceived) * 10000) / validation.expectedOutput;
             }
             
-            // EMIT EVENT WITH SLIPPAGE DATA
-            emit SwapExecuted("WETH", receiveTokenCode, amountIn, execution.actualReceived, slippage, msg.sender);
+            emit SwapExecuted(baseAssetCode, receiveTokenCode, amountIn, execution.actualReceived, slippage, msg.sender);
             
             return execution.actualReceived;
             
         } catch Error(string memory reason) {
-            // Emit event FIRST (persists through revert)
-            emit SwapFailed("WETH", receiveTokenCode, amountIn, reason, msg.sender, block.timestamp);
-            
-            // Mantieni chiamata a _handleSwapError per compatibilità
-            _handleSwapError("WETH", receiveTokenCode, amountIn, reason);
-            
+            emit SwapFailed(baseAssetCode, receiveTokenCode, amountIn, reason, msg.sender, block.timestamp);
+            _handleSwapError(baseAssetCode, receiveTokenCode, amountIn, reason);
             revert(reason);
         }
     }
@@ -1012,41 +995,41 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         }
         
         // CHECK TOKEN VALIDITY
-        // WETH SPECIAL CASE: WETH not in TokenManager, resolved via Beacon
-        bool spendTokenIsWeth = (keccak256(bytes(spendTokenCode)) == keccak256(bytes("WETH")));
-        bool receiveTokenIsWeth = (keccak256(bytes(receiveTokenCode)) == keccak256(bytes("WETH")));
+        // BASE ASSET SPECIAL CASE: not in TokenManager, resolved via Beacon
+        bool spendTokenIsBaseAsset = (keccak256(bytes(spendTokenCode)) == keccak256(bytes(baseAssetCode)));
+        bool receiveTokenIsBaseAsset = (keccak256(bytes(receiveTokenCode)) == keccak256(bytes(baseAssetCode)));
         
-        // Validate spend token (skip TokenManager check if WETH)
-        if (!spendTokenIsWeth && !tokens.isTokenActive(spendTokenCode)) {
+        // Validate spend token (skip TokenManager check if base asset)
+        if (!spendTokenIsBaseAsset && !tokens.isTokenActive(spendTokenCode)) {
             validation.errorReason = "Spend token is inactive";
             return validation;
         }
         
-        // Validate receive token (skip TokenManager check if WETH)
-        if (!receiveTokenIsWeth && !tokens.isTokenActive(receiveTokenCode)) {
+        // Validate receive token (skip TokenManager check if base asset)
+        if (!receiveTokenIsBaseAsset && !tokens.isTokenActive(receiveTokenCode)) {
             validation.errorReason = "Receive token is inactive";
             return validation;
         }
         
-        // If WETH is involved, verify it's registered in Beacon
-        if (spendTokenIsWeth || receiveTokenIsWeth) {
-            address wethAddress = IBeacon(beacon).getImplementation("WETH");
-            if (wethAddress == address(0)) {
-                validation.errorReason = "WETH not registered in Beacon";
+        // If base asset is involved, verify it's registered in Beacon
+        if (spendTokenIsBaseAsset || receiveTokenIsBaseAsset) {
+            address baseAssetAddr = IBeacon(beacon).getImplementation("BASE_ASSET");
+            if (baseAssetAddr == address(0)) {
+                validation.errorReason = "Base asset not registered in Beacon";
                 return validation;
             }
         }
         
         // GET TOKEN ADDRESSES
-        // WETH special case: get from Beacon instead of TokenManager
-        if (spendTokenIsWeth) {
-            validation.spendTokenAddress = IBeacon(beacon).getImplementation("WETH");
+        // Base asset special case: get from Beacon instead of TokenManager
+        if (spendTokenIsBaseAsset) {
+            validation.spendTokenAddress = IBeacon(beacon).getImplementation("BASE_ASSET");
         } else {
             validation.spendTokenAddress = tokens.getTokenAddress(spendTokenCode);
         }
         
-        if (receiveTokenIsWeth) {
-            validation.receiveTokenAddress = IBeacon(beacon).getImplementation("WETH");
+        if (receiveTokenIsBaseAsset) {
+            validation.receiveTokenAddress = IBeacon(beacon).getImplementation("BASE_ASSET");
         } else {
             validation.receiveTokenAddress = tokens.getTokenAddress(receiveTokenCode);
         }
@@ -1078,14 +1061,14 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         uint8 decimalsOut = 18;
         
         // Get decimals for spendToken
-        if (!spendTokenIsWeth) {
+        if (!spendTokenIsBaseAsset) {
             try tokens.getTokenInfo(spendTokenCode) returns (ITokenManagerForModules.TokenInfo memory info) {
                 decimalsIn = info.tokenDecimals;
             } catch {}
         }
         
         // Get decimals for receiveToken
-        if (!receiveTokenIsWeth) {
+        if (!receiveTokenIsBaseAsset) {
             try tokens.getTokenInfo(receiveTokenCode) returns (ITokenManagerForModules.TokenInfo memory info) {
                 decimalsOut = info.tokenDecimals;
             } catch {}
@@ -1173,7 +1156,7 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         string memory tokenCode,
         uint256 amountIn
     ) external view returns (uint256 estimatedOut) {
-        (uint256 expectedOutput, ) = getExpectedSwapOutput(tokenCode, "WETH", amountIn);
+        (uint256 expectedOutput, ) = getExpectedSwapOutput(tokenCode, baseAssetCode, amountIn);
         return expectedOutput;
     }
 
@@ -1345,11 +1328,11 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Ottiene prezzo corrente token/WETH
+     * @notice Ottiene prezzo corrente token/base asset
      * @param tokenCode Codice token
-     * @return price Prezzo in WETH per unità token
+     * @return price Prezzo in base asset per unità token
      */
-    function getTokenWETHPrice(string memory tokenCode) external view returns (uint256 price) {
+    function getTokenBaseAssetPrice(string memory tokenCode) external view returns (uint256 price) {
         // Use TokenManager to get current price
         ITokenManagerForModules tokenManager = ITokenManagerForModules(IBeacon(beacon).getImplementation("TokenManager"));
         (uint256 tokenPrice, , ) = tokenManager.getTokenPrice(tokenCode);
@@ -1381,14 +1364,14 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         // Base gas cost for swap operation
         uint256 baseGas = 150000;
         
-        // WETH swaps are cheaper (no need for token-to-token routing)
-        bool isWethSwap = keccak256(bytes(tokenCodeIn)) == keccak256(bytes("WETH")) ||
-                          keccak256(bytes(tokenCodeOut)) == keccak256(bytes("WETH"));
+        // Base asset swaps are cheaper (no need for token-to-token routing)
+        bool isBaseAssetSwap = keccak256(bytes(tokenCodeIn)) == keccak256(bytes(baseAssetCode)) ||
+                               keccak256(bytes(tokenCodeOut)) == keccak256(bytes(baseAssetCode));
         
-        if (isWethSwap) {
-            baseGas = 100000; // WETH swaps more efficient
+        if (isBaseAssetSwap) {
+            baseGas = 100000; // Base asset swaps more efficient
         } else {
-            // Token-to-token swaps cost more (may need intermediate WETH hop)
+            // Token-to-token swaps cost more (may need intermediate hop)
             baseGas = 200000;
         }
         
@@ -1456,13 +1439,13 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
     
     /**
      * @notice Verifica se due token hanno pair diretta
-     * @dev Semplificato: assume WETH sempre ha pair diretta
+     * @dev Semplificato: assume base asset sempre ha pair diretta
      */
     function _isDirectPair(address tokenA, address tokenB) internal view returns (bool) {
-        address wethAddress = IBeacon(beacon).getImplementation("WETH");
+        address baseAssetAddr = IBeacon(beacon).getImplementation("BASE_ASSET");
         
-        // If either token is WETH, assume direct pair
-        if (tokenA == wethAddress || tokenB == wethAddress) {
+        // If either token is base asset, assume direct pair
+        if (tokenA == baseAssetAddr || tokenB == baseAssetAddr) {
             return true;
         }
         
@@ -1498,22 +1481,22 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             return (false, "Amount must be greater than 0");
         }
 
-        // Check token addresses exist - SPECIAL CASE: WETH from Beacon
-        bool tokenInIsWeth = (keccak256(bytes(tokenCodeIn)) == keccak256(bytes("WETH")));
-        bool tokenOutIsWeth = (keccak256(bytes(tokenCodeOut)) == keccak256(bytes("WETH")));
+        // Check token addresses exist - SPECIAL CASE: base asset from Beacon
+        bool tokenInIsBaseAsset = (keccak256(bytes(tokenCodeIn)) == keccak256(bytes(baseAssetCode)));
+        bool tokenOutIsBaseAsset = (keccak256(bytes(tokenCodeOut)) == keccak256(bytes(baseAssetCode)));
         
         address tokenInAddress;
         address tokenOutAddress;
         
-        if (tokenInIsWeth) {
-            tokenInAddress = IBeacon(beacon).getImplementation("WETH");
+        if (tokenInIsBaseAsset) {
+            tokenInAddress = IBeacon(beacon).getImplementation("BASE_ASSET");
         } else {
             ITokenManagerForModules tokenManager = ITokenManagerForModules(IBeacon(beacon).getImplementation("TokenManager"));
             tokenInAddress = tokenManager.getTokenAddress(tokenCodeIn);
         }
         
-        if (tokenOutIsWeth) {
-            tokenOutAddress = IBeacon(beacon).getImplementation("WETH");
+        if (tokenOutIsBaseAsset) {
+            tokenOutAddress = IBeacon(beacon).getImplementation("BASE_ASSET");
         } else {
             ITokenManagerForModules tokenManager = ITokenManagerForModules(IBeacon(beacon).getImplementation("TokenManager"));
             tokenOutAddress = tokenManager.getTokenAddress(tokenCodeOut);

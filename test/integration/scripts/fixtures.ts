@@ -46,12 +46,13 @@ export async function deployScriptTestFixture() {
 
   // Register WETH in Beacon
   await beacon.updateImplementation("WETH", await mockWETH.getAddress());
+  await beacon.updateImplementation("BASE_ASSET", await mockWETH.getAddress());
 
   // ==================== CORE CONTRACTS ====================
   
   // Deploy ProxyGeneral
   const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
-  const proxyGeneral = await ProxyGeneral.deploy(await beacon.getAddress());
+  const proxyGeneral = await ProxyGeneral.deploy(await beacon.getAddress(), "WETH");
 
   // Deploy TokenManager
   const TokenManager = await ethers.getContractFactory("TokenManager");
@@ -59,19 +60,19 @@ export async function deployScriptTestFixture() {
 
   // Deploy ValueCalculator
   const ValueCalculator = await ethers.getContractFactory("ValueCalculator");
-  const valueCalculator = await ValueCalculator.deploy(await beacon.getAddress());
+  const valueCalculator = await ValueCalculator.deploy(await beacon.getAddress(), "WETH");
 
   // Deploy ParameterManager
   const ParameterManager = await ethers.getContractFactory("ParameterManager");
-  const parameterManager = await ParameterManager.deploy(await beacon.getAddress());
+  const parameterManager = await ParameterManager.deploy(await beacon.getAddress(), 18);
 
   // Deploy LiquidityManager
   const LiquidityManager = await ethers.getContractFactory("LiquidityManager");
-  const liquidityManager = await LiquidityManager.deploy(await beacon.getAddress());
+  const liquidityManager = await LiquidityManager.deploy(await beacon.getAddress(), "WETH");
 
   // Deploy SwapManager
   const SwapManager = await ethers.getContractFactory("SwapManager");
-  const swapManager = await SwapManager.deploy(await beacon.getAddress());
+  const swapManager = await SwapManager.deploy(await beacon.getAddress(), "WETH");
 
   // Deploy EmergencyHandler
   const EmergencyHandler = await ethers.getContractFactory("EmergencyHandler");

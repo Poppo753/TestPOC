@@ -8,7 +8,6 @@ import "./interfaces/IBeacon.sol";
 import "./interfaces/IProxyGeneral.sol";
 import "./interfaces/ITokenManagerForModules.sol";
 import "./interfaces/IValueCalculatorForModules.sol";
-import "./interfaces/IWETH.sol";
 
 /**
  * @title EmergencyHandler
@@ -55,7 +54,7 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
     
     struct EmergencyReport {
         uint256 totalPoolValue;
-        uint256 wethBalance;
+        uint256 baseAssetBalance;
         uint256 totalTokensValue;
         uint256 numberOfTokens;
         bool systemPaused;
@@ -286,39 +285,34 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
 
     /**
      * @notice Prelievo di emergenza di tutti gli asset
-     * @dev Preleva tutti i token e WETH dal ProxyGeneral all'owner
+     * @dev Preleva tutti i token e base asset dal ProxyGeneral all'owner
      * @return results Array con risultati per ogni token
      */
     function emergencyWithdraw() external onlyOwner returns (WithdrawResult[] memory results) {
         require(!emergencyExecuted["withdraw"], "Emergency withdraw already executed");
         
-        // GET CONTRACT REFERENCES
         address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
         address tokenManager = IBeacon(beacon).getImplementation("TokenManager");
-        address wethAddress = IBeacon(beacon).getImplementation("WETH");
+        address baseAssetAddress = IBeacon(beacon).getImplementation("BASE_ASSET");
         
         IProxyGeneral proxy = IProxyGeneral(proxyGeneral);
         ITokenManagerForModules tokens = ITokenManagerForModules(tokenManager);
         
-        // GET CURRENT POOL VALUE
         uint256 totalValueBefore = _getCurrentTotalValue();
         
         emit EmergencyWithdrawInitiated(msg.sender, block.timestamp, totalValueBefore);
         
-        // LOG ASSET SNAPSHOT BEFORE TRANSFER
         _logAssetSnapshot(owner());
         
-        // GET ACTIVE TOKENS
         string[] memory activeTokens = tokens.getActiveTokens();
         
-        // CREATE RESULTS ARRAY (tokens + WETH)
+        // CREATE RESULTS ARRAY (tokens + base asset)
         results = new WithdrawResult[](activeTokens.length + 1);
         
         uint256 successfulWithdraws = 0;
         uint256 failedWithdraws = 0;
         uint256 totalWithdrawn = 0;
         
-        // WITHDRAW ALL ERC20 TOKENS
         for (uint256 i = 0; i < activeTokens.length; i++) {
             string memory tokenCode = activeTokens[i];
             address tokenAddress = tokens.getTokenAddress(tokenCode);
@@ -336,7 +330,7 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
                 try proxy.emergencyTransfer(tokenAddress, balance, owner()) {
                     results[i].success = true;
                     successfulWithdraws++;
-                    totalWithdrawn += balance; // Note: questo è in token units, non ETH value
+                    totalWithdrawn += balance;
                     
                     emit TokenWithdrawAttempted(tokenCode, balance, true, "");
                 } catch Error(string memory reason) {
@@ -355,36 +349,36 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
             }
         }
         
-        // WITHDRAW WETH
-        uint256 wethBalance = IERC20(wethAddress).balanceOf(proxyGeneral);
+        // WITHDRAW BASE ASSET
+        uint256 baseAssetBalance = IERC20(baseAssetAddress).balanceOf(proxyGeneral);
         results[activeTokens.length] = WithdrawResult({
-            tokenCode: "WETH",
-            tokenAddress: wethAddress,
-            amount: wethBalance,
+            tokenCode: "BASE_ASSET",
+            tokenAddress: baseAssetAddress,
+            amount: baseAssetBalance,
             success: false,
             errorReason: ""
         });
         
-        if (wethBalance > 0) {
-            try proxy.emergencyTransfer(wethAddress, wethBalance, owner()) {
+        if (baseAssetBalance > 0) {
+            try proxy.emergencyTransfer(baseAssetAddress, baseAssetBalance, owner()) {
                 results[activeTokens.length].success = true;
                 successfulWithdraws++;
-                totalWithdrawn += wethBalance;
+                totalWithdrawn += baseAssetBalance;
                 
-                emit TokenWithdrawAttempted("WETH", wethBalance, true, "");
+                emit TokenWithdrawAttempted("BASE_ASSET", baseAssetBalance, true, "");
             } catch Error(string memory reason) {
                 results[activeTokens.length].errorReason = reason;
                 failedWithdraws++;
                 
-                emit TokenWithdrawAttempted("WETH", wethBalance, false, reason);
+                emit TokenWithdrawAttempted("BASE_ASSET", baseAssetBalance, false, reason);
             } catch {
-                results[activeTokens.length].errorReason = "Unknown error during WETH withdrawal";
+                results[activeTokens.length].errorReason = "Unknown error during base asset withdrawal";
                 failedWithdraws++;
                 
-                emit TokenWithdrawAttempted("WETH", wethBalance, false, "Unknown error");
+                emit TokenWithdrawAttempted("BASE_ASSET", baseAssetBalance, false, "Unknown error");
             }
         } else {
-            results[activeTokens.length].errorReason = "No WETH balance to withdraw";
+            results[activeTokens.length].errorReason = "No base asset balance to withdraw";
         }
         
         emergencyExecuted["withdraw"] = true;
@@ -405,7 +399,7 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
         address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
         address tokenManager = IBeacon(beacon).getImplementation("TokenManager");
         address valueCalculator = IBeacon(beacon).getImplementation("ValueCalculator");
-        address wethAddress = IBeacon(beacon).getImplementation("WETH");
+        address baseAssetAddress = IBeacon(beacon).getImplementation("BASE_ASSET");
         
         IProxyGeneral proxy = IProxyGeneral(proxyGeneral);
         ITokenManagerForModules tokens = ITokenManagerForModules(tokenManager);
@@ -413,7 +407,7 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
         
         // COLLECT POOL DATA
         report.totalPoolValue = calculator.getTotalPoolValueView();
-        report.wethBalance = IERC20(wethAddress).balanceOf(proxyGeneral);
+        report.baseAssetBalance = IERC20(baseAssetAddress).balanceOf(proxyGeneral);
         report.systemPaused = proxy.paused();
         report.reportTimestamp = block.timestamp;
         report.reportedBy = msg.sender;
@@ -635,10 +629,10 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
         address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
         address tokenManager = IBeacon(beacon).getImplementation("TokenManager");
         
-        // LOG WETH BALANCE
-        address wethAddress = IBeacon(beacon).getImplementation("WETH");
-        uint256 wethBalance = IERC20(wethAddress).balanceOf(proxyGeneral);
-        emit AssetTransferred("WETH", wethAddress, wethBalance, recipient);
+        // LOG BASE ASSET BALANCE
+        address baseAssetAddress = IBeacon(beacon).getImplementation("BASE_ASSET");
+        uint256 baseAssetBalance = IERC20(baseAssetAddress).balanceOf(proxyGeneral);
+        emit AssetTransferred("BASE_ASSET", baseAssetAddress, baseAssetBalance, recipient);
         
         // LOG ALL ACTIVE TOKENS
         try ITokenManagerForModules(tokenManager).getActiveTokens() returns (string[] memory activeTokens) {
@@ -803,17 +797,14 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
         // GET CONTRACT REFERENCES
         address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
         address tokenManager = IBeacon(beacon).getImplementation("TokenManager");
-        address wethAddress = IBeacon(beacon).getImplementation("WETH");
+        address baseAssetAddress = IBeacon(beacon).getImplementation("BASE_ASSET");
         
         ITokenManagerForModules tokens = ITokenManagerForModules(tokenManager);
         
-        // GET ACTIVE TOKENS
         string[] memory activeTokens = tokens.getActiveTokens();
         
-        // BUILD TOKEN BALANCES ARRAY
         IEmergencyHandler.TokenBalance[] memory tokenBalances = new IEmergencyHandler.TokenBalance[](activeTokens.length + 1);
         
-        // SNAPSHOT ALL ERC20 TOKENS
         for (uint256 i = 0; i < activeTokens.length; i++) {
             string memory tokenCode = activeTokens[i];
             address tokenAddress = tokens.getTokenAddress(tokenCode);
@@ -826,20 +817,19 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
             });
         }
         
-        // SNAPSHOT WETH
-        uint256 wethBalance = IERC20(wethAddress).balanceOf(proxyGeneral);
+        // SNAPSHOT BASE ASSET
+        uint256 baseAssetBalance = IERC20(baseAssetAddress).balanceOf(proxyGeneral);
         tokenBalances[activeTokens.length] = IEmergencyHandler.TokenBalance({
-            tokenCode: "WETH",
-            tokenAddress: wethAddress,
-            balance: wethBalance
+            tokenCode: "BASE_ASSET",
+            tokenAddress: baseAssetAddress,
+            balance: baseAssetBalance
         });
         
-        // CREATE SNAPSHOT STRUCT
         IEmergencyHandler.AssetSnapshot memory snapshot = IEmergencyHandler.AssetSnapshot({
             snapshotId: snapshotId,
             timestamp: block.timestamp,
             totalValue: _getTotalPoolValue(),
-            wethBalance: wethBalance,
+            baseAssetBalance: baseAssetBalance,
             tokenBalances: tokenBalances,
             capturedBy: msg.sender
         });

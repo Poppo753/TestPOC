@@ -37,7 +37,8 @@ describe("ProtocolManager + EulerV2Plugin Integration", function () {
     let whale: SignerWithAddress;
 
     // Arbitrum Addresses
-    const EVC_ADDRESS = "0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066";
+    const EVC_ADDRESS          = "0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066";
+    const ACCOUNT_LENS_ADDRESS = "0x90a52DDcb232e7bb003DD9258fA1235c553eC956";
     const EULER_VAULTS = {
         WETH: "0x78E3E051D32157AACD550fBB78458762d8f7edFF",
         USDC: "0x0a1eCC5Fe8C9be3C809844fcBe615B46A869b899",
@@ -99,7 +100,7 @@ describe("ProtocolManager + EulerV2Plugin Integration", function () {
         // ==================== DEPLOY EULER V2 PLUGIN ====================
         
         const EulerPluginFactory = await ethers.getContractFactory("EulerV2Plugin");
-        eulerPlugin = await EulerPluginFactory.deploy(await mockBeacon.getAddress());
+        eulerPlugin = await EulerPluginFactory.deploy(await mockBeacon.getAddress(), "WETH", EVC_ADDRESS, ACCOUNT_LENS_ADDRESS);
         await eulerPlugin.waitForDeployment();
         console.log(`   EulerV2Plugin: ${await eulerPlugin.getAddress()}`);
 

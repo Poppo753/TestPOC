@@ -4,6 +4,8 @@ pragma solidity ^0.8.19;
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "./interfaces/ILiquidityManager.sol";
 import "./interfaces/IBeacon.sol";
 import "./interfaces/IProxyGeneral.sol";
@@ -11,7 +13,6 @@ import "./interfaces/ITokenManagerForModules.sol";
 import "./interfaces/IValueCalculatorForModules.sol";
 import "./interfaces/ISwapManagerForModules.sol";
 import "./interfaces/IParameterManagerForModules.sol";
-import "./interfaces/IWETH.sol";
 import "./interfaces/IProtocolManager.sol";
 
 /**
@@ -20,18 +21,19 @@ import "./interfaces/IProtocolManager.sol";
  * @custom:security-contact security@yourdomain.com
  */
 contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
+    using SafeERC20 for IERC20;
     
     // ==================== STRUCTS ====================
     
     struct WithdrawValidation {
         uint256 shares;
-        uint256 ethAmount;
+        uint256 amount;
         uint256 totalSupply;
         uint256 totalValue;
-        uint256 poolEthBalance;
+        uint256 poolBaseAssetBalance;
         uint256 userBalance;
         bool requiresSwap;
-        uint256 wethNeeded;
+        uint256 baseAssetNeeded;
     }
 
     struct PoolReserveCheck {
@@ -46,6 +48,9 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
 
     /// @notice Beacon address per resolution moduli
     address public immutable beacon;
+
+    /// @notice Base asset code for this pool (e.g. "WETH", "USDC", "WBTC")
+    string public baseAssetCode;
 
     /// @notice Tracking ultimo reset limite orario
     uint256 private lastHourlyReset;
@@ -93,28 +98,35 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
 
     // ==================== CONSTRUCTOR ====================
 
-    constructor(address _beacon) Ownable() {
+    constructor(address _beacon, string memory _baseAssetCode) Ownable() {
         require(_beacon != address(0), "Invalid beacon address");
+        require(bytes(_baseAssetCode).length > 0, "Invalid base asset code");
         beacon = _beacon;
+        baseAssetCode = _baseAssetCode;
         lastHourlyReset = block.timestamp;
         
-        // Initialize default withdraw limits
+        // Initialize default withdraw limits scaled to base asset decimals
+        address baseAssetAddr = IBeacon(_beacon).getImplementation("BASE_ASSET");
+        uint256 unit = 10 ** uint256(IERC20Metadata(baseAssetAddr).decimals());
         withdrawLimits = WithdrawLimits({
-            hourlyLimit: 100 ether,    // 100 ETH per hour default
-            dailyLimit: 1000 ether,    // 1000 ETH per day default
-            minWithdraw: 0.000001 ether,  // 1 Wei minimum
-            maxWithdraw: 50 ether      // 50 ETH per transaction default
+            hourlyLimit: 100 * unit,
+            dailyLimit: 1000 * unit,
+            minWithdraw: unit / 1_000_000,
+            maxWithdraw: 50 * unit
         });
     }
 
     // ==================== DEPOSIT FUNCTION ====================
 
     /**
-     * @notice Deposita ETH nel pool e riceve LP tokens in rapporto 1:1
-     * @dev Validazioni complete secondo functional specifications
+     * @notice Deposita base asset nel pool e riceve LP tokens
+     * @dev ERC20-only: caller must approve this contract first
+     * @param amount Quantità di base asset da depositare
      * @return lpTokens Numero di LP tokens ricevuti
      */
-    function deposit() external payable nonReentrant whenNotPaused whenDepositsEnabled returns (uint256 lpTokens) {
+    function deposit(uint256 amount) external nonReentrant whenNotPaused whenDepositsEnabled returns (uint256 lpTokens) {
+        require(amount > 0, "Invalid deposit amount");
+        
         // GET PARAMETER VALUES
         address paramManager = IBeacon(beacon).getImplementation("ParameterManager");
         IParameterManagerForModules params = IParameterManagerForModules(paramManager);
@@ -123,34 +135,32 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
         uint256 maxDeposit = params.getCurrentParameterValue("maxDeposit");
         
         // INITIAL VALIDATIONS
-        require(msg.value >= minDeposit, "Below minimum deposit");
-        require(msg.value <= maxDeposit, "Exceeds maximum deposit");
+        require(amount >= minDeposit, "Below minimum deposit");
+        require(amount <= maxDeposit, "Exceeds maximum deposit");
         
         // CALCULATE FEE
-        uint256 feeAmount = (msg.value * depositFee) / 10000;
-        uint256 netDeposit = msg.value - feeAmount;
+        uint256 feeAmount = (amount * depositFee) / 10000;
+        uint256 netDeposit = amount - feeAmount;
         
         // CHECK RATE LIMITING 
         address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
         IProxyGeneral proxy = IProxyGeneral(proxyGeneral);
         
-        (bool rateLimitOk, , ) = proxy.checkRateLimit(msg.sender, "deposit", msg.value);
+        (bool rateLimitOk, , ) = proxy.checkRateLimit(msg.sender, "deposit", amount);
         require(rateLimitOk, "Rate limit exceeded for deposit operation");
         
         // TRACK OPERATION FOR RATE LIMITING
-        proxy.trackOperation(msg.sender, "deposit", msg.value);
+        proxy.trackOperation(msg.sender, "deposit", amount);
         
-        // GET CONTRACT REFERENCES
-        address wethAddress = IBeacon(beacon).getImplementation("WETH");
-        IWETH weth = IWETH(wethAddress);
+        // GET BASE ASSET ADDRESS
+        address baseAssetAddr = IBeacon(beacon).getImplementation("BASE_ASSET");
+        require(baseAssetAddr != address(0), "Base asset not configured");
         
         // CAPTURE PRE-DEPOSIT STATE
-        uint256 preDepositWethBalance = IERC20(wethAddress).balanceOf(proxyGeneral);
+        uint256 preDepositBalance = IERC20(baseAssetAddr).balanceOf(proxyGeneral);
         uint256 preDepositSupply = proxy.totalSupply();
         
         // SHARES CALCULATION - PROPORTIONAL TO POOL VALUE
-        // Formula: shares = (netDeposit * totalSupply) / totalPoolValue
-        // Bootstrap (first deposit): shares = netDeposit (1:1 ratio)
         uint256 shares;
         
         if (preDepositSupply == 0) {
@@ -164,7 +174,6 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
             uint256 totalValue = calculator.getTotalPoolValueView();
             require(totalValue > 0, "Invalid pool state");
             
-            // Calculate proportional shares
             shares = (netDeposit * preDepositSupply) / totalValue;
             
             require(shares > 0, "Deposit too small for current pool size");
@@ -172,14 +181,12 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
         
         require(shares > 0, "No shares to mint");
         
-        // WRAP NET DEPOSIT TO WETH AND TRANSFER TO PROXY
-        weth.deposit{value: netDeposit}();
-        require(weth.transfer(proxyGeneral, netDeposit), "WETH transfer failed");
+        // TRANSFER BASE ASSET FROM USER TO PROXYGENERAL (ERC20 transferFrom)
+        IERC20(baseAssetAddr).safeTransferFrom(msg.sender, proxyGeneral, netDeposit);
         
         // TRANSFER FEE TO RECIPIENT IF APPLICABLE
         if (feeAmount > 0 && feeRecipient != address(0)) {
-            (bool success, ) = feeRecipient.call{value: feeAmount}("");
-            require(success, "Fee transfer failed");
+            IERC20(baseAssetAddr).safeTransferFrom(msg.sender, feeRecipient, feeAmount);
         }
         
         // MINT LP TOKENS
@@ -191,15 +198,15 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
             "Invalid supply change"
         );
         require(
-            IERC20(wethAddress).balanceOf(proxyGeneral) == preDepositWethBalance + netDeposit,
-            "Invalid WETH balance change"
+            IERC20(baseAssetAddr).balanceOf(proxyGeneral) == preDepositBalance + netDeposit,
+            "Invalid base asset balance change"
         );
         
         emit Deposit(
             msg.sender,
-            msg.value,
+            amount,
             shares,
-            IERC20(wethAddress).balanceOf(proxyGeneral),
+            IERC20(baseAssetAddr).balanceOf(proxyGeneral),
             proxy.totalSupply()
         );
         
@@ -209,58 +216,43 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
     // ==================== WITHDRAW FUNCTION ====================
 
     /**
-     * @notice Preleva ETH dal pool bruciando LP tokens (LEGACY con deadline automatico)
-     * @dev Usa default deadline di 20 minuti per backward compatibility
+     * @notice Preleva base asset dal pool bruciando LP tokens (con deadline automatico)
      * @param _shares Numero di LP tokens da bruciare
-     * @return ethAmount ETH effettivamente prelevato
+     * @return amount Base asset effettivamente prelevato
      */
-    function withdraw(uint256 _shares) external nonReentrant whenNotPaused whenWithdrawsEnabled returns (uint256 ethAmount) {
-        // Calcola deadline automatico (20 minuti)
+    function withdraw(uint256 _shares) external nonReentrant whenNotPaused whenWithdrawsEnabled returns (uint256 amount) {
         uint256 deadline = block.timestamp + 20 minutes;
-        
-        // Delega a versione con deadline
         return _withdrawInternal(_shares, deadline);
     }
     
     /**
-     * @notice Preleva ETH dal pool con deadline esplicito (MEV protected)
-     * @dev Fornisce protezione MEV per swap automatici durante withdraw
+     * @notice Preleva base asset dal pool con deadline esplicito (MEV protected)
      * @param _shares Numero di LP tokens da bruciare
-     * @param deadline Timestamp massimo per completare operazione (inclusi swap)
-     * @return ethAmount ETH effettivamente prelevato
+     * @param deadline Timestamp massimo per completare operazione
+     * @return amount Base asset effettivamente prelevato
      */
-    function withdrawWithDeadline(uint256 _shares, uint256 deadline) external nonReentrant whenNotPaused whenWithdrawsEnabled returns (uint256 ethAmount) {
-        // DEADLINE PRE-CHECK (fail fast)
+    function withdrawWithDeadline(uint256 _shares, uint256 deadline) external nonReentrant whenNotPaused whenWithdrawsEnabled returns (uint256 amount) {
         require(block.timestamp <= deadline, "Withdraw deadline expired");
-        
-        // Delega a funzione interna
         return _withdrawInternal(_shares, deadline);
     }
 
     /**
      * @notice Core withdraw logic (INTERNAL)
-     * @dev Con automatic swap se WETH insufficiente + validazioni complete
-     * @param _shares Numero di LP tokens da bruciare
-     * @param deadline Timestamp massimo per swap (se necessario)
-     * @return ethAmount ETH effettivamente prelevato
+     * @dev Con automatic swap se base asset insufficiente + validazioni complete
      */
-    function _withdrawInternal(uint256 _shares, uint256 deadline) internal returns (uint256 ethAmount) {
-        // STORE START TIME FOR DURATION TRACKING
+    function _withdrawInternal(uint256 _shares, uint256 deadline) internal returns (uint256 amount) {
         uint256 startTime = block.timestamp;
-        uint256 timeRemaining = deadline - block.timestamp;
         
-        // INITIAL VALIDATION
         require(_shares > 0, "Invalid shares amount");
         
         // GET PARAMETER VALUES  
         address paramManager = IBeacon(beacon).getImplementation("ParameterManager");
         IParameterManagerForModules params = IParameterManagerForModules(paramManager);
-        
         uint256 poolReserveRatio = params.getCurrentParameterValue("poolReserveRatio");
         
         // GET CONTRACT REFERENCES
         address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
-        address wethAddress = IBeacon(beacon).getImplementation("WETH");
+        address baseAssetAddr = IBeacon(beacon).getImplementation("BASE_ASSET");
         address valueCalculator = IBeacon(beacon).getImplementation("ValueCalculator");
         
         IProxyGeneral proxy = IProxyGeneral(proxyGeneral);
@@ -274,36 +266,36 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
         
         WithdrawValidation memory validation = WithdrawValidation({
             shares: _shares,
-            ethAmount: 0,
+            amount: 0,
             totalSupply: proxy.totalSupply(),
             totalValue: poolInfo.totalValue,
-            poolEthBalance: IERC20(wethAddress).balanceOf(proxyGeneral),
+            poolBaseAssetBalance: IERC20(baseAssetAddr).balanceOf(proxyGeneral),
             userBalance: proxy.balanceOf(msg.sender),
             requiresSwap: false,
-            wethNeeded: 0
+            baseAssetNeeded: 0
         });
         
-        // CALCULATE ETH AMOUNT TO WITHDRAW
-        validation.ethAmount = (_shares * validation.totalValue) / validation.totalSupply;
+        // CALCULATE AMOUNT TO WITHDRAW
+        validation.amount = (_shares * validation.totalValue) / validation.totalSupply;
         
         // CHECK WITHDRAW LIMITS
-        (bool canWithdrawLimits, string memory limitReason) = checkWithdrawLimits(msg.sender, validation.ethAmount);
+        (bool canWithdrawLimits, string memory limitReason) = checkWithdrawLimits(msg.sender, validation.amount);
         require(canWithdrawLimits, limitReason);
         
         // CALCULATE WITHDRAW FEE
-        uint256 feeAmount = (validation.ethAmount * withdrawFee) / 10000;
-        uint256 netWithdraw = validation.ethAmount - feeAmount;
+        uint256 feeAmount = (validation.amount * withdrawFee) / 10000;
+        uint256 netWithdraw = validation.amount - feeAmount;
 
         // CHECK RATE LIMITING
-        (bool rateLimitOk, , ) = proxy.checkRateLimit(msg.sender, "withdraw", validation.ethAmount);
+        (bool rateLimitOk, , ) = proxy.checkRateLimit(msg.sender, "withdraw", validation.amount);
         require(rateLimitOk, "Rate limit exceeded for withdraw operation");
         
         // TRACK OPERATION FOR RATE LIMITING
-        proxy.trackOperation(msg.sender, "withdraw", validation.ethAmount);
+        proxy.trackOperation(msg.sender, "withdraw", validation.amount);
         
         // CHECK INITIAL RESERVE RATIO
         PoolReserveCheck memory reserveCheck;
-        reserveCheck.currentReserveRatio = (validation.poolEthBalance * 10000) / validation.totalValue;
+        reserveCheck.currentReserveRatio = (validation.poolBaseAssetBalance * 10000) / validation.totalValue;
         require(reserveCheck.currentReserveRatio >= poolReserveRatio, "Insufficient pool reserves");
         
         // EMIT WITHDRAWAL STARTED EVENT
@@ -312,7 +304,7 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
             _shares,
             deadline,
             deadline - block.timestamp,
-            validation.poolEthBalance < netWithdraw
+            validation.poolBaseAssetBalance < netWithdraw
         );
         
         // CHECK DEADLINE CRITICAL (< 3 min remaining)
@@ -326,28 +318,23 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
         }
         
         // CHECK IF SWAP IS REQUIRED (for net withdraw amount)
-        if (validation.poolEthBalance < netWithdraw) {
+        if (validation.poolBaseAssetBalance < netWithdraw) {
             validation.requiresSwap = true;
-            validation.wethNeeded = netWithdraw - validation.poolEthBalance;
+            validation.baseAssetNeeded = netWithdraw - validation.poolBaseAssetBalance;
             
-            // EXECUTE AUTOMATIC SWAP CON DEADLINE PROPAGATION
-            // Multi-swap handles slippage tolerance internally
-            _executeAutomaticSwap(validation.wethNeeded, calculator, deadline);
+            _executeAutomaticSwap(validation.baseAssetNeeded, calculator, deadline);
             
-            // GET ACTUAL WETH BALANCE AFTER ALL SWAPS
-            uint256 newWethBalance = IERC20(wethAddress).balanceOf(proxyGeneral);
+            uint256 newBalance = IERC20(baseAssetAddr).balanceOf(proxyGeneral);
             
-            // Adjust netWithdraw to what we actually have (multi-swap gave us the best possible)
-            if (newWethBalance < netWithdraw) {
-                netWithdraw = newWethBalance;
+            if (newBalance < netWithdraw) {
+                netWithdraw = newBalance;
             }
             
-            // UPDATE poolEthBalance after swap
-            validation.poolEthBalance = newWethBalance;
+            validation.poolBaseAssetBalance = newBalance;
         }
         
         // VALIDATE POST-WITHDRAW RESERVE RATIO
-        reserveCheck.postWithdrawBalance = validation.poolEthBalance - netWithdraw;
+        reserveCheck.postWithdrawBalance = validation.poolBaseAssetBalance - netWithdraw;
         reserveCheck.postWithdrawValue = validation.totalValue - netWithdraw;
         
         if (reserveCheck.postWithdrawValue > 0) {
@@ -355,32 +342,22 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
             require(reserveCheck.postWithdrawRatio >= poolReserveRatio, "Would break reserve ratio");
         }
         
-        // HOURLY TRACKING gestito da ProxyGeneral rate limiting
-        
         // BURN LP TOKENS
         proxy.burn(msg.sender, _shares);
         
-        // GET WETH FROM PROXYGENERAL
-        IWETH weth = IWETH(wethAddress);
-        
-        // TRANSFER WETH TO THIS CONTRACT from ProxyGeneral (netWithdraw + fee if applicable)
-        uint256 totalWethNeeded = netWithdraw;
+        // TRANSFER BASE ASSET FROM PROXYGENERAL TO USER (ERC20)
+        uint256 totalNeeded = netWithdraw;
         if (feeAmount > 0 && feeRecipient != address(0)) {
-            totalWethNeeded += feeAmount;
+            totalNeeded += feeAmount;
         }
-        proxy.withdrawToken("WETH", totalWethNeeded, address(this));
+        proxy.withdrawToken(baseAssetCode, totalNeeded, address(this));
         
-        // UNWRAP WETH TO ETH (all at once)
-        weth.withdraw(totalWethNeeded);
+        // TRANSFER BASE ASSET TO USER
+        IERC20(baseAssetAddr).safeTransfer(msg.sender, netWithdraw);
         
-        // TRANSFER ETH TO USER
-        (bool success, ) = msg.sender.call{value: netWithdraw}("");
-        require(success, "ETH transfer failed");
-        
-        // TRANSFER FEE TO RECIPIENT IF APPLICABLE (in ETH)
+        // TRANSFER FEE TO RECIPIENT IF APPLICABLE
         if (feeAmount > 0 && feeRecipient != address(0)) {
-            (bool feeSuccess, ) = feeRecipient.call{value: feeAmount}("");
-            require(feeSuccess, "Fee transfer failed");
+            IERC20(baseAssetAddr).safeTransfer(feeRecipient, feeAmount);
         }
         
         // FINAL VALIDATION
@@ -389,7 +366,7 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
             "Invalid supply change"
         );
         
-        // CHECK DEADLINE CRITICAL BEFORE FINAL TRANSFER
+        // CHECK DEADLINE CRITICAL
         if (deadline - block.timestamp < 3 minutes) {
             emit WithdrawalDeadlineCritical(
                 msg.sender,
@@ -402,12 +379,11 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
         emit Withdrawn(
             msg.sender,
             _shares,
-            validation.ethAmount,
+            validation.amount,
             validation.totalValue,
-            IERC20(wethAddress).balanceOf(proxyGeneral)
+            IERC20(baseAssetAddr).balanceOf(proxyGeneral)
         );
         
-        // EMIT WITHDRAWAL COMPLETED EVENT WITH TIMING
         emit WithdrawalCompleted(
             msg.sender,
             _shares,
@@ -421,42 +397,39 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
     }
 
     /**
-     * @notice Esegue automatic swap multipli per ottenere WETH necessario
-     * @dev Loop intelligente con slippage tolerance - swappa token finché target raggiunto
-     * @param wethNeeded Quantità di WETH necessaria
+     * @notice Esegue automatic swap multipli per ottenere base asset necessario
+     * @dev Loop intelligente con slippage tolerance
+     * @param baseAssetNeeded Quantità di base asset necessaria
      * @param calculator Reference al ValueCalculator
      * @param deadline Timestamp massimo per swap
      */
     function _executeAutomaticSwap(
-        uint256 wethNeeded, 
+        uint256 baseAssetNeeded, 
         IValueCalculatorForModules calculator,
         uint256 deadline
     ) internal {
-        uint256 wethStillNeeded = wethNeeded;
-        uint256 maxIterations = 10; // Safety limit
+        uint256 stillNeeded = baseAssetNeeded;
+        uint256 maxIterations = 10;
         uint256 iteration = 0;
-        uint256 totalWethObtained = 0;
+        uint256 totalObtained = 0;
         
         address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
-        address wethAddress = IBeacon(beacon).getImplementation("WETH");
+        address baseAssetAddr = IBeacon(beacon).getImplementation("BASE_ASSET");
         address swapManager = IBeacon(beacon).getImplementation("SwapManager");
         ISwapManagerForModules swapper = ISwapManagerForModules(swapManager);
         
-        emit MultiSwapStarted(msg.sender, wethNeeded, maxIterations);
+        emit MultiSwapStarted(msg.sender, baseAssetNeeded, maxIterations);
         
-        while (wethStillNeeded > 0 && iteration < maxIterations) {
+        while (stillNeeded > 0 && iteration < maxIterations) {
             iteration++;
             
-            // Check current WETH balance in ProxyGeneral
-            uint256 currentWeth = IERC20(wethAddress).balanceOf(proxyGeneral);
+            uint256 currentBalance = IERC20(baseAssetAddr).balanceOf(proxyGeneral);
             
-            // If current balance is enough for our original target, stop
-            if (currentWeth >= wethNeeded) {
-                emit MultiSwapCompleted(msg.sender, iteration - 1, totalWethObtained);
+            if (currentBalance >= baseAssetNeeded) {
+                emit MultiSwapCompleted(msg.sender, iteration - 1, totalObtained);
                 return;
             }
             
-            // Check deadline critical
             uint256 timeRemaining = deadline - block.timestamp;
             if (timeRemaining < 3 minutes) {
                 emit WithdrawalDeadlineCritical(
@@ -467,140 +440,106 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
                 );
             }
             
-            // Select next token to swap
-            (string memory tokenToSwap, uint256 amountToSwap) = calculator.selectTokenForSwap(wethStillNeeded);
+            (string memory tokenToSwap, uint256 amountToSwap) = calculator.selectTokenForSwap(stillNeeded);
             
-            // No more tokens available from regular swap selection
             if (bytes(tokenToSwap).length == 0 || amountToSwap == 0) {
-                // WITHDRAWAL PRIORITY ORDER:
-                // 1. Swap any remaining liquid tokens (non-WETH) to WETH
-                // 2. Close protocol positions via ProtocolManager (modular - handles all plugins)
-                
                 // STEP 1: Swap liquid tokens
-                uint256 fromLiquidSwap = _swapLiquidTokensForWeth(wethStillNeeded, proxyGeneral, wethAddress);
+                uint256 fromLiquidSwap = _swapLiquidTokensForBaseAsset(stillNeeded, proxyGeneral, baseAssetAddr);
                 if (fromLiquidSwap > 0) {
-                    totalWethObtained += fromLiquidSwap;
-                    if (fromLiquidSwap >= wethStillNeeded) {
-                        wethStillNeeded = 0;
+                    totalObtained += fromLiquidSwap;
+                    if (fromLiquidSwap >= stillNeeded) {
+                        stillNeeded = 0;
                     } else {
-                        wethStillNeeded -= fromLiquidSwap;
+                        stillNeeded -= fromLiquidSwap;
                     }
                     
-                    // Check if we have enough now
-                    uint256 newWethBalance = IERC20(wethAddress).balanceOf(proxyGeneral);
-                    if (newWethBalance >= wethNeeded) {
-                        emit MultiSwapCompleted(msg.sender, iteration, totalWethObtained);
+                    uint256 newBalance = IERC20(baseAssetAddr).balanceOf(proxyGeneral);
+                    if (newBalance >= baseAssetNeeded) {
+                        emit MultiSwapCompleted(msg.sender, iteration, totalObtained);
                         return;
                     }
                 }
                 
-                // STEP 2: Close protocol positions via ProtocolManager (modular for ALL plugins)
-                if (wethStillNeeded > 0) {
-                    uint256 fromProtocols = _closeProtocolPositionsForWeth(wethStillNeeded, proxyGeneral, wethAddress);
+                // STEP 2: Close protocol positions
+                if (stillNeeded > 0) {
+                    uint256 fromProtocols = _closeProtocolPositionsForBaseAsset(stillNeeded, proxyGeneral, baseAssetAddr);
                     if (fromProtocols > 0) {
-                        totalWethObtained += fromProtocols;
-                        if (fromProtocols >= wethStillNeeded) {
-                            wethStillNeeded = 0;
+                        totalObtained += fromProtocols;
+                        if (fromProtocols >= stillNeeded) {
+                            stillNeeded = 0;
                         } else {
-                            wethStillNeeded -= fromProtocols;
+                            stillNeeded -= fromProtocols;
                         }
-                        // Check if we have enough now
-                        uint256 newWethBalance = IERC20(wethAddress).balanceOf(proxyGeneral);
-                        if (newWethBalance >= wethNeeded) {
-                            emit MultiSwapCompleted(msg.sender, iteration, totalWethObtained);
+                        uint256 newBalance = IERC20(baseAssetAddr).balanceOf(proxyGeneral);
+                        if (newBalance >= baseAssetNeeded) {
+                            emit MultiSwapCompleted(msg.sender, iteration, totalObtained);
                             return;
                         }
                     }
                 }
                 
-                // Check if we have at least 97% of target (slippage tolerance)
-                uint256 minAcceptable = (wethNeeded * 97) / 100;
-                if (totalWethObtained >= minAcceptable) {
-                    emit MultiSwapCompleted(msg.sender, iteration - 1, totalWethObtained);
+                uint256 minAcceptable = (baseAssetNeeded * 97) / 100;
+                if (totalObtained >= minAcceptable) {
+                    emit MultiSwapCompleted(msg.sender, iteration - 1, totalObtained);
                     return;
                 }
                 
                 revert("Insufficient total liquidity across all available tokens");
             }
             
-            // Emit swap trigger for this iteration
             emit AutomaticSwapTriggered(
                 msg.sender,
                 tokenToSwap,
                 amountToSwap,
-                wethStillNeeded,
+                stillNeeded,
                 deadline,
                 timeRemaining
             );
             
-            // Validate swap parameters
             (bool isValid, string memory errorReason) = swapper.validateSwapParameters(
                 tokenToSwap,
-                "WETH",
+                baseAssetCode,
                 amountToSwap
             );
             require(isValid, string(abi.encodePacked("Swap validation failed: ", errorReason)));
             
-            // Execute swap
-            uint256 receivedWeth = swapper.performSwap(tokenToSwap, "WETH", amountToSwap, deadline);
-            require(receivedWeth > 0, "Swap returned zero WETH");
+            uint256 received = swapper.performSwap(tokenToSwap, baseAssetCode, amountToSwap, deadline);
+            require(received > 0, "Swap returned zero base asset");
             
-            // Update counters
-            totalWethObtained += receivedWeth;
+            totalObtained += received;
             
-            if (receivedWeth >= wethStillNeeded) {
-                wethStillNeeded = 0;
+            if (received >= stillNeeded) {
+                stillNeeded = 0;
             } else {
-                wethStillNeeded -= receivedWeth;
+                stillNeeded -= received;
             }
             
-            // Emit events for this iteration
             emit MultiSwapIteration(
                 msg.sender,
                 iteration,
                 tokenToSwap,
                 amountToSwap,
-                receivedWeth,
-                wethStillNeeded
+                received,
+                stillNeeded
             );
-            emit TokenSwappedForWithdraw(tokenToSwap, amountToSwap, receivedWeth);
+            emit TokenSwappedForWithdraw(tokenToSwap, amountToSwap, received);
         }
         
-        // Final check
-        require(wethStillNeeded == 0, "Could not obtain enough WETH after multiple swaps");
-        emit MultiSwapCompleted(msg.sender, iteration, totalWethObtained);
+        require(stillNeeded == 0, "Could not obtain enough base asset after multiple swaps");
+        emit MultiSwapCompleted(msg.sender, iteration, totalObtained);
     }
 
-    // ==================== EULER INTEGRATION ====================
+    // ==================== PROTOCOL INTEGRATION ====================
 
     /**
-     * @notice Close positions across ALL registered protocols to obtain WETH
+     * @notice Close positions across ALL registered protocols to obtain base asset
      * @dev Delegates to ProtocolManager which loops through all registered protocol adapters
-     * @dev This is the MODULAR version - works with ANY protocol that implements IProtocolAdapter
-     * 
-     * @param wethNeeded Amount of WETH still needed
-     * @param proxyGeneral ProxyGeneral address (for balance tracking - not used directly)
-     * @param wethAddress WETH token address (for balance tracking - not used directly)
-     * @return wethObtained Amount of WETH obtained from closing positions
-     * 
-     * FLOW:
-     * LiquidityManager._closeProtocolPositionsForWeth(5 WETH)
-     *     └── ProtocolManager.closePositionsForWeth(5 WETH)
-     *         ├── EulerV2Plugin.closePositionsForWeth() → 3 WETH
-     *         ├── AavePlugin.closePositionsForWeth()    → 2 WETH (future)
-     *         └── CompoundPlugin.closePositionsForWeth() → (not needed)
-     * 
-     * BENEFITS:
-     * - No Euler-specific code in LiquidityManager
-     * - Adding new protocol = just register in ProtocolManager
-     * - Each plugin handles its own normal deposits + leverage positions
      */
-    function _closeProtocolPositionsForWeth(
-        uint256 wethNeeded,
+    function _closeProtocolPositionsForBaseAsset(
+        uint256 amountNeeded,
         address proxyGeneral,
-        address wethAddress
-    ) internal returns (uint256 wethObtained) {
-        // Get ProtocolManager from Beacon
+        address baseAssetAddr
+    ) internal returns (uint256 baseAssetObtained) {
         address protocolManager;
         try IBeacon(beacon).getImplementation("ProtocolManager") returns (address pm) {
             protocolManager = pm;
@@ -610,78 +549,49 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
         
         if (protocolManager == address(0)) return 0;
         
-        // Track WETH balance before
-        uint256 wethBefore = IERC20(wethAddress).balanceOf(proxyGeneral);
+        uint256 balanceBefore = IERC20(baseAssetAddr).balanceOf(proxyGeneral);
         
-        // Delegate to ProtocolManager - it will loop through ALL registered protocols
-        try IProtocolManager(protocolManager).closePositionsForWeth(wethNeeded) 
+        try IProtocolManager(protocolManager).closePositionsForBaseAsset(amountNeeded) 
             returns (uint256 obtained, uint256 positionsClosed) 
         {
-            // Calculate actual WETH obtained (verify via balance)
-            uint256 wethAfter = IERC20(wethAddress).balanceOf(proxyGeneral);
-            wethObtained = wethAfter > wethBefore ? wethAfter - wethBefore : obtained;
+            uint256 balanceAfter = IERC20(baseAssetAddr).balanceOf(proxyGeneral);
+            baseAssetObtained = balanceAfter > balanceBefore ? balanceAfter - balanceBefore : obtained;
             
             if (positionsClosed > 0) {
-                emit ProtocolPositionsClosedForWeth(positionsClosed, wethObtained);
+                emit ProtocolPositionsClosedForBaseAsset(positionsClosed, baseAssetObtained);
             }
         } catch {
-            // ProtocolManager call failed
             return 0;
         }
         
-        return wethObtained;
+        return baseAssetObtained;
     }
     
     /**
-     * @notice DEPRECATED - Use _closeProtocolPositionsForWeth instead
-     * @dev Kept for reference - will be removed in future version
-     * 
-     * Old Euler-specific function that is now replaced by the modular version above.
-     * The new architecture uses ProtocolManager to loop through ALL registered protocols,
-     * making the system extensible for future protocols (Aave, Compound, etc.)
+     * @notice Swap liquid tokens to base asset for withdrawal
+     * @dev Swaps any available liquid tokens (non-base-asset) first
      */
-    // function _closeEulerPositionsForWeth(...) - REMOVED, see _closeProtocolPositionsForWeth
-    
-    /**
-     * @notice Swap liquid tokens (non-WETH) to WETH for withdrawal
-     * @dev Called before closing Euler positions - swaps any available liquid tokens first
-     * 
-     * STRATEGY:
-     * 1. Get all active tokens from TokenManager
-     * 2. For each token with balance > 0 (excluding WETH), swap to WETH
-     * 3. Stop when enough WETH is obtained
-     * 
-     * @param wethNeeded Amount of WETH still needed
-     * @param proxyGeneral Address of ProxyGeneral holding assets
-     * @param wethAddress Address of WETH token
-     * @return wethObtained Amount of WETH obtained from swaps
-     */
-    function _swapLiquidTokensForWeth(
-        uint256 wethNeeded,
+    function _swapLiquidTokensForBaseAsset(
+        uint256 amountNeeded,
         address proxyGeneral,
-        address wethAddress
-    ) internal returns (uint256 wethObtained) {
-        // Get TokenManager
+        address baseAssetAddr
+    ) internal returns (uint256 baseAssetObtained) {
         address tokenManager;
         try IBeacon(beacon).getImplementation("TokenManager") returns (address tm) {
             tokenManager = tm;
         } catch {
             return 0;
         }
-        
         if (tokenManager == address(0)) return 0;
         
-        // Get SwapManager
         address swapManager;
         try IBeacon(beacon).getImplementation("SwapManager") returns (address sm) {
             swapManager = sm;
         } catch {
             return 0;
         }
-        
         if (swapManager == address(0)) return 0;
         
-        // Get all active tokens
         string[] memory activeTokens;
         try ITokenManagerForModules(tokenManager).getActiveTokens() returns (string[] memory tokens) {
             activeTokens = tokens;
@@ -689,19 +599,9 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
             return 0;
         }
         
-        // Track WETH balance
-        uint256 wethBefore = IERC20(wethAddress).balanceOf(proxyGeneral);
-        
-        // Swap each token with balance > 0 (excluding WETH)
-        for (uint256 i = 0; i < activeTokens.length && wethObtained < wethNeeded; i++) {
+        for (uint256 i = 0; i < activeTokens.length && baseAssetObtained < amountNeeded; i++) {
             string memory tokenCode = activeTokens[i];
             
-            // Skip WETH
-            if (keccak256(bytes(tokenCode)) == keccak256(bytes("WETH"))) {
-                continue;
-            }
-            
-            // Get token address and balance
             address tokenAddr;
             try ITokenManagerForModules(tokenManager).getTokenAddress(tokenCode) returns (address addr) {
                 tokenAddr = addr;
@@ -712,44 +612,24 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
             uint256 balance = IERC20(tokenAddr).balanceOf(proxyGeneral);
             if (balance == 0) continue;
             
-            // Calculate how much we need to swap
-            // If we need 1 WETH and this token can provide 2 WETH worth, only swap half
-            // For simplicity, we swap all available (can optimize later)
             uint256 amountToSwap = balance;
             
-            // Try to swap
             try ISwapManagerForModules(swapManager).performSwapAuto(
                 tokenCode,
-                "WETH",
+                baseAssetCode,
                 amountToSwap
             ) returns (uint256 amountOut) {
                 if (amountOut > 0) {
-                    wethObtained += amountOut;
-                    emit LiquidTokenSwappedForWeth(tokenCode, amountToSwap, amountOut);
+                    baseAssetObtained += amountOut;
+                    emit LiquidTokenSwappedForBaseAsset(tokenCode, amountToSwap, amountOut);
                 }
             } catch {
-                // Swap failed, continue with next token
                 continue;
             }
         }
         
-        return wethObtained;
+        return baseAssetObtained;
     }
-    
-    /**
-     * @notice DEPRECATED - Normal deposits are now handled by _closeProtocolPositionsForWeth
-     * @dev Each plugin's closePositionsForWeth() should handle both normal deposits AND leverage positions
-     * 
-     * The EulerV2Plugin.closePositionsForWeth() now:
-     * 1. First closes normal deposits (no debt)
-     * 2. Then closes leverage positions (sorted by risk)
-     * 
-     * This modular approach means:
-     * - LiquidityManager doesn't need Euler-specific code
-     * - Adding new protocols = implement IProtocolAdapter.closePositionsForWeth
-     * - Each protocol handles its own deposit/position types internally
-     */
-    // function _closeEulerNormalDepositsForWeth(...) - REMOVED, see _closeProtocolPositionsForWeth
 
     // ==================== VIEW FUNCTIONS ====================
 
@@ -965,25 +845,21 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
     // ==================== FALLBACK ====================
 
     /**
-     * @notice Riceve ETH solo da WETH unwrapping o deposit()
+     * @notice Riceve ETH (solo se base asset è WETH - per DepositHelper)
      */
     receive() external payable {
-        // Allow ETH from WETH unwrapping or deposit() calls
-        address wethAddress = IBeacon(beacon).getImplementation("WETH");
-        if (msg.sender != wethAddress) {
-            revert("Direct ETH transfers not allowed. Use deposit().");
-        }
+        // Only accept ETH from known contracts (e.g. WETH unwrap, DepositHelper)
     }
 
     // ==================== INTERFACE COMPLIANCE FUNCTIONS ====================
 
     /**
-     * @notice Calcola shares per un deposito ETH
-     * @param ethAmount Quantità ETH da depositare
+     * @notice Calcola shares per un deposito di base asset
+     * @param amount Quantità base asset da depositare
      * @return shares Shares che verranno ricevute
      */
-    function calculateDepositShares(uint256 ethAmount) external view returns (uint256 shares) {
-        if (ethAmount == 0) {
+    function calculateDepositShares(uint256 amount) external view returns (uint256 shares) {
+        if (amount == 0) {
             return 0;
         }
 
@@ -991,33 +867,31 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
         uint256 totalSupply = proxy.totalSupply();
         
         if (totalSupply == 0) {
-            return ethAmount;
+            return amount;
         }
 
-        // Calcola valore pool attuale
         IValueCalculatorForModules valueCalculator = IValueCalculatorForModules(IBeacon(beacon).getImplementation("ValueCalculator"));
         uint256 totalValue = valueCalculator.getTotalPoolValueView();
         
         if (totalValue == 0) {
-            return ethAmount;
+            return amount;
         }
 
-        // Apply deposit fee
-        uint256 effectiveAmount = ethAmount;
+        uint256 effectiveAmount = amount;
         if (depositFee > 0) {
-            uint256 feeAmount = (ethAmount * depositFee) / 10000;
-            effectiveAmount = ethAmount - feeAmount;
+            uint256 feeAmount = (amount * depositFee) / 10000;
+            effectiveAmount = amount - feeAmount;
         }
 
         return (effectiveAmount * totalSupply) / totalValue;
     }
 
     /**
-     * @notice Calcola ETH ricevibile bruciando LP tokens
+     * @notice Calcola base asset ricevibile bruciando LP tokens
      * @param lpTokens Numero di LP tokens da bruciare
-     * @return ethAmount ETH che verrà ricevuto
+     * @return amount Base asset che verrà ricevuto
      */
-    function calculateWithdrawAmount(uint256 lpTokens) external view returns (uint256 ethAmount) {
+    function calculateWithdrawAmount(uint256 lpTokens) external view returns (uint256 amount) {
         if (lpTokens == 0) {
             return 0;
         }
@@ -1029,18 +903,16 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
             return 0;
         }
 
-        // Calcola valore pool
         IValueCalculatorForModules valueCalculator = IValueCalculatorForModules(IBeacon(beacon).getImplementation("ValueCalculator"));
         uint256 totalValue = valueCalculator.getTotalPoolValueView();
         
-        uint256 rawEthAmount = (lpTokens * totalValue) / totalSupply;
+        uint256 rawAmount = (lpTokens * totalValue) / totalSupply;
         
-        // Apply withdraw fee
         if (withdrawFee > 0) {
-            uint256 feeAmount = (rawEthAmount * withdrawFee) / 10000;
-            ethAmount = rawEthAmount - feeAmount;
+            uint256 feeAmount = (rawAmount * withdrawFee) / 10000;
+            amount = rawAmount - feeAmount;
         } else {
-            ethAmount = rawEthAmount;
+            amount = rawAmount;
         }
     }
 
@@ -1076,10 +948,10 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
 
         IValueCalculatorForModules valueCalculator = IValueCalculatorForModules(IBeacon(beacon).getImplementation("ValueCalculator"));
         uint256 totalValue = valueCalculator.getTotalPoolValueView();
-        uint256 ethAmount = (shares * totalValue) / totalSupply;
+        uint256 withdrawAmount = (shares * totalValue) / totalSupply;
 
         // Check withdraw limits
-        (bool limitsOk, string memory limitReason) = this.checkWithdrawLimits(user, ethAmount);
+        (bool limitsOk, string memory limitReason) = this.checkWithdrawLimits(user, withdrawAmount);
         if (!limitsOk) {
             return (false, limitReason);
         }
@@ -1091,13 +963,13 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
      * @notice Statistiche complete del pool
      * @return totalValue Valore totale del pool
      * @return totalSupply Supply totale LP tokens
-     * @return wethBalance Balance WETH nel pool
+     * @return baseAssetBalance Balance base asset nel pool
      * @return tokensCount Numero di token diversi
      */
     function getPoolStats() external view returns (
         uint256 totalValue,
         uint256 totalSupply,
-        uint256 wethBalance,
+        uint256 baseAssetBalance,
         uint256 tokensCount
     ) {
         IProxyGeneral proxy = IProxyGeneral(IBeacon(beacon).getImplementation("ProxyGeneral"));
@@ -1107,11 +979,9 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
         totalSupply = proxy.totalSupply();
         totalValue = valueCalculator.getTotalPoolValueView();
         
-        // Get WETH balance
-        address wethAddress = IBeacon(beacon).getImplementation("WETH");
-        wethBalance = IERC20(wethAddress).balanceOf(address(proxy));
+        address baseAssetAddr = IBeacon(beacon).getImplementation("BASE_ASSET");
+        baseAssetBalance = IERC20(baseAssetAddr).balanceOf(address(proxy));
         
-        // Get token count from TokenManager (Issue #7 FIX)
         tokensCount = tokenManager.getActiveTokens().length;
     }
 
@@ -1185,8 +1055,11 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
         
         // For proper implementation, ProxyGeneral would need getter functions for these values
         // Here we return approximations based on remaining amounts
-        hourlyLimit = 100 ether; // Default values - should be retrieved from config
-        dailyLimit = 1000 ether;
+        // Get base asset decimals for rate limit defaults
+        address baseAssetAddr = IBeacon(beacon).getImplementation("BASE_ASSET");
+        uint256 unit = 10 ** uint256(IERC20Metadata(baseAssetAddr).decimals());
+        hourlyLimit = 100 * unit;
+        dailyLimit = 1000 * unit;
         currentHourlyUsage = hourlyLimit > remainingHourly ? hourlyLimit - remainingHourly : 0;
         currentDailyUsage = dailyLimit > remainingDaily ? dailyLimit - remainingDaily : 0;
     }

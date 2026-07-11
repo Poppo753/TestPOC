@@ -29,8 +29,8 @@ describe("Integration: Emergency Flow", function () {
     const [owner, user1, feeRecipient] = await ethers.getSigners();
 
     // Deploy MockWETH
-    const MockWETH = await ethers.getContractFactory("MockWETH");
-    const mockWETH = await MockWETH.deploy();
+    const MockERC20 = await ethers.getContractFactory("MockERC20");
+    const mockWETH = await MockERC20.deploy("Wrapped Ether", "WETH", 18);
 
     // Deploy MockChainlinkOracle
     const MockChainlinkOracle = await ethers.getContractFactory("MockChainlinkOracle");
@@ -44,28 +44,29 @@ describe("Integration: Emergency Flow", function () {
     const Beacon = await ethers.getContractFactory("Beacon");
     const beacon = await Beacon.deploy();
     await beacon.updateImplementation("WETH", mockWETH.target);
+    await beacon.updateImplementation("BASE_ASSET", mockWETH.target);
 
     // Deploy ChainlinkAdapter
     const ChainlinkAdapter = await ethers.getContractFactory("ChainlinkAdapter");
     const chainlinkAdapter = await ChainlinkAdapter.deploy();
-    await chainlinkAdapter.setPriceFeed("USDC", mockOracle.target, 8, 3600);
-    await chainlinkAdapter.setPriceFeed("WBTC", mockOracle.target, 8, 3600);
+    await chainlinkAdapter.setPriceFeed("USDC", mockOracle.target, 8, 3600, "USD");
+    await chainlinkAdapter.setPriceFeed("WBTC", mockOracle.target, 8, 3600, "USD");
 
     // Deploy core contracts
     const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
-    const proxyGeneral = await ProxyGeneral.deploy(beacon.target);
+    const proxyGeneral = await ProxyGeneral.deploy(beacon.target, "WETH");
 
     const TokenManager = await ethers.getContractFactory("TokenManager");
     const tokenManager = await TokenManager.deploy(beacon.target, chainlinkAdapter.target);
 
     const ValueCalculator = await ethers.getContractFactory("ValueCalculator");
-    const valueCalculator = await ValueCalculator.deploy(beacon.target);
+    const valueCalculator = await ValueCalculator.deploy(beacon.target, "WETH");
 
     const ParameterManager = await ethers.getContractFactory("ParameterManager");
-    const parameterManager = await ParameterManager.deploy(beacon.target);
+    const parameterManager = await ParameterManager.deploy(beacon.target, 18);
 
     const LiquidityManager = await ethers.getContractFactory("LiquidityManager");
-    const liquidityManager = await LiquidityManager.deploy(beacon.target);
+    const liquidityManager = await LiquidityManager.deploy(beacon.target, "WETH");
 
     const EmergencyHandler = await ethers.getContractFactory("EmergencyHandler");
     const emergencyHandler = await EmergencyHandler.deploy(beacon.target);
@@ -133,8 +134,12 @@ describe("Integration: Emergency Flow", function () {
     await proxyGeneral.setRateLimit("withdraw", ethers.parseEther("1000"), ethers.parseEther("2000"));
     
     // Bootstrap pool
-    await liquidityManager.connect(owner).deposit({ value: ethers.parseEther("10") });
-    await liquidityManager.connect(user1).deposit({ value: DEPOSIT_AMOUNT });
+    await mockWETH.mint(owner.address, ethers.parseEther("10"));
+    await mockWETH.connect(owner).approve(liquidityManager.target, ethers.parseEther("10"));
+    await liquidityManager.connect(owner).deposit(ethers.parseEther("10"));
+    await mockWETH.mint(user1.address, DEPOSIT_AMOUNT);
+    await mockWETH.connect(user1).approve(liquidityManager.target, DEPOSIT_AMOUNT);
+    await liquidityManager.connect(user1).deposit(DEPOSIT_AMOUNT);
   });
 
   describe("⚡ HIGH: Emergency Flow Integration Tests", function () {
@@ -179,7 +184,7 @@ describe("Integration: Emergency Flow", function () {
       // Try deposit - should revert
       console.log(`   💰 Attempting deposit of 1 ETH...`);
       await expect(
-        liquidityManager.connect(user1).deposit({ value: ethers.parseEther("1") })
+        liquidityManager.connect(user1).deposit(ethers.parseEther("1"))
       ).to.be.revertedWith("Contract is paused");
       console.log(`   ❌ Deposit correctly blocked`);
       

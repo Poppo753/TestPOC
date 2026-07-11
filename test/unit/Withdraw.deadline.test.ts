@@ -53,6 +53,7 @@ describe("Unit: Withdrawal Deadline Monitoring", function () {
     const Beacon = await ethers.getContractFactory("Beacon");
     const beacon = await Beacon.deploy();
     await beacon.updateImplementation("WETH", await mockWETH.getAddress());
+    await beacon.updateImplementation("BASE_ASSET", await mockWETH.getAddress());
 
     // Deploy ChainlinkAdapter
     const ChainlinkAdapter = await ethers.getContractFactory("ChainlinkAdapter");
@@ -62,22 +63,22 @@ describe("Unit: Withdrawal Deadline Monitoring", function () {
 
     // Deploy core contracts
     const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
-    const proxyGeneral = await ProxyGeneral.deploy(await beacon.getAddress());
+    const proxyGeneral = await ProxyGeneral.deploy(await beacon.getAddress(), "WETH");
 
     const TokenManager = await ethers.getContractFactory("TokenManager");
     const tokenManager = await TokenManager.deploy(await beacon.getAddress(), await chainlinkAdapter.getAddress());
 
     const ValueCalculator = await ethers.getContractFactory("ValueCalculator");
-    const valueCalculator = await ValueCalculator.deploy(await beacon.getAddress());
+    const valueCalculator = await ValueCalculator.deploy(await beacon.getAddress(), "WETH");
 
     const SwapManager = await ethers.getContractFactory("SwapManager");
-    const swapManager = await SwapManager.deploy(await beacon.getAddress());
+    const swapManager = await SwapManager.deploy(await beacon.getAddress(), "WETH");
 
     const ParameterManager = await ethers.getContractFactory("ParameterManager");
-    const parameterManager = await ParameterManager.deploy(await beacon.getAddress());
+    const parameterManager = await ParameterManager.deploy(await beacon.getAddress(), 18);
 
     const LiquidityManager = await ethers.getContractFactory("LiquidityManager");
-    const liquidityManager = await LiquidityManager.deploy(await beacon.getAddress());
+    const liquidityManager = await LiquidityManager.deploy(await beacon.getAddress(), "WETH");
 
     // Register in Beacon
     await beacon.updateImplementation("ProxyGeneral", await proxyGeneral.getAddress());
@@ -88,8 +89,8 @@ describe("Unit: Withdrawal Deadline Monitoring", function () {
     await beacon.updateImplementation("LiquidityManager", await liquidityManager.getAddress());
 
     // Setup tokens
-    await tokenManager.manageTokenData("USDC", await mockUSDC.getAddress(), await mockOracle.getAddress(), 6, 8, 3600);
-    await tokenManager.manageTokenData("WBTC", await mockWBTC.getAddress(), await mockOracle.getAddress(), 8, 8, 3600);
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"]("USDC", await mockUSDC.getAddress(), 6, 3600);
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"]("WBTC", await mockWBTC.getAddress(), 8, 3600);
 
     // Setup LiquidityManager
     await liquidityManager.setFeeRecipient(feeRecipient.address);
@@ -135,9 +136,14 @@ describe("Unit: Withdrawal Deadline Monitoring", function () {
     user1 = fixture.user1;
     feeRecipient = fixture.feeRecipient;
 
-    // Bootstrap pool
-    await liquidityManager.connect(owner).deposit({ value: ethers.parseEther("10") });
-    await liquidityManager.connect(user1).deposit({ value: DEPOSIT_AMOUNT });
+    // Bootstrap pool - ERC20 deposit flow (base asset abstraction)
+    await owner.sendTransaction({ to: mockWETH.target, value: ethers.parseEther("10") });
+    await mockWETH.connect(owner).approve(liquidityManager.target, ethers.parseEther("10"));
+    await liquidityManager.connect(owner).deposit(ethers.parseEther("10"));
+
+    await user1.sendTransaction({ to: mockWETH.target, value: DEPOSIT_AMOUNT });
+    await mockWETH.connect(user1).approve(liquidityManager.target, DEPOSIT_AMOUNT);
+    await liquidityManager.connect(user1).deposit(DEPOSIT_AMOUNT);
   });
 
   describe("🎯 Deadline Event Emission", function () {
@@ -210,7 +216,7 @@ describe("Unit: Withdrawal Deadline Monitoring", function () {
       
       console.log(`   User: ${parsed?.args.user}`);
       console.log(`   Shares burned: ${ethers.formatEther(parsed?.args.shares)}`);
-      console.log(`   ETH received: ${ethers.formatEther(parsed?.args.ethReceived)}`);
+      console.log(`   Amount received: ${ethers.formatEther(parsed?.args.amountReceived)}`);
       console.log(`   Deadline: ${parsed?.args.deadline}`);
       console.log(`   Time used: ${parsed?.args.timeUsed}s`);
       console.log(`   Swap executed: ${parsed?.args.swapExecuted}`);

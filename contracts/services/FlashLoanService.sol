@@ -2,12 +2,14 @@
 pragma solidity ^0.8.27;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "../interfaces/balancer/IBalancerVault.sol";
 import "../interfaces/IFlashLoanCallback.sol";
 import "../interfaces/IBeacon.sol";
 import "../interfaces/ISimpleSwap.sol";
+import "../interfaces/ITokenManagerForModules.sol";
 
 /**
  * @title FlashLoanService
@@ -50,12 +52,6 @@ contract FlashLoanService is IFlashLoanRecipient, ReentrancyGuard {
     
     /// @notice SimpleSwap router (Uniswap V3 wrapper) su Arbitrum
     address public constant SIMPLE_SWAP = 0xa0DB78167CBAccD47524a261b7741C6B41Bbd096;
-    
-    /// @notice WETH su Arbitrum
-    address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
-    
-    /// @notice USDC su Arbitrum
-    address public constant USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
     
     // ==================== IMMUTABLES ====================
     
@@ -299,21 +295,79 @@ contract FlashLoanService is IFlashLoanRecipient, ReentrancyGuard {
         address tokenOut,
         uint256 amountIn
     ) external view returns (uint256 amountOut) {
-        // Determina decimali basandosi su token noti
-        uint8 decimalsIn = tokenIn == WETH ? 18 : 6;  // WETH=18, USDC=6
-        uint8 decimalsOut = tokenOut == WETH ? 18 : 6;
+        // Determina decimali dinamicamente
+        uint8 decimalsIn = IERC20Metadata(tokenIn).decimals();
+        uint8 decimalsOut = IERC20Metadata(tokenOut).decimals();
         
         try ISimpleSwap(SIMPLE_SWAP).getExpectedOutput(tokenIn, tokenOut, amountIn, decimalsIn, decimalsOut) returns (uint256 result) {
             return result;
         } catch {
-            // Fallback: stima basata su prezzo fisso ETH = 3000 USDC
-            if (tokenIn == WETH && tokenOut == USDC) {
-                return (amountIn * 3000e6) / 1e18;
-            } else if (tokenIn == USDC && tokenOut == WETH) {
-                return (amountIn * 1e18) / 3000e6;
-            }
-            return 0;
+            // Fallback: usa prezzi da TokenManager per stima cross-asset
+            return _estimateViaTokenManager(tokenIn, tokenOut, amountIn, decimalsIn, decimalsOut);
         }
+    }
+
+    /**
+     * @notice Stima output swap usando prezzi da TokenManager
+     * @dev Fallback quando SimpleSwap.getExpectedOutput() non è disponibile.
+     *      Usa try/catch su this.estimateFromTokenManager() per gestire 
+     *      qualsiasi errore nelle sotto-chiamate (getActiveTokens, getTokenAddress, etc.)
+     * @param tokenIn Token in ingresso
+     * @param tokenOut Token in uscita
+     * @param amountIn Importo in ingresso
+     * @param decimalsIn Decimali tokenIn
+     * @param decimalsOut Decimali tokenOut
+     * @return Importo stimato in tokenOut
+     */
+    function _estimateViaTokenManager(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint8 decimalsIn,
+        uint8 decimalsOut
+    ) internal view returns (uint256) {
+        try this.estimateFromTokenManager(tokenIn, tokenOut, amountIn, decimalsIn, decimalsOut) returns (uint256 result) {
+            if (result > 0) return result;
+        } catch {}
+        
+        // Ultimo fallback: conversione 1:1 (solo per same-asset o token sconosciuti)
+        return (amountIn * (10 ** decimalsOut)) / (10 ** decimalsIn);
+    }
+
+    /**
+     * @notice Stima output swap tramite TokenManager (external per try/catch safety)
+     * @dev Essendo external, può essere chiamata via try this.estimateFromTokenManager()
+     *      e qualsiasi revert interno viene catturato dal catch
+     */
+    function estimateFromTokenManager(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint8 decimalsIn,
+        uint8 decimalsOut
+    ) external view returns (uint256) {
+        address tmAddr = beacon.getImplementation("TokenManager");
+        require(tmAddr != address(0), "No TokenManager");
+        
+        ITokenManagerForModules tm = ITokenManagerForModules(tmAddr);
+        string[] memory tokens = tm.getActiveTokens();
+        uint256 priceIn;
+        uint256 priceOut;
+        
+        for (uint256 i = 0; i < tokens.length; i++) {
+            address addr = tm.getTokenAddress(tokens[i]);
+            if (addr == tokenIn) {
+                priceIn = tm.getTokenPriceForModule(tokens[i]);
+            }
+            if (addr == tokenOut) {
+                priceOut = tm.getTokenPriceForModule(tokens[i]);
+            }
+        }
+        
+        require(priceIn > 0 && priceOut > 0, "Price not found");
+        
+        // cross-rate: amountOut = amountIn * priceIn / priceOut * 10^decimalsOut / 10^decimalsIn
+        return (amountIn * priceIn * (10 ** decimalsOut)) / (priceOut * (10 ** decimalsIn));
     }
     
     // ==================== INTERNAL FUNCTIONS ====================

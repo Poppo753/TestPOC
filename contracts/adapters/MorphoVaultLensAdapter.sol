@@ -3,6 +3,7 @@ pragma solidity ^0.8.27;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "../interfaces/ILensAdapter.sol";
 import "../interfaces/IProtocolAdapter.sol";
 import "../interfaces/IBeacon.sol";
@@ -41,17 +42,18 @@ interface IMorphoVaultPluginView {
  */
 contract MorphoVaultLensAdapter is ILensAdapter, Ownable {
 
-    /// @notice WETH on Arbitrum
-    address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
-
     /// @notice Beacon for module resolution
     address public immutable beacon;
 
+    /// @notice Base asset code for value denomination
+    string public baseAssetCode;
+
     error InvalidBeacon();
 
-    constructor(address _beacon) Ownable() {
+    constructor(address _beacon, string memory _baseAssetCode) Ownable() {
         if (_beacon == address(0)) revert InvalidBeacon();
         beacon = _beacon;
+        baseAssetCode = _baseAssetCode;
     }
 
     // ==================== INTERNAL HELPERS ====================
@@ -64,30 +66,52 @@ contract MorphoVaultLensAdapter is ILensAdapter, Ownable {
         return IMorphoRegistry(IBeacon(beacon).getImplementation("MorphoRegistry"));
     }
 
-    function _toEth(address token, uint256 amount) private view returns (uint256) {
+    function _toBaseAsset(address token, uint256 amount) private view returns (uint256) {
         if (amount == 0) return 0;
-        if (token == WETH) return amount;
+
+        address baseAsset = IBeacon(beacon).getImplementation("BASE_ASSET");
+        if (token == baseAsset) return amount;
 
         address tokenManager = IBeacon(beacon).getImplementation("TokenManager");
-        uint256 ethPriceUsd = ITokenManagerForModules(tokenManager).getTokenPriceForModule("WETH");
-        if (ethPriceUsd == 0) return 0;
+        IMorphoRegistry registry = _getRegistry();
 
-        // Get token price and convert to ETH
-        // For stablecoins (USDC, USDT): 1 token ≈ $1, so amount / ethPriceUsd
-        return (amount * 1e18) / ethPriceUsd;
+        // Find token code from vault config
+        address[] memory vaults = registry.getRegisteredVaults();
+        string memory tokenCode;
+        bool found = false;
+        for (uint256 i = 0; i < vaults.length; i++) {
+            IMorphoRegistry.VaultConfig memory cfg = registry.getVaultConfig(vaults[i]);
+            if (IERC4626(vaults[i]).asset() == token) {
+                tokenCode = cfg.assetCode;
+                found = true;
+                break;
+            }
+        }
+        if (!found) return 0;
+
+        uint256 tokenPrice = ITokenManagerForModules(tokenManager).getTokenPriceForModule(tokenCode);
+        if (tokenPrice == 0) return 0;
+
+        uint256 baseAssetPrice = ITokenManagerForModules(tokenManager).getBaseAssetPrice();
+        if (baseAssetPrice == 0) return 0;
+
+        uint8 tokenDecimals = IERC20Metadata(token).decimals();
+        uint8 baseDecimals = IERC20Metadata(baseAsset).decimals();
+
+        return (amount * tokenPrice * (10 ** baseDecimals)) / (baseAssetPrice * (10 ** tokenDecimals));
     }
 
     /**
-     * @dev Get total value of all vault positions in ETH
+     * @dev Get total value of all vault positions in base asset
      */
-    function _getTotalVaultValueEth() private view returns (uint256 totalEth) {
+    function _getTotalVaultValue() private view returns (uint256 totalValue) {
         address plugin = _getPlugin();
         (address[] memory vaults, uint256[] memory balances) = IMorphoVaultPluginView(plugin).getAllVaultPositions();
 
         for (uint256 i = 0; i < vaults.length; i++) {
             if (balances[i] > 0) {
                 address asset = IERC4626(vaults[i]).asset();
-                totalEth += _toEth(asset, balances[i]);
+                totalValue += _toBaseAsset(asset, balances[i]);
             }
         }
     }
@@ -113,16 +137,16 @@ contract MorphoVaultLensAdapter is ILensAdapter, Ownable {
 
     // ==================== ILensAdapter: VALUE FUNCTIONS ====================
 
-    function getTotalValue() external view override returns (uint256 netValueEth) {
-        return _getTotalVaultValueEth();
+    function getTotalValue() external view override returns (uint256 netValue) {
+        return _getTotalVaultValue();
     }
 
     function getValueBreakdown() external view override returns (ValueBreakdown memory breakdown) {
-        uint256 totalEth = _getTotalVaultValueEth();
-        breakdown.totalCollateralEth = totalEth; // Supply-only = "collateral" in ETH terms
-        breakdown.totalDebtEth = 0;              // No debt in vaults
-        breakdown.netValueEth = totalEth;
-        breakdown.availableToWithdrawEth = totalEth; // All can be withdrawn
+        uint256 total = _getTotalVaultValue();
+        breakdown.totalCollateral = total;
+        breakdown.totalDebt = 0;
+        breakdown.netValue = total;
+        breakdown.availableToWithdraw = total;
     }
 
     // ==================== ILensAdapter: HEALTH MONITORING ====================
@@ -157,14 +181,14 @@ contract MorphoVaultLensAdapter is ILensAdapter, Ownable {
 
     function getProtocolSummary() external view override returns (ProtocolSummary memory summary) {
         address plugin = _getPlugin();
-        uint256 totalEth = _getTotalVaultValueEth();
+        uint256 total = _getTotalVaultValue();
         uint256 activeCount = IMorphoVaultPluginView(plugin).getActiveVaultCount();
 
         summary.name = "MorphoVault";
         summary.protocolType = IProtocolAdapter.ProtocolType.YIELD;
-        summary.totalCollateralEth = totalEth;
-        summary.totalDebtEth = 0;
-        summary.netValueEth = totalEth;
+        summary.totalCollateral = total;
+        summary.totalDebt = 0;
+        summary.netValue = total;
         summary.activePositionCount = activeCount;
         summary.lowestHealthFactor = type(uint256).max;
         summary.isHealthy = true;
@@ -202,15 +226,15 @@ contract MorphoVaultLensAdapter is ILensAdapter, Ownable {
         for (uint256 i = 0; i < vaults.length; i++) {
             if (balances[i] > 0) {
                 address asset = IERC4626(vaults[i]).asset();
-                uint256 valueEth = _toEth(asset, balances[i]);
+                uint256 value = _toBaseAsset(asset, balances[i]);
                 positions[idx] = PositionWithRisk({
                     positionId: i,
                     protocolName: "MorphoVault",
                     healthFactor: type(uint256).max,
                     timeToLiquidation: type(int256).max,
                     riskLevel: "SAFE",
-                    collateralEth: valueEth,
-                    debtEth: 0,
+                    collateral: value,
+                    debt: 0,
                     shouldAutoClose: false
                 });
                 idx++;
@@ -239,8 +263,8 @@ contract MorphoVaultLensAdapter is ILensAdapter, Ownable {
         return _getRegistry().getDefaultVault(tokenCode);
     }
 
-    function estimateWethFromCloseAll() external view override returns (uint256) {
-        return _getTotalVaultValueEth();
+    function estimateBaseAssetFromCloseAll() external view override returns (uint256) {
+        return _getTotalVaultValue();
     }
 
     function getLiquidationThreshold(uint256 /* positionId */) external pure override returns (uint256) {

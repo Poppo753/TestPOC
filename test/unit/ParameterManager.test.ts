@@ -57,12 +57,12 @@ describe("ParameterManager Contract", function () {
 
     // Deploy ProxyGeneral
     const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
-    const proxyGeneral = await ProxyGeneral.deploy(beacon.target);
+    const proxyGeneral = await ProxyGeneral.deploy(beacon.target, "WETH");
 
     // Deploy a mock LiquidityManager for authorization
     const mockLiquidityManager = await MockERC20.deploy("Mock LiquidityManager", "MLM", 18);
     const ParameterManager = await ethers.getContractFactory("ParameterManager");
-    const parameterManager = await ParameterManager.deploy(beacon.target);
+    const parameterManager = await ParameterManager.deploy(beacon.target, 18);
 
     // Register contracts in Beacon
     await beacon.updateImplementation("ProxyGeneral", proxyGeneral.target);
@@ -485,7 +485,7 @@ describe("ParameterManager Contract", function () {
   describe("⛽ Gas Optimization", function () {
     it("should deploy with reasonable gas cost", async function () {
       const ParameterManager = await ethers.getContractFactory("ParameterManager");
-      const deployTx = await ParameterManager.getDeployTransaction(beacon.target);
+      const deployTx = await ParameterManager.getDeployTransaction(beacon.target, 18);
       
       const estimatedGas = await ethers.provider.estimateGas(deployTx);
       console.log(`✅ ParameterManager deployment gas usage: ${estimatedGas}`);

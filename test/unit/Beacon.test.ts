@@ -271,8 +271,14 @@ describe("Beacon Contract", function () {
       
       // Try to deploy a module that uses this beacon
       try {
+        // Deploy MockWETH as BASE_ASSET (needed by LiquidityManager constructor)
+        const MockWETHFactory = await ethers.getContractFactory("MockWETH");
+        const mockWeth = await MockWETHFactory.deploy();
+        await mockWeth.waitForDeployment();
+        await beacon.updateImplementation("BASE_ASSET", await mockWeth.getAddress());
+
         const LiquidityManagerFactory = await ethers.getContractFactory("LiquidityManager");
-        const liquidityManager = await LiquidityManagerFactory.deploy(await beacon.getAddress());
+        const liquidityManager = await LiquidityManagerFactory.deploy(await beacon.getAddress(), "WETH");
         await liquidityManager.waitForDeployment();
         
         console.log("✅ Module deployment successful with Beacon");

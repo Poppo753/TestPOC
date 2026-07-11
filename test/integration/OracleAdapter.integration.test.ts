@@ -59,6 +59,7 @@ describe("🔗 Oracle Adapter - Integration Tests", function () {
         const MockERC20Factory = await ethers.getContractFactory("MockERC20");
         const wethForBeacon = await MockERC20Factory.deploy("Wrapped Ether", "WETH", 18);
         await beacon.updateImplementation("WETH", await wethForBeacon.getAddress());
+        await beacon.updateImplementation("BASE_ASSET", await wethForBeacon.getAddress());
 
         // Deploy mock token
         mockToken = await MockERC20Factory.deploy("USD Coin", "USDC", 6);
@@ -73,6 +74,7 @@ describe("🔗 Oracle Adapter - Integration Tests", function () {
         // Deploy ChainlinkAdapter
         const ChainlinkAdapterFactory = await ethers.getContractFactory("ChainlinkAdapter");
         chainlinkAdapter = await ChainlinkAdapterFactory.deploy();
+        await chainlinkAdapter.setTargetDenomination("USD");
 
         // Deploy mock Chainlink oracles
         const MockChainlinkFactory = await ethers.getContractFactory("MockChainlinkOracle");
@@ -80,8 +82,8 @@ describe("🔗 Oracle Adapter - Integration Tests", function () {
         mockOracle2 = await MockChainlinkFactory.deploy(PRICES.WBTC, 8, "WBTC / USD");
 
         // Setup ChainlinkAdapter with feeds
-        await chainlinkAdapter.setPriceFeed(TOKEN_CODES.USDC, await mockOracle1.getAddress(), 8, 3600);
-        await chainlinkAdapter.setPriceFeed(TOKEN_CODES.WBTC, await mockOracle2.getAddress(), 8, 3600);
+        await chainlinkAdapter.setPriceFeed(TOKEN_CODES.USDC, await mockOracle1.getAddress(), 8, 3600, "USD");
+        await chainlinkAdapter.setPriceFeed(TOKEN_CODES.WBTC, await mockOracle2.getAddress(), 8, 3600, "USD");
 
         // Deploy TokenManager with MockOracleAdapter
         const TokenManagerFactory = await ethers.getContractFactory("TokenManager");
@@ -172,22 +174,18 @@ describe("🔗 Oracle Adapter - Integration Tests", function () {
     describe("🪙 Multi-Token with Same Adapter", function () {
 
         beforeEach(async function () {
-            // Add WBTC and WETH tokens
+            // Add WBTC token (WETH is now base asset, cannot be added as token)
             const wbtcToken = await (await ethers.getContractFactory("MockERC20")).deploy("Wrapped Bitcoin", "WBTC", 8);
-            const wethToken = await (await ethers.getContractFactory("MockERC20")).deploy("Wrapped Ether", "WETH", 18);
             
             await tokenManager["manageTokenData(string,address,uint8,uint256)"](TOKEN_CODES.WBTC, await wbtcToken.getAddress(), 8, 3600);
-            await tokenManager["manageTokenData(string,address,uint8,uint256)"](TOKEN_CODES.WETH, await wethToken.getAddress(), 18, 3600);
         });
 
         it("Should get prices for multiple tokens from same adapter", async function () {
             const [usdcPrice] = await tokenManager.getTokenPrice(TOKEN_CODES.USDC);
             const [wbtcPrice] = await tokenManager.getTokenPrice(TOKEN_CODES.WBTC);
-            const [wethPrice] = await tokenManager.getTokenPrice(TOKEN_CODES.WETH);
 
             expect(usdcPrice).to.equal(PRICES.USDC);
             expect(wbtcPrice).to.equal(PRICES.WBTC);
-            expect(wethPrice).to.equal(PRICES.WETH);
         });
 
         it("Should maintain independent prices after updates", async function () {
@@ -216,10 +214,9 @@ describe("🔗 Oracle Adapter - Integration Tests", function () {
         it("Should return active tokens list correctly", async function () {
             const activeTokens = await tokenManager.getActiveTokens();
             
-            expect(activeTokens.length).to.equal(3);
+            expect(activeTokens.length).to.equal(2);
             expect(activeTokens).to.include(TOKEN_CODES.USDC);
             expect(activeTokens).to.include(TOKEN_CODES.WBTC);
-            expect(activeTokens).to.include(TOKEN_CODES.WETH);
         });
     });
 

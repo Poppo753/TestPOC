@@ -5,6 +5,70 @@ All notable changes to the Enhanced Liquidity Pool ETH protocol will be document
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2025-07-03
+
+### 🎉 Base Asset Abstraction - USDC Deployment Ready
+
+This release completes the base-asset-abstraction refactor, enabling the protocol to deploy with ANY base asset (USDC, WETH, WBTC, etc.) instead of hardcoded WETH.
+
+### Changed
+
+#### Contract Constructor Signatures
+- `ParameterManager(beacon)` → `ParameterManager(beacon, baseDecimals)` — uint8 decimals
+- `LiquidityManager(beacon)` → `LiquidityManager(beacon, baseAssetCode)` — string
+- `ProxyGeneral(beacon)` → `ProxyGeneral(beacon, baseAssetCode)` — string
+- `SwapManager(beacon)` → `SwapManager(beacon, baseAssetCode)` — string
+- `ValueCalculator(beacon)` → `ValueCalculator(beacon, baseAssetCode)` — string
+- `AaveV3LensAdapter(beacon)` → `AaveV3LensAdapter(beacon, baseAssetCode)` — string
+- `EulerLensAdapter(beacon)` → `EulerLensAdapter(beacon, baseAssetCode)` — string
+- `MorphoLensAdapter(beacon)` → `MorphoLensAdapter(beacon, baseAssetCode)` — string
+- `MorphoVaultLensAdapter(beacon)` → `MorphoVaultLensAdapter(beacon, baseAssetCode)` — string
+- `AaveV3Plugin(beacon)` → `AaveV3Plugin(beacon, baseAssetCode)` — string
+- `EulerV2Plugin(beacon)` → `EulerV2Plugin(beacon, baseAssetCode)` — string
+- `MorphoPlugin(beacon)` → `MorphoPlugin(beacon, baseAssetCode)` — string
+
+#### Struct Field Renames (ILensAdapter + IProtocolAdapter)
+- `collateralValueEth` → `collateralValue`
+- `debtValueEth` → `debtValue`
+- `netValueEth` → `netValue`
+- `totalCollateralEth` → `totalCollateral`
+- `totalDebtEth` → `totalDebt`
+- `availableToWithdrawEth` → `availableToWithdraw`
+- `collateralEth` → `collateral`
+- `debtEth` → `debt`
+- `thresholdEth` → `threshold`
+
+#### Cross-Rate Formula (all LensAdapters)
+```
+valueInBaseAsset = (amount * tokenPrice * 10^baseDecimals) / (baseAssetPrice * 10^tokenDecimals)
+```
+
+### Fixed
+- EulerLensAdapter `getNetAPY()` — was hardcoded to `getYieldInfo("WETH")`, now uses `baseAssetCode`
+- FlashLoanService `getExpectedOutput()` — was hardcoded `WETH/USDC = 3000` fallback, now uses dynamic decimal conversion
+- 4 critical bugs in LensAdapters found via deep logic analysis
+
+### Added
+
+#### Deploy Script Updates
+- All 23+ deploy scripts updated with new constructor signatures
+- `dev/DeployModule.ts` and `dev/UpgradeSystem.ts` — dynamic module parameter detection
+- Generic deployers now auto-detect if module needs `baseAssetCode` or `baseDecimals`
+
+#### New Tests (255+ tests)
+- **Registry Unit Tests** — 187 tests (AaveV3: 51, Euler: 72, Morpho: 64)
+- **LensAdapter Unit Tests** — 30 tests (all 4 adapters)
+- **SwapManager Missing Functions** — 21 tests
+- **ProxyGeneral transferFromModule** — 3 tests
+- **Reentrancy Guard Tests** — 6 tests
+- **Multi-User Concurrent Tests** — 8 tests
+- **E2E USDC Fork Test** — 12 tests (full deploy+deposit+supply+withdraw stack)
+
+### Fixed (Post-Release)
+- **AaveV3LensAdapter `_usdToBaseAsset` design bug** — Was calling `TokenManager.getTokenPriceForModule(baseAssetCode)` which required the base asset to be registered as a tracked token. But TokenManager explicitly blocks base asset registration (`require(_tokenAddress != baseAsset)`), creating a deadlock. Fixed by using Aave's own oracle (`IAaveOracle.getAssetPrice(baseAsset)`) directly — both `getUserAccountData()` and `getAssetPrice()` return values in USD×1e8, so the math is clean and consistent.
+- **TokenManager `getPriceFromOracle()`** — Added new function that queries the oracle adapter directly, bypassing the `isActive` registration check. Used by Euler/Morpho/MorphoVault LensAdapters for base asset price lookups.
+- **ChainlinkAdapter denomination config** — E2E test now properly configures `setTargetDenomination("USDC")` and `setReferenceFeed("USD", ...)` for USDC-denominated deployments.
+
 ## [2.0.0] - 2025-10-24
 
 ### 🎉 Major Release - Production Ready

@@ -30,6 +30,9 @@ import { ethers } from "hardhat";
 import { ARBITRUM_ADDRESSES } from "../../config/arbitrum.config";
 import { saveDeployment, verifyArbitrumMainnet, checkSignerBalance } from "../../utils/plugins/euler/euler-helpers";
 
+// Base Asset Configuration
+const BASE_ASSET_CODE = "USDC";
+
 // Indirizzo del vecchio plugin (da mainnet-latest.json)
 const OLD_PLUGIN_ADDRESS = "0x490139F3b29786D64056a236a0062CA23A7313f6";
 
@@ -151,7 +154,7 @@ async function main() {
     console.log("\n🚀 Deploying NEW EulerV2Plugin (EVC Batch version)...");
 
     const EulerV2Plugin = await ethers.getContractFactory("EulerV2Plugin", deployer);
-    const newPlugin = await EulerV2Plugin.deploy(ARBITRUM_ADDRESSES.BEACON);
+    const newPlugin = await EulerV2Plugin.deploy(ARBITRUM_ADDRESSES.BEACON, BASE_ASSET_CODE, ARBITRUM_ADDRESSES.EVC, ARBITRUM_ADDRESSES.ACCOUNT_LENS);
     await newPlugin.waitForDeployment();
 
     const newPluginAddress = await newPlugin.getAddress();

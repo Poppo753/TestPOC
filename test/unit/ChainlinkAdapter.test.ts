@@ -52,7 +52,8 @@ describe("ChainlinkAdapter - Unit Tests", function () {
                 tokenCode,
                 oracleAddress,
                 8,
-                heartbeat // 1 hour heartbeat
+                heartbeat, // 1 hour heartbeat
+                "USD"
             );
 
             expect(await adapter.supportsToken(tokenCode)).to.be.true;
@@ -71,45 +72,45 @@ describe("ChainlinkAdapter - Unit Tests", function () {
 
         it("Should emit PriceFeedAdded event", async function () {
             await expect(
-                adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600)
+                adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600, "USD")
             ).to.emit(adapter, "PriceFeedAdded")
              .withArgs("USDC", await mockOracle.getAddress(), 8, 3600);
         });
 
         it("Should reject empty token code", async function () {
             await expect(
-                adapter.setPriceFeed("", await mockOracle.getAddress(), 8, 3600)
+                adapter.setPriceFeed("", await mockOracle.getAddress(), 8, 3600, "USD")
             ).to.be.revertedWith("Empty token code");
         });
 
         it("Should reject token code too long", async function () {
             const longCode = "A".repeat(17); // 17 chars > 16 limit
             await expect(
-                adapter.setPriceFeed(longCode, await mockOracle.getAddress(), 8, 3600)
+                adapter.setPriceFeed(longCode, await mockOracle.getAddress(), 8, 3600, "USD")
             ).to.be.revertedWith("Token code too long");
         });
 
         it("Should reject invalid feed address", async function () {
             await expect(
-                adapter.setPriceFeed("USDC", ethers.ZeroAddress, 8, 3600)
+                adapter.setPriceFeed("USDC", ethers.ZeroAddress, 8, 3600, "USD")
             ).to.be.revertedWith("Invalid feed address");
         });
 
         it("Should reject invalid decimals (zero)", async function () {
             await expect(
-                adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 0, 3600)
+                adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 0, 3600, "USD")
             ).to.be.revertedWith("Invalid decimals");
         });
 
         it("Should reject invalid decimals (>18)", async function () {
             await expect(
-                adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 19, 3600)
+                adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 19, 3600, "USD")
             ).to.be.revertedWith("Invalid decimals");
         });
 
         it("Should reject zero heartbeat", async function () {
             await expect(
-                adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 0)
+                adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 0, "USD")
             ).to.be.revertedWith("Invalid heartbeat");
         });
 
@@ -122,7 +123,7 @@ describe("ChainlinkAdapter - Unit Tests", function () {
             );
 
             await expect(
-                adapter.setPriceFeed("USDC", await badOracle.getAddress(), 8, 3600)
+                adapter.setPriceFeed("USDC", await badOracle.getAddress(), 8, 3600, "USD")
             ).to.be.revertedWith("Invalid price");
         });
 
@@ -136,7 +137,7 @@ describe("ChainlinkAdapter - Unit Tests", function () {
             await badOracle.setUpdatedAt(0);  // Set invalid timestamp
 
             await expect(
-                adapter.setPriceFeed("USDC", await badOracle.getAddress(), 8, 3600)
+                adapter.setPriceFeed("USDC", await badOracle.getAddress(), 8, 3600, "USD")
             ).to.be.reverted; // Generic revert from try-catch
         });
 
@@ -150,7 +151,7 @@ describe("ChainlinkAdapter - Unit Tests", function () {
             await badOracle.setAnsweredInRound(0);  // answeredInRound=0 < roundId=1
 
             await expect(
-                adapter.setPriceFeed("USDC", await badOracle.getAddress(), 8, 3600)
+                adapter.setPriceFeed("USDC", await badOracle.getAddress(), 8, 3600, "USD")
             ).to.be.reverted; // Generic revert from try-catch
         });
 
@@ -163,13 +164,13 @@ describe("ChainlinkAdapter - Unit Tests", function () {
             );
 
             await expect(
-                adapter.setPriceFeed("USDC", await badOracle.getAddress(), 8, 3600)  // Claiming 8
+                adapter.setPriceFeed("USDC", await badOracle.getAddress(), 8, 3600, "USD")  // Claiming 8
             ).to.be.revertedWith("Decimals mismatch");
         });
 
         it("Should update existing feed", async function () {
             // Add initial feed
-            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600);
+            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600, "USD");
 
             // Deploy new oracle with different price
             const newOracle = await (await ethers.getContractFactory("MockChainlinkOracle")).deploy(
@@ -180,7 +181,7 @@ describe("ChainlinkAdapter - Unit Tests", function () {
 
             // Update feed
             await expect(
-                adapter.setPriceFeed("USDC", await newOracle.getAddress(), 8, 3600)
+                adapter.setPriceFeed("USDC", await newOracle.getAddress(), 8, 3600, "USD")
             ).to.emit(adapter, "PriceFeedUpdated")
              .withArgs("USDC", await mockOracle.getAddress(), await newOracle.getAddress());
 
@@ -191,7 +192,7 @@ describe("ChainlinkAdapter - Unit Tests", function () {
 
         it("Should remove feed", async function () {
             // Add feed first
-            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600);
+            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600, "USD");
             expect(await adapter.supportsToken("USDC")).to.be.true;
             
             // Remove it
@@ -211,12 +212,12 @@ describe("ChainlinkAdapter - Unit Tests", function () {
 
         it("Should only allow owner to add feeds", async function () {
             await expect(
-                adapter.connect(user).setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600)
+                adapter.connect(user).setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600, "USD")
             ).to.be.revertedWith("Ownable: caller is not the owner");
         });
 
         it("Should only allow owner to remove feeds", async function () {
-            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600);
+            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600, "USD");
             
             await expect(
                 adapter.connect(user).removePriceFeed("USDC")
@@ -229,7 +230,9 @@ describe("ChainlinkAdapter - Unit Tests", function () {
     describe("Price Retrieval", function () {
         beforeEach(async function () {
             // Setup USDC feed for all price tests
-            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600);
+            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600, "USD");
+            // Set target denomination to USD so no conversion is needed for these unit tests
+            await adapter.setTargetDenomination("USD");
         });
 
         it("Should return valid price for fresh data", async function () {
@@ -247,9 +250,9 @@ describe("ChainlinkAdapter - Unit Tests", function () {
 
             const [price, timestamp, isValid] = await adapter.getPrice("USDC");
             
-            expect(price).to.equal(2000_00000000); // Still returns price
+            expect(price).to.equal(0); // Adapter returns 0 for invalid prices
             expect(timestamp).to.be.gt(0);
-            expect(isValid).to.be.false; // But marked as stale
+            expect(isValid).to.be.false; // Marked as stale
         });
 
         it("Should handle zero price (mark as invalid)", async function () {
@@ -312,8 +315,8 @@ describe("ChainlinkAdapter - Unit Tests", function () {
 
             const [price, , isValid] = await adapter.getPrice("USDC");
             
-            expect(price).to.equal(2000_00000000); // Still returns price
-            expect(isValid).to.be.false; // But flagged as invalid
+            expect(price).to.equal(0); // Adapter returns 0 for invalid prices
+            expect(isValid).to.be.false; // Flagged as invalid
         });
     });
 
@@ -321,12 +324,13 @@ describe("ChainlinkAdapter - Unit Tests", function () {
 
     describe("Decimals", function () {
         beforeEach(async function () {
-            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600);
+            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600, "USD");
+            await adapter.setTargetDenomination("USD");
         });
 
         it("Should return correct decimals", async function () {
             const decimals = await adapter.getPriceDecimals("USDC");
-            expect(decimals).to.equal(8);
+            expect(decimals).to.equal(18); // All prices normalized to 18 decimals
         });
 
         it("Should revert for unsupported token", async function () {
@@ -346,7 +350,7 @@ describe("ChainlinkAdapter - Unit Tests", function () {
 
     describe("Token Support", function () {
         it("Should return true for configured token", async function () {
-            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600);
+            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600, "USD");
             expect(await adapter.supportsToken("USDC")).to.be.true;
         });
 
@@ -355,7 +359,7 @@ describe("ChainlinkAdapter - Unit Tests", function () {
         });
 
         it("Should return false after feed removal", async function () {
-            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600);
+            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600, "USD");
             await adapter.removePriceFeed("USDC");
             
             expect(await adapter.supportsToken("USDC")).to.be.false;
@@ -391,7 +395,8 @@ describe("ChainlinkAdapter - Unit Tests", function () {
 
     describe("Circuit Breaker", function () {
         beforeEach(async function () {
-            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600);
+            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600, "USD");
+            await adapter.setTargetDenomination("USD");
             await adapter.setMaxErrorThreshold(3);
         });
 
@@ -445,7 +450,8 @@ describe("ChainlinkAdapter - Unit Tests", function () {
 
     describe("Gas Benchmarks", function () {
         beforeEach(async function () {
-            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600);
+            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 3600, "USD");
+            await adapter.setTargetDenomination("USD");
         });
 
         it("getPrice should use <50k gas", async function () {
@@ -475,6 +481,10 @@ describe("ChainlinkAdapter - Unit Tests", function () {
     // ==================== EDGE CASES ====================
 
     describe("Edge Cases", function () {
+        beforeEach(async function () {
+            await adapter.setTargetDenomination("USD");
+        });
+
         it("Should handle maximum uint256 price", async function () {
             // Deploy new oracle with max price
             const maxOracle = await (await ethers.getContractFactory("MockChainlinkOracle")).deploy(
@@ -482,14 +492,14 @@ describe("ChainlinkAdapter - Unit Tests", function () {
                 8,
                 "Max Price Oracle"
             );
-            await adapter.setPriceFeed("MAXTOKEN", await maxOracle.getAddress(), 8, 3600);
+            await adapter.setPriceFeed("MAXTOKEN", await maxOracle.getAddress(), 8, 3600, "USD");
 
             const [price, , ] = await adapter.getPrice("MAXTOKEN");
             expect(price).to.be.gt(0); // Just verify it's positive
         });
 
         it("Should handle minimum heartbeat (1 second)", async function () {
-            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 1);
+            await adapter.setPriceFeed("USDC", await mockOracle.getAddress(), 8, 1, "USD");
             
             const config = await adapter.getFeedConfig("USDC");
             expect(config.heartbeat).to.equal(1);
@@ -502,7 +512,7 @@ describe("ChainlinkAdapter - Unit Tests", function () {
                 18,
                 "High Decimals Oracle"
             );
-            await adapter.setPriceFeed("HD_TOKEN", await highDecOracle.getAddress(), 18, 3600);
+            await adapter.setPriceFeed("HD_TOKEN", await highDecOracle.getAddress(), 18, 3600, "USD");
             
             const decimals = await adapter.getPriceDecimals("HD_TOKEN");
             expect(decimals).to.equal(18);
@@ -529,9 +539,9 @@ describe("ChainlinkAdapter - Unit Tests", function () {
             );
 
             // Add all three
-            await adapter.setPriceFeed("WETH", await oracle1.getAddress(), 8, 3600);
-            await adapter.setPriceFeed("WBTC", await oracle2.getAddress(), 8, 3600);
-            await adapter.setPriceFeed("USDC", await oracle3.getAddress(), 8, 3600);
+            await adapter.setPriceFeed("WETH", await oracle1.getAddress(), 8, 3600, "USD");
+            await adapter.setPriceFeed("WBTC", await oracle2.getAddress(), 8, 3600, "USD");
+            await adapter.setPriceFeed("USDC", await oracle3.getAddress(), 8, 3600, "USD");
 
             // Verify all work
             expect(await adapter.supportsToken("WETH")).to.be.true;

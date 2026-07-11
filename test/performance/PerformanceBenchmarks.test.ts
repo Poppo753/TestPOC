@@ -79,7 +79,7 @@ describe("Performance Benchmarks - TEST-002", function () {
 
         // Deploy core modules
         const ParameterManagerFactory = await ethers.getContractFactory("ParameterManager");
-        parameterManager = await ParameterManagerFactory.deploy(await beacon.getAddress());
+        parameterManager = await ParameterManagerFactory.deploy(await beacon.getAddress(), 18);
         await parameterManager.waitForDeployment();
 
         const TokenManagerFactory = await ethers.getContractFactory("TokenManager");
@@ -102,16 +102,22 @@ describe("Performance Benchmarks - TEST-002", function () {
         );
         await tokenManager.waitForDeployment();
 
+        // Deploy MockWETH as BASE_ASSET for LiquidityManager
+        const MockWETHFactory = await ethers.getContractFactory("MockWETH");
+        const mockWeth = await MockWETHFactory.deploy();
+        await mockWeth.waitForDeployment();
+        await beacon.updateImplementation("BASE_ASSET", await mockWeth.getAddress());
+
         const LiquidityManagerFactory = await ethers.getContractFactory("LiquidityManager");
-        liquidityManager = await LiquidityManagerFactory.deploy(await beacon.getAddress());
+        liquidityManager = await LiquidityManagerFactory.deploy(await beacon.getAddress(), "WETH");
         await liquidityManager.waitForDeployment();
 
         const SwapManagerFactory = await ethers.getContractFactory("SwapManager");
-        swapManager = await SwapManagerFactory.deploy(await beacon.getAddress());
+        swapManager = await SwapManagerFactory.deploy(await beacon.getAddress(), "WETH");
         await swapManager.waitForDeployment();
 
         const ValueCalculatorFactory = await ethers.getContractFactory("ValueCalculator");
-        valueCalculator = await ValueCalculatorFactory.deploy(await beacon.getAddress());
+        valueCalculator = await ValueCalculatorFactory.deploy(await beacon.getAddress(), "WETH");
         await valueCalculator.waitForDeployment();
 
         // Deploy WETH first (needed for TokenManager validation)
@@ -121,7 +127,7 @@ describe("Performance Benchmarks - TEST-002", function () {
 
         // Deploy ProxyGeneral (needed for LiquidityManager)
         const ProxyGeneralFactory = await ethers.getContractFactory("ProxyGeneral");
-        const proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress());
+        const proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress(), "WETH");
         await proxyGeneral.waitForDeployment();
 
         // Register all modules

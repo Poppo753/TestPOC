@@ -13,7 +13,7 @@ async function main() {
   // Deploy new ValueCalculator
   console.log("📦 Deploying new ValueCalculator...");
   const ValueCalculator = await ethers.getContractFactory("ValueCalculator");
-  const valueCalculator = await ValueCalculator.deploy(BEACON);
+  const valueCalculator = await ValueCalculator.deploy(BEACON, "USDC");
   await valueCalculator.waitForDeployment();
   
   const newAddress = await valueCalculator.getAddress();

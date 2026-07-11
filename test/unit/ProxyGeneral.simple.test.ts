@@ -36,10 +36,11 @@ describe("ProxyGeneral Contract - Core Tests", function () {
     const Beacon = await ethers.getContractFactory("Beacon");
     beacon = await Beacon.deploy();
     await beacon.updateImplementation("WETH", mockWETH.target);
+    await beacon.updateImplementation("BASE_ASSET", mockWETH.target);
 
     // Deploy ProxyGeneral
     const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
-    proxyGeneral = await ProxyGeneral.deploy(beacon.target);
+    proxyGeneral = await ProxyGeneral.deploy(beacon.target, "WETH");
 
     // Deploy TokenManager
     const TokenManager = await ethers.getContractFactory("TokenManager");
@@ -243,6 +244,42 @@ describe("ProxyGeneral Contract - Core Tests", function () {
           )
         ).to.be.revertedWith("Caller not authorized");
       });
+
+      it("should allow authorized transferFromModule", async function () {
+        const amount = ethers.parseUnits("50", 6);
+
+        // Authorize owner so it can call proxy functions as a "module"
+        await proxyGeneral.connect(owner).authorizeModule(owner.address, "TestModule");
+
+        // Mint tokens to owner (acting as module)
+        await mockUSDC.mint(owner.address, amount);
+        // Owner approves ProxyGeneral to pull tokens
+        await mockUSDC.connect(owner).approve(proxyGeneral.target, amount);
+
+        const proxyBalBefore = await mockUSDC.balanceOf(proxyGeneral.target);
+        // owner is both the caller and the module address
+        await proxyGeneral.transferFromModule(mockUSDC.target, owner.address, amount);
+        const proxyBalAfter = await mockUSDC.balanceOf(proxyGeneral.target);
+
+        expect(proxyBalAfter - proxyBalBefore).to.equal(amount);
+      });
+
+      it("should revert transferFromModule for unauthorized module address", async function () {
+        await proxyGeneral.connect(owner).authorizeModule(owner.address, "TestModule");
+        await expect(
+          proxyGeneral.transferFromModule(mockUSDC.target, user1.address, 100)
+        ).to.be.revertedWith("Module not authorized");
+      });
+
+      it("should revert transferFromModule when caller not authorized", async function () {
+        await expect(
+          proxyGeneral.connect(user1).transferFromModule(
+            mockUSDC.target,
+            tokenManager.target,
+            100
+          )
+        ).to.be.revertedWith("Caller not authorized");
+      });
     });
   });
 
@@ -398,7 +435,7 @@ describe("ProxyGeneral Contract - Core Tests", function () {
   describe("⛽ Gas Optimization", function () {
     it("should deploy with reasonable gas cost", async function () {
       const ProxyGeneralFactory = await ethers.getContractFactory("ProxyGeneral");
-      const newProxy = await ProxyGeneralFactory.deploy(beacon.target);
+      const newProxy = await ProxyGeneralFactory.deploy(beacon.target, "WETH");
       const deployTx = newProxy.deploymentTransaction();
       
       console.log(`✅ ProxyGeneral deployment gas usage: ${deployTx?.gasLimit}`);

@@ -47,9 +47,9 @@ interface ILensAdapter {
         uint256 positionId;           // Unique ID within this protocol
         string protocolName;          // "Euler", "Dolomite", etc.
         PositionStatus status;        // ACTIVE, CLOSED, LIQUIDATED
-        uint256 collateralValueEth;   // Total collateral in ETH
-        uint256 debtValueEth;         // Total debt in ETH
-        uint256 netValueEth;          // collateral - debt
+        uint256 collateralValue;      // Total collateral in base asset
+        uint256 debtValue;            // Total debt in base asset
+        uint256 netValue;             // collateral - debt
         uint256 healthFactor;         // 1e18 = 1.0, type(uint256).max = no debt
         uint256 openTimestamp;        // When position was opened
         address collateralToken;      // Primary collateral token
@@ -62,9 +62,9 @@ interface ILensAdapter {
     struct ProtocolSummary {
         string name;
         IProtocolAdapter.ProtocolType protocolType;
-        uint256 totalCollateralEth;
-        uint256 totalDebtEth;
-        uint256 netValueEth;
+        uint256 totalCollateral;      // In base asset
+        uint256 totalDebt;            // In base asset
+        uint256 netValue;             // In base asset
         uint256 activePositionCount;
         uint256 lowestHealthFactor;   // Min HF across all positions
         bool isHealthy;               // All positions above safe threshold
@@ -85,10 +85,10 @@ interface ILensAdapter {
      * @notice Value breakdown for positions
      */
     struct ValueBreakdown {
-        uint256 totalCollateralEth;
-        uint256 totalDebtEth;
-        uint256 netValueEth;
-        uint256 availableToWithdrawEth; // How much can be withdrawn maintaining health
+        uint256 totalCollateral;       // In base asset
+        uint256 totalDebt;             // In base asset
+        uint256 netValue;              // In base asset
+        uint256 availableToWithdraw;   // In base asset
     }
     
     /**
@@ -110,8 +110,8 @@ interface ILensAdapter {
         uint256 healthFactor;
         int256 timeToLiquidation;
         string riskLevel;
-        uint256 collateralEth;
-        uint256 debtEth;
+        uint256 collateral;         // In base asset
+        uint256 debt;               // In base asset
         bool shouldAutoClose;  // Below auto-close threshold
     }
     
@@ -205,10 +205,10 @@ interface ILensAdapter {
     // ==================== VALUE FUNCTIONS ====================
 
     /**
-     * @notice Get total net value of all positions in ETH
-     * @return netValueEth Net value (collateral - debt)
+     * @notice Get total net value of all positions in base asset
+     * @return netValue Net value (collateral - debt) in base asset
      */
-    function getTotalValue() external view returns (uint256 netValueEth);
+    function getTotalValue() external view returns (uint256 netValue);
     
     /**
      * @notice Get detailed value breakdown
@@ -245,10 +245,10 @@ interface ILensAdapter {
 
     
     /**
-     * @notice Estimate WETH obtainable by closing all positions
-     * @return wethAmount Estimated WETH after closing all positions
+     * @notice Estimate base asset obtainable by closing all positions
+     * @return amount Estimated base asset after closing all positions
      */
-    function estimateWethFromCloseAll() external view returns (uint256 wethAmount);
+    function estimateBaseAssetFromCloseAll() external view returns (uint256 amount);
     
     // ============================================================================
     // VIEW FUNCTIONS - Moved from IProtocolAdapter
@@ -257,12 +257,12 @@ interface ILensAdapter {
     /**
      * @notice Get liquidation threshold for position
      * @param positionId Position ID
-     * @return thresholdEth Liquidation threshold in ETH
+     * @return threshold Liquidation threshold in base asset
      */
     function getLiquidationThreshold(uint256 positionId) 
         external 
         view 
-        returns (uint256 thresholdEth);
+        returns (uint256 threshold);
 
     /**
      * @notice Estimate position state after swap
@@ -270,8 +270,8 @@ interface ILensAdapter {
      * @param tokenIn Token to swap from
      * @param tokenOut Token to swap to
      * @param amountIn Amount to swap
-     * @return newCollateralEth New collateral value in ETH
-     * @return newDebtEth New debt value in ETH
+     * @return newCollateral New collateral value in base asset
+     * @return newDebt New debt value in base asset
      * @return newHealthFactor New health factor
      */
     function estimatePositionAfterSwap(
@@ -283,8 +283,8 @@ interface ILensAdapter {
         external 
         view 
         returns (
-            uint256 newCollateralEth,
-            uint256 newDebtEth,
+            uint256 newCollateral,
+            uint256 newDebt,
             uint256 newHealthFactor
         );
 

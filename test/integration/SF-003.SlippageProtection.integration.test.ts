@@ -70,17 +70,17 @@ describe("SF-003: Slippage Protection (Price Impact Safeguards)", function () {
 
     // Deploy core modules for slippage testing
     const ValueCalculatorFactory = await ethers.getContractFactory("ValueCalculator");
-    valueCalculator = await ValueCalculatorFactory.deploy(await beacon.getAddress());
+    valueCalculator = await ValueCalculatorFactory.deploy(await beacon.getAddress(), "WETH");
     await valueCalculator.waitForDeployment();
     console.log(`📊 ValueCalculator deployed: ${await valueCalculator.getAddress()}`);
 
     const SwapManagerFactory = await ethers.getContractFactory("SwapManager");
-    swapManager = await SwapManagerFactory.deploy(await beacon.getAddress());
+    swapManager = await SwapManagerFactory.deploy(await beacon.getAddress(), "WETH");
     await swapManager.waitForDeployment();
     console.log(`🔄 SwapManager deployed: ${await swapManager.getAddress()}`);
 
     const ProxyGeneralFactory = await ethers.getContractFactory("ProxyGeneral");
-    proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress());
+    proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress(), "WETH");
     await proxyGeneral.waitForDeployment();
     console.log(`🏛️ ProxyGeneral deployed: ${await proxyGeneral.getAddress()}`);
 

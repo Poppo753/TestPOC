@@ -21,6 +21,9 @@ contract ParameterManager is IParameterManager, Ownable {
     /// @notice Storage parametri completo
     mapping(string => IParameterManager.Parameter) private parameters;
     
+    /// @notice Default values per reset (set at initialization, scaled to base asset)
+    mapping(string => uint256) private defaultValues;
+    
     /// @notice Lista di tutti i parametri per iterazione
     string[] private parameterNames;
     
@@ -93,27 +96,30 @@ contract ParameterManager is IParameterManager, Ownable {
 
     // ==================== CONSTRUCTOR ====================
 
-    constructor(address _beacon) Ownable() {
+    constructor(address _beacon, uint8 _baseDecimals) Ownable() {
         require(_beacon != address(0), "Invalid beacon address");
         beacon = _beacon;
         
         // Initialize default parameter timelock to 24 hours
         parameterTimelock = 24 hours;
         
-        // INITIALIZE DEFAULT PARAMETERS
-        _initializeDefaultParameters();
+        // INITIALIZE DEFAULT PARAMETERS (scaled to base asset decimals)
+        _initializeDefaultParameters(_baseDecimals);
     }
 
     /**
      * @notice Inizializza parametri di default del sistema con complete struct
+     * @param _baseDecimals Decimali del base asset (18 per WETH, 6 per USDC, 8 per WBTC)
      */
-    function _initializeDefaultParameters() internal {
+    function _initializeDefaultParameters(uint8 _baseDecimals) internal {
+        uint256 unit = 10 ** uint256(_baseDecimals); // 1 full token in smallest units
+
         // LIQUIDITY LIMITS (critical - require timelock)
-        _registerParameter("maxDeposit", 100 ether, 1 ether, 1000 ether, true);
-        _registerParameter("maxWithdrawPerTx", 50 ether, 0.1 ether, 500 ether, true);
-        _registerParameter("minDeposit", 0.000001 ether, 0.000001 ether, 1 ether, false);
-        _registerParameter("minWithdraw", 0.000001 ether, 0.000001 ether, 1 ether, false);
-        _registerParameter("withdrawLimitPerHour", 100 ether, 1 ether, 10000 ether, true);
+        _registerParameter("maxDeposit", 100 * unit, 1 * unit, 1000 * unit, true);
+        _registerParameter("maxWithdrawPerTx", 50 * unit, unit / 10, 500 * unit, true);
+        _registerParameter("minDeposit", unit / 1_000_000, unit / 1_000_000, 1 * unit, false);
+        _registerParameter("minWithdraw", unit / 1_000_000, unit / 1_000_000, 1 * unit, false);
+        _registerParameter("withdrawLimitPerHour", 100 * unit, 1 * unit, 10000 * unit, true);
         
         // POOL PARAMETERS (critical - require timelock)
         _registerParameter("maxSlippage", 200, 10, 1000, true); // 0.1% to 10%
@@ -151,6 +157,9 @@ contract ParameterManager is IParameterManager, Ownable {
             requiresTimelock: requiresTimelock,
             isActive: true
         });
+        
+        // Store initial default for reset
+        defaultValues[name] = value;
         
         parameterNames.push(name);
         
@@ -371,74 +380,21 @@ contract ParameterManager is IParameterManager, Ownable {
     }
 
     /**
-     * @notice Validazione interna parametri
+     * @notice Validazione interna parametri — usa range dinamici dal storage
      */
-    function _isValidParameterValue(string memory parameterName, uint256 newValue) internal pure returns (bool) {
-        bytes32 paramHash = keccak256(bytes(parameterName));
-        
-        // LIQUIDITY LIMITS
-        if (paramHash == keccak256(bytes("maxDeposit"))) {
-            return newValue >= 1 ether && newValue <= 1000 ether;
-        }
-        if (paramHash == keccak256(bytes("maxWithdrawPerTx"))) {
-            return newValue >= 0.1 ether && newValue <= 500 ether;
-        }
-        if (paramHash == keccak256(bytes("minDeposit"))) {
-            return newValue >= 0.000001 ether && newValue <= 1 ether;
-        }
-        if (paramHash == keccak256(bytes("minWithdraw"))) {
-            return newValue >= 0.000001 ether && newValue <= 1 ether;
-        }
-        if (paramHash == keccak256(bytes("withdrawLimitPerHour"))) {
-            return newValue >= 1 ether && newValue <= 10000 ether;
-        }
-        
-        // POOL PARAMETERS
-        if (paramHash == keccak256(bytes("maxSlippage"))) {
-            return newValue >= 10 && newValue <= 1000; // 0.1% to 10%
-        }
-        if (paramHash == keccak256(bytes("poolReserveRatio"))) {
-            return newValue <= 5000; // Max 50%
-        }
-        
-        // CACHE & TIMING
-        if (paramHash == keccak256(bytes("cacheDuration"))) {
-            return newValue >= 1 minutes && newValue <= 1 hours;
-        }
-        if (paramHash == keccak256(bytes("maxPriceAge"))) {
-            return newValue >= 5 minutes && newValue <= 24 hours;
-        }
-        
-        // OPERATIONAL LIMITS
-        if (paramHash == keccak256(bytes("maxTokensPerOperation"))) {
-            return newValue >= 1 && newValue <= 50;
-        }
-        if (paramHash == keccak256(bytes("maxErrors"))) {
-            return newValue >= 1 && newValue <= 100;
-        }
-        
-        return false;
+    function _isValidParameterValue(string memory parameterName, uint256 newValue) internal view returns (bool) {
+        Parameter storage param = parameters[parameterName];
+        if (!param.isActive) return false;
+        return newValue >= param.minValue && newValue <= param.maxValue;
     }
 
     /**
-     * @notice Ottiene range validazione per un parametro
+     * @notice Ottiene range validazione per un parametro dal storage
      */
-    function _getValidationRange(string memory parameterName) internal pure returns (uint256 minVal, uint256 maxVal) {
-        bytes32 paramHash = keccak256(bytes(parameterName));
-        
-        if (paramHash == keccak256(bytes("maxDeposit"))) return (1 ether, 1000 ether);
-        if (paramHash == keccak256(bytes("maxWithdrawPerTx"))) return (0.1 ether, 500 ether);
-        if (paramHash == keccak256(bytes("minDeposit"))) return (0.000001 ether, 1 ether);
-        if (paramHash == keccak256(bytes("minWithdraw"))) return (0.000001 ether, 1 ether);
-        if (paramHash == keccak256(bytes("withdrawLimitPerHour"))) return (1 ether, 10000 ether);
-        if (paramHash == keccak256(bytes("maxSlippage"))) return (10, 1000);
-        if (paramHash == keccak256(bytes("poolReserveRatio"))) return (0, 5000);
-        if (paramHash == keccak256(bytes("cacheDuration"))) return (1 minutes, 1 hours);
-        if (paramHash == keccak256(bytes("maxPriceAge"))) return (5 minutes, 24 hours);
-        if (paramHash == keccak256(bytes("maxTokensPerOperation"))) return (1, 50);
-        if (paramHash == keccak256(bytes("maxErrors"))) return (1, 100);
-        
-        return (0, type(uint256).max);
+    function _getValidationRange(string memory parameterName) internal view returns (uint256 minVal, uint256 maxVal) {
+        Parameter storage param = parameters[parameterName];
+        if (!param.isActive) return (0, type(uint256).max);
+        return (param.minValue, param.maxValue);
     }
 
     // ==================== ADMIN FUNCTIONS ====================
@@ -498,24 +454,10 @@ contract ParameterManager is IParameterManager, Ownable {
     }
 
     /**
-     * @notice Ottiene valore di default per un parametro
+     * @notice Ottiene valore di default per un parametro (dal storage, scaled al base asset)
      */
-    function _getDefaultValue(string memory parameterName) internal pure returns (uint256) {
-        bytes32 paramHash = keccak256(bytes(parameterName));
-        
-        if (paramHash == keccak256(bytes("maxDeposit"))) return 100 ether;
-        if (paramHash == keccak256(bytes("maxWithdrawPerTx"))) return 50 ether;
-        if (paramHash == keccak256(bytes("minDeposit"))) return 0.000001 ether;
-        if (paramHash == keccak256(bytes("minWithdraw"))) return 0.000001 ether;
-        if (paramHash == keccak256(bytes("withdrawLimitPerHour"))) return 100 ether;
-        if (paramHash == keccak256(bytes("maxSlippage"))) return 200;
-        if (paramHash == keccak256(bytes("poolReserveRatio"))) return 0;
-        if (paramHash == keccak256(bytes("cacheDuration"))) return 5 minutes;
-        if (paramHash == keccak256(bytes("maxPriceAge"))) return 1 hours;
-        if (paramHash == keccak256(bytes("maxTokensPerOperation"))) return 10;
-        if (paramHash == keccak256(bytes("maxErrors"))) return 3;
-        
-        return 0;
+    function _getDefaultValue(string memory parameterName) internal view returns (uint256) {
+        return defaultValues[parameterName];
     }
 
     // ==================== INTERFACE COMPLIANCE FUNCTIONS ====================
@@ -697,6 +639,8 @@ contract ParameterManager is IParameterManager, Ownable {
             requiresTimelock: true,
             isActive: true
         });
+        
+        defaultValues[key] = value;
         
         emit ParameterRegistered(key, defaultValue, description);
     }

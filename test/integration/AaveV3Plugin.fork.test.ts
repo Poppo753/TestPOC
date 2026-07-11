@@ -113,6 +113,7 @@ describe("AaveV3 Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", function
         await mockBeacon.setImplementation("ProtocolManager", owner.address);
         await mockBeacon.setImplementation("LiquidityManager", owner.address);
         await mockBeacon.setImplementation("WETH", WETH);
+        await mockBeacon.setImplementation("BASE_ASSET", WETH);
 
         // Configura mock token manager
         await mockTokenManager.setTokenAddress("WETH", WETH);
@@ -142,7 +143,7 @@ describe("AaveV3 Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", function
         // ==================== DEPLOY AAVE V3 PLUGIN ====================
 
         const PluginFactory = await ethers.getContractFactory("AaveV3Plugin");
-        plugin = await PluginFactory.deploy(await mockBeacon.getAddress());
+        plugin = await PluginFactory.deploy(await mockBeacon.getAddress(), "WETH");
         await plugin.waitForDeployment();
         await mockBeacon.setImplementation("AaveV3Plugin", await plugin.getAddress());
 
@@ -154,7 +155,7 @@ describe("AaveV3 Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", function
         // ==================== DEPLOY AAVE V3 LENS ADAPTER ====================
 
         const LensFactory = await ethers.getContractFactory("AaveV3LensAdapter");
-        lensAdapter = await LensFactory.deploy(await mockBeacon.getAddress());
+        lensAdapter = await LensFactory.deploy(await mockBeacon.getAddress(), "WETH");
         await lensAdapter.waitForDeployment();
         await mockBeacon.setImplementation("AaveV3LensAdapter", await lensAdapter.getAddress());
 
@@ -649,7 +650,7 @@ describe("AaveV3 Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", function
     // 8. PLUGIN TESTS - CLOSE POSITION BY ID
     // ================================================================
 
-    describe("9. AaveV3Plugin - closePosition(positionId) + closePositionsForWeth", function () {
+    describe("9. AaveV3Plugin - closePosition(positionId) + closePositionsForBaseAsset", function () {
         before(async function () {
             // Cleanup residual state from previous sections
             await cleanupAllPositions();
@@ -675,8 +676,8 @@ describe("AaveV3 Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", function
             console.log(`   ✅ closePosition(0): ${ethers.formatEther(returned)} WETH → ProxyGeneral`);
         });
 
-        it("Should closePositionsForWeth with target amount", async function () {
-            // Deposita di nuovo per testare closePositionsForWeth
+        it("Should closePositionsForBaseAsset with target amount", async function () {
+            // Deposita di nuovo per testare closePositionsForBaseAsset
             await ethers.provider.send("hardhat_impersonateAccount", [WETH_WHALE]);
             const whale = await ethers.getSigner(WETH_WHALE);
 
@@ -687,13 +688,13 @@ describe("AaveV3 Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", function
             const proxyBefore = await wethContract.balanceOf(await mockProxyGeneral.getAddress());
             const target = ethers.parseEther("0.02"); // Chiedi solo 0.02 WETH
 
-            const tx = await plugin.connect(owner).closePositionsForWeth(target);
+            const tx = await plugin.connect(owner).closePositionsForBaseAsset(target);
             await tx.wait();
 
             const proxyAfter = await wethContract.balanceOf(await mockProxyGeneral.getAddress());
             const obtained = proxyAfter - proxyBefore;
             expect(obtained).to.be.gte(target - 1n);
-            console.log(`   ✅ closePositionsForWeth: ${ethers.formatEther(obtained)} WETH obtained`);
+            console.log(`   ✅ closePositionsForBaseAsset: ${ethers.formatEther(obtained)} WETH obtained`);
         });
     });
 
@@ -973,20 +974,20 @@ describe("AaveV3 Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", function
 
         it("Should return correct value breakdown", async function () {
             const breakdown = await lensAdapter.getValueBreakdown();
-            expect(breakdown.totalCollateralEth).to.be.gt(0);
-            expect(breakdown.totalDebtEth).to.be.gt(0);
-            expect(breakdown.netValueEth).to.be.gt(0);
-            expect(breakdown.totalCollateralEth).to.be.gt(breakdown.totalDebtEth);
-            console.log(`   Collateral: ${ethers.formatEther(breakdown.totalCollateralEth)} ETH`);
-            console.log(`   Debt:       ${ethers.formatEther(breakdown.totalDebtEth)} ETH`);
-            console.log(`   Net:        ${ethers.formatEther(breakdown.netValueEth)} ETH`);
+            expect(breakdown.totalCollateral).to.be.gt(0);
+            expect(breakdown.totalDebt).to.be.gt(0);
+            expect(breakdown.netValue).to.be.gt(0);
+            expect(breakdown.totalCollateral).to.be.gt(breakdown.totalDebt);
+            console.log(`   Collateral: ${ethers.formatEther(breakdown.totalCollateral)} ETH`);
+            console.log(`   Debt:       ${ethers.formatEther(breakdown.totalDebt)} ETH`);
+            console.log(`   Net:        ${ethers.formatEther(breakdown.netValue)} ETH`);
         });
 
         it("Should return healthy protocol summary", async function () {
             const summary = await lensAdapter.getProtocolSummary();
             expect(summary.name).to.equal("AaveV3");
             expect(summary.activePositionCount).to.equal(1);
-            expect(summary.netValueEth).to.be.gt(0);
+            expect(summary.netValue).to.be.gt(0);
             expect(summary.lowestHealthFactor).to.be.gt(ethers.parseEther("1"));
             console.log(`   Summary: ${summary.activePositionCount} positions, HF=${ethers.formatEther(summary.lowestHealthFactor)}`);
         });
@@ -1016,7 +1017,7 @@ describe("AaveV3 Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", function
         });
 
         it("Should estimate WETH from close all", async function () {
-            const estimate = await lensAdapter.estimateWethFromCloseAll();
+            const estimate = await lensAdapter.estimateBaseAssetFromCloseAll();
             expect(estimate).to.be.gt(0);
             console.log(`   Estimated WETH from close all: ${ethers.formatEther(estimate)}`);
         });

@@ -59,7 +59,7 @@ describe("PG-005: Governance Emergency (Crisis Management)", function () {
 
     // Deploy ParameterManager
     const ParameterManagerFactory = await ethers.getContractFactory("ParameterManager");
-    parameterManager = await ParameterManagerFactory.deploy(beacon.target);
+    parameterManager = await ParameterManagerFactory.deploy(beacon.target, 18);
     console.log(`⚙️ ParameterManager deployed: ${parameterManager.target}`);
 
     // Deploy TokenManager
@@ -69,22 +69,28 @@ describe("PG-005: Governance Emergency (Crisis Management)", function () {
 
     // Deploy SwapManager
     const SwapManagerFactory = await ethers.getContractFactory("SwapManager");
-    swapManager = await SwapManagerFactory.deploy(beacon.target);
+    swapManager = await SwapManagerFactory.deploy(beacon.target, "WETH");
     console.log(`🔄 SwapManager deployed: ${swapManager.target}`);
+
+    // Deploy MockWETH as BASE_ASSET for LiquidityManager
+    const MockWETHFactory = await ethers.getContractFactory("MockWETH");
+    const mockWeth = await MockWETHFactory.deploy();
+    await mockWeth.waitForDeployment();
+    await beacon.updateImplementation("BASE_ASSET", await mockWeth.getAddress());
 
     // Deploy LiquidityManager
     const LiquidityManagerFactory = await ethers.getContractFactory("LiquidityManager");
-    liquidityManager = await LiquidityManagerFactory.deploy(beacon.target);
+    liquidityManager = await LiquidityManagerFactory.deploy(beacon.target, "WETH");
     console.log(`💧 LiquidityManager deployed: ${liquidityManager.target}`);
 
     // Deploy ValueCalculator
     const ValueCalculatorFactory = await ethers.getContractFactory("ValueCalculator");
-    valueCalculator = await ValueCalculatorFactory.deploy(beacon.target);
+    valueCalculator = await ValueCalculatorFactory.deploy(beacon.target, "WETH");
     console.log(`📊 ValueCalculator deployed: ${valueCalculator.target}`);
 
     // Deploy ProxyGeneral
     const ProxyGeneralFactory = await ethers.getContractFactory("ProxyGeneral");
-    proxyGeneral = await ProxyGeneralFactory.deploy(beacon.target);
+    proxyGeneral = await ProxyGeneralFactory.deploy(beacon.target, "WETH");
     console.log(`🏛️ ProxyGeneral deployed: ${proxyGeneral.target}`);
 
     // Deploy EmergencyHandler

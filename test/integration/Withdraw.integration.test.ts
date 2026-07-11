@@ -41,9 +41,9 @@ describe("Integration: Withdraw Flow", function () {
     const mockUSDC = await MockERC20.deploy("USD Coin", "USDC", 6);
     const mockWBTC = await MockERC20.deploy("Wrapped Bitcoin", "WBTC", 8);
     
-    // Deploy MockWETH
-    const MockWETH = await ethers.getContractFactory("MockWETH");
-    const mockWETH = await MockWETH.deploy();
+    // Deploy MockWETH (as MockERC20 for mint support)
+    const MockWETHFactory = await ethers.getContractFactory("MockERC20");
+    const mockWETH = await MockWETHFactory.deploy("Wrapped Ether", "WETH", 18);
 
     // Deploy MockChainlinkOracle
     const MockChainlinkOracle = await ethers.getContractFactory("MockChainlinkOracle");
@@ -57,33 +57,34 @@ describe("Integration: Withdraw Flow", function () {
     const Beacon = await ethers.getContractFactory("Beacon");
     const beacon = await Beacon.deploy();
     await beacon.updateImplementation("WETH", mockWETH.target);
+    await beacon.updateImplementation("BASE_ASSET", mockWETH.target);
 
     // Deploy ChainlinkAdapter
     const ChainlinkAdapter = await ethers.getContractFactory("ChainlinkAdapter");
     const chainlinkAdapter = await ChainlinkAdapter.deploy();
     
     // Setup price feeds in ChainlinkAdapter
-    await chainlinkAdapter.setPriceFeed("USDC", mockOracle.target, 8, 3600);
-    await chainlinkAdapter.setPriceFeed("WBTC", mockOracle.target, 8, 3600);
+    await chainlinkAdapter.setPriceFeed("USDC", mockOracle.target, 8, 3600, "USD");
+    await chainlinkAdapter.setPriceFeed("WBTC", mockOracle.target, 8, 3600, "USD");
 
     // Deploy core contracts
     const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
-    const proxyGeneral = await ProxyGeneral.deploy(beacon.target);
+    const proxyGeneral = await ProxyGeneral.deploy(beacon.target, "WETH");
 
     const TokenManager = await ethers.getContractFactory("TokenManager");
     const tokenManager = await TokenManager.deploy(beacon.target, chainlinkAdapter.target);
 
     const ValueCalculator = await ethers.getContractFactory("ValueCalculator");
-    const valueCalculator = await ValueCalculator.deploy(beacon.target);
+    const valueCalculator = await ValueCalculator.deploy(beacon.target, "WETH");
 
     const SwapManager = await ethers.getContractFactory("SwapManager");
-    const swapManager = await SwapManager.deploy(beacon.target);
+    const swapManager = await SwapManager.deploy(beacon.target, "WETH");
 
     const ParameterManager = await ethers.getContractFactory("ParameterManager");
-    const parameterManager = await ParameterManager.deploy(beacon.target);
+    const parameterManager = await ParameterManager.deploy(beacon.target, 18);
 
     const LiquidityManager = await ethers.getContractFactory("LiquidityManager");
-    const liquidityManager = await LiquidityManager.deploy(beacon.target);
+    const liquidityManager = await LiquidityManager.deploy(beacon.target, "WETH");
 
     // Register contracts in Beacon
     await beacon.updateImplementation("ProxyGeneral", proxyGeneral.target);
@@ -94,11 +95,11 @@ describe("Integration: Withdraw Flow", function () {
     await beacon.updateImplementation("LiquidityManager", liquidityManager.target);
 
     // Setup tokens in TokenManager
-    await tokenManager.manageTokenData(
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"](
       "USDC", mockUSDC.target, 6, 3600
     );
-    await tokenManager.manageTokenData(
-      "WBTC", mockWBTC.target, mockOracle.target, 8, 8, 3600
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"](
+      "WBTC", mockWBTC.target, 8, 3600
     );
 
     // Setup LiquidityManager
@@ -170,11 +171,16 @@ describe("Integration: Withdraw Flow", function () {
     await proxyGeneral.setRateLimit("deposit", ethers.parseEther("200"), ethers.parseEther("1000"));
     await proxyGeneral.setRateLimit("withdraw", ethers.parseEther("1000"), ethers.parseEther("2000"));
     
-    // Bootstrap pool with initial deposit
-    await liquidityManager.connect(owner).deposit({ value: ethers.parseEther("10") });
+    // Bootstrap pool with initial deposit (ERC20-based)
+    const bootstrapAmount = ethers.parseEther("10");
+    await mockWETH.mint(owner.address, bootstrapAmount);
+    await mockWETH.connect(owner).approve(liquidityManager.target, bootstrapAmount);
+    await liquidityManager.connect(owner).deposit(bootstrapAmount);
     
     // User1 deposits to get LP tokens for withdrawal tests
-    await liquidityManager.connect(user1).deposit({ value: DEPOSIT_AMOUNT });
+    await mockWETH.mint(user1.address, DEPOSIT_AMOUNT);
+    await mockWETH.connect(user1).approve(liquidityManager.target, DEPOSIT_AMOUNT);
+    await liquidityManager.connect(user1).deposit(DEPOSIT_AMOUNT);
   });
 
   describe("⚡ HIGH: Complete Withdraw Flow Tests", function () {
@@ -188,7 +194,7 @@ describe("Integration: Withdraw Flow", function () {
       const withdrawShares = lpBalance / 2n; // Withdraw half
       
       // Get initial state
-      const initialETHBalance = await ethers.provider.getBalance(user1.address);
+      const initialETHBalance = await mockWETH.balanceOf(user1.address);
       const initialLPBalance = await proxyGeneral.balanceOf(user1.address);
       const initialProxyWETH = await mockWETH.balanceOf(proxyGeneral.target);
       const initialTotalSupply = await proxyGeneral.totalSupply();
@@ -199,7 +205,7 @@ describe("Integration: Withdraw Flow", function () {
       console.log(`   👤 User: ${user1.address.slice(0,8)}...`);
       console.log(`   🎫 Total LP Balance: ${ethers.formatEther(lpBalance)} LP tokens`);
       console.log(`   🔥 Withdrawing: ${ethers.formatEther(withdrawShares)} LP tokens (50%)`);
-      console.log(`   💰 Initial ETH Balance: ${ethers.formatEther(initialETHBalance)} ETH`);
+      console.log(`   💰 Initial WETH Balance: ${ethers.formatEther(initialETHBalance)} WETH`);
       console.log(`   🌊 Pool WETH Available: ${ethers.formatEther(initialProxyWETH)} WETH`);
       console.log(`   💎 Initial Pool Value: ${ethers.formatEther(initialPoolValue)} ETH`);
       console.log(`   📈 Pool Total Supply: ${ethers.formatEther(initialTotalSupply)} LP tokens`);
@@ -209,17 +215,14 @@ describe("Integration: Withdraw Flow", function () {
       const tx = await liquidityManager.connect(user1).withdraw(withdrawShares);
       const receipt = await tx.wait();
       
-      // Calculate gas cost
-      const gasUsed = receipt!.gasUsed * receipt!.gasPrice;
-      
-      // Get final state
-      const finalETHBalance = await ethers.provider.getBalance(user1.address);
+      // Get final state (WETH-based, no gas cost needed for ERC20 balance)
+      const finalETHBalance = await mockWETH.balanceOf(user1.address);
       const finalLPBalance = await proxyGeneral.balanceOf(user1.address);
       const finalProxyWETH = await mockWETH.balanceOf(proxyGeneral.target);
       const finalTotalSupply = await proxyGeneral.totalSupply();
       
       // Calculate metrics
-      const ethReceived = finalETHBalance - initialETHBalance + BigInt(gasUsed);
+      const ethReceived = finalETHBalance - initialETHBalance;
       const lpTokensBurned = initialLPBalance - finalLPBalance;
       const wethUsed = initialProxyWETH - finalProxyWETH;
       const supplyDecrease = initialTotalSupply - finalTotalSupply;
@@ -238,7 +241,7 @@ describe("Integration: Withdraw Flow", function () {
       console.log(`   🌊 Pool WETH Remaining: ${ethers.formatEther(finalProxyWETH)} WETH`);
       console.log(`   💎 Final Pool Value: ${ethers.formatEther(finalPoolValue)} ETH (-${ethers.formatEther(poolValueDecrease)})`);
       console.log(`   💰 Final LP Price: ${finalLPPrice.toFixed(6)} ETH per LP token`);
-      console.log(`   ⛽ Gas Used: ${receipt!.gasUsed.toLocaleString()} gas (${ethers.formatEther(gasUsed)} ETH)`);
+      console.log(`   ⛽ Gas Used: ${receipt!.gasUsed.toLocaleString()} gas`);
       
       // Verify LP tokens burned
       expect(finalLPBalance).to.equal(initialLPBalance - withdrawShares);
@@ -354,8 +357,8 @@ describe("Integration: Withdraw Flow", function () {
       const lpBalance = await proxyGeneral.balanceOf(user1.address);
       const firstWithdraw = lpBalance / 4n;
       
-      // Get initial ETH balance
-      const initialETH = await ethers.provider.getBalance(user1.address);
+      // Get initial WETH balance
+      const initialETH = await mockWETH.balanceOf(user1.address);
       const initialTotalSupply = await proxyGeneral.totalSupply();
       const initialPoolValue = await valueCalculator.getTotalPoolValueView();
       const initialLPPrice = initialTotalSupply > 0n ? Number(initialPoolValue) / Number(initialTotalSupply) : 0;
@@ -363,7 +366,7 @@ describe("Integration: Withdraw Flow", function () {
       console.log(`\n📊 WITHDRAWAL LIMIT TRACKING:`);
       console.log(`   👤 User: ${user1.address.slice(0,8)}...`);
       console.log(`   🎫 Total LP Balance: ${ethers.formatEther(lpBalance)} LP tokens`);
-      console.log(`   💰 Initial ETH Balance: ${ethers.formatEther(initialETH)} ETH`);
+      console.log(`   💰 Initial WETH Balance: ${ethers.formatEther(initialETH)} WETH`);
       console.log(`   💎 Initial Pool Value: ${ethers.formatEther(initialPoolValue)} ETH`);
       console.log(`   💰 Initial LP Price: ${initialLPPrice.toFixed(6)} ETH per LP token`);
       console.log(`   📈 Initial Total Supply: ${ethers.formatEther(initialTotalSupply)} LP tokens`);
@@ -374,10 +377,9 @@ describe("Integration: Withdraw Flow", function () {
       console.log(`   🎫 Amount: ${ethers.formatEther(firstWithdraw)} LP tokens (25%)`);
       const tx1 = await liquidityManager.connect(user1).withdraw(firstWithdraw);
       const receipt1 = await tx1.wait();
-      const gas1 = receipt1!.gasUsed * receipt1!.gasPrice;
       
-      const midETH = await ethers.provider.getBalance(user1.address);
-      const firstReceived = midETH - initialETH + BigInt(gas1);
+      const midETH = await mockWETH.balanceOf(user1.address);
+      const firstReceived = midETH - initialETH;
       const midLPBalance = await proxyGeneral.balanceOf(user1.address);
       const midTotalSupply = await proxyGeneral.totalSupply();
       const midPoolValue = await valueCalculator.getTotalPoolValueView();
@@ -397,14 +399,13 @@ describe("Integration: Withdraw Flow", function () {
       console.log(`   🎫 Amount: ${ethers.formatEther(secondWithdraw)} LP tokens (25%)`);
       const tx2 = await liquidityManager.connect(user1).withdraw(secondWithdraw);
       const receipt2 = await tx2.wait();
-      const gas2 = receipt2!.gasUsed * receipt2!.gasPrice;
       
       // Verify second withdraw also completed successfully
-      const finalETH = await ethers.provider.getBalance(user1.address);
-      const secondReceived = finalETH - midETH + BigInt(gas2);
+      const finalETH = await mockWETH.balanceOf(user1.address);
+      const secondReceived = finalETH - midETH;
       const finalLPBalance = await proxyGeneral.balanceOf(user1.address);
       const finalTotalSupply = await proxyGeneral.totalSupply();
-      const totalReceived = finalETH - initialETH + BigInt(gas1) + BigInt(gas2);
+      const totalReceived = finalETH - initialETH;
       const totalWithdrawn = firstWithdraw + secondWithdraw;
       const finalPoolValue = await valueCalculator.getTotalPoolValueView();
       const finalLPPrice = finalTotalSupply > 0n ? Number(finalPoolValue) / Number(finalTotalSupply) : 0;

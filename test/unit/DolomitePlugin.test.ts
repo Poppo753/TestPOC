@@ -39,6 +39,7 @@ describe("DolomitePlugin - Unit Tests", function () {
     await beacon.waitForDeployment();
 
     // Deploy mock tokens (used as mock contracts for Dolomite dependencies)
+    // Note: WETH and BASE_ASSET must be registered in beacon before other deploys
     const MockERC20Factory = (await ethers.getContractFactory(
       "MockERC20",
       owner
@@ -53,6 +54,10 @@ describe("DolomitePlugin - Unit Tests", function () {
     await mockDolomiteMargin.waitForDeployment();
     await mockDepositRouter.waitForDeployment();
     await mockBorrowRouter.waitForDeployment();
+
+    // Register WETH and BASE_ASSET in beacon
+    await beacon.updateImplementation("WETH", await mockToken.getAddress());
+    await beacon.updateImplementation("BASE_ASSET", await mockToken.getAddress());
 
     // Mint tokens
     await mockToken.mint(owner.address, INITIAL_BALANCE);

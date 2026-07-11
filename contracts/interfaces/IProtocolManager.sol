@@ -162,28 +162,28 @@ interface IProtocolManager {
     // ========== MODULAR WITHDRAWAL ==========
     
     /**
-     * @notice Chiude posizioni su TUTTI i protocolli registrati per ottenere WETH
-     * @dev Loop su tutti i protocolli attivi, chiama IProtocolAdapter.closePositionsForWeth
+     * @notice Chiude posizioni su TUTTI i protocolli registrati per ottenere il base asset
+     * @dev Loop su tutti i protocolli attivi, chiama IProtocolAdapter.closePositionsForBaseAsset
      * @dev Priorità: chiude le posizioni più rischiose prima (lowest health factor)
      * 
-     * @param targetWethAmount Quantità di WETH necessaria
-     * @return wethObtained WETH effettivamente ottenuto
+     * @param targetAmount Quantità di base asset necessaria
+     * @return baseAssetObtained Base asset effettivamente ottenuto
      * @return totalPositionsClosed Numero totale di posizioni chiuse
      * 
      * Flow:
      * ```
      * for each protocol in registeredProtocols:
-     *     if (wethObtained < targetWethAmount):
-     *         IProtocolAdapter(plugin).closePositionsForWeth(stillNeeded)
+     *     if (baseAssetObtained < targetAmount):
+     *         IProtocolAdapter(plugin).closePositionsForBaseAsset(stillNeeded)
      * ```
      * 
      * Requirements:
      * - Callable solo da owner o LiquidityManager
-     * - I plugin DEVONO implementare IProtocolAdapter.closePositionsForWeth
+     * - I plugin DEVONO implementare IProtocolAdapter.closePositionsForBaseAsset
      */
-    function closePositionsForWeth(uint256 targetWethAmount) 
+    function closePositionsForBaseAsset(uint256 targetAmount) 
         external 
-        returns (uint256 wethObtained, uint256 totalPositionsClosed);
+        returns (uint256 baseAssetObtained, uint256 totalPositionsClosed);
     
     // ========== MODULAR VALUE CALCULATION ==========
     

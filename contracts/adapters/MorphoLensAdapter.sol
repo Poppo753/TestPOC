@@ -3,6 +3,7 @@ pragma solidity ^0.8.27;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "../interfaces/ILensAdapter.sol";
 import "../interfaces/IProtocolAdapter.sol";
 import "../interfaces/IBeacon.sol";
@@ -42,12 +43,6 @@ contract MorphoLensAdapter is ILensAdapter, Ownable {
 
     // ==================== CONSTANTS ====================
 
-    /// @notice Morpho Blue on Arbitrum
-    address public constant MORPHO = 0x6c247b1F6182318877311737BaC0844bAa518F5e;
-
-    /// @notice WETH on Arbitrum
-    address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
-
     /// @notice Oracle price scale (1e36)
     uint256 public constant ORACLE_PRICE_SCALE = 1e36;
 
@@ -62,6 +57,12 @@ contract MorphoLensAdapter is ILensAdapter, Ownable {
     /// @notice Beacon for module resolution
     address public immutable beacon;
 
+    /// @notice Morpho Blue address (chain-specific, injected at deploy time)
+    address public immutable morpho;
+
+    /// @notice Base asset code for value denomination
+    string public baseAssetCode;
+
     // ==================== ERRORS ====================
 
     error InvalidBeacon();
@@ -71,15 +72,18 @@ contract MorphoLensAdapter is ILensAdapter, Ownable {
 
     // ==================== CONSTRUCTOR ====================
 
-    constructor(address _beacon) Ownable() {
+    constructor(address _beacon, string memory _baseAssetCode, address _morphoAddress) Ownable() {
         if (_beacon == address(0)) revert InvalidBeacon();
+        if (_morphoAddress == address(0)) revert InvalidBeacon();
         beacon = _beacon;
+        morpho = _morphoAddress;
+        baseAssetCode = _baseAssetCode;
     }
 
     // ==================== INTERNAL HELPERS ====================
 
-    function _getMorpho() private pure returns (IMorpho) {
-        return IMorpho(MORPHO);
+    function _getMorpho() private view returns (IMorpho) {
+        return IMorpho(morpho);
     }
 
     function _getRegistry() private view returns (IMorphoRegistry) {
@@ -92,38 +96,42 @@ contract MorphoLensAdapter is ILensAdapter, Ownable {
     }
 
     /**
-     * @dev Convert a token amount to ETH using TokenManager (Chainlink prices)
+     * @dev Convert a token amount to base asset using TokenManager (Chainlink prices)
      * @param token Token address
+     * @param tokenCode Token code for TokenManager lookup
      * @param amount Amount in token units
-     * @return ethValue Value in ETH (18 decimals)
+     * @return Value in base asset decimals
      */
-    function _toEth(address token, uint256 amount) private view returns (uint256) {
+    function _toBaseAsset(address token, string memory tokenCode, uint256 amount) private view returns (uint256) {
         if (amount == 0) return 0;
-        if (token == WETH) return amount; // 1 WETH = 1 ETH
+
+        address baseAsset = IBeacon(beacon).getImplementation("BASE_ASSET");
+        if (token == baseAsset) return amount;
 
         address tokenManager = IBeacon(beacon).getImplementation("TokenManager");
-        // TokenManager returns price in USD (8 decimals, Chainlink standard)
-        // We need to find the tokenCode for this token to query the price
-        // For simplicity, use the WETH price to convert
 
-        uint256 ethPriceUsd = ITokenManagerForModules(tokenManager).getTokenPriceForModule("WETH");
-        if (ethPriceUsd == 0) return 0;
+        uint256 tokenPrice = ITokenManagerForModules(tokenManager).getTokenPriceForModule(tokenCode);
+        if (tokenPrice == 0) return 0;
 
-        // Try to find the token price
-        // We use oracle price from the market's oracle to value collateral relative to loan token
-        // Then convert loan token to ETH
-        // For direct approach: query tokenCode → price from TokenManager
-        return (amount * 1e18) / ethPriceUsd; // Approximate: treat as same decimals as WETH
+        uint256 baseAssetPrice = ITokenManagerForModules(tokenManager).getBaseAssetPrice();
+        if (baseAssetPrice == 0) return 0;
+
+        uint8 tokenDecimals = IERC20Metadata(token).decimals();
+        uint8 baseDecimals = IERC20Metadata(baseAsset).decimals();
+
+        // Cross-rate: valueInBaseAsset = amount * tokenPrice * 10^baseDecimals / (baseAssetPrice * 10^tokenDecimals)
+        return (amount * tokenPrice * (10 ** baseDecimals)) / (baseAssetPrice * (10 ** tokenDecimals));
     }
 
     /**
-     * @dev Get the collateral value in ETH for a position in a specific market
+     * @dev Get position value in base asset for a specific market
      */
-    function _getPositionValueEth(
+    function _getPositionValue(
         address plugin,
         MarketParams memory params,
-        Id marketId
-    ) private view returns (uint256 collateralEth, uint256 debtEth) {
+        Id marketId,
+        string memory loanCode
+    ) private view returns (uint256 collateralVal, uint256 debtVal) {
         MorphoPosition memory pos = _getMorpho().position(marketId, plugin);
 
         if (pos.collateral == 0 && pos.borrowShares == 0) return (0, 0);
@@ -132,7 +140,7 @@ contract MorphoLensAdapter is ILensAdapter, Ownable {
         if (pos.collateral > 0) {
             uint256 oraclePrice = IMorphoOracle(params.oracle).price();
             uint256 collateralValueInLoan = (uint256(pos.collateral) * oraclePrice) / ORACLE_PRICE_SCALE;
-            collateralEth = _toEth(params.loanToken, collateralValueInLoan);
+            collateralVal = _toBaseAsset(params.loanToken, loanCode, collateralValueInLoan);
         }
 
         // Convert debt from shares to assets
@@ -140,7 +148,7 @@ contract MorphoLensAdapter is ILensAdapter, Ownable {
             Market memory mkt = _getMorpho().market(marketId);
             if (mkt.totalBorrowShares > 0) {
                 uint256 debtAssets = (uint256(pos.borrowShares) * uint256(mkt.totalBorrowAssets) + uint256(mkt.totalBorrowShares) - 1) / uint256(mkt.totalBorrowShares);
-                debtEth = _toEth(params.loanToken, debtAssets);
+                debtVal = _toBaseAsset(params.loanToken, loanCode, debtAssets);
             }
         }
     }
@@ -205,7 +213,7 @@ contract MorphoLensAdapter is ILensAdapter, Ownable {
      * @inheritdoc ILensAdapter
      * @dev Net value across all Morpho markets (collateral - debt) in ETH
      */
-    function getTotalValue() external view override returns (uint256 netValueEth) {
+    function getTotalValue() external view override returns (uint256 netValue) {
         address plugin = _getPlugin();
         IMorphoRegistry registry = _getRegistry();
         (string[] memory collCodes, string[] memory lnCodes) = registry.getRegisteredMarkets();
@@ -216,12 +224,12 @@ contract MorphoLensAdapter is ILensAdapter, Ownable {
         for (uint256 i = 0; i < collCodes.length; i++) {
             MarketParams memory params = registry.getMarketParams(collCodes[i], lnCodes[i]);
             Id marketId = params.id();
-            (uint256 cEth, uint256 dEth) = _getPositionValueEth(plugin, params, marketId);
-            totalCollateral += cEth;
-            totalDebt += dEth;
+            (uint256 cVal, uint256 dVal) = _getPositionValue(plugin, params, marketId, lnCodes[i]);
+            totalCollateral += cVal;
+            totalDebt += dVal;
         }
 
-        netValueEth = totalCollateral > totalDebt ? totalCollateral - totalDebt : 0;
+        netValue = totalCollateral > totalDebt ? totalCollateral - totalDebt : 0;
     }
 
     /// @inheritdoc ILensAdapter
@@ -233,17 +241,17 @@ contract MorphoLensAdapter is ILensAdapter, Ownable {
         for (uint256 i = 0; i < collCodes.length; i++) {
             MarketParams memory params = registry.getMarketParams(collCodes[i], lnCodes[i]);
             Id marketId = params.id();
-            (uint256 cEth, uint256 dEth) = _getPositionValueEth(plugin, params, marketId);
-            breakdown.totalCollateralEth += cEth;
-            breakdown.totalDebtEth += dEth;
+            (uint256 cVal, uint256 dVal) = _getPositionValue(plugin, params, marketId, lnCodes[i]);
+            breakdown.totalCollateral += cVal;
+            breakdown.totalDebt += dVal;
         }
 
-        breakdown.netValueEth = breakdown.totalCollateralEth > breakdown.totalDebtEth
-            ? breakdown.totalCollateralEth - breakdown.totalDebtEth
+        breakdown.netValue = breakdown.totalCollateral > breakdown.totalDebt
+            ? breakdown.totalCollateral - breakdown.totalDebt
             : 0;
         // Available to withdraw = approximate remaining borrowing capacity
-        breakdown.availableToWithdrawEth = breakdown.netValueEth > breakdown.totalDebtEth
-            ? breakdown.netValueEth - breakdown.totalDebtEth
+        breakdown.availableToWithdraw = breakdown.netValue > breakdown.totalDebt
+            ? breakdown.netValue - breakdown.totalDebt
             : 0;
     }
 
@@ -372,9 +380,9 @@ contract MorphoLensAdapter is ILensAdapter, Ownable {
             MarketParams memory params = registry.getMarketParams(collCodes[i], lnCodes[i]);
             Id marketId = params.id();
 
-            (uint256 cEth, uint256 dEth) = _getPositionValueEth(plugin, params, marketId);
-            summary.totalCollateralEth += cEth;
-            summary.totalDebtEth += dEth;
+            (uint256 cVal, uint256 dVal) = _getPositionValue(plugin, params, marketId, lnCodes[i]);
+            summary.totalCollateral += cVal;
+            summary.totalDebt += dVal;
 
             MorphoPosition memory pos = _getMorpho().position(marketId, plugin);
             if (pos.collateral > 0 || pos.borrowShares > 0) {
@@ -386,8 +394,8 @@ contract MorphoLensAdapter is ILensAdapter, Ownable {
 
         summary.name = "Morpho";
         summary.protocolType = IProtocolAdapter.ProtocolType.LENDING;
-        summary.netValueEth = summary.totalCollateralEth > summary.totalDebtEth
-            ? summary.totalCollateralEth - summary.totalDebtEth
+        summary.netValue = summary.totalCollateral > summary.totalDebt
+            ? summary.totalCollateral - summary.totalDebt
             : 0;
         summary.activePositionCount = activeCount;
         summary.lowestHealthFactor = lowestHF;
@@ -433,15 +441,15 @@ contract MorphoLensAdapter is ILensAdapter, Ownable {
             if (pos.borrowShares > 0) {
                 uint256 hf = _computeMarketHF(plugin, params, marketId);
                 if (hf < minHealthFactor) {
-                    (uint256 cEth, uint256 dEth) = _getPositionValueEth(plugin, params, marketId);
+                    (uint256 cVal, uint256 dVal) = _getPositionValue(plugin, params, marketId, lnCodes[i]);
                     positions[idx] = PositionWithRisk({
                         positionId: i,
                         protocolName: "Morpho",
                         healthFactor: hf,
                         timeToLiquidation: hf < 1e18 ? int256(-1) : int256(0),
                         riskLevel: hf < 1e18 ? "LIQUIDATABLE" : "DANGER",
-                        collateralEth: cEth,
-                        debtEth: dEth,
+                        collateral: cVal,
+                        debt: dVal,
                         shouldAutoClose: hf < minHealthFactor
                     });
                     idx++;
@@ -480,7 +488,7 @@ contract MorphoLensAdapter is ILensAdapter, Ownable {
             MorphoPosition memory pos = _getMorpho().position(marketId, plugin);
             if (pos.collateral > 0 || pos.borrowShares > 0) {
                 uint256 hf = _computeMarketHF(plugin, params, marketId);
-                (uint256 cEth, uint256 dEth) = _getPositionValueEth(plugin, params, marketId);
+                (uint256 cVal, uint256 dVal) = _getPositionValue(plugin, params, marketId, lnCodes[i]);
 
                 string memory riskLevel;
                 if (pos.borrowShares == 0) {
@@ -499,8 +507,8 @@ contract MorphoLensAdapter is ILensAdapter, Ownable {
                     healthFactor: hf,
                     timeToLiquidation: pos.borrowShares == 0 ? type(int256).max : (hf < 1e18 ? int256(-1) : int256(3600)),
                     riskLevel: riskLevel,
-                    collateralEth: cEth,
-                    debtEth: dEth,
+                    collateral: cVal,
+                    debt: dVal,
                     shouldAutoClose: pos.borrowShares > 0 && hf < DEFAULT_SAFE_HEALTH_FACTOR
                 });
                 idx++;
@@ -549,14 +557,14 @@ contract MorphoLensAdapter is ILensAdapter, Ownable {
         bytes32 tokenHash = keccak256(bytes(tokenCode));
         for (uint256 i = 0; i < collCodes.length; i++) {
             if (keccak256(bytes(collCodes[i])) == tokenHash) {
-                return MORPHO;
+                return morpho;
             }
         }
         return address(0);
     }
 
     /// @inheritdoc ILensAdapter
-    function estimateWethFromCloseAll() external view override returns (uint256 wethAmount) {
+    function estimateBaseAssetFromCloseAll() external view override returns (uint256 amount) {
         address plugin = _getPlugin();
         IMorphoRegistry registry = _getRegistry();
         (string[] memory collCodes, string[] memory lnCodes) = registry.getRegisteredMarkets();
@@ -564,9 +572,9 @@ contract MorphoLensAdapter is ILensAdapter, Ownable {
         for (uint256 i = 0; i < collCodes.length; i++) {
             MarketParams memory params = registry.getMarketParams(collCodes[i], lnCodes[i]);
             Id marketId = params.id();
-            (uint256 cEth, uint256 dEth) = _getPositionValueEth(plugin, params, marketId);
-            if (cEth > dEth) {
-                wethAmount += cEth - dEth;
+            (uint256 cVal, uint256 dVal) = _getPositionValue(plugin, params, marketId, lnCodes[i]);
+            if (cVal > dVal) {
+                amount += cVal - dVal;
             }
         }
     }
@@ -576,7 +584,7 @@ contract MorphoLensAdapter is ILensAdapter, Ownable {
         external
         view
         override
-        returns (uint256 thresholdEth)
+        returns (uint256 threshold)
     {
         IMorphoRegistry registry = _getRegistry();
         (string[] memory collCodes, string[] memory lnCodes) = registry.getRegisteredMarkets();

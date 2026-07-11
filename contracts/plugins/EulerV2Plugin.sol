@@ -108,14 +108,11 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     
     /// @notice Euler Vault Connector (hub centrale)
     IEVC public immutable evc;
+
+    /// @notice AccountLens address (chain-specific, injected at deploy time)
+    address public immutable accountLensAddress;
     
     // ==================== CONSTANTS ====================
-    
-    /// @notice Indirizzo EVC su Arbitrum
-    address public constant EVC_ADDRESS = 0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066;
-    
-    /// @notice Indirizzo AccountLens su Arbitrum (per health factor)
-    address public constant ACCOUNT_LENS_ADDRESS = 0x90a52DDcb232e7bb003DD9258fA1235c553eC956;
     
     /// @notice Minimum health factor (1.05 = 105%)
     uint256 public constant MIN_HEALTH_FACTOR = 1.05e18;
@@ -124,6 +121,9 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     
     // ==================== STATE VARIABLES ====================
     
+    /// @notice Base asset code for this pool (e.g. "WETH", "USDC", "WBTC")
+    string public baseAssetCode;
+
     /// @notice Circuit breaker flag (emergency stop)
     bool public override circuitBreakerTripped;
     
@@ -231,12 +231,18 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     /**
      * @notice Costruttore del plugin
      * @param _beacon Indirizzo del Beacon per risoluzione moduli
+     * @param _evcAddress EVC address (chain-specific, injected at deploy time)
+     * @param _accountLensAddress AccountLens address (chain-specific, injected at deploy time)
      */
-    constructor(address _beacon) Ownable() {
+    constructor(address _beacon, string memory _baseAssetCode, address _evcAddress, address _accountLensAddress) Ownable() {
         if (_beacon == address(0)) revert InvalidAddress();
+        if (_evcAddress == address(0)) revert InvalidAddress();
+        if (_accountLensAddress == address(0)) revert InvalidAddress();
         
         beacon = _beacon;
-        evc = IEVC(EVC_ADDRESS);
+        baseAssetCode = _baseAssetCode;
+        evc = IEVC(_evcAddress);
+        accountLensAddress = _accountLensAddress;
         // Sub-account allocation removed - now managed by EulerRegistry (Opzione C)
     }
     
@@ -607,7 +613,7 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         address controllerVault = controllers[0];
         
         // Query AccountLens per informazioni liquidità
-        IAccountLens lens = IAccountLens(ACCOUNT_LENS_ADDRESS);
+        IAccountLens lens = IAccountLens(accountLensAddress);
         IAccountLens.AccountLiquidityInfo memory liquidity = 
             lens.getAccountLiquidityInfo(address(this), controllerVault);
         
@@ -1200,12 +1206,12 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     
     /**
      * @notice Risolve token address da tokenCode via TokenManager o Beacon
-     * @dev WETH è gestito come caso speciale tramite Beacon
+     * @dev Base asset è gestito come caso speciale tramite Beacon
      */
     function _resolveToken(string memory tokenCode) internal view returns (address) {
-        // WETH è gestito separatamente nel Beacon (non in TokenManager)
-        if (keccak256(bytes(tokenCode)) == keccak256(bytes("WETH"))) {
-            return IBeacon(beacon).getImplementation("WETH");
+        // Base asset è gestito separatamente nel Beacon (non in TokenManager)
+        if (keccak256(bytes(tokenCode)) == keccak256(bytes(baseAssetCode))) {
+            return IBeacon(beacon).getImplementation("BASE_ASSET");
         }
         
         address tokenManager = IBeacon(beacon).getImplementation("TokenManager");
@@ -1320,44 +1326,40 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     /// @inheritdoc IProtocolAdapter
     /// @dev Closes a leverage position atomically using closeLeverageAtomic().
     ///      Retrieves position info and calls the atomic close function.
-    function closePosition(uint256 positionId) external override returns (uint256 wethReturned) {
+    function closePosition(uint256 positionId) external override returns (uint256 baseAssetReturned) {
         // Verifica che la posizione esista ed è attiva
         address registry = _getVaultRegistry();
         IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPosition(positionId);
         if (!pos.isActive) revert PositionAlreadyClosed(positionId);
         
-        // Recupera token codes dai vault addresses
         IEulerRegistry registryContract = IEulerRegistry(registry);
         
         string memory collateralTokenCode = registryContract.getTokenCode(pos.collateralVault);
         string memory borrowTokenCode = registryContract.getTokenCode(pos.borrowVault);
         
-        // Prepara parametri per chiusura atomica
         CloseLeverageAtomicParams memory params = CloseLeverageAtomicParams({
             collateralToken: collateralTokenCode,
             borrowToken: borrowTokenCode,
-            maxSlippageBps: 200,  // 2% max slippage (default conservativo)
-            deadline: block.timestamp + 300  // 5 minuti deadline
+            maxSlippageBps: 200,
+            deadline: block.timestamp + 300
         });
         
-        // Chiama chiusura atomica
-        wethReturned = this.closeLeverageAtomic(params);
+        baseAssetReturned = this.closeLeverageAtomic(params);
         
-        // Marca posizione come chiusa nel Registry
         IEulerRegistry(registry).closePositionRecord(positionId);
         
-        return wethReturned;
+        return baseAssetReturned;
     }
     
     /// @inheritdoc IProtocolAdapter
-    function closePositionsForWeth(uint256 targetWethAmount) 
+    function closePositionsForBaseAsset(uint256 targetAmount) 
         external 
         override 
         onlyOwnerOrLiquidityManager
-        returns (uint256 wethObtained, uint256 positionsClosed) 
+        returns (uint256 obtained, uint256 positionsClosed) 
     {
-        address weth = IBeacon(beacon).getImplementation("WETH");
-        uint256 wethBefore = IERC20(weth).balanceOf(address(this));
+        address baseAsset = IBeacon(beacon).getImplementation("BASE_ASSET");
+        uint256 balBefore = IERC20(baseAsset).balanceOf(address(this));
         
         // Close leverage positions (sorted by risk, riskiest first)
         address lensAdapter = IBeacon(beacon).getImplementation("EulerLensAdapter");
@@ -1371,11 +1373,9 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
             IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPositionSafe(positionId);
             if (pos.createdAt == 0 || !pos.isActive) continue;
             
-            // Determine token codes from vault assets
             string memory collateralToken = IEulerRegistry(registry).getTokenCode(pos.collateralVault);
             string memory borrowToken = IEulerRegistry(registry).getTokenCode(pos.borrowVault);
             
-            // Close position via closeLeverageAtomic (tokens stay in plugin via self-call)
             try this.closeLeverageAtomic(
                 CloseLeverageAtomicParams({
                     collateralToken: collateralToken,
@@ -1390,15 +1390,13 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
                 // Continue on failure
             }
             
-            // Check if enough WETH obtained
-            wethObtained = IERC20(weth).balanceOf(address(this)) - wethBefore;
-            if (wethObtained >= targetWethAmount) break;
+            obtained = IERC20(baseAsset).balanceOf(address(this)) - balBefore;
+            if (obtained >= targetAmount) break;
         }
         
-        // Final WETH tally and transfer to ProxyGeneral
-        wethObtained = IERC20(weth).balanceOf(address(this)) - wethBefore;
-        if (wethObtained > 0) {
-            IERC20(weth).safeTransfer(_getProxyGeneral(), wethObtained);
+        obtained = IERC20(baseAsset).balanceOf(address(this)) - balBefore;
+        if (obtained > 0) {
+            IERC20(baseAsset).safeTransfer(_getProxyGeneral(), obtained);
         }
     }
     

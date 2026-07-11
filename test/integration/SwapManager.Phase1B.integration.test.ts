@@ -85,19 +85,22 @@ describe("SwapManager - Phase 1B Integration Tests", function () {
         tokenManager = await TokenManagerFactory.deploy(beacon.target, mockOracleAdapter.target);
 
         const ProxyGeneralFactory = await ethers.getContractFactory("ProxyGeneral");
-        proxyGeneral = await ProxyGeneralFactory.deploy(beacon.target);
+        proxyGeneral = await ProxyGeneralFactory.deploy(beacon.target, "WETH");
 
         const ValueCalculatorFactory = await ethers.getContractFactory("ValueCalculator");
-        valueCalculator = await ValueCalculatorFactory.deploy(beacon.target);
+        valueCalculator = await ValueCalculatorFactory.deploy(beacon.target, "WETH");
 
         const ParameterManagerFactory = await ethers.getContractFactory("ParameterManager");
-        parameterManager = await ParameterManagerFactory.deploy(beacon.target);
+        parameterManager = await ParameterManagerFactory.deploy(beacon.target, 18);
+
+        // Register BASE_ASSET before LiquidityManager deploy
+        await beacon.updateImplementation("BASE_ASSET", mockWETH.target);
 
         const LiquidityManagerFactory = await ethers.getContractFactory("LiquidityManager");
-        liquidityManager = await LiquidityManagerFactory.deploy(beacon.target);
+        liquidityManager = await LiquidityManagerFactory.deploy(beacon.target, "WETH");
 
         const SwapManagerFactory = await ethers.getContractFactory("SwapManager");
-        swapManager = await SwapManagerFactory.deploy(beacon.target);
+        swapManager = await SwapManagerFactory.deploy(beacon.target, "WETH");
 
         // Register in Beacon
         await beacon.updateImplementation("WETH", mockWETH.target);

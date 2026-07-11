@@ -206,6 +206,7 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
 
         // Register WETH address in Beacon (TokenManager uses this to prevent adding WETH as token)
         await beacon.updateImplementation("WETH", ADDRESSES.WETH);
+        await beacon.updateImplementation("BASE_ASSET", ADDRESSES.WETH);
         await sleep(1500);
 
         // Setup tokens in TokenManager using manageTokenData
@@ -248,7 +249,7 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
 
         // Deploy EulerV2Plugin
         const EulerV2PluginFactory = await ethers.getContractFactory("EulerV2Plugin");
-        eulerV2Plugin = await EulerV2PluginFactory.deploy(await beacon.getAddress());
+        eulerV2Plugin = await EulerV2PluginFactory.deploy(await beacon.getAddress(), "WETH");
         await eulerV2Plugin.waitForDeployment();
         console.log(`   ✅ EulerV2Plugin deployed: ${await eulerV2Plugin.getAddress()}`);
         await sleep(2000);
@@ -259,7 +260,7 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
 
         // Deploy EulerLensAdapter
         const EulerLensAdapterFactory = await ethers.getContractFactory("EulerLensAdapter");
-        eulerLensAdapter = await EulerLensAdapterFactory.deploy(await beacon.getAddress());
+        eulerLensAdapter = await EulerLensAdapterFactory.deploy(await beacon.getAddress(), "WETH");
         await eulerLensAdapter.waitForDeployment();
         console.log(`   ✅ EulerLensAdapter deployed: ${await eulerLensAdapter.getAddress()}`);
         await sleep(2000);

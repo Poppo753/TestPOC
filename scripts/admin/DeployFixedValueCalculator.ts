@@ -27,7 +27,7 @@ async function main() {
   
   Logger.info("Deploying ValueCalculator with fix...");
   const ValueCalculatorFactory = await ethers.getContractFactory("ValueCalculator");
-  const newValueCalculator = await ValueCalculatorFactory.deploy(CONTRACTS.beacon);
+  const newValueCalculator = await ValueCalculatorFactory.deploy(CONTRACTS.beacon, "USDC");
   
   await newValueCalculator.waitForDeployment();
   const newAddress = await newValueCalculator.getAddress();

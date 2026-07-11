@@ -9,6 +9,13 @@ import * as path from "path";
 
 const BEACON = "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870";
 
+// Base Asset Configuration
+const BASE_ASSET_CODE = "USDC";
+
+// Euler V2 addresses on Arbitrum
+const EVC_ADDRESS          = "0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066";
+const ACCOUNT_LENS_ADDRESS = "0x90a52DDcb232e7bb003DD9258fA1235c553eC956";
+
 async function main() {
     console.log("\n🚀 Deploying EulerV2Plugin to Arbitrum...\n");
 
@@ -19,7 +26,7 @@ async function main() {
     // Deploy EulerV2Plugin
     console.log("\n📦 Deploying EulerV2Plugin...");
     const EulerV2Plugin = await ethers.getContractFactory("EulerV2Plugin");
-    const eulerPlugin = await EulerV2Plugin.deploy(BEACON);
+    const eulerPlugin = await EulerV2Plugin.deploy(BEACON, BASE_ASSET_CODE, EVC_ADDRESS, ACCOUNT_LENS_ADDRESS);
     await eulerPlugin.waitForDeployment();
     const pluginAddress = await eulerPlugin.getAddress();
     console.log("✅ EulerV2Plugin deployed to:", pluginAddress);

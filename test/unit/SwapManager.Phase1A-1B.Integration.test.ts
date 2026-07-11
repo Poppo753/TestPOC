@@ -33,7 +33,7 @@ describe("SwapManager - Phase 1A+1B Integration: ALL Swap Modes", function () {
         
         // Deploy ProxyGeneral
         const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
-        const proxyGeneral = await ProxyGeneral.deploy(await beacon.getAddress());
+        const proxyGeneral = await ProxyGeneral.deploy(await beacon.getAddress(), "WETH");
         await proxyGeneral.waitForDeployment();
         
         // Deploy Mock OracleAdapter
@@ -72,7 +72,7 @@ describe("SwapManager - Phase 1A+1B Integration: ALL Swap Modes", function () {
         
         // Deploy SwapManager
         const SwapManager = await ethers.getContractFactory("SwapManager");
-        const swapManager = await SwapManager.deploy(await beacon.getAddress());
+        const swapManager = await SwapManager.deploy(await beacon.getAddress(), "WETH");
         await swapManager.waitForDeployment();
         
         // Deploy Mock Swap Plugins (3 different implementations)
@@ -119,6 +119,7 @@ describe("SwapManager - Phase 1A+1B Integration: ALL Swap Modes", function () {
         await beacon.updateImplementation("ProxyGeneral", await proxyGeneral.getAddress());
         await beacon.updateImplementation("SwapManager", await swapManager.getAddress());
         await beacon.updateImplementation("WETH", await weth.getAddress());
+        await beacon.updateImplementation("BASE_ASSET", await weth.getAddress());
         
         // Register swap plugins
         await beacon.updateImplementation("UniswapV3Plugin", await uniswapPlugin.getAddress());
@@ -127,27 +128,21 @@ describe("SwapManager - Phase 1A+1B Integration: ALL Swap Modes", function () {
         
         // Configure MockOracleAdapter prices
         const oracleAdapterMock = oracleAdapter as any;
-        await oracleAdapterMock.setPrice("USDC", 1_00000000); // $1.00
-        await oracleAdapterMock.setDecimals("USDC", 8);
-        await oracleAdapterMock.setPrice("WBTC", 50000_00000000); // $50000.00
-        await oracleAdapterMock.setDecimals("WBTC", 8);
+        await oracleAdapterMock.setupToken("USDC", 1_00000000, 8, true);
+        await oracleAdapterMock.setupToken("WBTC", 50000_00000000, 8, true);
         
-        // Register tokens in TokenManager with price feeds
+        // Register tokens in TokenManager (NEW API: 4 params)
         const tokenManagerAdmin = tokenManager as any;
-        await tokenManagerAdmin.manageTokenData(
+        await tokenManagerAdmin["manageTokenData(string,address,uint8,uint256)"](
             "USDC",
             await usdc.getAddress(),
-            await usdcPriceFeed.getAddress(),
             6,
-            8,
             3600
         );
         
-        await tokenManagerAdmin.manageTokenData(
+        await tokenManagerAdmin["manageTokenData(string,address,uint8,uint256)"](
             "WBTC",
             await wbtc.getAddress(),
-            await wbtcPriceFeed.getAddress(),
-            8,
             8,
             3600
         );
@@ -219,7 +214,8 @@ describe("SwapManager - Phase 1A+1B Integration: ALL Swap Modes", function () {
             console.log(`WBTC before: ${wbtcBefore / 10n**8n}`);
             
             // Perform swap with SPECIFIC plugin (UniswapV3 = 0.5 WBTC quote)
-            const deadline = Math.floor(Date.now() / 1000) + 600;
+            const currentBlock = await ethers.provider.getBlock("latest");
+            const deadline = currentBlock!.timestamp + 600;
             const tx = await swapManager.connect(owner).performSwap(
                 "USDC",
                 "WBTC",
@@ -280,7 +276,8 @@ describe("SwapManager - Phase 1A+1B Integration: ALL Swap Modes", function () {
             const wbtcBefore = await wbtc.balanceOf(await proxyGeneral.getAddress());
             
             // Perform swap - should use CamelotPlugin now
-            const deadline = Math.floor(Date.now() / 1000) + 600;
+            const currentBlock = await ethers.provider.getBlock("latest");
+            const deadline = currentBlock!.timestamp + 600;
             const tx = await swapManager.connect(owner).performSwap(
                 "USDC",
                 "WBTC",
@@ -343,7 +340,8 @@ describe("SwapManager - Phase 1A+1B Integration: ALL Swap Modes", function () {
             const wbtcBefore = await wbtc.balanceOf(await proxyGeneral.getAddress());
             
             // Call swapWithBestPlugin - should IGNORE activeSwapPlugin and use best
-            const deadline = Math.floor(Date.now() / 1000) + 600;
+            const currentBlock = await ethers.provider.getBlock("latest");
+            const deadline = currentBlock!.timestamp + 600;
             const tx = await swapManager.connect(owner).swapWithBestPlugin(
                 "USDC",
                 "WBTC",
@@ -393,7 +391,8 @@ describe("SwapManager - Phase 1A+1B Integration: ALL Swap Modes", function () {
             await swapManager.setActiveSwapPlugin("CamelotPlugin");
             
             // OPTION 1: Use SPECIFIC plugin (user trusts Camelot)
-            const deadline = Math.floor(Date.now() / 1000) + 600;
+            const currentBlock = await ethers.provider.getBlock("latest");
+            const deadline = currentBlock!.timestamp + 600;
             
             const wbtcBefore1 = await wbtc.balanceOf(await proxyGeneral.getAddress());
             await swapManager.connect(owner).performSwap(

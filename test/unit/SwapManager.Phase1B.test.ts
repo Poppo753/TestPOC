@@ -24,7 +24,7 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
         
         // Deploy ProxyGeneral
         const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
-        const proxyGeneral = await ProxyGeneral.deploy(await beacon.getAddress());
+        const proxyGeneral = await ProxyGeneral.deploy(await beacon.getAddress(), "WETH");
         await proxyGeneral.waitForDeployment();
         
         // Deploy MockOracleAdapter
@@ -56,7 +56,7 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
         
         // Deploy SwapManager
         const SwapManager = await ethers.getContractFactory("SwapManager");
-        const swapManager = await SwapManager.deploy(await beacon.getAddress());
+        const swapManager = await SwapManager.deploy(await beacon.getAddress(), "WETH");
         await swapManager.waitForDeployment();
         
         // Deploy Mock Swap Plugins (3 different implementations)
@@ -74,23 +74,23 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
         const odosPlugin = await MockSimpleSwap.deploy();
         await odosPlugin.waitForDeployment();
         
-        // Configure expected outputs for each plugin
+        // Configure expected outputs for each plugin (USDC → WBTC)
         await uniswapPlugin.setExpectedOutput(
-            await weth.getAddress(),
             await usdc.getAddress(),
-            2000n * 10n**6n // 2000 USDC
+            await wbtc.getAddress(),
+            5n * 10n**7n // 0.5 WBTC (best price - 8 decimals)
         );
         
         await camelotPlugin.setExpectedOutput(
-            await weth.getAddress(),
             await usdc.getAddress(),
-            1990n * 10n**6n // 1990 USDC
+            await wbtc.getAddress(),
+            49n * 10n**6n // 0.49 WBTC (medium price)
         );
         
         await odosPlugin.setExpectedOutput(
-            await weth.getAddress(),
             await usdc.getAddress(),
-            1980n * 10n**6n // 1980 USDC
+            await wbtc.getAddress(),
+            48n * 10n**6n // 0.48 WBTC (worst price)
         );
         
         // Set custody holder for all plugins
@@ -103,6 +103,22 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
         await beacon.updateImplementation("ProxyGeneral", await proxyGeneral.getAddress());
         await beacon.updateImplementation("SwapManager", await swapManager.getAddress());
         await beacon.updateImplementation("WETH", await weth.getAddress());
+        await beacon.updateImplementation("BASE_ASSET", await weth.getAddress());
+        
+        // Configure MockOracleAdapter prices BEFORE registering tokens
+        const oracleAdapterMock = oracleAdapter as any;
+        await oracleAdapterMock.setPrice("USDC", 1_00000000);
+        await oracleAdapterMock.setDecimals("USDC", 8);
+        await oracleAdapterMock.setPrice("WBTC", 50000_00000000);
+        await oracleAdapterMock.setDecimals("WBTC", 8);
+        
+        // Register tokens in TokenManager (WETH is base asset, cannot be added)
+        await tokenManager["manageTokenData(string,address,uint8,uint256)"](
+            "USDC", await usdc.getAddress(), 6, 3600
+        );
+        await tokenManager["manageTokenData(string,address,uint8,uint256)"](
+            "WBTC", await wbtc.getAddress(), 8, 3600
+        );
         
         // Register swap plugins (Phase 1B naming convention)
         await beacon.updateImplementation("UniswapV3Plugin", await uniswapPlugin.getAddress());
@@ -140,7 +156,7 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
         
         // Deploy ProxyGeneral
         const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
-        const proxyGeneral = await ProxyGeneral.deploy(await beacon.getAddress());
+        const proxyGeneral = await ProxyGeneral.deploy(await beacon.getAddress(), "WETH");
         await proxyGeneral.waitForDeployment();
         
         // Deploy MockOracleAdapter
@@ -183,7 +199,7 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
         
         // Deploy SwapManager
         const SwapManager = await ethers.getContractFactory("SwapManager");
-        const swapManager = await SwapManager.deploy(await beacon.getAddress());
+        const swapManager = await SwapManager.deploy(await beacon.getAddress(), "WETH");
         await swapManager.waitForDeployment();
         
         // Deploy Mock Swap Plugins (3 different implementations)
@@ -230,6 +246,7 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
         await beacon.updateImplementation("ProxyGeneral", await proxyGeneral.getAddress());
         await beacon.updateImplementation("SwapManager", await swapManager.getAddress());
         await beacon.updateImplementation("WETH", await weth.getAddress());
+        await beacon.updateImplementation("BASE_ASSET", await weth.getAddress());
         
         // Register swap plugins
         await beacon.updateImplementation("UniswapV3Plugin", await uniswapPlugin.getAddress());
@@ -308,13 +325,13 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
         it("Should return quotes from ALL registered plugins (3 plugins)", async function () {
             this.timeout(60000);
             const contracts = await deployContracts();
-            const { swapManager, weth, usdc } = contracts;
+            const { swapManager, usdc, wbtc } = contracts;
             
-            // Query all plugins for WETH → USDC quote
+            // Query all plugins for USDC → WBTC quote
             const quotes = await swapManager.getAllQuotes(
-                await weth.getAddress(),
-                await usdc.getAddress(),
-                ethers.parseEther("1") // 1 WETH
+                "USDC",
+                "WBTC",
+                25000n * 10n**6n // 25000 USDC
             );
             
             // Should have 3 results (UniswapV3Plugin, CamelotPlugin, OdosPlugin)
@@ -324,7 +341,7 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
             // Verify all plugins returned valid quotes
             for (let i = 0; i < quotes.length; i++) {
                 console.log(`  Plugin ${i+1}: ${quotes[i].pluginName}`);
-                console.log(`    Quote: ${ethers.formatUnits(quotes[i].quote, 6)} USDC`);
+                console.log(`    Quote: ${ethers.formatUnits(quotes[i].quote, 8)} WBTC`);
                 console.log(`    Valid: ${quotes[i].isValid}`);
                 
                 if (quotes[i].isValid) {
@@ -338,15 +355,15 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
             expect(validQuotes.length).to.be.gte(1);
         });
         
-        it("Should identify BEST plugin (UniswapV3Plugin = 2000 USDC)", async function () {
+        it("Should identify BEST plugin (UniswapV3Plugin = 0.5 WBTC)", async function () {
             this.timeout(60000);
             const contracts = await deployContracts();
-            const { swapManager, weth, usdc } = contracts;
+            const { swapManager, usdc, wbtc } = contracts;
             
             const quotes = await swapManager.getAllQuotes(
-                await weth.getAddress(),
-                await usdc.getAddress(),
-                ethers.parseEther("1")
+                "USDC",
+                "WBTC",
+                25000n * 10n**6n
             );
             
             // Find best quote
@@ -360,32 +377,32 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
                 }
             }
             
-            console.log(`\n🏆 Best plugin: ${bestPlugin} with ${ethers.formatUnits(bestQuote, 6)} USDC`);
+            console.log(`\n\uD83C\uDFC6 Best plugin: ${bestPlugin} with ${ethers.formatUnits(bestQuote, 8)} WBTC`);
             
             expect(bestPlugin).to.equal("UniswapV3Plugin");
-            expect(bestQuote).to.equal(2000n * 10n**6n); // 2000 USDC
+            expect(bestQuote).to.equal(5n * 10n**7n); // 0.5 WBTC
         });
         
-        it("Should handle INVALID tokens (zero addresses)", async function () {
+        it("Should handle INVALID tokens (empty codes)", async function () {
             this.timeout(60000);
             const contracts = await deployContracts();
-            const { swapManager, weth } = contracts;
+            const { swapManager } = contracts;
             
             await expect(
                 swapManager.getAllQuotes(
-                    ethers.ZeroAddress, // Invalid tokenIn
-                    await weth.getAddress(),
+                    "", // Invalid tokenIn
+                    "USDC",
                     ethers.parseEther("1")
                 )
-            ).to.be.revertedWith("Invalid tokenIn");
+            ).to.be.revertedWith("Invalid tokenCodeIn");
             
             await expect(
                 swapManager.getAllQuotes(
-                    await weth.getAddress(),
-                    ethers.ZeroAddress, // Invalid tokenOut
+                    "USDC",
+                    "", // Invalid tokenOut
                     ethers.parseEther("1")
                 )
-            ).to.be.revertedWith("Invalid tokenOut");
+            ).to.be.revertedWith("Invalid tokenCodeOut");
             
             console.log("✅ Zero address validation works");
         });
@@ -393,12 +410,12 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
         it("Should reject SAME token swap", async function () {
             this.timeout(60000);
             const contracts = await deployContracts();
-            const { swapManager, weth } = contracts;
+            const { swapManager } = contracts;
             
             await expect(
                 swapManager.getAllQuotes(
-                    await weth.getAddress(),
-                    await weth.getAddress(), // Same token
+                    "USDC",
+                    "USDC", // Same token
                     ethers.parseEther("1")
                 )
             ).to.be.revertedWith("Same token");
@@ -409,12 +426,12 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
         it("Should reject ZERO amount", async function () {
             this.timeout(60000);
             const contracts = await deployContracts();
-            const { swapManager, weth, usdc } = contracts;
+            const { swapManager } = contracts;
             
             await expect(
                 swapManager.getAllQuotes(
-                    await weth.getAddress(),
-                    await usdc.getAddress(),
+                    "USDC",
+                    "WBTC",
                     0 // Zero amount
                 )
             ).to.be.revertedWith("Amount must be > 0");
@@ -431,7 +448,7 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
             await beacon2.waitForDeployment();
             
             const SwapManager2 = await ethers.getContractFactory("SwapManager");
-            const swapManager2 = await SwapManager2.deploy(await beacon2.getAddress());
+            const swapManager2 = await SwapManager2.deploy(await beacon2.getAddress(), "WETH");
             await swapManager2.waitForDeployment();
             
             const WETH = await ethers.getContractFactory("MockWETH");
@@ -442,11 +459,35 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
             const usdc = await ERC20.deploy("USD Coin", "USDC", 6);
             await usdc.waitForDeployment();
             
+            const wbtc = await ERC20.deploy("Wrapped Bitcoin", "WBTC", 8);
+            await wbtc.waitForDeployment();
+            
+            // Deploy MockOracleAdapter and TokenManager for token registration
+            const MockOracleAdapter = await ethers.getContractFactory("MockOracleAdapter");
+            const oracleAdapter2 = await MockOracleAdapter.deploy();
+            await oracleAdapter2.waitForDeployment();
+            
+            const TokenManager2 = await ethers.getContractFactory("TokenManager");
+            const tokenManager2 = await TokenManager2.deploy(await beacon2.getAddress(), await oracleAdapter2.getAddress());
+            await tokenManager2.waitForDeployment();
+            
+            await beacon2.updateImplementation("TokenManager", await tokenManager2.getAddress());
+            await beacon2.updateImplementation("BASE_ASSET", await weth.getAddress());
+            
+            // Register tokens (non-base-asset only)
+            const oracleMock2 = oracleAdapter2 as any;
+            await oracleMock2.setPrice("USDC", 1_00000000);
+            await oracleMock2.setDecimals("USDC", 8);
+            await oracleMock2.setPrice("WBTC", 50000_00000000);
+            await oracleMock2.setDecimals("WBTC", 8);
+            await tokenManager2["manageTokenData(string,address,uint8,uint256)"]("USDC", await usdc.getAddress(), 6, 3600);
+            await tokenManager2["manageTokenData(string,address,uint8,uint256)"]("WBTC", await wbtc.getAddress(), 8, 3600);
+            
             // Query should return empty array (no plugins registered)
             const quotes = await swapManager2.getAllQuotes(
-                await weth.getAddress(),
-                await usdc.getAddress(),
-                ethers.parseEther("1")
+                "USDC",
+                "WBTC",
+                25000n * 10n**6n
             );
             
             expect(quotes.length).to.equal(0);
@@ -456,7 +497,7 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
         it("Should mark FAILING plugin as invalid (with errorReason)", async function () {
             this.timeout(60000);
             const contracts = await deployContracts();
-            const { beacon, swapManager, weth, usdc } = contracts;
+            const { beacon, swapManager } = contracts;
             
             // Deploy BROKEN plugin that returns zero quote
             const MockSimpleSwap = await ethers.getContractFactory("MockSimpleSwap");
@@ -470,9 +511,9 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
             
             // Query all plugins
             const quotes = await swapManager.getAllQuotes(
-                await weth.getAddress(),
-                await usdc.getAddress(),
-                ethers.parseEther("1")
+                "USDC",
+                "WBTC",
+                25000n * 10n**6n
             );
             
             // Find BrokenPlugin result
@@ -492,7 +533,8 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
             const contracts = await deployContractsWithTokenManager();
             const { swapManager, proxyGeneral, usdc, wbtc, owner } = contracts;
             
-            const deadline = Math.floor(Date.now() / 1000) + 600; // 10 minutes
+            const currentBlock = await ethers.provider.getBlock("latest");
+            const deadline = currentBlock!.timestamp + 600; // 10 minutes
             
             // Check initial balances
             const initialUSDCBalance = await usdc.balanceOf(await proxyGeneral.getAddress());
@@ -637,7 +679,8 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
             await beacon.updateImplementation("CamelotPlugin", await brokenPlugin2.getAddress());
             await beacon.updateImplementation("OdosPlugin", await brokenPlugin3.getAddress());
             
-            const deadline = Math.floor(Date.now() / 1000) + 600;
+            const currentBlock = await ethers.provider.getBlock("latest");
+            const deadline = currentBlock!.timestamp + 600;
             
             await expect(
                 swapManager.connect(owner).swapWithBestPlugin(
@@ -657,7 +700,8 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
             const contracts = await deployContractsWithTokenManager();
             const { swapManager, owner } = contracts;
             
-            const deadline = Math.floor(Date.now() / 1000) + 600;
+            const currentBlock = await ethers.provider.getBlock("latest");
+            const deadline = currentBlock!.timestamp + 600;
             
             // Best plugin returns 0.5 WBTC, but we require 1 WBTC
             await expect(
@@ -678,7 +722,8 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
             const contracts = await deployContractsWithTokenManager();
             const { swapManager, owner } = contracts;
             
-            const deadline = Math.floor(Date.now() / 1000) + 600;
+            const currentBlock = await ethers.provider.getBlock("latest");
+            const deadline = currentBlock!.timestamp + 600;
             
             await expect(
                 swapManager.connect(owner).swapWithBestPlugin(
@@ -717,7 +762,8 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
             // Register AFTER existing plugins (so it's not first)
             await beacon.updateImplementation("SuperPlugin", await superPlugin.getAddress());
             
-            const deadline = Math.floor(Date.now() / 1000) + 600;
+            const currentBlock = await ethers.provider.getBlock("latest");
+            const deadline = currentBlock!.timestamp + 600;
             
             const tx = await swapManager.connect(owner).swapWithBestPlugin(
                 "USDC",
@@ -765,7 +811,8 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
             const contracts = await deployContracts();
             const { swapManager, owner } = contracts;
             
-            const expiredDeadline = Math.floor(Date.now() / 1000) - 60; // 1 minute ago
+            const currentBlock = await ethers.provider.getBlock("latest");
+            const expiredDeadline = currentBlock!.timestamp - 60; // 1 minute ago
             
             await expect(
                 swapManager.connect(owner).swapWithBestPlugin(
@@ -785,7 +832,8 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
             const contracts = await deployContracts();
             const { swapManager, owner } = contracts;
             
-            const deadline = Math.floor(Date.now() / 1000) + 600;
+            const currentBlock2 = await ethers.provider.getBlock("latest");
+            const deadline = currentBlock2!.timestamp + 600;
             
             await expect(
                 swapManager.connect(owner).swapWithBestPlugin(
@@ -802,17 +850,18 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
         
         it("Should REVERT if same token swap", async function () {
             this.timeout(60000);
-            const contracts = await deployContracts();
+            const contracts = await deployContractsWithTokenManager();
             const { swapManager, owner } = contracts;
             
-            const deadline = Math.floor(Date.now() / 1000) + 600;
+            const latestBlock = await ethers.provider.getBlock('latest');
+            const deadline = latestBlock!.timestamp + 600;
             
             await expect(
                 swapManager.connect(owner).swapWithBestPlugin(
-                    "WETH",
-                    "WETH", // Same token!
-                    ethers.parseEther("1"),
-                    1900n * 10n**6n,
+                    "USDC",
+                    "USDC", // Same token!
+                    1000n * 10n**6n,
+                    900n * 10n**6n,
                     deadline
                 )
             ).to.be.revertedWith("Cannot swap same token");
@@ -852,13 +901,13 @@ describe("SwapManager - Phase 1B Multi-Plugin Query System", function () {
         it("Should measure getAllQuotes() gas cost (3 plugins)", async function () {
             this.timeout(60000);
             const contracts = await deployContracts();
-            const { swapManager, weth, usdc } = contracts;
+            const { swapManager } = contracts;
             
             // View function - gas cost is off-chain
             const quotes = await swapManager.getAllQuotes(
-                await weth.getAddress(),
-                await usdc.getAddress(),
-                ethers.parseEther("1")
+                "USDC",
+                "WBTC",
+                25000n * 10n**6n
             );
             
             console.log("\n📊 getAllQuotes() executed successfully");

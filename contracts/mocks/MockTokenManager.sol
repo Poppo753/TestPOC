@@ -10,10 +10,22 @@ contract MockTokenManager {
     mapping(string => address) private tokenAddresses;
     mapping(address => string) private tokenCodes;
     mapping(string => uint256) private tokenPrices;
+    string[] private _activeTokens;
     
     function setTokenAddress(string memory tokenCode, address tokenAddress) external {
         tokenAddresses[tokenCode] = tokenAddress;
         tokenCodes[tokenAddress] = tokenCode;
+        // Track active tokens for getActiveTokens()
+        bool exists = false;
+        for (uint256 i = 0; i < _activeTokens.length; i++) {
+            if (keccak256(bytes(_activeTokens[i])) == keccak256(bytes(tokenCode))) {
+                exists = true;
+                break;
+            }
+        }
+        if (!exists) {
+            _activeTokens.push(tokenCode);
+        }
     }
     
     function getTokenAddress(string memory tokenCode) external view returns (address) {
@@ -34,5 +46,13 @@ contract MockTokenManager {
 
     function getTokenPriceForModule(string memory tokenCode) external view returns (uint256) {
         return tokenPrices[tokenCode];
+    }
+
+    function getActiveTokens() external view returns (string[] memory) {
+        return _activeTokens;
+    }
+
+    function isTokenActive(string memory tokenCode) external view returns (bool) {
+        return tokenAddresses[tokenCode] != address(0);
     }
 }

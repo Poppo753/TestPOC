@@ -43,17 +43,18 @@ describe("SwapManager Contract - Core Tests", function () {
     const Beacon = await ethers.getContractFactory("Beacon");
     const beacon = await Beacon.deploy();
     await beacon.updateImplementation("WETH", mockWETH.target);
+    await beacon.updateImplementation("BASE_ASSET", mockWETH.target);
 
     // Deploy core contracts
     const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
-    const proxyGeneral = await ProxyGeneral.deploy(beacon.target);
+    const proxyGeneral = await ProxyGeneral.deploy(beacon.target, "WETH");
 
     const TokenManager = await ethers.getContractFactory("TokenManager");
     const tokenManager = await TokenManager.deploy(beacon.target, mockOracleAdapter.target);
 
     // Deploy SwapManager
     const SwapManager = await ethers.getContractFactory("SwapManager");
-    const swapManager = await SwapManager.deploy(beacon.target);
+    const swapManager = await SwapManager.deploy(beacon.target, "WETH");
 
     // Register contracts in Beacon
     await beacon.updateImplementation("ProxyGeneral", proxyGeneral.target);
@@ -134,8 +135,7 @@ describe("SwapManager Contract - Core Tests", function () {
         "setSimpleSwapRouter",
         "setSwapsEnabled",
         "getSimpleSwapRouter",
-        "areSwapsEnabled",
-        "getTokenWETHPrice"
+        "areSwapsEnabled"
       ];
 
       for (const func of expectedFunctions) {
@@ -272,22 +272,6 @@ describe("SwapManager Contract - Core Tests", function () {
       });
     });
 
-    describe("getTokenWETHPrice", function () {
-      it("should return token price in WETH", async function () {
-        const price = await swapManager.getTokenWETHPrice("USDC");
-        expect(price).to.be.greaterThanOrEqual(0);
-      });
-
-      it("should handle different tokens", async function () {
-        const usdcPrice = await swapManager.getTokenWETHPrice("USDC");
-        const wbtcPrice = await swapManager.getTokenWETHPrice("WBTC");
-        
-        // Both should return valid prices
-        expect(usdcPrice).to.be.greaterThanOrEqual(0);
-        expect(wbtcPrice).to.be.greaterThanOrEqual(0);
-      });
-    });
-
     describe("getSwapStats", function () {
       it("should return swap statistics for token pair", async function () {
         const [successCount, errorCount] = await swapManager.getSwapStats("USDC", "WBTC");
@@ -335,13 +319,13 @@ describe("SwapManager Contract - Core Tests", function () {
   describe("⛽ Gas Optimization", function () {
     it("should deploy with reasonable gas cost", async function () {
       const SwapManager = await ethers.getContractFactory("SwapManager");
-      const deployTx = await SwapManager.getDeployTransaction(beacon.target);
+      const deployTx = await SwapManager.getDeployTransaction(beacon.target, "WETH");
       
       const estimatedGas = await ethers.provider.estimateGas(deployTx);
       console.log(`✅ SwapManager deployment gas usage: ${estimatedGas}`);
       
-      // Should deploy under 5.1M gas (updated after oracle modularity)
-      expect(estimatedGas).to.be.lessThan(5100000);
+      // Should deploy under 6M gas (updated after base asset abstraction)
+      expect(estimatedGas).to.be.lessThan(6000000);
     });
 
     it("should have reasonable gas for admin operations", async function () {
@@ -355,12 +339,12 @@ describe("SwapManager Contract - Core Tests", function () {
     });
 
     it("should have reasonable gas for view functions", async function () {
-      const tx = await swapManager.getTokenWETHPrice.populateTransaction("USDC");
+      const tx = await swapManager.areSwapsEnabled.populateTransaction();
       const estimatedGas = await ethers.provider.estimateGas(tx);
       
-      console.log(`✅ Get token price gas usage: ${estimatedGas}`);
+      console.log(`✅ Get swaps enabled gas usage: ${estimatedGas}`);
       
-      // Should query price under 200k gas
+      // Should query under 200k gas
       expect(estimatedGas).to.be.lessThan(200000);
     });
   });

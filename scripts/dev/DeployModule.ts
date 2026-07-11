@@ -131,7 +131,21 @@ export class DeployModuleScript extends BaseScript {
 
     // Deploy the module
     const ModuleFactory = await ethers.getContractFactory(this.moduleOptions.module);
-    const module = await ModuleFactory.deploy(beaconAddr);
+
+    // Modules requiring baseAssetCode or baseDecimals
+    const modulesNeedingBaseAssetCode = [
+      "SwapManager", "ValueCalculator", "LiquidityManager", "ProxyGeneral",
+      "MorphoLensAdapter", "EulerLensAdapter", "AaveV3LensAdapter", "MorphoVaultLensAdapter",
+      "EulerV2Plugin", "AaveV3Plugin", "MorphoPlugin"
+    ];
+    let module;
+    if (this.moduleOptions.module === "ParameterManager") {
+      module = await ModuleFactory.deploy(beaconAddr, 6); // baseDecimals for USDC
+    } else if (modulesNeedingBaseAssetCode.includes(this.moduleOptions.module)) {
+      module = await ModuleFactory.deploy(beaconAddr, "USDC");
+    } else {
+      module = await ModuleFactory.deploy(beaconAddr);
+    }
     await module.waitForDeployment();
 
     this.moduleAddress = await module.getAddress();

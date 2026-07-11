@@ -81,6 +81,7 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
         await mockBeacon.setImplementation("ProxyGeneral", await mockProxyGeneral.getAddress());
         await mockBeacon.setImplementation("ProtocolManager", owner.address);
         await mockBeacon.setImplementation("WETH", WETH);
+        await mockBeacon.setImplementation("BASE_ASSET", WETH);
 
         // ==================== DEPLOY VAULT REGISTRY ====================
         
@@ -92,12 +93,12 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
         // ==================== DEPLOY EULER V2 PLUGIN ====================
         
         const EulerPluginFactory = await ethers.getContractFactory("EulerV2Plugin");
-        plugin = await EulerPluginFactory.deploy(await mockBeacon.getAddress());
+        plugin = await EulerPluginFactory.deploy(await mockBeacon.getAddress(), "WETH");
         await plugin.waitForDeployment();
 
         // Deploy EulerLensAdapter
         const EulerLensAdapterFactory = await ethers.getContractFactory("EulerLensAdapter");
-        eulerLensAdapter = await EulerLensAdapterFactory.deploy(await mockBeacon.getAddress());
+        eulerLensAdapter = await EulerLensAdapterFactory.deploy(await mockBeacon.getAddress(), "WETH");
         await eulerLensAdapter.waitForDeployment();
         await mockBeacon.setImplementation("EulerLensAdapter", await eulerLensAdapter.getAddress());
         await mockBeacon.setImplementation("EulerV2Plugin", await plugin.getAddress());
@@ -399,8 +400,8 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
                 this.skip();
             }
 
-            const [, debtValue] = await eulerLensAdapter.getPositionValue(testPositionId);
-            console.log(`   Position debt value: ${ethers.formatEther(debtValue)}`);
+            const breakdown = await eulerLensAdapter.getValueBreakdown();
+            console.log(`   Position debt value: ${ethers.formatEther(breakdown.totalDebt)}`);
             
             const currentDebt = pos.borrowedAmount + ethers.parseUnits("10", 6);
             console.log(`   Estimated debt to repay: ${ethers.formatUnits(currentDebt, 6)} USDC`);

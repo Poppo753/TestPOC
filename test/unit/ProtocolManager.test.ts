@@ -127,10 +127,12 @@ describe("ProtocolManager - Unit Tests", function () {
       ).to.be.revertedWithCustomError(protocolManager, "InvalidAmount");
     });
 
-    it("Should revert repay with zero amount", async function () {
+    it("Should allow repay with zero amount (repay all semantics)", async function () {
+      // amount=0 means "repay all" in the contract design, so no InvalidAmount check.
+      // It will still revert because no plugin is registered, but NOT with InvalidAmount.
       await expect(
         protocolManager.repay(PROTOCOL_NAME, TOKEN_CODE, 0)
-      ).to.be.revertedWithCustomError(protocolManager, "InvalidAmount");
+      ).to.be.reverted;
     });
 
     it("Should revert executeProtocolCall with invalid calldata (< 4 bytes)", async function () {

@@ -37,9 +37,22 @@ contract MockOracleAdapter is IOracleAdapter {
     
     /// @notice Decimals per token code
     mapping(string => uint8) public decimalsMap;
-    
+
+    /// @notice Optional USD prices per token code (for getPriceInUsd). Falls back to prices if 0.
+    mapping(string => uint256) public usdPrices;
+
     // ==================== TEST HELPER FUNCTIONS ====================
-    
+
+    /**
+     * @notice Set the USD price for a token (used by getPriceInUsd)
+     * @dev If not set, getPriceInUsd falls back to the regular price
+     * @param tokenCode Token identifier
+     * @param usdPrice USD price (18 decimals expected for ChainlinkAdapter parity)
+     */
+    function setUsdPrice(string memory tokenCode, uint256 usdPrice) external {
+        usdPrices[tokenCode] = usdPrice;
+    }
+
     /**
      * @notice Set price for a token
      * @dev Automatically marks as valid and sets current timestamp
@@ -147,7 +160,37 @@ contract MockOracleAdapter is IOracleAdapter {
             validFlags[tokenCode]
         );
     }
-    
+
+    /**
+     * @inheritdoc IOracleAdapter
+     * @dev Returns the USD price if set via setUsdPrice, otherwise falls back to the regular price.
+     */
+    function getPriceInUsd(string memory tokenCode)
+        external
+        view
+        override
+        returns (
+            uint256 price,
+            uint256 timestamp,
+            bool isValid
+        )
+    {
+        if (prices[tokenCode] == 0) {
+            revert TokenNotSupported(tokenCode);
+        }
+
+        uint256 usdPrice = usdPrices[tokenCode];
+        if (usdPrice == 0) {
+            usdPrice = prices[tokenCode];
+        }
+
+        return (
+            usdPrice,
+            timestamps[tokenCode],
+            validFlags[tokenCode]
+        );
+    }
+
     /**
      * @inheritdoc IOracleAdapter
      * @dev Returns stored decimals value

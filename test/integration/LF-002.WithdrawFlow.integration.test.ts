@@ -62,23 +62,29 @@ describe("LF-002: Complete Withdraw Flow (LP tokens → WETH → ETH)", function
         console.log(`🪙 TokenManager deployed: ${await tokenManager.getAddress()}`);
 
         const ParameterManagerFactory = await ethers.getContractFactory("ParameterManager");
-        const parameterManager = await ParameterManagerFactory.deploy(await beacon.getAddress());
+        const parameterManager = await ParameterManagerFactory.deploy(await beacon.getAddress(), 18);
         console.log(`⚙️ ParameterManager deployed: ${await parameterManager.getAddress()}`);
 
         const ValueCalculatorFactory = await ethers.getContractFactory("ValueCalculator");
-        const valueCalculator = await ValueCalculatorFactory.deploy(await beacon.getAddress());
+        const valueCalculator = await ValueCalculatorFactory.deploy(await beacon.getAddress(), "WETH");
         console.log(`📊 ValueCalculator deployed: ${await valueCalculator.getAddress()}`);
 
         const ProxyGeneralFactory = await ethers.getContractFactory("ProxyGeneral");
-        const proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress());
+        const proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress(), "WETH");
         console.log(`🏛️ ProxyGeneral deployed: ${await proxyGeneral.getAddress()}`);
 
+        // Deploy MockWETH as BASE_ASSET for LiquidityManager
+        const MockWETHFactory = await ethers.getContractFactory("MockWETH");
+        const mockWeth = await MockWETHFactory.deploy();
+        await mockWeth.waitForDeployment();
+        await beacon.updateImplementation("BASE_ASSET", await mockWeth.getAddress());
+
         const LiquidityManagerFactory = await ethers.getContractFactory("LiquidityManager");
-        const liquidityManager = await LiquidityManagerFactory.deploy(await beacon.getAddress());
+        const liquidityManager = await LiquidityManagerFactory.deploy(await beacon.getAddress(), "WETH");
         console.log(`🌊 LiquidityManager deployed: ${await liquidityManager.getAddress()}`);
 
         const SwapManagerFactory = await ethers.getContractFactory("SwapManager");
-        const swapManager = await SwapManagerFactory.deploy(await beacon.getAddress());
+        const swapManager = await SwapManagerFactory.deploy(await beacon.getAddress(), "WETH");
         console.log(`🔄 SwapManager deployed: ${await swapManager.getAddress()}`);
 
         const EmergencyHandlerFactory = await ethers.getContractFactory("EmergencyHandler");

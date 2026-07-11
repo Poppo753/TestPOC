@@ -86,27 +86,34 @@ describe("SF-001: Complete Swap Operations (Token A → Token B)", function () {
     console.log(`🪙 TokenManager deployed: ${await tokenManager.getAddress()}`);
 
     const ParameterManagerFactory = await ethers.getContractFactory("ParameterManager");
-    parameterManager = await ParameterManagerFactory.deploy(await beacon.getAddress());
+    parameterManager = await ParameterManagerFactory.deploy(await beacon.getAddress(), 18);
     await parameterManager.waitForDeployment();
     console.log(`⚙️ ParameterManager deployed: ${await parameterManager.getAddress()}`);
 
     const ValueCalculatorFactory = await ethers.getContractFactory("ValueCalculator");
-    valueCalculator = await ValueCalculatorFactory.deploy(await beacon.getAddress());
+    valueCalculator = await ValueCalculatorFactory.deploy(await beacon.getAddress(), "WETH");
     await valueCalculator.waitForDeployment();
     console.log(`📊 ValueCalculator deployed: ${await valueCalculator.getAddress()}`);
 
     const ProxyGeneralFactory = await ethers.getContractFactory("ProxyGeneral");
-    proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress());
+    proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress(), "WETH");
     await proxyGeneral.waitForDeployment();
     console.log(`🏛️ ProxyGeneral deployed: ${await proxyGeneral.getAddress()}`);
 
+    // Deploy MockWETH early (needed as BASE_ASSET for LiquidityManager)
+    const MockWETHFactory = await ethers.getContractFactory("MockWETH");
+    mockWETH = await MockWETHFactory.deploy();
+    await mockWETH.waitForDeployment();
+    console.log(`💰 MockWETH deployed: ${await mockWETH.getAddress()}`);
+    await beacon.updateImplementation("BASE_ASSET", await mockWETH.getAddress());
+
     const LiquidityManagerFactory = await ethers.getContractFactory("LiquidityManager");
-    liquidityManager = await LiquidityManagerFactory.deploy(await beacon.getAddress());
+    liquidityManager = await LiquidityManagerFactory.deploy(await beacon.getAddress(), "WETH");
     await liquidityManager.waitForDeployment();
     console.log(`🌊 LiquidityManager deployed: ${await liquidityManager.getAddress()}`);
 
     const SwapManagerFactory = await ethers.getContractFactory("SwapManager");
-    swapManager = await SwapManagerFactory.deploy(await beacon.getAddress());
+    swapManager = await SwapManagerFactory.deploy(await beacon.getAddress(), "WETH");
     await swapManager.waitForDeployment();
     console.log(`🔄 SwapManager deployed: ${await swapManager.getAddress()}`);
 
@@ -115,12 +122,7 @@ describe("SF-001: Complete Swap Operations (Token A → Token B)", function () {
     await emergencyHandler.waitForDeployment();
     console.log(`🚨 EmergencyHandler deployed: ${await emergencyHandler.getAddress()}`);
 
-    // Deploy Mock Tokens
-    const MockWETHFactory = await ethers.getContractFactory("MockWETH");
-    mockWETH = await MockWETHFactory.deploy();
-    await mockWETH.waitForDeployment();
-    console.log(`💰 MockWETH deployed: ${await mockWETH.getAddress()}`);
-
+    // Deploy Mock Tokens (USDC, WBTC - MockWETH already deployed above)
     const MockERC20Factory = await ethers.getContractFactory("MockERC20");
     mockUSDC = await MockERC20Factory.deploy("USD Coin", "USDC", 6);
     await mockUSDC.waitForDeployment();

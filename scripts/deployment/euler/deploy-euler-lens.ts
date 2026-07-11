@@ -20,6 +20,9 @@ import { ethers } from "hardhat";
 import { ARBITRUM_ADDRESSES } from "../../config/arbitrum.config";
 import { saveDeployment, verifyArbitrumMainnet, checkSignerBalance } from "../../utils/plugins/euler/euler-helpers";
 
+// Base Asset Configuration
+const BASE_ASSET_CODE = "USDC";
+
 async function main() {
     console.log("\n" + "=".repeat(70));
     console.log("🚀 DEPLOY EULER LENS ADAPTER");
@@ -62,7 +65,14 @@ async function main() {
     console.log("\n🚀 Deploying EulerLensAdapter...");
     
     const EulerLensAdapter = await ethers.getContractFactory("EulerLensAdapter", deployer);
-    const lens = await EulerLensAdapter.deploy(ARBITRUM_ADDRESSES.BEACON);
+    const lens = await EulerLensAdapter.deploy(
+        ARBITRUM_ADDRESSES.BEACON,
+        BASE_ASSET_CODE,
+        ARBITRUM_ADDRESSES.ACCOUNT_LENS,
+        ARBITRUM_ADDRESSES.VAULT_LENS,
+        ARBITRUM_ADDRESSES.UTILS_LENS,
+        ARBITRUM_ADDRESSES.EVC
+    );
     await lens.waitForDeployment();
     
     const lensAddress = await lens.getAddress();

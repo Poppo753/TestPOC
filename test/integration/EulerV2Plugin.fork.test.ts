@@ -93,6 +93,7 @@ describe("EulerV2Plugin - Fork Tests (Arbitrum Mainnet)", function () {
         await mockBeacon.setImplementation("TokenManager", await mockTokenManager.getAddress());
         await mockBeacon.setImplementation("ProxyGeneral", await mockProxyGeneral.getAddress());
         await mockBeacon.setImplementation("WETH", WETH);
+        await mockBeacon.setImplementation("BASE_ASSET", WETH);
 
         // ==================== DEPLOY EULER VAULT REGISTRY ====================
         
@@ -107,7 +108,7 @@ describe("EulerV2Plugin - Fork Tests (Arbitrum Mainnet)", function () {
         // ==================== DEPLOY EULER V2 PLUGIN ====================
         
         const EulerPluginFactory = await ethers.getContractFactory("EulerV2Plugin");
-        plugin = await EulerPluginFactory.deploy(await mockBeacon.getAddress());
+        plugin = await EulerPluginFactory.deploy(await mockBeacon.getAddress(), "WETH");
         await plugin.waitForDeployment();
         console.log(`   EulerV2Plugin: ${await plugin.getAddress()}`);
 

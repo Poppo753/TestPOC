@@ -13,7 +13,7 @@ async function main() {
   // Deploy new LiquidityManager
   console.log("📦 Deploying new LiquidityManager...");
   const LiquidityManager = await ethers.getContractFactory("LiquidityManager");
-  const liquidityManager = await LiquidityManager.deploy(BEACON);
+  const liquidityManager = await LiquidityManager.deploy(BEACON, "USDC");
   await liquidityManager.waitForDeployment();
   
   const newAddress = await liquidityManager.getAddress();

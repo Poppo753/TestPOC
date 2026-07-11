@@ -181,7 +181,7 @@ export async function deployMinimalSystemFixture(): Promise<{
   await beacon.waitForDeployment();
   
   const ProxyGeneralFactory = await ethers.getContractFactory("ProxyGeneral");
-  const proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress());
+  const proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress(), "WETH");
   await proxyGeneral.waitForDeployment();
   
   await beacon.updateImplementation("ProxyGeneral", await proxyGeneral.getAddress());

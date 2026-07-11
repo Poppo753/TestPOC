@@ -13,6 +13,9 @@ const BEACON = "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870";
 const PROTOCOL_MANAGER = "0x5b8314319CB56864b002caFEB92540B7A7559fBB";
 const PROXY_GENERAL = "0x8750344c6cf493f4F5d13F52b7F7Bf1d285978e1";
 
+// Base Asset Configuration
+const BASE_ASSET_CODE = "USDC";
+
 async function main() {
     console.log("\n" + "=".repeat(70));
     console.log("🚀 COMPLETE EULER ECOSYSTEM REDEPLOY");
@@ -45,7 +48,14 @@ async function main() {
     console.log("=".repeat(70));
 
     const EulerLensAdapter = await ethers.getContractFactory("EulerLensAdapter");
-    const lens = await EulerLensAdapter.deploy(registryAddress);
+    const lens = await EulerLensAdapter.deploy(
+        BEACON,
+        BASE_ASSET_CODE,
+        ARBITRUM_ADDRESSES.ACCOUNT_LENS,
+        ARBITRUM_ADDRESSES.VAULT_LENS,
+        ARBITRUM_ADDRESSES.UTILS_LENS,
+        ARBITRUM_ADDRESSES.EVC
+    );
     await lens.waitForDeployment();
     const lensAddress = await lens.getAddress();
     console.log(`✅ EulerLensAdapter: ${lensAddress}\n`);
@@ -60,7 +70,7 @@ async function main() {
     console.log("=".repeat(70));
 
     const EulerV2Plugin = await ethers.getContractFactory("EulerV2Plugin");
-    const plugin = await EulerV2Plugin.deploy(BEACON);
+    const plugin = await EulerV2Plugin.deploy(BEACON, BASE_ASSET_CODE, ARBITRUM_ADDRESSES.EVC, ARBITRUM_ADDRESSES.ACCOUNT_LENS);
     await plugin.waitForDeployment();
     const pluginAddress = await plugin.getAddress();
     

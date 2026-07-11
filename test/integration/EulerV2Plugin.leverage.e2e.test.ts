@@ -68,6 +68,7 @@ describe("EulerV2Plugin - Leverage E2E Tests (Atomic)", function () {
         await mockBeacon.setImplementation("ProxyGeneral", await mockProxyGeneral.getAddress());
         await mockBeacon.setImplementation("ProtocolManager", owner.address);
         await mockBeacon.setImplementation("WETH", TOKENS.WETH);
+        await mockBeacon.setImplementation("BASE_ASSET", TOKENS.WETH);
 
         // Deploy VaultRegistry
         const VaultRegistryFactory = await ethers.getContractFactory("EulerRegistry");
@@ -84,12 +85,12 @@ describe("EulerV2Plugin - Leverage E2E Tests (Atomic)", function () {
 
         // Deploy Plugin
         const EulerPluginFactory = await ethers.getContractFactory("EulerV2Plugin");
-        plugin = await EulerPluginFactory.deploy(await mockBeacon.getAddress());
+        plugin = await EulerPluginFactory.deploy(await mockBeacon.getAddress(), "WETH");
         await plugin.waitForDeployment();
 
         // Deploy EulerLensAdapter
         const EulerLensAdapterFactory = await ethers.getContractFactory("EulerLensAdapter");
-        eulerLensAdapter = await EulerLensAdapterFactory.deploy(await mockBeacon.getAddress());
+        eulerLensAdapter = await EulerLensAdapterFactory.deploy(await mockBeacon.getAddress(), "WETH");
         await eulerLensAdapter.waitForDeployment();
         await mockBeacon.setImplementation("EulerLensAdapter", await eulerLensAdapter.getAddress());
         await mockBeacon.setImplementation("EulerV2Plugin", await plugin.getAddress());
@@ -102,6 +103,8 @@ describe("EulerV2Plugin - Leverage E2E Tests (Atomic)", function () {
         await vaultRegistry.transferOwnership(await plugin.getAddress());
         await mockTokenManager.setTokenAddress("WETH", TOKENS.WETH);
         await mockTokenManager.setTokenAddress("USDC", TOKENS.USDC);
+        await mockTokenManager.setTokenPrice("WETH", ethers.parseUnits("2500", 8));
+        await mockTokenManager.setTokenPrice("USDC", ethers.parseUnits("1", 8));
 
         wethContract = await ethers.getContractAt("IERC20", TOKENS.WETH);
         usdcContract = await ethers.getContractAt("IERC20", TOKENS.USDC);
@@ -198,15 +201,15 @@ describe("EulerV2Plugin - Leverage E2E Tests (Atomic)", function () {
         it("Should have correct position value", async function () {
             if (positionId === undefined) this.skip();
             
-            const [collateralValue, debtValue, netValue] = await eulerLensAdapter.getPositionValue(positionId);
+            const breakdown = await eulerLensAdapter.getValueBreakdown();
             
-            console.log(`   Collateral Value: ${ethers.formatEther(collateralValue)} ETH`);
-            console.log(`   Debt Value: ${ethers.formatEther(debtValue)} ETH`);
-            console.log(`   Net Value: ${ethers.formatEther(netValue)} ETH`);
+            console.log(`   Collateral Value: ${ethers.formatEther(breakdown.totalCollateral)} ETH`);
+            console.log(`   Debt Value: ${ethers.formatEther(breakdown.totalDebt)} ETH`);
+            console.log(`   Net Value: ${ethers.formatEther(breakdown.netValue)} ETH`);
             
-            expect(collateralValue).to.be.gt(0n);
-            expect(debtValue).to.be.gt(0n);
-            expect(collateralValue).to.be.gt(debtValue); // Healthy = collateral > debt
+            expect(breakdown.totalCollateral).to.be.gt(0n);
+            expect(breakdown.totalDebt).to.be.gt(0n);
+            expect(breakdown.totalCollateral).to.be.gt(breakdown.totalDebt); // Healthy = collateral > debt
         });
     });
 
@@ -271,8 +274,8 @@ describe("EulerV2Plugin - Leverage E2E Tests (Atomic)", function () {
             }
 
             // Get debt estimate
-            const [, debtValue] = await eulerLensAdapter.getPositionValue(testPositionId);
-            console.log(`   Current debt value: ${ethers.formatEther(debtValue)} ETH`);
+            const breakdown = await eulerLensAdapter.getValueBreakdown();
+            console.log(`   Current debt value: ${ethers.formatEther(breakdown.totalDebt)} ETH`);
             
             // Transfer USDC for debt repayment
             const estimatedDebt = pos.borrowedAmount + ethers.parseUnits("5", 6); // +5 USDC for interest

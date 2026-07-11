@@ -168,7 +168,7 @@ async function main() {
 
     console.log("\n📦 Step 5/7: Deploying MorphoVaultLensAdapter...");
     const VaultLensFactory = await ethers.getContractFactory("MorphoVaultLensAdapter");
-    const vaultLens = await VaultLensFactory.deploy(BEACON);
+    const vaultLens = await VaultLensFactory.deploy(BEACON, "USDC");
     await vaultLens.waitForDeployment();
     const vaultLensAddress = await vaultLens.getAddress();
     console.log(`   ✅ MorphoVaultLensAdapter deployed: ${vaultLensAddress}`);

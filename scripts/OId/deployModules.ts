@@ -34,21 +34,21 @@ async function main() {
     // Deploy SwapManager.sol
     console.log("Deploying SwapManager...");
     const SwapManager = await ethers.getContractFactory("SwapManager");
-    const swapManager = await SwapManager.deploy(beaconAddress);
+    const swapManager = await SwapManager.deploy(beaconAddress, "USDC");
     await swapManager.waitForDeployment();
     console.log(`SwapManager deployed at: ${swapManager.target}`);
 
     // Deploy ValueCalculator.sol
     console.log("Deploying ValueCalculator...");
     const ValueCalculator = await ethers.getContractFactory("ValueCalculator");
-    const valueCalculator = await ValueCalculator.deploy(beaconAddress);
+    const valueCalculator = await ValueCalculator.deploy(beaconAddress, "USDC");
     await valueCalculator.waitForDeployment();
     console.log(`ValueCalculator deployed at: ${valueCalculator.target}`);
 
     // Deploy ParameterManager.sol
     console.log("Deploying ParameterManager...");
     const ParameterManager = await ethers.getContractFactory("ParameterManager");
-    const parameterManager = await ParameterManager.deploy(beaconAddress);
+    const parameterManager = await ParameterManager.deploy(beaconAddress, 6);
     await parameterManager.waitForDeployment();
     console.log(`ParameterManager deployed at: ${parameterManager.target}`);
 
@@ -62,7 +62,7 @@ async function main() {
     // Deploy LiquidityManager.sol
     console.log("Deploying LiquidityManager...");
     const LiquidityManager = await ethers.getContractFactory("LiquidityManager");
-    const liquidityManager = await LiquidityManager.deploy(beaconAddress);
+    const liquidityManager = await LiquidityManager.deploy(beaconAddress, "USDC");
     await liquidityManager.waitForDeployment();
     console.log(`LiquidityManager deployed at: ${liquidityManager.target}`);
 

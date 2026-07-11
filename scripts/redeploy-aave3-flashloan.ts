@@ -37,6 +37,11 @@ const BEACON = "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870";
 const PROXY_GENERAL = "0x8750344c6cf493f4F5d13F52b7F7Bf1d285978e1";
 const REAL_DEPLOYER = "0x8390e98483a9b39265428c8610371134B5d11C3F";
 
+// Aave V3 Pool on Arbitrum
+const AAVE_V3_POOL = "0x794a61358D6845594F94dc1DB02A252b5b4814aD";
+// Base asset code for this deployment
+const BASE_ASSET_CODE = "USDC";
+
 // Current deployed addresses (from mainnet-latest.json)
 const OLD_AAVE_V3_PLUGIN = "0x4cFDCb4215F562DC3Bc36D28fCf093E993AdC026";
 const OLD_FLASH_LOAN_SERVICE = "0x638C0175a1883063F22fc2439C85364e4aC27b03";
@@ -135,7 +140,7 @@ async function main() {
 
     console.log("\n📦 STEP 2/5: Deploying new AaveV3Plugin...");
     const AaveV3PluginFactory = await ethers.getContractFactory("AaveV3Plugin", deployer);
-    const aaveV3Plugin = await AaveV3PluginFactory.deploy(BEACON);
+    const aaveV3Plugin = await AaveV3PluginFactory.deploy(BEACON, BASE_ASSET_CODE, AAVE_V3_POOL);
     await aaveV3Plugin.waitForDeployment();
     const newPluginAddress = await aaveV3Plugin.getAddress();
     console.log(`   ✅ AaveV3Plugin deployed: ${newPluginAddress}`);

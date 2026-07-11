@@ -64,7 +64,7 @@ describe("SF-005: Swap Emergency Scenarios (System Resilience)", function () {
 
     // Deploy core modules
     const SwapManagerFactory = await ethers.getContractFactory("SwapManager");
-    swapManager = await SwapManagerFactory.deploy(await beacon.getAddress());
+    swapManager = await SwapManagerFactory.deploy(await beacon.getAddress(), "WETH");
     await swapManager.waitForDeployment();
     console.log(`🔄 SwapManager deployed: ${await swapManager.getAddress()}`);
 
@@ -74,7 +74,7 @@ describe("SF-005: Swap Emergency Scenarios (System Resilience)", function () {
     console.log(`🚨 EmergencyHandler deployed: ${await emergencyHandler.getAddress()}`);
 
     const ProxyGeneralFactory = await ethers.getContractFactory("ProxyGeneral");
-    proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress());
+    proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress(), "WETH");
     await proxyGeneral.waitForDeployment();
     console.log(`🏛️ ProxyGeneral deployed: ${await proxyGeneral.getAddress()}`);
 

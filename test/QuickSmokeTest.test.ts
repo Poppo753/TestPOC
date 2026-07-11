@@ -47,7 +47,7 @@ describe("⚡ QUICK SMOKE TEST - System Sanity Check", function () {
             console.log("\n📦 Deploying ProxyGeneral...");
             const ProxyFactory = await ethers.getContractFactory("ProxyGeneral");
             const beaconAddress = await beacon.getAddress();
-            const proxy = await ProxyFactory.deploy(beaconAddress);
+            const proxy = await ProxyFactory.deploy(beaconAddress, "WETH");
             await proxy.waitForDeployment();
             const address = await proxy.getAddress();
             
@@ -97,7 +97,7 @@ describe("⚡ QUICK SMOKE TEST - System Sanity Check", function () {
             console.log("\n📦 Deploying ValueCalculator...");
             const ValueCalculatorFactory = await ethers.getContractFactory("ValueCalculator");
             const beaconAddress = await beacon.getAddress();
-            const valueCalculator = await ValueCalculatorFactory.deploy(beaconAddress);
+            const valueCalculator = await ValueCalculatorFactory.deploy(beaconAddress, "WETH");
             await valueCalculator.waitForDeployment();
             const address = await valueCalculator.getAddress();
             
@@ -112,9 +112,15 @@ describe("⚡ QUICK SMOKE TEST - System Sanity Check", function () {
 
         it("✅ Should deploy LiquidityManager", async function () {
             console.log("\n📦 Deploying LiquidityManager...");
+            // LiquidityManager needs BASE_ASSET registered in beacon
+            const MockWETHFactory = await ethers.getContractFactory("MockWETH");
+            const mockWeth = await MockWETHFactory.deploy();
+            await mockWeth.waitForDeployment();
+            await beacon.updateImplementation("BASE_ASSET", await mockWeth.getAddress());
+            
             const LiquidityManagerFactory = await ethers.getContractFactory("LiquidityManager");
             const beaconAddress = await beacon.getAddress();
-            const liquidityManager = await LiquidityManagerFactory.deploy(beaconAddress);
+            const liquidityManager = await LiquidityManagerFactory.deploy(beaconAddress, "WETH");
             await liquidityManager.waitForDeployment();
             const address = await liquidityManager.getAddress();
             
@@ -130,7 +136,7 @@ describe("⚡ QUICK SMOKE TEST - System Sanity Check", function () {
             console.log("\n📦 Deploying SwapManager...");
             const SwapManagerFactory = await ethers.getContractFactory("SwapManager");
             const beaconAddress = await beacon.getAddress();
-            const swapManager = await SwapManagerFactory.deploy(beaconAddress);
+            const swapManager = await SwapManagerFactory.deploy(beaconAddress, "WETH");
             await swapManager.waitForDeployment();
             const address = await swapManager.getAddress();
             
@@ -163,7 +169,7 @@ describe("⚡ QUICK SMOKE TEST - System Sanity Check", function () {
             console.log("\n📦 Deploying ParameterManager...");
             const ParameterManagerFactory = await ethers.getContractFactory("ParameterManager");
             const beaconAddress = await beacon.getAddress();
-            const parameterManager = await ParameterManagerFactory.deploy(beaconAddress);
+            const parameterManager = await ParameterManagerFactory.deploy(beaconAddress, 18);
             await parameterManager.waitForDeployment();
             const address = await parameterManager.getAddress();
             
@@ -188,7 +194,7 @@ describe("⚡ QUICK SMOKE TEST - System Sanity Check", function () {
             // Deploy ProxyGeneral
             const ProxyFactory = await ethers.getContractFactory("ProxyGeneral");
             const beaconAddress = await beacon.getAddress();
-            proxyGeneral = await ProxyFactory.deploy(beaconAddress);
+            proxyGeneral = await ProxyFactory.deploy(beaconAddress, "WETH");
             await proxyGeneral.waitForDeployment();
             
             // Deploy TokenManager
@@ -250,7 +256,11 @@ describe("⚡ QUICK SMOKE TEST - System Sanity Check", function () {
     describe("📊 BASIC FUNCTIONALITY TEST", function () {
         
         it("✅ Should update Beacon implementation", async function () {
-            const newAddress = user1.address; // Use as mock new implementation
+            // Deploy a mock contract to use as implementation
+            const MockERC20Factory = await ethers.getContractFactory("MockERC20");
+            const mockImpl = await MockERC20Factory.deploy("Test", "TST", 18);
+            await mockImpl.waitForDeployment();
+            const newAddress = await mockImpl.getAddress();
             
             await beacon.updateImplementation("TestModule", newAddress);
             
@@ -262,7 +272,7 @@ describe("⚡ QUICK SMOKE TEST - System Sanity Check", function () {
         it("✅ Should pause/unpause ProxyGeneral", async function () {
             const ProxyFactory = await ethers.getContractFactory("ProxyGeneral");
             const beaconAddress = await beacon.getAddress();
-            const proxy = await ProxyFactory.deploy(beaconAddress);
+            const proxy = await ProxyFactory.deploy(beaconAddress, "WETH");
             await proxy.waitForDeployment();
             
             // Pause
@@ -301,13 +311,22 @@ describe("⚡ QUICK SMOKE TEST - System Sanity Check", function () {
             await tokenManager.waitForDeployment();
             
             // Register WETH in Beacon (required for manageTokenData)
-            const mockWETH = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1"; // Arbitrum WETH
-            await beacon.updateImplementation("WETH", mockWETH);
+            const MockWETHFactory = await ethers.getContractFactory("MockWETH");
+            const mockWETH = await MockWETHFactory.deploy();
+            await mockWETH.waitForDeployment();
+            await beacon.updateImplementation("WETH", await mockWETH.getAddress());
+            await beacon.updateImplementation("BASE_ASSET", await mockWETH.getAddress());
             
-            // Add mock token
+            // Add mock token - first set up oracle support
             const tokenCode = "TEST";
-            const tokenAddress = "0x1234567890123456789012345678901234567890";
+            const MockERC20Factory2 = await ethers.getContractFactory("MockERC20");
+            const testToken = await MockERC20Factory2.deploy("Test Token", "TEST", 18);
+            await testToken.waitForDeployment();
+            const tokenAddress = await testToken.getAddress();
             const priceFeed = "0x0987654321098765432109876543210987654321";
+            
+            // Set up oracle to support TEST token
+            await mockOracleAdapter.setPrice(tokenCode, ethers.parseUnits("100", 8));
             
             await tokenManager.manageTokenData(
                 tokenCode,

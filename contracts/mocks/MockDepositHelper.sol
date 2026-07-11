@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "../interfaces/IWETH.sol";
+
 /**
  * @title MockDepositHelper
  * @dev Simple helper contract for testing deposits from contract addresses
@@ -10,16 +13,19 @@ contract MockDepositHelper {
     receive() external payable {}
     
     /**
-     * @dev Deposit ETH to LiquidityManager from this contract address
+     * @dev Deposit via ERC20 flow: wrap ETH→WETH, approve LM, call deposit(amount)
      * @param liquidityManager Address of LiquidityManager contract
-     * @param amount Amount of ETH to deposit
+     * @param weth Address of WETH token
+     * @param amount Amount to deposit
      */
-    function depositTo(address payable liquidityManager, uint256 amount) external {
-        require(address(this).balance >= amount, "Insufficient balance");
-        
-        // Call deposit() on LiquidityManager
-        (bool success, ) = liquidityManager.call{value: amount}(
-            abi.encodeWithSignature("deposit()")
+    function depositTo(address liquidityManager, address weth, uint256 amount) external {
+        // Wrap ETH to WETH
+        IWETH(weth).deposit{value: amount}();
+        // Approve LM
+        IERC20(weth).approve(liquidityManager, amount);
+        // Call deposit(uint256)
+        (bool success, ) = liquidityManager.call(
+            abi.encodeWithSignature("deposit(uint256)", amount)
         );
         require(success, "Deposit failed");
     }

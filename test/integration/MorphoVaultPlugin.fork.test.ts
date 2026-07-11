@@ -117,6 +117,7 @@ describe("MorphoVault Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", fun
         await mockBeacon.setImplementation("ProtocolManager", owner.address);
         await mockBeacon.setImplementation("LiquidityManager", owner.address);
         await mockBeacon.setImplementation("WETH", WETH);
+        await mockBeacon.setImplementation("BASE_ASSET", WETH);
 
         // Configure mock token manager
         await mockTokenManager.setTokenAddress("WETH", WETH);
@@ -125,6 +126,7 @@ describe("MorphoVault Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", fun
         // Set ETH price for LensAdapter calculations (~$2500)
         const ethPriceUsd = ethers.parseUnits("2500", 8);
         await mockTokenManager.setTokenPrice("WETH", ethPriceUsd);
+        await mockTokenManager.setTokenPrice("USDC", ethers.parseUnits("1", 8)); // $1
 
         // ==================== DEPLOY MORPHO REGISTRY ====================
 
@@ -151,7 +153,7 @@ describe("MorphoVault Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", fun
         // ==================== DEPLOY MORPHO VAULT LENS ADAPTER ====================
 
         const VaultLensFactory = await ethers.getContractFactory("MorphoVaultLensAdapter");
-        vaultLensAdapter = await VaultLensFactory.deploy(await mockBeacon.getAddress());
+        vaultLensAdapter = await VaultLensFactory.deploy(await mockBeacon.getAddress(), "WETH");
         await vaultLensAdapter.waitForDeployment();
         await mockBeacon.setImplementation("MorphoVaultLensAdapter", await vaultLensAdapter.getAddress());
 
@@ -595,13 +597,13 @@ describe("MorphoVault Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", fun
 
         it("8.6 Should return value breakdown", async function () {
             const breakdown = await vaultLensAdapter.getValueBreakdown();
-            console.log(`      Collateral: ${ethers.formatEther(breakdown.totalCollateralEth)} ETH`);
-            console.log(`      Debt: ${ethers.formatEther(breakdown.totalDebtEth)} ETH`);
-            console.log(`      Net: ${ethers.formatEther(breakdown.netValueEth)} ETH`);
+            console.log(`      Collateral: ${ethers.formatEther(breakdown.totalCollateral)} ETH`);
+            console.log(`      Debt: ${ethers.formatEther(breakdown.totalDebt)} ETH`);
+            console.log(`      Net: ${ethers.formatEther(breakdown.netValue)} ETH`);
             
-            expect(breakdown.totalDebtEth).to.equal(0n);
-            expect(breakdown.netValueEth).to.equal(breakdown.totalCollateralEth);
-            expect(breakdown.netValueEth).to.be.gt(0n);
+            expect(breakdown.totalDebt).to.equal(0n);
+            expect(breakdown.netValue).to.equal(breakdown.totalCollateral);
+            expect(breakdown.netValue).to.be.gt(0n);
         });
 
         it("8.7 Should return infinite health factor (supply-only)", async function () {
@@ -626,10 +628,10 @@ describe("MorphoVault Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", fun
             const summary = await vaultLensAdapter.getProtocolSummary();
             expect(summary.name).to.equal("MorphoVault");
             expect(summary.isHealthy).to.be.true;
-            expect(summary.netValueEth).to.be.gt(0n);
-            expect(summary.totalDebtEth).to.equal(0n);
+            expect(summary.netValue).to.be.gt(0n);
+            expect(summary.totalDebt).to.equal(0n);
             expect(summary.lowestHealthFactor).to.equal(ethers.MaxUint256);
-            console.log(`      Summary: ${summary.name}, net=${ethers.formatEther(summary.netValueEth)} ETH, positions=${summary.activePositionCount}`);
+            console.log(`      Summary: ${summary.name}, net=${ethers.formatEther(summary.netValue)} ETH, positions=${summary.activePositionCount}`);
         });
 
         it("8.11 Should return empty positions at risk", async function () {
@@ -653,7 +655,7 @@ describe("MorphoVault Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", fun
         });
 
         it("8.14 Should estimate WETH from close all", async function () {
-            const estimate = await vaultLensAdapter.estimateWethFromCloseAll();
+            const estimate = await vaultLensAdapter.estimateBaseAssetFromCloseAll();
             expect(estimate).to.be.gt(0n);
             console.log(`      Estimated WETH from close all: ${ethers.formatEther(estimate)} ETH`);
         });

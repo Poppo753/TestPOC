@@ -47,26 +47,27 @@ describe("LiquidityManager Contract - Core Tests", function () {
     const Beacon = await ethers.getContractFactory("Beacon");
     const beacon = await Beacon.deploy();
     await beacon.updateImplementation("WETH", mockWETH.target);
+    await beacon.updateImplementation("BASE_ASSET", mockWETH.target);
 
     // Deploy core contracts
     const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
-    const proxyGeneral = await ProxyGeneral.deploy(beacon.target);
+    const proxyGeneral = await ProxyGeneral.deploy(beacon.target, "WETH");
 
     const TokenManager = await ethers.getContractFactory("TokenManager");
     const tokenManager = await TokenManager.deploy(beacon.target, mockOracleAdapter.target);
 
     const ValueCalculator = await ethers.getContractFactory("ValueCalculator");
-    const valueCalculator = await ValueCalculator.deploy(beacon.target);
+    const valueCalculator = await ValueCalculator.deploy(beacon.target, "WETH");
 
     const SwapManager = await ethers.getContractFactory("SwapManager");
-    const swapManager = await SwapManager.deploy(beacon.target);
+    const swapManager = await SwapManager.deploy(beacon.target, "WETH");
 
     const ParameterManager = await ethers.getContractFactory("ParameterManager");
-    const parameterManager = await ParameterManager.deploy(beacon.target);
+    const parameterManager = await ParameterManager.deploy(beacon.target, 18);
 
     // Deploy LiquidityManager
     const LiquidityManager = await ethers.getContractFactory("LiquidityManager");
-    const liquidityManager = await LiquidityManager.deploy(beacon.target);
+    const liquidityManager = await LiquidityManager.deploy(beacon.target, "WETH");
 
     // Register all contracts in Beacon
     await beacon.updateImplementation("ProxyGeneral", proxyGeneral.target);
@@ -371,7 +372,7 @@ describe("LiquidityManager Contract - Core Tests", function () {
   describe("⛽ Gas Optimization", function () {
     it("should deploy with reasonable gas cost", async function () {
       const LiquidityManager = await ethers.getContractFactory("LiquidityManager");
-      const deployTx = await LiquidityManager.getDeployTransaction(beacon.target);
+      const deployTx = await LiquidityManager.getDeployTransaction(beacon.target, "WETH");
       
       const estimatedGas = await ethers.provider.estimateGas(deployTx);
       console.log(`✅ LiquidityManager deployment gas usage: ${estimatedGas}`);

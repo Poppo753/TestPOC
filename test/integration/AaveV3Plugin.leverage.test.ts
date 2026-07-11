@@ -113,10 +113,14 @@ describe("AaveV3 Plugin - Leverage via FlashLoanService (Fork)", function () {
         await mockBeacon.setImplementation("ProtocolManager", owner.address);
         await mockBeacon.setImplementation("LiquidityManager", owner.address);
         await mockBeacon.setImplementation("WETH", WETH);
+        await mockBeacon.setImplementation("BASE_ASSET", WETH);
 
         // Configure mock token manager
         await mockTokenManager.setTokenAddress("WETH", WETH);
         await mockTokenManager.setTokenAddress("USDC", USDC);
+        // Set prices (8 decimals, Chainlink standard) for FlashLoanService fallback
+        await mockTokenManager.setTokenPrice("WETH", ethers.parseUnits("3000", 8)); // $3000
+        await mockTokenManager.setTokenPrice("USDC", ethers.parseUnits("1", 8));    // $1
 
         // ==================== DEPLOY AAVE V3 REGISTRY ====================
         console.log("   Deploying AaveV3Registry...");
@@ -132,7 +136,7 @@ describe("AaveV3 Plugin - Leverage via FlashLoanService (Fork)", function () {
         // ==================== DEPLOY AAVE V3 PLUGIN ====================
         console.log("   Deploying AaveV3Plugin...");
         const PluginFactory = await ethers.getContractFactory("AaveV3Plugin");
-        plugin = await PluginFactory.deploy(await mockBeacon.getAddress());
+        plugin = await PluginFactory.deploy(await mockBeacon.getAddress(), "WETH");
         await plugin.waitForDeployment();
         await mockBeacon.setImplementation("AaveV3Plugin", await plugin.getAddress());
 

@@ -58,7 +58,7 @@ describe("ProtocolManager - Integration Tests", function () {
       "ProxyGeneral",
       owner
     )) as ProxyGeneral__factory;
-    proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress());
+    proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress(), "WETH");
     await proxyGeneral.waitForDeployment();
 
     // Deploy mock Dolomite contracts (just use MockERC20 as placeholder - won't be called in whitelist tests)

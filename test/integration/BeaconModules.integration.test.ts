@@ -71,23 +71,29 @@ describe("Integration: Beacon ↔ Modules", function () {
     await tokenManager.waitForDeployment();
 
     const ParameterManagerFactory = await ethers.getContractFactory("ParameterManager");
-    parameterManager = await ParameterManagerFactory.deploy(await beacon.getAddress());
+    parameterManager = await ParameterManagerFactory.deploy(await beacon.getAddress(), 18);
     await parameterManager.waitForDeployment();
 
     const ValueCalculatorFactory = await ethers.getContractFactory("ValueCalculator");
-    valueCalculator = await ValueCalculatorFactory.deploy(await beacon.getAddress());
+    valueCalculator = await ValueCalculatorFactory.deploy(await beacon.getAddress(), "WETH");
     await valueCalculator.waitForDeployment();
 
     const ProxyGeneralFactory = await ethers.getContractFactory("ProxyGeneral");
-    proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress());
+    proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress(), "WETH");
     await proxyGeneral.waitForDeployment();
 
+    // Deploy MockWETH as BASE_ASSET (needed by LiquidityManager constructor)
+    const MockWETHFactory = await ethers.getContractFactory("MockWETH");
+    const mockWeth = await MockWETHFactory.deploy();
+    await mockWeth.waitForDeployment();
+    await beacon.updateImplementation("BASE_ASSET", await mockWeth.getAddress());
+
     const LiquidityManagerFactory = await ethers.getContractFactory("LiquidityManager");
-    liquidityManager = await LiquidityManagerFactory.deploy(await beacon.getAddress());
+    liquidityManager = await LiquidityManagerFactory.deploy(await beacon.getAddress(), "WETH");
     await liquidityManager.waitForDeployment();
 
     const SwapManagerFactory = await ethers.getContractFactory("SwapManager");
-    swapManager = await SwapManagerFactory.deploy(await beacon.getAddress());
+    swapManager = await SwapManagerFactory.deploy(await beacon.getAddress(), "WETH");
     await swapManager.waitForDeployment();
 
     const EmergencyHandlerFactory = await ethers.getContractFactory("EmergencyHandler");
@@ -143,10 +149,10 @@ describe("Integration: Beacon ↔ Modules", function () {
 
         console.log("\n📊 VERIFICATION:");
         
-        // Verify all modules are registered
+        // Verify all modules are registered (MODULE_NAMES + BASE_ASSET)
         const finalModules = await beacon.getRegisteredModules();
         console.log(`   📈 Final registered modules: ${finalModules.length}`);
-        expect(finalModules.length).to.equal(MODULE_NAMES.length);
+        expect(finalModules.length).to.equal(MODULE_NAMES.length + 1);
 
         // Check each module exists and has correct address
         for (let i = 0; i < MODULE_NAMES.length; i++) {
@@ -162,17 +168,18 @@ describe("Integration: Beacon ↔ Modules", function () {
           console.log(`   ✅ ${moduleName}: ${actualAddress} ✓`);
         }
 
-        // Verify module discovery functionality
+        // Verify module discovery functionality (includes BASE_ASSET)
         const discoveredModules = await beacon.getRegisteredModules();
-        expect(discoveredModules).to.have.lengthOf(MODULE_NAMES.length);
+        expect(discoveredModules).to.have.lengthOf(MODULE_NAMES.length + 1);
         
         // Check all expected modules are discovered
         for (const moduleName of MODULE_NAMES) {
           expect(discoveredModules).to.include(moduleName);
         }
+        expect(discoveredModules).to.include("BASE_ASSET");
 
         console.log("\n✅ MODULE DISCOVERY VERIFICATION COMPLETE:");
-        console.log(`   🎯 All ${MODULE_NAMES.length} modules discovered correctly`);
+        console.log(`   🎯 All ${MODULE_NAMES.length + 1} modules discovered correctly`);
         console.log(`   📊 Beacon successfully managing module registry`);
         console.log(`   🔄 Module discovery system functioning properly`);
       });
@@ -272,10 +279,11 @@ describe("Integration: Beacon ↔ Modules", function () {
       it("should maintain accurate registered module list", async function () {
         console.log("\n📜 REGISTERED MODULE LIST TEST:");
         
-        // Start with empty list
+        // Start with BASE_ASSET already registered
         let registeredModules = await beacon.getRegisteredModules();
-        expect(registeredModules).to.have.lengthOf(0);
-        console.log(`   📊 Initial modules: ${registeredModules.length}`);
+        expect(registeredModules).to.have.lengthOf(1);
+        expect(registeredModules).to.include("BASE_ASSET");
+        console.log(`   📊 Initial modules: ${registeredModules.length} (BASE_ASSET)`);
 
         // Register modules one by one and verify list updates
         const testModules = [
@@ -291,7 +299,7 @@ describe("Integration: Beacon ↔ Modules", function () {
           await beacon.updateImplementation(name, address);
           
           registeredModules = await beacon.getRegisteredModules();
-          expect(registeredModules).to.have.lengthOf(i + 1);
+          expect(registeredModules).to.have.lengthOf(i + 2); // +1 for BASE_ASSET
           expect(registeredModules).to.include(name);
           
           console.log(`      ✅ Step ${i + 1}: ${name} added. Total: ${registeredModules.length}`);
@@ -303,8 +311,9 @@ describe("Integration: Beacon ↔ Modules", function () {
           console.log(`      📌 ${moduleName}`);
         }
 
-        // Verify final list accuracy
-        expect(finalList).to.have.lengthOf(testModules.length);
+        // Verify final list accuracy (testModules + BASE_ASSET)
+        expect(finalList).to.have.lengthOf(testModules.length + 1);
+        expect(finalList).to.include("BASE_ASSET");
         for (const { name } of testModules) {
           expect(finalList).to.include(name);
         }
@@ -364,7 +373,7 @@ describe("Integration: Beacon ↔ Modules", function () {
         
         // Deploy initial ValueCalculator
         const ValueCalculatorFactory = await ethers.getContractFactory("ValueCalculator");
-        const valueCalc1 = await ValueCalculatorFactory.deploy(await beacon.getAddress());
+        const valueCalc1 = await ValueCalculatorFactory.deploy(await beacon.getAddress(), "WETH");
         await valueCalc1.waitForDeployment();
         
         // Register initial version
@@ -377,7 +386,7 @@ describe("Integration: Beacon ↔ Modules", function () {
         console.log(`   ✅ Initial address confirmed: ${currentAddress}`);
 
         // Deploy new version of ValueCalculator
-        const valueCalc2 = await ValueCalculatorFactory.deploy(await beacon.getAddress());
+        const valueCalc2 = await ValueCalculatorFactory.deploy(await beacon.getAddress(), "WETH");
         await valueCalc2.waitForDeployment();
         console.log(`   🆕 New ValueCalculator deployed: ${await valueCalc2.getAddress()}`);
 
@@ -431,7 +440,7 @@ describe("Integration: Beacon ↔ Modules", function () {
         // Verify status information
         expect(beaconStatus[3]).to.equal(owner.address); // currentOwner
         expect(beaconStatus[4]).to.equal(ethers.ZeroAddress); // pendingOwner
-        expect(beaconStatus[0]).to.equal(3); // totalModules
+        expect(beaconStatus[0]).to.equal(4); // totalModules (3 + BASE_ASSET)
         expect(beaconStatus[2]).to.be.false; // globalFreeze
         expect(beaconStatus[1]).to.equal(0); // frozenModules
 
@@ -636,15 +645,15 @@ describe("Integration: Beacon ↔ Modules", function () {
         const ValueCalculatorFactory = await ethers.getContractFactory("ValueCalculator");
         
         console.log("   🏗️ Deploying multiple ValueCalculator versions:");
-        const valueCalc1 = await ValueCalculatorFactory.deploy(await beacon.getAddress());
+        const valueCalc1 = await ValueCalculatorFactory.deploy(await beacon.getAddress(), "WETH");
         await valueCalc1.waitForDeployment();
         console.log(`      📝 Version 1: ${await valueCalc1.getAddress()}`);
         
-        const valueCalc2 = await ValueCalculatorFactory.deploy(await beacon.getAddress());
+        const valueCalc2 = await ValueCalculatorFactory.deploy(await beacon.getAddress(), "WETH");
         await valueCalc2.waitForDeployment();
         console.log(`      📝 Version 2: ${await valueCalc2.getAddress()}`);
         
-        const valueCalc3 = await ValueCalculatorFactory.deploy(await beacon.getAddress());
+        const valueCalc3 = await ValueCalculatorFactory.deploy(await beacon.getAddress(), "WETH");
         await valueCalc3.waitForDeployment();
         console.log(`      📝 Version 3: ${await valueCalc3.getAddress()}`);
 
@@ -792,10 +801,10 @@ describe("Integration: Beacon ↔ Modules", function () {
         
         // Deploy initial and updated versions of a module
         const LiquidityManagerFactory = await ethers.getContractFactory("LiquidityManager");
-        const liquidityV1 = await LiquidityManagerFactory.deploy(await beacon.getAddress());
+        const liquidityV1 = await LiquidityManagerFactory.deploy(await beacon.getAddress(), "WETH");
         await liquidityV1.waitForDeployment();
         
-        const liquidityV2 = await LiquidityManagerFactory.deploy(await beacon.getAddress());
+        const liquidityV2 = await LiquidityManagerFactory.deploy(await beacon.getAddress(), "WETH");
         await liquidityV2.waitForDeployment();
         
         console.log("   🏗️ Deployed LiquidityManager versions:");
@@ -953,11 +962,11 @@ describe("Integration: Beacon ↔ Modules", function () {
         await newTokenManager.waitForDeployment();
         console.log(`      📦 New TokenManager: ${await newTokenManager.getAddress()}`);
         
-        const newValueCalculator = await ValueCalculatorFactory.deploy(await beacon.getAddress());
+        const newValueCalculator = await ValueCalculatorFactory.deploy(await beacon.getAddress(), "WETH");
         await newValueCalculator.waitForDeployment();
         console.log(`      📦 New ValueCalculator: ${await newValueCalculator.getAddress()}`);
         
-        const newParameterManager = await ParameterManagerFactory.deploy(await beacon.getAddress());
+        const newParameterManager = await ParameterManagerFactory.deploy(await beacon.getAddress(), 18);
         await newParameterManager.waitForDeployment();
         console.log(`      📦 New ParameterManager: ${await newParameterManager.getAddress()}`);
 
@@ -996,9 +1005,9 @@ describe("Integration: Beacon ↔ Modules", function () {
         expect(updatedParamMgr).to.equal(await newParameterManager.getAddress());
         console.log(`      ✅ ParameterManager: ${updatedParamMgr}`);
 
-        // Verify module count remains correct
+        // Verify module count remains correct (3 modules + BASE_ASSET)
         const finalCount = await beacon.getBeaconStatus();
-        expect(finalCount[0]).to.equal(3);
+        expect(finalCount[0]).to.equal(4);
         console.log(`      📊 Module count maintained: ${finalCount[0]}`);
 
         // Verify each module has correct history
@@ -1207,7 +1216,7 @@ describe("Integration: Beacon ↔ Modules", function () {
         
         // Should be able to update unfrozen modules
         const ValueCalculatorFactory = await ethers.getContractFactory("ValueCalculator");
-        const newValueCalc = await ValueCalculatorFactory.deploy(await beacon.getAddress());
+        const newValueCalc = await ValueCalculatorFactory.deploy(await beacon.getAddress(), "WETH");
         await newValueCalc.waitForDeployment();
         
         await beacon.updateImplementation("ValueCalculator", await newValueCalc.getAddress());
@@ -1248,7 +1257,7 @@ describe("Integration: Beacon ↔ Modules", function () {
 
         // Test that unfrozen modules can still be updated
         console.log("\n   ✅ VERIFYING UNFROZEN MODULES STILL ACCESSIBLE:");
-        const anotherValueCalc = await ValueCalculatorFactory.deploy(await beacon.getAddress());
+        const anotherValueCalc = await ValueCalculatorFactory.deploy(await beacon.getAddress(), "WETH");
         await anotherValueCalc.waitForDeployment();
         
         await beacon.updateImplementation("ValueCalculator", await anotherValueCalc.getAddress());
@@ -1297,7 +1306,7 @@ describe("Integration: Beacon ↔ Modules", function () {
         console.log("\n   🚫 TESTING OPERATIONS DURING GLOBAL FREEZE:");
         
         const ValueCalculatorFactory = await ethers.getContractFactory("ValueCalculator");
-        const newValueCalc = await ValueCalculatorFactory.deploy(await beacon.getAddress());
+        const newValueCalc = await ValueCalculatorFactory.deploy(await beacon.getAddress(), "WETH");
         await newValueCalc.waitForDeployment();
         
         console.log("      🚫 Attempting module update during global freeze...");
@@ -1317,7 +1326,7 @@ describe("Integration: Beacon ↔ Modules", function () {
         // Test that query operations still work
         console.log("\n   🔍 VERIFYING QUERY OPERATIONS STILL WORK:");
         const modules = await beacon.getRegisteredModules();
-        expect(modules).to.have.lengthOf(3);
+        expect(modules).to.have.lengthOf(4); // 3 modules + BASE_ASSET
         console.log(`      ✅ Can still query registered modules: ${modules.length}`);
         
         const status = await beacon.getBeaconStatus();

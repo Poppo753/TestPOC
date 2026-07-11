@@ -225,6 +225,13 @@ describe("EulerV2Plugin - FASE 3: Leverage Atomico", function () {
             await (await beacon.updateImplementation("WETH", ADDRESSES.WETH)).wait();
         }
 
+        // Register BASE_ASSET in Beacon (required by refactored plugins)
+        try {
+            await beacon.getImplementation("BASE_ASSET");
+        } catch {
+            await (await beacon.updateImplementation("BASE_ASSET", ADDRESSES.WETH)).wait();
+        }
+
         // Check ProtocolManager
         try {
             await beacon.getImplementation("ProtocolManager");
@@ -232,15 +239,24 @@ describe("EulerV2Plugin - FASE 3: Leverage Atomico", function () {
             await (await beacon.updateImplementation("ProtocolManager", ADDRESSES.TOKEN_MANAGER)).wait();
         }
 
+        // Check TokenManager
+        try {
+            await beacon.getImplementation("TokenManager");
+        } catch {
+            await (await beacon.updateImplementation("TokenManager", ADDRESSES.TOKEN_MANAGER)).wait();
+        }
+
         // Deploy EulerV2Plugin
         const EulerV2Plugin = await ethers.getContractFactory("EulerV2Plugin", owner);
-        eulerPlugin = await EulerV2Plugin.deploy(ADDRESSES.BEACON);
+        eulerPlugin = await EulerV2Plugin.deploy(ADDRESSES.BEACON, "WETH");
         await eulerPlugin.waitForDeployment();
         console.log(`   ✅ EulerV2Plugin deployed: ${await eulerPlugin.getAddress()}`);
 
+        // Transfer registry ownership to plugin (needed for createPositionOnDemand)
+        await (await EulerRegistry.transferOwnership(await eulerPlugin.getAddress())).wait();
         // Deploy EulerLensAdapter
         const EulerLensAdapter = await ethers.getContractFactory("EulerLensAdapter", owner);
-        eulerLensAdapter = await EulerLensAdapter.deploy(ADDRESSES.BEACON);
+        eulerLensAdapter = await EulerLensAdapter.deploy(ADDRESSES.BEACON, "WETH");
         await eulerLensAdapter.waitForDeployment();
         await (await beacon.updateImplementation("EulerLensAdapter", await eulerLensAdapter.getAddress())).wait();
         await (await beacon.updateImplementation("EulerV2Plugin", await eulerPlugin.getAddress())).wait();
@@ -315,7 +331,7 @@ describe("EulerV2Plugin - FASE 3: Leverage Atomico", function () {
         before(async function () {
             // Deploy fresh plugin for leverage test
             const EulerV2Plugin = await ethers.getContractFactory("EulerV2Plugin", owner);
-            leveragePlugin = await EulerV2Plugin.deploy(ADDRESSES.BEACON);
+            leveragePlugin = await EulerV2Plugin.deploy(ADDRESSES.BEACON, "WETH");
             await leveragePlugin.waitForDeployment();
             
             const pluginAddress = await leveragePlugin.getAddress();

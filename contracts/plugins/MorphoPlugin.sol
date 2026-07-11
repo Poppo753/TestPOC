@@ -72,9 +72,6 @@ contract MorphoPlugin is IMorphoPlugin, IFlashLoanCallback, Ownable, ReentrancyG
 
     // ==================== CONSTANTS ====================
 
-    /// @notice Morpho Blue on Arbitrum (V1 canonical 0xBBBB... not deployed on Arb, real address below)
-    address public constant MORPHO_ADDRESS = 0x6c247b1F6182318877311737BaC0844bAa518F5e;
-
     /// @notice Oracle price scale (1e36)
     uint256 public constant ORACLE_PRICE_SCALE = 1e36;
 
@@ -85,6 +82,9 @@ contract MorphoPlugin is IMorphoPlugin, IFlashLoanCallback, Ownable, ReentrancyG
     uint256 public constant MIN_HEALTH_FACTOR = 1.05e18;
 
     // ==================== STATE VARIABLES ====================
+
+    /// @notice Base asset code for this pool (e.g. "WETH", "USDC", "WBTC")
+    string public baseAssetCode;
 
     /// @notice Circuit breaker flag (emergency stop)
     bool public override circuitBreakerTripped;
@@ -188,10 +188,12 @@ contract MorphoPlugin is IMorphoPlugin, IFlashLoanCallback, Ownable, ReentrancyG
 
     // ==================== CONSTRUCTOR ====================
 
-    constructor(address _beacon) Ownable() {
+    constructor(address _beacon, string memory _baseAssetCode, address _morphoAddress) Ownable() {
         if (_beacon == address(0)) revert InvalidAddress();
+        if (_morphoAddress == address(0)) revert InvalidAddress();
         beacon = _beacon;
-        morpho = IMorpho(MORPHO_ADDRESS);
+        baseAssetCode = _baseAssetCode;
+        morpho = IMorpho(_morphoAddress);
     }
 
     // ==================== IProtocolAdapter: DEPOSIT/WITHDRAW ====================
@@ -489,14 +491,13 @@ contract MorphoPlugin is IMorphoPlugin, IFlashLoanCallback, Ownable, ReentrancyG
         onlyProtocolManager
         notCircuitBroken
         nonReentrant
-        returns (uint256 wethReturned)
+        returns (uint256 baseAssetReturned)
     {
-        // Morpho non ha position IDs → chiudi tutti i mercati e ritira WETH
-        address weth = _resolveToken("WETH");
+        // Morpho non ha position IDs → chiudi tutti i mercati e ritira base asset
+        address baseAsset = _resolveToken(baseAssetCode);
         address proxyGeneral = _getProxyGeneral();
-        uint256 wethBefore = IERC20(weth).balanceOf(proxyGeneral);
+        uint256 balBefore = IERC20(baseAsset).balanceOf(proxyGeneral);
 
-        // Iterate all registered markets and close those with positions
         IMorphoRegistry registry = _getRegistry();
         (string[] memory collCodes, string[] memory lnCodes) = registry.getRegisteredMarkets();
 
@@ -519,24 +520,24 @@ contract MorphoPlugin is IMorphoPlugin, IFlashLoanCallback, Ownable, ReentrancyG
             }
         }
 
-        wethReturned = IERC20(weth).balanceOf(proxyGeneral) - wethBefore;
-        emit PositionClosed(0, wethReturned);
+        baseAssetReturned = IERC20(baseAsset).balanceOf(proxyGeneral) - balBefore;
+        emit PositionClosed(0, baseAssetReturned);
     }
 
     /**
      * @inheritdoc IProtocolAdapter
      */
-    function closePositionsForWeth(uint256 targetWethAmount)
+    function closePositionsForBaseAsset(uint256 targetAmount)
         external
         override
         onlyOwnerOrLiquidityManager
         notCircuitBroken
         nonReentrant
-        returns (uint256 wethObtained, uint256 positionsClosed)
+        returns (uint256 obtained, uint256 positionsClosed)
     {
-        address weth = _resolveToken("WETH");
+        address baseAsset = _resolveToken(baseAssetCode);
         address proxyGeneral = _getProxyGeneral();
-        uint256 wethBefore = IERC20(weth).balanceOf(proxyGeneral);
+        uint256 balBefore = IERC20(baseAsset).balanceOf(proxyGeneral);
 
         IMorphoRegistry registry = _getRegistry();
         (string[] memory collCodes, string[] memory lnCodes) = registry.getRegisteredMarkets();
@@ -546,7 +547,7 @@ contract MorphoPlugin is IMorphoPlugin, IFlashLoanCallback, Ownable, ReentrancyG
             Id marketId = params.id();
             MorphoPosition memory pos = morpho.position(marketId, address(this));
 
-            if (pos.collateral > 0 && params.collateralToken == weth) {
+            if (pos.collateral > 0 && params.collateralToken == baseAsset) {
                 if (pos.borrowShares > 0) {
                     uint256 balance = IERC20(params.loanToken).balanceOf(address(this));
                     if (balance > 0) {
@@ -556,13 +557,13 @@ contract MorphoPlugin is IMorphoPlugin, IFlashLoanCallback, Ownable, ReentrancyG
                 }
 
                 pos = morpho.position(marketId, address(this));
-                uint256 withdrawAmount = targetWethAmount < pos.collateral ? targetWethAmount : pos.collateral;
+                uint256 withdrawAmount = targetAmount < pos.collateral ? targetAmount : pos.collateral;
                 morpho.withdrawCollateral(params, withdrawAmount, address(this), proxyGeneral);
                 positionsClosed++;
             }
 
-            wethObtained = IERC20(weth).balanceOf(proxyGeneral) - wethBefore;
-            if (wethObtained >= targetWethAmount) break;
+            obtained = IERC20(baseAsset).balanceOf(proxyGeneral) - balBefore;
+            if (obtained >= targetAmount) break;
         }
     }
 
@@ -1011,8 +1012,8 @@ contract MorphoPlugin is IMorphoPlugin, IFlashLoanCallback, Ownable, ReentrancyG
     // ==================== INTERNAL: RESOLVERS ====================
 
     function _resolveToken(string memory tokenCode) internal view returns (address) {
-        if (keccak256(bytes(tokenCode)) == keccak256(bytes("WETH"))) {
-            return IBeacon(beacon).getImplementation("WETH");
+        if (keccak256(bytes(tokenCode)) == keccak256(bytes(baseAssetCode))) {
+            return IBeacon(beacon).getImplementation("BASE_ASSET");
         }
         address tokenManager = IBeacon(beacon).getImplementation("TokenManager");
         return ITokenManagerForModules(tokenManager).getTokenAddress(tokenCode);

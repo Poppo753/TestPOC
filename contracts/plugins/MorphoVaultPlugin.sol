@@ -175,39 +175,39 @@ contract MorphoVaultPlugin is IProtocolAdapter, Ownable, ReentrancyGuard {
         onlyProtocolManager
         notCircuitBroken
         nonReentrant
-        returns (uint256 wethReturned)
+        returns (uint256 baseAssetReturned)
     {
         // Vault positions are supply-only, return all assets to ProxyGeneral
         address proxyGeneral = _getProxyGeneral();
-        address weth = IBeacon(beacon).getImplementation("WETH");
-        uint256 wethBefore = IERC20(weth).balanceOf(proxyGeneral);
+        address baseAsset = IBeacon(beacon).getImplementation("BASE_ASSET");
+        uint256 balBefore = IERC20(baseAsset).balanceOf(proxyGeneral);
 
         _redeemAllVaults(proxyGeneral);
 
-        wethReturned = IERC20(weth).balanceOf(proxyGeneral) - wethBefore;
-        emit PositionClosed(0, wethReturned);
+        baseAssetReturned = IERC20(baseAsset).balanceOf(proxyGeneral) - balBefore;
+        emit PositionClosed(0, baseAssetReturned);
     }
 
     /**
      * @inheritdoc IProtocolAdapter
-     * @dev Vaults are supply-only — no targetWeth extraction per se, 
-     *      but we redeem from vaults and report what came back as WETH
+     * @dev Vaults are supply-only — no target extraction per se, 
+     *      but we redeem from vaults and report what came back as base asset
      */
-    function closePositionsForWeth(uint256 /* targetWethAmount */)
+    function closePositionsForBaseAsset(uint256 /* targetAmount */)
         external
         override
         onlyProtocolManager
         notCircuitBroken
         nonReentrant
-        returns (uint256 wethObtained, uint256 positionsClosed)
+        returns (uint256 obtained, uint256 positionsClosed)
     {
         address proxyGeneral = _getProxyGeneral();
-        address weth = IBeacon(beacon).getImplementation("WETH");
-        uint256 wethBefore = IERC20(weth).balanceOf(proxyGeneral);
+        address baseAsset = IBeacon(beacon).getImplementation("BASE_ASSET");
+        uint256 balBefore = IERC20(baseAsset).balanceOf(proxyGeneral);
 
         _redeemAllVaults(proxyGeneral);
 
-        wethObtained = IERC20(weth).balanceOf(proxyGeneral) - wethBefore;
+        obtained = IERC20(baseAsset).balanceOf(proxyGeneral) - balBefore;
         positionsClosed = activeVaults.length;
     }
 

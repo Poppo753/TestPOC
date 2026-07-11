@@ -56,8 +56,14 @@ describe("✅ DeFi System - Core Compliance Tests", function () {
             await beacon.waitForDeployment();
             const beaconAddress = await beacon.getAddress();
             
+            // Register BASE_ASSET for LiquidityManager constructor
+            const MockWETHFactory = await ethers.getContractFactory("MockWETH");
+            const mockWeth = await MockWETHFactory.deploy();
+            await mockWeth.waitForDeployment();
+            await beacon.updateImplementation("BASE_ASSET", await mockWeth.getAddress());
+            
             const LMFactory = await ethers.getContractFactory("LiquidityManager");
-            const liquidityManager = await LMFactory.deploy(beaconAddress);
+            const liquidityManager = await LMFactory.deploy(beaconAddress, "WETH");
             await liquidityManager.waitForDeployment();
             const lmAddress = await liquidityManager.getAddress();
             
@@ -105,7 +111,7 @@ describe("✅ DeFi System - Core Compliance Tests", function () {
             const beaconAddress = await beacon.getAddress();
             
             const PMFactory = await ethers.getContractFactory("ParameterManager");
-            const parameterManager = await PMFactory.deploy(beaconAddress);
+            const parameterManager = await PMFactory.deploy(beaconAddress, 18);
             await parameterManager.waitForDeployment();
             const pmAddress = await parameterManager.getAddress();
             
@@ -121,8 +127,13 @@ describe("✅ DeFi System - Core Compliance Tests", function () {
             const beacon = await BeaconFactory.deploy();
             await beacon.waitForDeployment();
             
+            const MockWETHFactory = await ethers.getContractFactory("MockWETH");
+            const mockWeth = await MockWETHFactory.deploy();
+            await mockWeth.waitForDeployment();
+            await beacon.updateImplementation("BASE_ASSET", await mockWeth.getAddress());
+            
             const LMFactory = await ethers.getContractFactory("LiquidityManager");
-            const liquidityManager = await LMFactory.deploy(await beacon.getAddress());
+            const liquidityManager = await LMFactory.deploy(await beacon.getAddress(), "WETH");
             await liquidityManager.waitForDeployment();
             
             const feeAmount = 100; // 1%
@@ -138,8 +149,13 @@ describe("✅ DeFi System - Core Compliance Tests", function () {
             const beacon = await BeaconFactory.deploy();
             await beacon.waitForDeployment();
             
+            const MockWETHFactory = await ethers.getContractFactory("MockWETH");
+            const mockWeth = await MockWETHFactory.deploy();
+            await mockWeth.waitForDeployment();
+            await beacon.updateImplementation("BASE_ASSET", await mockWeth.getAddress());
+            
             const LMFactory = await ethers.getContractFactory("LiquidityManager");
-            const liquidityManager = await LMFactory.deploy(await beacon.getAddress());
+            const liquidityManager = await LMFactory.deploy(await beacon.getAddress(), "WETH");
             await liquidityManager.waitForDeployment();
             
             const feeAmount = 50; // 0.5%
@@ -155,8 +171,13 @@ describe("✅ DeFi System - Core Compliance Tests", function () {
             const beacon = await BeaconFactory.deploy();
             await beacon.waitForDeployment();
             
+            const MockWETHFactory = await ethers.getContractFactory("MockWETH");
+            const mockWeth = await MockWETHFactory.deploy();
+            await mockWeth.waitForDeployment();
+            await beacon.updateImplementation("BASE_ASSET", await mockWeth.getAddress());
+            
             const LMFactory = await ethers.getContractFactory("LiquidityManager");
-            const liquidityManager = await LMFactory.deploy(await beacon.getAddress());
+            const liquidityManager = await LMFactory.deploy(await beacon.getAddress(), "WETH");
             await liquidityManager.waitForDeployment();
             
             const excessiveFee = 1001; // 10.01% (over 10% cap)
@@ -178,8 +199,13 @@ describe("✅ DeFi System - Core Compliance Tests", function () {
             const beacon = await BeaconFactory.deploy();
             await beacon.waitForDeployment();
             
+            const MockWETHFactory = await ethers.getContractFactory("MockWETH");
+            const mockWeth = await MockWETHFactory.deploy();
+            await mockWeth.waitForDeployment();
+            await beacon.updateImplementation("BASE_ASSET", await mockWeth.getAddress());
+            
             const LMFactory = await ethers.getContractFactory("LiquidityManager");
-            const liquidityManager = await LMFactory.deploy(await beacon.getAddress());
+            const liquidityManager = await LMFactory.deploy(await beacon.getAddress(), "WETH");
             await liquidityManager.waitForDeployment();
             
             const hourlyLimit = ethers.parseEther("10");
@@ -243,7 +269,7 @@ describe("✅ DeFi System - Core Compliance Tests", function () {
             await beacon.waitForDeployment();
             
             const PMFactory = await ethers.getContractFactory("ParameterManager");
-            const parameterManager = await PMFactory.deploy(await beacon.getAddress());
+            const parameterManager = await PMFactory.deploy(await beacon.getAddress(), 18);
             await parameterManager.waitForDeployment();
             
             const paramName = "testParameter";
@@ -262,7 +288,7 @@ describe("✅ DeFi System - Core Compliance Tests", function () {
             await beacon.waitForDeployment();
             
             const PMFactory = await ethers.getContractFactory("ParameterManager");
-            const parameterManager = await PMFactory.deploy(await beacon.getAddress());
+            const parameterManager = await PMFactory.deploy(await beacon.getAddress(), 18);
             await parameterManager.waitForDeployment();
             
             const timelock = 7200; // 2 hours

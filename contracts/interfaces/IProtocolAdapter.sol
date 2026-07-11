@@ -55,9 +55,9 @@ interface IProtocolAdapter {
         uint256 positionId;           // Unique ID within this protocol
         string protocolName;          // "Euler", "Dolomite", etc.
         PositionStatus status;        // ACTIVE, CLOSED, LIQUIDATED
-        uint256 collateralValueEth;   // Total collateral in ETH
-        uint256 debtValueEth;         // Total debt in ETH
-        uint256 netValueEth;          // collateral - debt
+        uint256 collateralValue;      // Total collateral in base asset
+        uint256 debtValue;            // Total debt in base asset
+        uint256 netValue;             // collateral - debt
         uint256 healthFactor;         // 1e18 = 1.0, type(uint256).max = no debt
         uint256 openTimestamp;        // When position was opened
         address collateralToken;      // Primary collateral token
@@ -70,9 +70,9 @@ interface IProtocolAdapter {
     struct ProtocolSummary {
         string name;
         ProtocolType protocolType;
-        uint256 totalCollateralEth;
-        uint256 totalDebtEth;
-        uint256 netValueEth;
+        uint256 totalCollateral;
+        uint256 totalDebt;
+        uint256 netValue;
         uint256 activePositionCount;
         uint256 lowestHealthFactor;   // Min HF across all positions
         bool isHealthy;               // All positions above safe threshold
@@ -83,20 +83,20 @@ interface IProtocolAdapter {
     /**
      * @notice Close a position and return assets to ProxyGeneral
      * @param positionId Position to close
-     * @return wethReturned Amount of WETH returned to ProxyGeneral
+     * @return baseAssetReturned Amount of base asset returned to ProxyGeneral
      */
-    function closePosition(uint256 positionId) external returns (uint256 wethReturned);
+    function closePosition(uint256 positionId) external returns (uint256 baseAssetReturned);
     
     /**
-     * @notice Close positions until target WETH amount is obtained
+     * @notice Close positions until target base asset amount is obtained
      * @dev Closes riskiest positions first (lowest HF)
-     * @param targetWethAmount Target WETH to obtain
-     * @return wethObtained Actual WETH obtained
+     * @param targetAmount Target base asset amount to obtain
+     * @return baseAssetObtained Actual base asset obtained
      * @return positionsClosed Number of positions closed
      */
-    function closePositionsForWeth(uint256 targetWethAmount) 
+    function closePositionsForBaseAsset(uint256 targetAmount) 
         external 
-        returns (uint256 wethObtained, uint256 positionsClosed);
+        returns (uint256 baseAssetObtained, uint256 positionsClosed);
     
     // ==================== BASIC OPERATIONS ====================
     
@@ -139,8 +139,8 @@ interface IProtocolAdapter {
     
     // ==================== EVENTS ====================
     
-    event PositionOpened(uint256 indexed positionId, uint256 collateralEth, uint256 debtEth);
-    event PositionClosed(uint256 indexed positionId, uint256 wethReturned);
+    event PositionOpened(uint256 indexed positionId, uint256 collateral, uint256 debt);
+    event PositionClosed(uint256 indexed positionId, uint256 baseAssetReturned);
     event PositionLiquidated(uint256 indexed positionId, uint256 collateralLost);
     event Deposited(string tokenCode, uint256 amount);
     event Withdrawn(string tokenCode, uint256 amount);

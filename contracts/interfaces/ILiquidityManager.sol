@@ -19,32 +19,33 @@ interface ILiquidityManager {
     // ==================== DEPOSIT OPERATIONS ====================
     
     /**
-     * @notice Deposita ETH e riceve LP tokens
+     * @notice Deposita base asset e riceve LP tokens
+     * @param amount Quantità di base asset da depositare
      */
-    function deposit() external payable returns (uint256 lpTokens);
+    function deposit(uint256 amount) external returns (uint256 lpTokens);
     
     /**
      * @notice Calcola shares per un deposito
-     * @param ethAmount Quantità ETH
+     * @param amount Quantità base asset
      * @return shares Shares calcolate
      */
-    function calculateDepositShares(uint256 ethAmount) external view returns (uint256 shares);
+    function calculateDepositShares(uint256 amount) external view returns (uint256 shares);
 
     // ==================== WITHDRAW OPERATIONS ====================
     
     /**
-     * @notice Preleva ETH bruciando LP tokens
+     * @notice Preleva base asset bruciando LP tokens
      * @param lpTokenAmount LP tokens da bruciare
-     * @return ethAmount ETH ricevuto
+     * @return amount Base asset ricevuto
      */
-    function withdraw(uint256 lpTokenAmount) external returns (uint256 ethAmount);
+    function withdraw(uint256 lpTokenAmount) external returns (uint256 amount);
     
     /**
-     * @notice Calcola ETH ricevibile per LP tokens
+     * @notice Calcola base asset ricevibile per LP tokens
      * @param lpTokens Numero di LP tokens
-     * @return ethAmount ETH ricevibile
+     * @return amount Base asset ricevibile
      */
-    function calculateWithdrawAmount(uint256 lpTokens) external view returns (uint256 ethAmount);
+    function calculateWithdrawAmount(uint256 lpTokens) external view returns (uint256 amount);
 
     // ==================== WITHDRAW LIMITS ====================
     
@@ -134,13 +135,13 @@ interface ILiquidityManager {
      * @notice Statistiche pool
      * @return totalValue Valore totale
      * @return totalSupply Supply totale
-     * @return wethBalance Balance WETH
+     * @return baseAssetBalance Balance base asset
      * @return tokensCount Numero token
      */
     function getPoolStats() external view returns (
         uint256 totalValue,
         uint256 totalSupply,
-        uint256 wethBalance,
+        uint256 baseAssetBalance,
         uint256 tokensCount
     );
     
@@ -153,8 +154,8 @@ interface ILiquidityManager {
 
     // ==================== EVENTS ====================
     
-    event Deposit(address indexed user, uint256 ethAmount, uint256 sharesReceived, uint256 totalPoolETH, uint256 totalSupply);
-    event Withdrawn(address indexed user, uint256 shares, uint256 ethAmount, uint256 totalPoolValue, uint256 remainingPoolBalance);
+    event Deposit(address indexed user, uint256 amount, uint256 sharesReceived, uint256 totalPoolBaseAsset, uint256 totalSupply);
+    event Withdrawn(address indexed user, uint256 shares, uint256 amount, uint256 totalPoolValue, uint256 remainingPoolBalance);
     event TokenSwappedForWithdraw(string indexed tokenCode, uint256 amountIn, uint256 amountOut);
     event WithdrawLimitsUpdated(uint256 hourlyLimit, uint256 dailyLimit, uint256 minWithdraw, uint256 maxWithdraw);
     event DepositFeeUpdated(uint256 oldFee, uint256 newFee);
@@ -179,7 +180,7 @@ interface ILiquidityManager {
         address indexed user,
         string tokenToSwap,
         uint256 amountToSwap,
-        uint256 wethNeeded,
+        uint256 baseAssetNeeded,
         uint256 deadline,
         uint256 timeRemaining
     );
@@ -188,7 +189,7 @@ interface ILiquidityManager {
     event WithdrawalCompleted(
         address indexed user,
         uint256 shares,
-        uint256 ethReceived,
+        uint256 amountReceived,
         uint256 deadline,
         uint256 timeUsed,
         bool swapExecuted
@@ -217,30 +218,30 @@ interface ILiquidityManager {
         uint256 iteration,
         string tokenCode,
         uint256 amountSwapped,
-        uint256 wethReceived,
-        uint256 wethStillNeeded
+        uint256 baseAssetReceived,
+        uint256 baseAssetStillNeeded
     );
     
     /// @notice Emitted when multi-swap process completes
     event MultiSwapCompleted(
         address indexed user,
         uint256 totalIterations,
-        uint256 totalWethObtained
+        uint256 totalBaseAssetObtained
     );
 
     // ==================== PROTOCOL INTEGRATION EVENTS ====================
 
-    /// @notice Emitted when protocol positions are closed to obtain WETH for withdrawal
+    /// @notice Emitted when protocol positions are closed to obtain base asset for withdrawal
     /// @dev This is the modular version - works with ANY protocol via IProtocolAdapter
-    event ProtocolPositionsClosedForWeth(
+    event ProtocolPositionsClosedForBaseAsset(
         uint256 positionsClosed,
-        uint256 wethObtained
+        uint256 baseAssetObtained
     );
     
-    /// @notice Emitted when liquid tokens are swapped to WETH during withdrawal
-    event LiquidTokenSwappedForWeth(
+    /// @notice Emitted when liquid tokens are swapped to base asset during withdrawal
+    event LiquidTokenSwappedForBaseAsset(
         string indexed tokenCode,
         uint256 tokenAmount,
-        uint256 wethObtained
+        uint256 baseAssetObtained
     );
 }

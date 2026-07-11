@@ -3,12 +3,13 @@ pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "../interfaces/ILensAdapter.sol";
 import "../interfaces/IProtocolAdapter.sol";
 import "../interfaces/IBeacon.sol";
-import "../interfaces/ITokenManagerForModules.sol";
 import "../interfaces/IAaveV3Registry.sol";
 import "../interfaces/aave/IAaveV3Pool.sol";
+import "../interfaces/ITokenManagerForModules.sol";
 
 /**
  * @title AaveV3LensAdapter
@@ -20,14 +21,13 @@ import "../interfaces/aave/IAaveV3Pool.sol";
  * 
  * AAVE V3 ARBITRUM:
  * - Pool: 0x794a61358D6845594F94dc1DB02A252b5b4814aD
- * - Oracle: 0xb56c2F0B653B2e0b10C9b928C8580Ac5Df02C7C7
  * - PoolDataProvider: 0x243Aa95cAC2a25651eda86e80bEe66114413c43b
  * 
  * ARCHITETTURA:
  * - Query Aave Pool via getUserAccountData() (dati aggregati nativi)
  * - Query individual token balances via aToken/debtToken balanceOf
- * - Calcolo valori con Chainlink via TokenManager (conversione a ETH)
- * - Aave's base currency è USD (8 decimali) → conversione necessaria a ETH
+ * - USD→baseAsset conversion via TokenManager.convertUsdToBaseAsset()
+ * - Aave's base currency è USD (8 decimali) → conversione via ChainlinkAdapter
  * 
  * DIFFERENZA VS EULER LENS:
  * - Euler: serve AccountLens + calcolo manuale per posizioni isolate (sub-accounts)
@@ -42,15 +42,6 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
 
     // ==================== CONSTANTS ====================
 
-    /// @notice Aave V3 Pool on Arbitrum
-    address public constant AAVE_POOL = 0x794a61358D6845594F94dc1DB02A252b5b4814aD;
-
-    /// @notice Aave Oracle on Arbitrum (prices in USD, 8 decimals)
-    address public constant AAVE_ORACLE = 0xb56c2F0B653B2e0b10C9b928C8580Ac5Df02C7C7;
-
-    /// @notice WETH on Arbitrum
-    address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
-
     /// @notice Safe health factor threshold (default 1.5)
     uint256 public constant DEFAULT_SAFE_HEALTH_FACTOR = 1.5e18;
 
@@ -58,6 +49,12 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
 
     /// @notice Beacon for module resolution
     address public immutable beacon;
+
+    /// @notice Aave V3 Pool (chain-specific, injected at deploy time)
+    IAaveV3Pool public immutable aavePool;
+
+    /// @notice Base asset code for value denomination
+    string public baseAssetCode;
 
     // ==================== ERRORS ====================
 
@@ -68,9 +65,12 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
 
     // ==================== CONSTRUCTOR ====================
 
-    constructor(address _beacon) Ownable() {
+    constructor(address _beacon, string memory _baseAssetCode, address _aavePool) Ownable() {
         if (_beacon == address(0)) revert InvalidBeacon();
+        if (_aavePool == address(0)) revert InvalidBeacon();
         beacon = _beacon;
+        aavePool = IAaveV3Pool(_aavePool);
+        baseAssetCode = _baseAssetCode;
     }
 
     // ============================================================================
@@ -87,21 +87,14 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
     }
 
     /**
-     * @dev Converts Aave base currency (USD 8 decimals) to ETH (18 decimals)
-     *      Uses Chainlink WETH price via TokenManager
+     * @dev Converts Aave base currency (USD 8 decimals) to base asset denomination
+     *      Delegates to TokenManager.convertUsdToBaseAsset for unified USD→baseAsset conversion
+     *      Aave's getUserAccountData() returns values in USD * 1e8 → usdDecimals = 8
      */
-    function _baseToEth(uint256 valueInBase) private view returns (uint256) {
-        if (valueInBase == 0) return 0;
-
-        // Get WETH price in USD from TokenManager
+    function _usdToBaseAsset(uint256 valueInUsd) private view returns (uint256) {
+        if (valueInUsd == 0) return 0;
         address tokenManager = IBeacon(beacon).getImplementation("TokenManager");
-        uint256 ethPriceUsd = ITokenManagerForModules(tokenManager).getTokenPriceForModule("WETH");
-
-        if (ethPriceUsd == 0) return 0;
-
-        // Aave base = USD * 1e8, TokenManager price = USD * 1e8 (Chainlink standard)
-        // valueInEth = valueInBase * 1e18 / ethPriceUsd
-        return (valueInBase * 1e18) / ethPriceUsd;
+        return ITokenManagerForModules(tokenManager).convertUsdToBaseAsset(valueInUsd, 8);
     }
 
     // ==================== ILensAdapter: IDENTIFICATION ====================
@@ -138,10 +131,10 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
 
     /**
      * @inheritdoc ILensAdapter
-     * @dev Valore netto totale (collaterale - debito) in ETH
+     * @dev Valore netto totale (collaterale - debito) in base asset
      *      Usa getUserAccountData() di Aave V3 per dati aggregati
      */
-    function getTotalValue() external view override returns (uint256 netValueEth) {
+    function getTotalValue() external view override returns (uint256 netValue) {
         address plugin = _getPlugin();
 
         (
@@ -150,12 +143,12 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
             ,
             ,
             ,
-        ) = IAaveV3Pool(AAVE_POOL).getUserAccountData(plugin);
+        ) = aavePool.getUserAccountData(plugin);
 
-        uint256 collateralEth = _baseToEth(totalCollateralBase);
-        uint256 debtEth = _baseToEth(totalDebtBase);
+        uint256 collateral = _usdToBaseAsset(totalCollateralBase);
+        uint256 debt = _usdToBaseAsset(totalDebtBase);
 
-        netValueEth = collateralEth > debtEth ? collateralEth - debtEth : 0;
+        netValue = collateral > debt ? collateral - debt : 0;
     }
 
     /// @inheritdoc ILensAdapter
@@ -168,14 +161,14 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
             uint256 availableBorrowsBase,
             ,
             ,
-        ) = IAaveV3Pool(AAVE_POOL).getUserAccountData(plugin);
+        ) = aavePool.getUserAccountData(plugin);
 
-        breakdown.totalCollateralEth = _baseToEth(totalCollateralBase);
-        breakdown.totalDebtEth = _baseToEth(totalDebtBase);
-        breakdown.netValueEth = breakdown.totalCollateralEth > breakdown.totalDebtEth
-            ? breakdown.totalCollateralEth - breakdown.totalDebtEth
+        breakdown.totalCollateral = _usdToBaseAsset(totalCollateralBase);
+        breakdown.totalDebt = _usdToBaseAsset(totalDebtBase);
+        breakdown.netValue = breakdown.totalCollateral > breakdown.totalDebt
+            ? breakdown.totalCollateral - breakdown.totalDebt
             : 0;
-        breakdown.availableToWithdrawEth = _baseToEth(availableBorrowsBase);
+        breakdown.availableToWithdraw = _usdToBaseAsset(availableBorrowsBase);
     }
 
     // ==================== ILensAdapter: HEALTH MONITORING ====================
@@ -195,7 +188,7 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
             ,
             ,
             uint256 hf
-        ) = IAaveV3Pool(AAVE_POOL).getUserAccountData(plugin);
+        ) = aavePool.getUserAccountData(plugin);
 
         if (totalDebtBase == 0) {
             return type(uint256).max;
@@ -225,7 +218,7 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
             uint256 currentLiquidationThreshold,
             ,
             uint256 hf
-        ) = IAaveV3Pool(AAVE_POOL).getUserAccountData(plugin);
+        ) = aavePool.getUserAccountData(plugin);
 
         if (totalDebtBase == 0) {
             info.healthFactor = type(uint256).max;
@@ -265,7 +258,7 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
     function getActivePositionCount() external view override returns (uint256) {
         // Aave = 1 account. Se ha collaterale, conta come 1 posizione
         address plugin = _getPlugin();
-        (uint256 totalCollateralBase, , , , , ) = IAaveV3Pool(AAVE_POOL).getUserAccountData(plugin);
+        (uint256 totalCollateralBase, , , , , ) = aavePool.getUserAccountData(plugin);
         return totalCollateralBase > 0 ? 1 : 0;
     }
 
@@ -280,17 +273,17 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
             ,
             ,
             uint256 hf
-        ) = IAaveV3Pool(AAVE_POOL).getUserAccountData(plugin);
+        ) = aavePool.getUserAccountData(plugin);
 
-        uint256 collateralEth = _baseToEth(totalCollateralBase);
-        uint256 debtEth = _baseToEth(totalDebtBase);
+        uint256 collateral = _usdToBaseAsset(totalCollateralBase);
+        uint256 debt = _usdToBaseAsset(totalDebtBase);
 
         summary = ProtocolSummary({
             name: "AaveV3",
             protocolType: IProtocolAdapter.ProtocolType.LENDING,
-            totalCollateralEth: collateralEth,
-            totalDebtEth: debtEth,
-            netValueEth: collateralEth > debtEth ? collateralEth - debtEth : 0,
+            totalCollateral: collateral,
+            totalDebt: debt,
+            netValue: collateral > debt ? collateral - debt : 0,
             activePositionCount: totalCollateralBase > 0 ? 1 : 0,
             lowestHealthFactor: totalDebtBase > 0 ? hf : type(uint256).max,
             isHealthy: totalDebtBase == 0 || hf >= DEFAULT_SAFE_HEALTH_FACTOR
@@ -315,7 +308,7 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
             ,
             ,
             uint256 hf
-        ) = IAaveV3Pool(AAVE_POOL).getUserAccountData(plugin);
+        ) = aavePool.getUserAccountData(plugin);
 
         // Se nessun debito, nessun rischio
         if (totalDebtBase == 0 || hf >= minHealthFactor) {
@@ -330,8 +323,8 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
             healthFactor: hf,
             timeToLiquidation: hf < 1e18 ? int256(-1) : int256(0),
             riskLevel: hf < 1e18 ? "LIQUIDATABLE" : "DANGER",
-            collateralEth: _baseToEth(totalCollateralBase),
-            debtEth: _baseToEth(totalDebtBase),
+            collateral: _usdToBaseAsset(totalCollateralBase),
+            debt: _usdToBaseAsset(totalDebtBase),
             shouldAutoClose: hf < minHealthFactor
         });
     }
@@ -352,7 +345,7 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
             ,
             ,
             uint256 hf
-        ) = IAaveV3Pool(AAVE_POOL).getUserAccountData(plugin);
+        ) = aavePool.getUserAccountData(plugin);
 
         if (totalCollateralBase == 0) {
             return new PositionWithRisk[](0);
@@ -377,8 +370,8 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
             healthFactor: totalDebtBase == 0 ? type(uint256).max : hf,
             timeToLiquidation: totalDebtBase == 0 ? type(int256).max : (hf < 1e18 ? int256(-1) : int256(3600)),
             riskLevel: riskLevel,
-            collateralEth: _baseToEth(totalCollateralBase),
-            debtEth: _baseToEth(totalDebtBase),
+            collateral: _usdToBaseAsset(totalCollateralBase),
+            debt: _usdToBaseAsset(totalDebtBase),
             shouldAutoClose: totalDebtBase > 0 && hf < DEFAULT_SAFE_HEALTH_FACTOR
         });
     }
@@ -391,8 +384,8 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
         address underlying = registry.getUnderlying(tokenCode);
 
         // Get reserve rates from Aave Pool (ray = 1e27)
-        uint256 liquidityRate = IAaveV3Pool(AAVE_POOL).getReserveNormalizedIncome(underlying);
-        uint256 variableBorrowRate = IAaveV3Pool(AAVE_POOL).getReserveNormalizedVariableDebt(underlying);
+        uint256 liquidityRate = aavePool.getReserveNormalizedIncome(underlying);
+        uint256 variableBorrowRate = aavePool.getReserveNormalizedVariableDebt(underlying);
 
         // Convert from ray (1e27) to 1e18 scale
         // These are normalized indexes, not direct rates. For approximate APY:
@@ -418,7 +411,7 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
     }
 
     /// @inheritdoc ILensAdapter
-    function estimateWethFromCloseAll() external view override returns (uint256 wethAmount) {
+    function estimateBaseAssetFromCloseAll() external view override returns (uint256 amount) {
         address plugin = _getPlugin();
 
         (
@@ -427,14 +420,14 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
             ,
             ,
             ,
-        ) = IAaveV3Pool(AAVE_POOL).getUserAccountData(plugin);
+        ) = aavePool.getUserAccountData(plugin);
 
-        uint256 netValueEth = _baseToEth(
+        uint256 netVal = _usdToBaseAsset(
             totalCollateralBase > totalDebtBase ? totalCollateralBase - totalDebtBase : 0
         );
 
         // Stima conservativa: 95% del valore netto (slippage, fees)
-        wethAmount = (netValueEth * 95) / 100;
+        amount = (netVal * 95) / 100;
     }
 
     /// @inheritdoc ILensAdapter
@@ -442,7 +435,7 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
         external
         view
         override
-        returns (uint256 thresholdEth)
+        returns (uint256 threshold)
     {
         address plugin = _getPlugin();
         (
@@ -451,11 +444,11 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
             ,
             uint256 currentLiquidationThreshold,
             ,
-        ) = IAaveV3Pool(AAVE_POOL).getUserAccountData(plugin);
+        ) = aavePool.getUserAccountData(plugin);
 
         // Aave returns LT in basis points (e.g., 8250 = 82.50%)
         // Convert to 1e18 scale
-        thresholdEth = currentLiquidationThreshold * 1e14; // 8250 * 1e14 = 0.825e18
+        threshold = currentLiquidationThreshold * 1e14; // 8250 * 1e14 = 0.825e18
     }
 
     /// @inheritdoc ILensAdapter
@@ -469,8 +462,8 @@ contract AaveV3LensAdapter is ILensAdapter, Ownable {
         pure
         override
         returns (
-            uint256 newCollateralEth,
-            uint256 newDebtEth,
+            uint256 newCollateral,
+            uint256 newDebt,
             uint256 newHealthFactor
         )
     {

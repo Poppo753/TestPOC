@@ -38,7 +38,7 @@ describe("Morpho Blue Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", fun
     // ==================== ARBITRUM MAINNET ADDRESSES ====================
 
     // Morpho Blue singleton
-    const MORPHO = "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb";
+    const MORPHO = "0x6c247b1F6182318877311737BaC0844bAa518F5e";
 
     // Tokens
     const WETH = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
@@ -167,6 +167,7 @@ describe("Morpho Blue Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", fun
         await mockBeacon.setImplementation("ProtocolManager", owner.address);
         await mockBeacon.setImplementation("LiquidityManager", owner.address);
         await mockBeacon.setImplementation("WETH", WETH);
+        await mockBeacon.setImplementation("BASE_ASSET", WETH);
         await mockBeacon.setImplementation("FlashLoanService", flashLoanAddr);
 
         // Configure mock token manager
@@ -176,6 +177,7 @@ describe("Morpho Blue Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", fun
         // Set ETH price for LensAdapter calculations
         const ethPriceUsd = ethers.parseUnits("2500", 8); // ~$2500
         await mockTokenManager.setTokenPrice("WETH", ethPriceUsd);
+        await mockTokenManager.setTokenPrice("USDC", ethers.parseUnits("1", 8)); // $1
 
         // ==================== DEPLOY MORPHO REGISTRY ====================
 
@@ -195,14 +197,14 @@ describe("Morpho Blue Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", fun
         // ==================== DEPLOY MORPHO PLUGIN ====================
 
         const PluginFactory = await ethers.getContractFactory("MorphoPlugin");
-        plugin = await PluginFactory.deploy(await mockBeacon.getAddress());
+        plugin = await PluginFactory.deploy(await mockBeacon.getAddress(), "WETH", MORPHO);
         await plugin.waitForDeployment();
         await mockBeacon.setImplementation("MorphoPlugin", await plugin.getAddress());
 
         // ==================== DEPLOY MORPHO LENS ADAPTER ====================
 
         const LensFactory = await ethers.getContractFactory("MorphoLensAdapter");
-        lensAdapter = await LensFactory.deploy(await mockBeacon.getAddress());
+        lensAdapter = await LensFactory.deploy(await mockBeacon.getAddress(), "WETH", MORPHO);
         await lensAdapter.waitForDeployment();
         await mockBeacon.setImplementation("MorphoLensAdapter", await lensAdapter.getAddress());
 

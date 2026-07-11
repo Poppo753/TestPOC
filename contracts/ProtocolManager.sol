@@ -161,12 +161,12 @@ contract ProtocolManager is Ownable {
     );
     
     /**
-     * @notice Emesso quando vengono chiuse posizioni per ottenere WETH
+     * @notice Emesso quando vengono chiuse posizioni per ottenere base asset
      */
-    event PositionsClosedForWeth(
+    event PositionsClosedForBaseAsset(
         string protocolName,
         uint256 positionsClosed,
-        uint256 wethObtained
+        uint256 obtained
     );
     
     // ==================== ERRORS ====================
@@ -186,7 +186,7 @@ contract ProtocolManager is Ownable {
     
     /**
      * @notice Modifier per funzioni callable da owner o LiquidityManager
-     * @dev Usato per closePositionsForWeth che deve essere chiamabile durante withdraw automatici
+     * @dev Usato per closePositionsForBaseAsset che deve essere chiamabile durante withdraw automatici
      */
     modifier onlyOwnerOrLiquidityManager() {
         address liquidityManager = IBeacon(beacon).getImplementation("LiquidityManager");
@@ -688,7 +688,7 @@ contract ProtocolManager is Ownable {
         try ILensAdapter(info.lensAdapter).getValueBreakdown() 
             returns (ILensAdapter.ValueBreakdown memory breakdown) 
         {
-            return (breakdown.totalCollateralEth, breakdown.totalDebtEth, breakdown.netValueEth);
+            return (breakdown.totalCollateral, breakdown.totalDebt, breakdown.netValue);
         } catch {
             // If getValueBreakdown fails, try getTotalValue as fallback
             try ILensAdapter(info.lensAdapter).getTotalValue() returns (uint256 value) {
@@ -789,34 +789,33 @@ contract ProtocolManager is Ownable {
     }
     
     /**
-     * @notice Close positions across all protocols to obtain WETH
+     * @notice Close positions across all protocols to obtain base asset
      * @dev Closes riskiest positions first (lowest HF)
      * @dev Callable by owner or LiquidityManager for automatic withdrawals
-     * @param targetWethAmount Amount of WETH needed
-     * @return wethObtained Actual WETH obtained
+     * @param targetAmount Amount of base asset needed
+     * @return obtained Actual base asset obtained
      * @return totalPositionsClosed Total positions closed across all protocols
      */
-    function closePositionsForWeth(uint256 targetWethAmount) 
+    function closePositionsForBaseAsset(uint256 targetAmount) 
         external 
         onlyOwnerOrLiquidityManager 
-        returns (uint256 wethObtained, uint256 totalPositionsClosed) 
+        returns (uint256 obtained, uint256 totalPositionsClosed) 
     {
-        // Close positions protocol by protocol, prioritizing riskiest
-        for (uint256 i = 0; i < registeredProtocolNames.length && wethObtained < targetWethAmount; i++) {
+        for (uint256 i = 0; i < registeredProtocolNames.length && obtained < targetAmount; i++) {
             string memory name = registeredProtocolNames[i];
             ProtocolInfo storage info = protocols[name];
             if (!info.isActive) continue;
             
-            uint256 stillNeeded = targetWethAmount - wethObtained;
+            uint256 stillNeeded = targetAmount - obtained;
             
-            try IProtocolAdapter(info.plugin).closePositionsForWeth(stillNeeded) 
-                returns (uint256 obtained, uint256 closed) 
+            try IProtocolAdapter(info.plugin).closePositionsForBaseAsset(stillNeeded) 
+                returns (uint256 got, uint256 closed) 
             {
-                wethObtained += obtained;
+                obtained += got;
                 totalPositionsClosed += closed;
                 
                 if (closed > 0) {
-                    emit PositionsClosedForWeth(name, closed, obtained);
+                    emit PositionsClosedForBaseAsset(name, closed, got);
                 }
             } catch {
                 // Protocol failed, continue with next
@@ -828,20 +827,20 @@ contract ProtocolManager is Ownable {
      * @notice Close a specific position in a protocol
      * @param protocolName Protocol containing the position
      * @param positionId Position to close
-     * @return wethReturned WETH returned from closing
+     * @return baseAssetReturned Base asset returned from closing
      */
     function closePosition(string memory protocolName, uint256 positionId) 
         external 
         onlyOwner 
-        returns (uint256 wethReturned) 
+        returns (uint256 baseAssetReturned) 
     {
         if (!isProtocolRegistered[protocolName]) revert ProtocolNotFound(protocolName);
         ProtocolInfo storage info = protocols[protocolName];
         if (!info.isActive) revert ProtocolNotActive(protocolName);
         
-        wethReturned = IProtocolAdapter(info.plugin).closePosition(positionId);
+        baseAssetReturned = IProtocolAdapter(info.plugin).closePosition(positionId);
         
-        emit PositionsClosedForWeth(protocolName, 1, wethReturned);
+        emit PositionsClosedForBaseAsset(protocolName, 1, baseAssetReturned);
     }
     
     /**
@@ -872,9 +871,9 @@ contract ProtocolManager is Ownable {
                 summaries[idx++] = ILensAdapter.ProtocolSummary({
                     name: registeredProtocolNames[i],
                     protocolType: IProtocolAdapter.ProtocolType.LENDING,
-                    totalCollateralEth: 0,
-                    totalDebtEth: 0,
-                    netValueEth: 0,
+                    totalCollateral: 0,
+                    totalDebt: 0,
+                    netValue: 0,
                     activePositionCount: 0,
                     lowestHealthFactor: type(uint256).max,
                     isHealthy: true

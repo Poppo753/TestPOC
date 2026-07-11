@@ -96,6 +96,7 @@ describe("E2E: Automatic Swap on Withdraw (Fresh Fork Deploy)", function () {
     // 3. Register implementations in Beacon
     await beacon.updateImplementation("ProxyGeneral", await proxyGeneral.getAddress());
     await beacon.updateImplementation("WETH", ARBITRUM_WETH);
+    await beacon.updateImplementation("BASE_ASSET", ARBITRUM_WETH);
     await beacon.updateImplementation("USDC", ARBITRUM_USDC);
     await beacon.updateImplementation("WBTC", ARBITRUM_WBTC);
     await delay(1000);
@@ -127,7 +128,7 @@ describe("E2E: Automatic Swap on Withdraw (Fresh Fork Deploy)", function () {
     
     // 6. Deploy ValueCalculator
     const ValueCalculatorFactory = await ethers.getContractFactory("ValueCalculator");
-    valueCalculator = await ValueCalculatorFactory.deploy(await beacon.getAddress());
+    valueCalculator = await ValueCalculatorFactory.deploy(await beacon.getAddress(), "WETH");
     await valueCalculator.waitForDeployment();
     console.log(`   ✅ ValueCalculator: ${await valueCalculator.getAddress()}`);
     await beacon.updateImplementation("ValueCalculator", await valueCalculator.getAddress());
@@ -135,7 +136,7 @@ describe("E2E: Automatic Swap on Withdraw (Fresh Fork Deploy)", function () {
     
     // 7. Deploy ParameterManager
     const ParameterManagerFactory = await ethers.getContractFactory("ParameterManager");
-    parameterManager = await ParameterManagerFactory.deploy(await beacon.getAddress());
+    parameterManager = await ParameterManagerFactory.deploy(await beacon.getAddress(), 18);
     await parameterManager.waitForDeployment();
     console.log(`   ✅ ParameterManager: ${await parameterManager.getAddress()}`);
     await beacon.updateImplementation("ParameterManager", await parameterManager.getAddress());
@@ -163,7 +164,7 @@ describe("E2E: Automatic Swap on Withdraw (Fresh Fork Deploy)", function () {
     
     // 10. Deploy SwapManager
     const SwapManagerFactory = await ethers.getContractFactory("SwapManager");
-    swapManager = await SwapManagerFactory.deploy(await beacon.getAddress());
+    swapManager = await SwapManagerFactory.deploy(await beacon.getAddress(), "WETH");
     await swapManager.waitForDeployment();
     console.log(`   ✅ SwapManager: ${await swapManager.getAddress()}`);
     await beacon.updateImplementation("SwapManager", await swapManager.getAddress());
@@ -171,7 +172,7 @@ describe("E2E: Automatic Swap on Withdraw (Fresh Fork Deploy)", function () {
     
     // 11. Deploy LiquidityManager
     const LiquidityManagerFactory = await ethers.getContractFactory("LiquidityManager");
-    liquidityManager = await LiquidityManagerFactory.deploy(await beacon.getAddress());
+    liquidityManager = await LiquidityManagerFactory.deploy(await beacon.getAddress(), "WETH");
     await liquidityManager.waitForDeployment();
     console.log(`   ✅ LiquidityManager: ${await liquidityManager.getAddress()}`);
     await beacon.updateImplementation("LiquidityManager", await liquidityManager.getAddress());

@@ -6,7 +6,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/IBeacon.sol";
 import "./interfaces/ITokenManagerForModules.sol";
 import "./interfaces/IProxyGeneral.sol";
-import "./interfaces/IWETH.sol";
 import "./interfaces/IEulerLensAdapter.sol";
 import "./interfaces/IProtocolManager.sol";
 
@@ -44,6 +43,9 @@ contract ValueCalculator is Ownable {
     /// @notice Beacon address per resolution moduli
     address public immutable beacon;
 
+    /// @notice Base asset code for this pool (e.g. "WETH", "USDC", "WBTC")
+    string public baseAssetCode;
+
     /// @notice Cache dei valori token con TTL
     mapping(string => TokenValueCache) private tokenValueCache;
     
@@ -78,9 +80,11 @@ contract ValueCalculator is Ownable {
 
     // ==================== CONSTRUCTOR ====================
 
-    constructor(address _beacon) Ownable() {
+    constructor(address _beacon, string memory _baseAssetCode) Ownable() {
         require(_beacon != address(0), "Invalid beacon address");
+        require(bytes(_baseAssetCode).length > 0, "Invalid base asset code");
         beacon = _beacon;
+        baseAssetCode = _baseAssetCode;
     }
 
     // ==================== TOKEN VALUE CALCULATION ====================
@@ -210,11 +214,11 @@ contract ValueCalculator is Ownable {
     function getTotalPoolValue() external view returns (PoolValueInfo memory) {
         ITokenManagerForModules tokenManager = ITokenManagerForModules(IBeacon(beacon).getImplementation("TokenManager"));
         address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
-        address wethAddress = IBeacon(beacon).getImplementation("WETH");
+        address baseAssetAddr = IBeacon(beacon).getImplementation("BASE_ASSET");
         
-        // START WITH WETH BALANCE
-        uint256 wethBalance = IWETH(wethAddress).balanceOf(proxyGeneral);
-        uint256 totalValue = wethBalance;
+        // START WITH BASE ASSET BALANCE (value = balance for base asset priced in itself)
+        uint256 baseAssetBalance = IERC20(baseAssetAddr).balanceOf(proxyGeneral);
+        uint256 totalValue = baseAssetBalance;
         
         // GET ACTIVE TOKENS
         string[] memory activeTokens = tokenManager.getActiveTokens();
@@ -222,13 +226,13 @@ contract ValueCalculator is Ownable {
         // CALCULATE VALUE FOR EACH TOKEN
         TokenValueInfo[] memory tokenValues = new TokenValueInfo[](activeTokens.length + 1);
         
-        // WETH info (index 0)
+        // Base asset info (index 0)
         tokenValues[0] = TokenValueInfo({
-            tokenCode: "WETH",
-            value: wethBalance,
-            balance: wethBalance,
-            pricePerToken: 1e18, // 1 WETH = 1 ETH by definition
-            percentage: 0 // Will be calculated after total
+            tokenCode: baseAssetCode,
+            value: baseAssetBalance,
+            balance: baseAssetBalance,
+            pricePerToken: 1e18, // 1 base asset = 1 unit of account by definition
+            percentage: 0
         });
         
         // CALCULATE EACH TOKEN VALUE usando funzione view pura
@@ -290,9 +294,9 @@ contract ValueCalculator is Ownable {
      */
     function getTotalPoolValueView() external view returns (uint256) {
         address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
-        address wethAddress = IBeacon(beacon).getImplementation("WETH");
+        address baseAssetAddr = IBeacon(beacon).getImplementation("BASE_ASSET");
         
-        uint256 totalValue = IWETH(wethAddress).balanceOf(proxyGeneral);
+        uint256 totalValue = IERC20(baseAssetAddr).balanceOf(proxyGeneral);
         
         ITokenManagerForModules tokenManager = ITokenManagerForModules(IBeacon(beacon).getImplementation("TokenManager"));
         string[] memory activeTokens = tokenManager.getActiveTokens();
@@ -511,22 +515,16 @@ contract ValueCalculator is Ownable {
         require(activeTokens.length > 0, "No swappable tokens");
         
         // GET TOTAL POOL VALUE FOR PERCENTAGE CALCULATION
-        // NOTE: We'll calculate swappable value (excluding WETH) separately
         uint256 totalPoolValue = this.getTotalPoolValueView();
         require(totalPoolValue > 0, "Pool has no value");
         
         // BUILD TOKEN INFO ARRAY
         TokenValueInfo[] memory tokenInfos = new TokenValueInfo[](activeTokens.length);
         uint256 validTokenCount = 0;
-        uint256 swappableValue = 0; // Total value of swappable tokens (non-WETH)
+        uint256 swappableValue = 0;
         
         for (uint256 i = 0; i < activeTokens.length; i++) {
             string memory currentToken = activeTokens[i];
-            
-            // Skip WETH (we're swapping TO WETH, not FROM it)
-            if (keccak256(bytes(currentToken)) == keccak256(bytes("WETH"))) {
-                continue;
-            }
             
             // GET TOKEN DATA
             address tokenAddress = tokenManager.getTokenAddress(currentToken);
@@ -566,7 +564,7 @@ contract ValueCalculator is Ownable {
         
         require(validTokenCount > 0, "Insufficient liquidity");
         
-        // RECALCULATE PERCENTAGES based on swappable value only (not total pool including WETH)
+        // RECALCULATE PERCENTAGES based on swappable value only (not total pool including base asset)
         if (swappableValue > 0) {
             for (uint256 i = 0; i < validTokenCount; i++) {
                 tokenInfos[i].percentage = (tokenInfos[i].value * 10000) / swappableValue;

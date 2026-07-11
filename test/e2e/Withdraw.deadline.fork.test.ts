@@ -78,6 +78,7 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
     const Beacon = await ethers.getContractFactory("Beacon");
     beacon = await Beacon.deploy();
     await beacon.updateImplementation("WETH", ARBITRUM_WETH);
+    await beacon.updateImplementation("BASE_ASSET", ARBITRUM_WETH);
     console.log(`   ✅ Beacon deployed: ${await beacon.getAddress()}`);
 
     // Deploy ChainlinkAdapter with real Arbitrum price feeds
@@ -90,22 +91,22 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
 
     // Deploy core contracts
     const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
-    proxyGeneral = await ProxyGeneral.deploy(await beacon.getAddress());
+    proxyGeneral = await ProxyGeneral.deploy(await beacon.getAddress(), "WETH");
 
     const TokenManager = await ethers.getContractFactory("TokenManager");
     tokenManager = await TokenManager.deploy(await beacon.getAddress(), await chainlinkAdapter.getAddress());
 
     const ValueCalculator = await ethers.getContractFactory("ValueCalculator");
-    valueCalculator = await ValueCalculator.deploy(await beacon.getAddress());
+    valueCalculator = await ValueCalculator.deploy(await beacon.getAddress(), "WETH");
 
     const SwapManager = await ethers.getContractFactory("SwapManager");
-    swapManager = await SwapManager.deploy(await beacon.getAddress());
+    swapManager = await SwapManager.deploy(await beacon.getAddress(), "WETH");
 
     const ParameterManager = await ethers.getContractFactory("ParameterManager");
-    parameterManager = await ParameterManager.deploy(await beacon.getAddress());
+    parameterManager = await ParameterManager.deploy(await beacon.getAddress(), 18);
 
     const LiquidityManager = await ethers.getContractFactory("LiquidityManager");
-    liquidityManager = await LiquidityManager.deploy(await beacon.getAddress());
+    liquidityManager = await LiquidityManager.deploy(await beacon.getAddress(), "WETH");
 
     // Deploy UniswapV3PluginDirect with REAL Uniswap V3 Router
     const UniswapV3PluginDirect = await ethers.getContractFactory("UniswapV3PluginDirect");

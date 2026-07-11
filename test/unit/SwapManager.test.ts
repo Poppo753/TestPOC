@@ -54,10 +54,11 @@ describe("SwapManager Contract", function () {
     const Beacon = await ethers.getContractFactory("Beacon");
     const beacon = await Beacon.deploy();
     await beacon.updateImplementation("WETH", mockWETH.target);
+    await beacon.updateImplementation("BASE_ASSET", mockWETH.target);
 
     // Deploy core contracts
     const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
-    const proxyGeneral = await ProxyGeneral.deploy(beacon.target);
+    const proxyGeneral = await ProxyGeneral.deploy(beacon.target, "WETH");
 
     const TokenManager = await ethers.getContractFactory("TokenManager");
     const tokenManager = await TokenManager.deploy(beacon.target, mockOracleAdapter.target);
@@ -68,7 +69,7 @@ describe("SwapManager Contract", function () {
 
     // Deploy SwapManager
     const SwapManager = await ethers.getContractFactory("SwapManager");
-    const swapManager = await SwapManager.deploy(beacon.target);
+    const swapManager = await SwapManager.deploy(beacon.target, "WETH");
 
     // Register contracts in Beacon
     await beacon.updateImplementation("ProxyGeneral", proxyGeneral.target);
@@ -1167,13 +1168,13 @@ describe("SwapManager Contract", function () {
   describe("⛽ Gas Optimization", function () {
     it("should deploy with reasonable gas cost", async function () {
       const SwapManager = await ethers.getContractFactory("SwapManager");
-      const deployTx = await SwapManager.getDeployTransaction(beacon.target);
+      const deployTx = await SwapManager.getDeployTransaction(beacon.target, "WETH");
       
       const estimatedGas = await ethers.provider.estimateGas(deployTx);
       console.log(`✅ SwapManager deployment gas usage: ${estimatedGas}`);
       
-      // Should deploy under 5.1M gas (updated after oracle modularity)
-      expect(estimatedGas).to.be.lessThan(5100000);
+      // Should deploy under 6M gas (updated after base asset abstraction)
+      expect(estimatedGas).to.be.lessThan(6000000);
     });
 
     it("should have reasonable gas for validation", async function () {

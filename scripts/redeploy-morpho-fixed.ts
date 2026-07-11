@@ -157,16 +157,16 @@ async function main() {
 
     console.log("\n📦 Step 3/7: Deploying new MorphoPlugin...");
     const PluginFactory = await ethers.getContractFactory("MorphoPlugin");
-    const plugin = await PluginFactory.deploy(BEACON);
+    const plugin = await PluginFactory.deploy(BEACON, "USDC", MORPHO_REAL);
     await plugin.waitForDeployment();
     const pluginAddress = await plugin.getAddress();
     console.log(`   ✅ MorphoPlugin: ${pluginAddress}`);
     
     // Verify it uses correct Morpho address
-    const morphoFromPlugin = await plugin.MORPHO_ADDRESS();
-    console.log(`   MORPHO_ADDRESS: ${morphoFromPlugin}`);
+    const morphoFromPlugin = await plugin.morpho();
+    console.log(`   morpho (immutable): ${morphoFromPlugin}`);
     if (morphoFromPlugin.toLowerCase() !== MORPHO_REAL.toLowerCase()) {
-        console.error("   ❌ MORPHO_ADDRESS mismatch! Compilation did not pick up the fix!");
+        console.error("   ❌ morpho address mismatch! Check deploy args.");
         process.exit(1);
     }
     console.log("   ✅ Correct Morpho address confirmed");
@@ -188,7 +188,7 @@ async function main() {
 
     console.log("\n📦 Step 5/7: Deploying new MorphoLensAdapter...");
     const LensFactory = await ethers.getContractFactory("MorphoLensAdapter");
-    const lens = await LensFactory.deploy(BEACON);
+    const lens = await LensFactory.deploy(BEACON, "USDC", MORPHO_REAL);
     await lens.waitForDeployment();
     const lensAddress = await lens.getAddress();
     console.log(`   ✅ MorphoLensAdapter: ${lensAddress}`);

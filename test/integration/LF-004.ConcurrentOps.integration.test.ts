@@ -55,27 +55,36 @@ describe("LF-004: Concurrent Operations Testing", function () {
     console.log(`🪙 TokenManager deployed: ${await tokenManager.getAddress()}`);
 
     const ParameterManagerFactory = await ethers.getContractFactory("ParameterManager");
-    parameterManager = await ParameterManagerFactory.deploy(await beacon.getAddress());
+    parameterManager = await ParameterManagerFactory.deploy(await beacon.getAddress(), 18);
     await parameterManager.waitForDeployment();
     console.log(`⚙️ ParameterManager deployed: ${await parameterManager.getAddress()}`);
 
     const ValueCalculatorFactory = await ethers.getContractFactory("ValueCalculator");
-    valueCalculator = await ValueCalculatorFactory.deploy(await beacon.getAddress());
+    valueCalculator = await ValueCalculatorFactory.deploy(await beacon.getAddress(), "WETH");
     await valueCalculator.waitForDeployment();
     console.log(`📊 ValueCalculator deployed: ${await valueCalculator.getAddress()}`);
 
     const ProxyGeneralFactory = await ethers.getContractFactory("ProxyGeneral");
-    proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress());
+    proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress(), "WETH");
     await proxyGeneral.waitForDeployment();
     console.log(`🏛️ ProxyGeneral deployed: ${await proxyGeneral.getAddress()}`);
 
+    // Deploy MockERC20 as WETH (BASE_ASSET)
+    const MockERC20Factory = await ethers.getContractFactory("MockERC20");
+    mockWETH = await MockERC20Factory.deploy("Wrapped Ether", "WETH", 18);
+    await mockWETH.waitForDeployment();
+    console.log(`💰 MockWETH (MockERC20) deployed: ${await mockWETH.getAddress()}`);
+
+    // Register BASE_ASSET for LiquidityManager constructor
+    await beacon.updateImplementation("BASE_ASSET", await mockWETH.getAddress());
+
     const LiquidityManagerFactory = await ethers.getContractFactory("LiquidityManager");
-    liquidityManager = await LiquidityManagerFactory.deploy(await beacon.getAddress());
+    liquidityManager = await LiquidityManagerFactory.deploy(await beacon.getAddress(), "WETH");
     await liquidityManager.waitForDeployment();
     console.log(`🌊 LiquidityManager deployed: ${await liquidityManager.getAddress()}`);
 
     const SwapManagerFactory = await ethers.getContractFactory("SwapManager");
-    swapManager = await SwapManagerFactory.deploy(await beacon.getAddress());
+    swapManager = await SwapManagerFactory.deploy(await beacon.getAddress(), "WETH");
     await swapManager.waitForDeployment();
     console.log(`🔄 SwapManager deployed: ${await swapManager.getAddress()}`);
 
@@ -83,12 +92,6 @@ describe("LF-004: Concurrent Operations Testing", function () {
     emergencyHandler = await EmergencyHandlerFactory.deploy(await beacon.getAddress());
     await emergencyHandler.waitForDeployment();
     console.log(`🚨 EmergencyHandler deployed: ${await emergencyHandler.getAddress()}`);
-
-    // Deploy MockWETH
-    const MockWETHFactory = await ethers.getContractFactory("MockWETH");
-    mockWETH = await MockWETHFactory.deploy();
-    await mockWETH.waitForDeployment();
-    console.log(`💰 MockWETH deployed: ${await mockWETH.getAddress()}`);
 
     // Register all modules in Beacon
     console.log("\n🔗 REGISTERING MODULES IN BEACON:");
@@ -109,12 +112,7 @@ describe("LF-004: Concurrent Operations Testing", function () {
 
     // Initialize WETH with some liquidity
     console.log("\n💰 INITIALIZING WETH LIQUIDITY:");
-    await owner.sendTransaction({ to: await mockWETH.getAddress(), value: ethers.parseEther("50") });
-    const wethInterface = new ethers.Interface(["function transfer(address to, uint256 amount) returns (bool)"]);
-    await owner.sendTransaction({
-      to: await mockWETH.getAddress(),
-      data: wethInterface.encodeFunctionData("transfer", [await proxyGeneral.getAddress(), ethers.parseEther("20")])
-    });
+    await mockWETH.mint(await proxyGeneral.getAddress(), ethers.parseEther("20"));
     console.log("   ✅ Initial WETH liquidity provided to ProxyGeneral");
 
     console.log("\n🎯 ECOSYSTEM DEPLOYMENT COMPLETE - READY FOR CONCURRENT TESTING!");
@@ -140,17 +138,23 @@ describe("LF-004: Concurrent Operations Testing", function () {
 
       console.log("\n📥 CONCURRENT DEPOSIT PHASE:");
       
-      // Get initial balances
-      const initialBalance1 = await ethers.provider.getBalance(user1.address);
-      const initialBalance2 = await ethers.provider.getBalance(user2.address);
-      const initialBalance3 = await ethers.provider.getBalance(user3.address);
+      // Get initial WETH balances
+      const initialBalance1 = await mockWETH.balanceOf(user1.address);
+      const initialBalance2 = await mockWETH.balanceOf(user2.address);
+      const initialBalance3 = await mockWETH.balanceOf(user3.address);
+
+      // Mint WETH and approve for all users
+      for (const user of [user1, user2, user3]) {
+        await mockWETH.mint(user.address, depositAmount);
+        await mockWETH.connect(user).approve(await liquidityManager.getAddress(), depositAmount);
+      }
 
       // Execute simultaneous deposits using Promise.all
       const startTime = Date.now();
       const depositPromises = [
-        liquidityManager.connect(user1).deposit({ value: depositAmount }),
-        liquidityManager.connect(user2).deposit({ value: depositAmount }),
-        liquidityManager.connect(user3).deposit({ value: depositAmount })
+        liquidityManager.connect(user1).deposit(depositAmount),
+        liquidityManager.connect(user2).deposit(depositAmount),
+        liquidityManager.connect(user3).deposit(depositAmount)
       ];
 
       console.log("     ⏰ Executing deposits simultaneously...");
@@ -215,7 +219,9 @@ describe("LF-004: Concurrent Operations Testing", function () {
       // Setup initial state - give user2 some LP tokens
       const initialDeposit = ethers.parseEther("2.0");
       console.log("\n📥 SETUP PHASE - User2 Initial Deposit:");
-      await liquidityManager.connect(user2).deposit({ value: initialDeposit });
+      await mockWETH.mint(user2.address, initialDeposit);
+      await mockWETH.connect(user2).approve(await liquidityManager.getAddress(), initialDeposit);
+      await liquidityManager.connect(user2).deposit(initialDeposit);
       const user2InitialLP = await proxyGeneral.balanceOf(user2.address);
       console.log(`     🎫 User2 LP Balance: ${ethers.formatEther(user2InitialLP)} LP`);
 
@@ -227,13 +233,19 @@ describe("LF-004: Concurrent Operations Testing", function () {
       console.log(`     💰 User2 withdrawing: ${ethers.formatEther(withdrawAmount)} LP`);
       console.log(`     💰 User3 depositing: ${ethers.formatEther(depositAmount)} ETH`);
 
+      // Mint WETH and approve for depositing users
+      for (const user of [user1, user3]) {
+        await mockWETH.mint(user.address, depositAmount);
+        await mockWETH.connect(user).approve(await liquidityManager.getAddress(), depositAmount);
+      }
+
       const startTime = Date.now();
       
       // Execute mixed operations simultaneously
       const operationPromises = [
-        liquidityManager.connect(user1).deposit({ value: depositAmount }),
+        liquidityManager.connect(user1).deposit(depositAmount),
         liquidityManager.connect(user2).withdraw(withdrawAmount),
-        liquidityManager.connect(user3).deposit({ value: depositAmount })
+        liquidityManager.connect(user3).deposit(depositAmount)
       ];
 
       console.log("     ⏰ Executing mixed operations simultaneously...");
@@ -293,7 +305,9 @@ describe("LF-004: Concurrent Operations Testing", function () {
       console.log("     🏗️ Setting up users with initial LP tokens...");
       
       for (let i = 0; i < 3; i++) {
-        await liquidityManager.connect(testUsers[i]).deposit({ value: setupAmount });
+        await mockWETH.mint(testUsers[i].address, setupAmount);
+        await mockWETH.connect(testUsers[i]).approve(await liquidityManager.getAddress(), setupAmount);
+        await liquidityManager.connect(testUsers[i]).deposit(setupAmount);
         const lpBalance = await proxyGeneral.balanceOf(testUsers[i].address);
         console.log(`     🎫 User${i+1} initial LP: ${ethers.formatEther(lpBalance)} LP`);
       }
@@ -317,11 +331,13 @@ describe("LF-004: Concurrent Operations Testing", function () {
       
       // Users 4-6: Deposits
       for (let i = 3; i < 6; i++) {
+        await mockWETH.mint(testUsers[i].address, operationAmount);
+        await mockWETH.connect(testUsers[i]).approve(await liquidityManager.getAddress(), operationAmount);
         operations.push({
           type: 'deposit',
           user: testUsers[i],
           amount: operationAmount,
-          promise: liquidityManager.connect(testUsers[i]).deposit({ value: operationAmount })
+          promise: liquidityManager.connect(testUsers[i]).deposit(operationAmount)
         });
       }
 

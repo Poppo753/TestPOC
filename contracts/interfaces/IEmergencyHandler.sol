@@ -35,7 +35,7 @@ interface IEmergencyHandler {
         uint256 snapshotId;
         uint256 timestamp;
         uint256 totalValue;
-        uint256 wethBalance;
+        uint256 baseAssetBalance;
         TokenBalance[] tokenBalances;
         address capturedBy;
     }

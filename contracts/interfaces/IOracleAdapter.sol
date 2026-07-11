@@ -101,7 +101,34 @@ interface IOracleAdapter {
             uint256 timestamp,
             bool isValid
         );
-    
+
+    /**
+     * @notice Get the price of a token directly in USD, normalized to 18 decimals
+     * @dev Unlike getPrice(), this NEVER applies denomination conversion. It returns
+     *      the raw feed price (which must be USD-denominated) normalized to 18 decimals.
+     *      Used by TokenManager.convertUsdToBaseAsset() to convert USD values to base
+     *      asset units, where the base asset price must be expressed in USD regardless
+     *      of the adapter's targetDenomination setting.
+     *
+     * Requirements:
+     * - The token's feed denomination MUST be "USD"
+     * - MUST revert with TokenNotSupported if token not configured
+     * - Returns price normalized to 18 decimals (e.g., WETH at $3100 → 3100e18)
+     *
+     * @param tokenCode Token identifier
+     * @return price USD price normalized to 18 decimals
+     * @return timestamp Unix timestamp of last price update
+     * @return isValid True if price passed all validations and is fresh
+     */
+    function getPriceInUsd(string memory tokenCode)
+        external
+        view
+        returns (
+            uint256 price,
+            uint256 timestamp,
+            bool isValid
+        );
+
     /**
      * @notice Get decimals used by price feed
      * @dev CRITICAL: Used for price normalization in calculations

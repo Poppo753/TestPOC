@@ -67,9 +67,6 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
 
     // ==================== CONSTANTS ====================
 
-    /// @notice Aave V3 Pool on Arbitrum
-    address public constant AAVE_POOL_ADDRESS = 0x794a61358D6845594F94dc1DB02A252b5b4814aD;
-
     /// @notice Variable interest rate mode (Aave V3 only supports variable)
     uint256 public constant VARIABLE_RATE_MODE = 2;
 
@@ -77,6 +74,9 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
     uint256 public constant MIN_HEALTH_FACTOR = 1.05e18;
 
     // ==================== STATE VARIABLES ====================
+
+    /// @notice Base asset code for this pool (e.g. "WETH", "USDC", "WBTC")
+    string public baseAssetCode;
 
     /// @notice Circuit breaker flag (emergency stop)
     bool public override circuitBreakerTripped;
@@ -186,11 +186,14 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
     /**
      * @notice Costruttore del plugin
      * @param _beacon Indirizzo del Beacon per risoluzione moduli
+     * @param _aavePool Aave V3 Pool address (chain-specific, injected at deploy time)
      */
-    constructor(address _beacon) Ownable() {
+    constructor(address _beacon, string memory _baseAssetCode, address _aavePool) Ownable() {
         if (_beacon == address(0)) revert InvalidAddress();
+        if (_aavePool == address(0)) revert InvalidAddress();
         beacon = _beacon;
-        aavePool = IAaveV3Pool(AAVE_POOL_ADDRESS);
+        baseAssetCode = _baseAssetCode;
+        aavePool = IAaveV3Pool(_aavePool);
     }
 
     // ==================== IProtocolAdapter: DEPOSIT/WITHDRAW ====================
@@ -419,48 +422,47 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
         onlyProtocolManager
         notCircuitBroken
         nonReentrant
-        returns (uint256 wethReturned)
+        returns (uint256 baseAssetReturned)
     {
-        // Aave ha account unico → chiudi tutto e ritira WETH
-        address weth = _resolveToken("WETH");
-        address aToken = _getAToken("WETH");
+        // Aave ha account unico → chiudi tutto e ritira base asset
+        address baseAsset = _resolveToken(baseAssetCode);
+        address aToken = _getAToken(baseAssetCode);
         address proxyGeneral = _getProxyGeneral();
 
         uint256 aTokenBalance = IERC20(aToken).balanceOf(address(this));
         if (aTokenBalance > 0) {
-            uint256 wethBefore = IERC20(weth).balanceOf(proxyGeneral);
-            aavePool.withdraw(weth, type(uint256).max, proxyGeneral);
-            wethReturned = IERC20(weth).balanceOf(proxyGeneral) - wethBefore;
+            uint256 balBefore = IERC20(baseAsset).balanceOf(proxyGeneral);
+            aavePool.withdraw(baseAsset, type(uint256).max, proxyGeneral);
+            baseAssetReturned = IERC20(baseAsset).balanceOf(proxyGeneral) - balBefore;
         }
 
-        emit PositionClosed(0, wethReturned);
+        emit PositionClosed(0, baseAssetReturned);
     }
 
     /**
      * @inheritdoc IProtocolAdapter
      */
-    function closePositionsForWeth(uint256 targetWethAmount)
+    function closePositionsForBaseAsset(uint256 targetAmount)
         external
         override
         onlyOwnerOrLiquidityManager
         notCircuitBroken
         nonReentrant
-        returns (uint256 wethObtained, uint256 positionsClosed)
+        returns (uint256 obtained, uint256 positionsClosed)
     {
         // Per Aave: tenta di chiudere l'unica posizione
-        address weth = _resolveToken("WETH");
-        address aToken = _getAToken("WETH");
+        address baseAsset = _resolveToken(baseAssetCode);
+        address aToken = _getAToken(baseAssetCode);
         address proxyGeneral = _getProxyGeneral();
 
         uint256 aTokenBalance = IERC20(aToken).balanceOf(address(this));
         if (aTokenBalance == 0) return (0, 0);
 
-        // Determine quanto ritirare
-        uint256 withdrawAmount = targetWethAmount < aTokenBalance ? targetWethAmount : type(uint256).max;
+        uint256 withdrawAmount = targetAmount < aTokenBalance ? targetAmount : type(uint256).max;
 
-        uint256 wethBefore = IERC20(weth).balanceOf(proxyGeneral);
-        aavePool.withdraw(weth, withdrawAmount, proxyGeneral);
-        wethObtained = IERC20(weth).balanceOf(proxyGeneral) - wethBefore;
+        uint256 balBefore = IERC20(baseAsset).balanceOf(proxyGeneral);
+        aavePool.withdraw(baseAsset, withdrawAmount, proxyGeneral);
+        obtained = IERC20(baseAsset).balanceOf(proxyGeneral) - balBefore;
         positionsClosed = 1;
     }
 
@@ -877,8 +879,8 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
      *      WETH direttamente dal Beacon, altri via TokenManager
      */
     function _resolveToken(string memory tokenCode) internal view returns (address) {
-        if (keccak256(bytes(tokenCode)) == keccak256(bytes("WETH"))) {
-            return IBeacon(beacon).getImplementation("WETH");
+        if (keccak256(bytes(tokenCode)) == keccak256(bytes(baseAssetCode))) {
+            return IBeacon(beacon).getImplementation("BASE_ASSET");
         }
         address tokenManager = IBeacon(beacon).getImplementation("TokenManager");
         return ITokenManagerForModules(tokenManager).getTokenAddress(tokenCode);

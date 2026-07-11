@@ -40,7 +40,7 @@ async function main() {
     console.log("⏳ Compiling and deploying...");
 
     const SwapManager = await ethers.getContractFactory("SwapManager");
-    const newSwapManager = await SwapManager.deploy(BEACON_ADDRESS);
+    const newSwapManager = await SwapManager.deploy(BEACON_ADDRESS, "USDC");
     
     await newSwapManager.waitForDeployment();
     const newAddress = await newSwapManager.getAddress();

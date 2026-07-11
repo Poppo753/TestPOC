@@ -52,27 +52,36 @@ describe("LF-005: Stress Testing", function () {
     console.log(`🪙 TokenManager deployed: ${await tokenManager.getAddress()}`);
 
     const ParameterManagerFactory = await ethers.getContractFactory("ParameterManager");
-    parameterManager = await ParameterManagerFactory.deploy(await beacon.getAddress());
+    parameterManager = await ParameterManagerFactory.deploy(await beacon.getAddress(), 18);
     await parameterManager.waitForDeployment();
     console.log(`⚙️ ParameterManager deployed: ${await parameterManager.getAddress()}`);
 
     const ValueCalculatorFactory = await ethers.getContractFactory("ValueCalculator");
-    valueCalculator = await ValueCalculatorFactory.deploy(await beacon.getAddress());
+    valueCalculator = await ValueCalculatorFactory.deploy(await beacon.getAddress(), "WETH");
     await valueCalculator.waitForDeployment();
     console.log(`📊 ValueCalculator deployed: ${await valueCalculator.getAddress()}`);
 
     const ProxyGeneralFactory = await ethers.getContractFactory("ProxyGeneral");
-    proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress());
+    proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress(), "WETH");
     await proxyGeneral.waitForDeployment();
     console.log(`🏛️ ProxyGeneral deployed: ${await proxyGeneral.getAddress()}`);
 
+    // Deploy MockERC20 as WETH (BASE_ASSET)
+    const MockERC20Factory = await ethers.getContractFactory("MockERC20");
+    mockWETH = await MockERC20Factory.deploy("Wrapped Ether", "WETH", 18);
+    await mockWETH.waitForDeployment();
+    console.log(`💰 MockWETH (MockERC20) deployed: ${await mockWETH.getAddress()}`);
+
+    // Register BASE_ASSET for LiquidityManager constructor
+    await beacon.updateImplementation("BASE_ASSET", await mockWETH.getAddress());
+
     const LiquidityManagerFactory = await ethers.getContractFactory("LiquidityManager");
-    liquidityManager = await LiquidityManagerFactory.deploy(await beacon.getAddress());
+    liquidityManager = await LiquidityManagerFactory.deploy(await beacon.getAddress(), "WETH");
     await liquidityManager.waitForDeployment();
     console.log(`🌊 LiquidityManager deployed: ${await liquidityManager.getAddress()}`);
 
     const SwapManagerFactory = await ethers.getContractFactory("SwapManager");
-    swapManager = await SwapManagerFactory.deploy(await beacon.getAddress());
+    swapManager = await SwapManagerFactory.deploy(await beacon.getAddress(), "WETH");
     await swapManager.waitForDeployment();
     console.log(`🔄 SwapManager deployed: ${await swapManager.getAddress()}`);
 
@@ -80,12 +89,6 @@ describe("LF-005: Stress Testing", function () {
     emergencyHandler = await EmergencyHandlerFactory.deploy(await beacon.getAddress());
     await emergencyHandler.waitForDeployment();
     console.log(`🚨 EmergencyHandler deployed: ${await emergencyHandler.getAddress()}`);
-
-    // Deploy MockWETH
-    const MockWETHFactory = await ethers.getContractFactory("MockWETH");
-    mockWETH = await MockWETHFactory.deploy();
-    await mockWETH.waitForDeployment();
-    console.log(`💰 MockWETH deployed: ${await mockWETH.getAddress()}`);
 
     // Register all modules in Beacon
     console.log("\n🔗 REGISTERING MODULES IN BEACON:");
@@ -116,12 +119,7 @@ describe("LF-005: Stress Testing", function () {
 
     // Initialize WETH with substantial liquidity for stress testing
     console.log("\n💰 INITIALIZING WETH LIQUIDITY FOR STRESS TESTING:");
-    await owner.sendTransaction({ to: await mockWETH.getAddress(), value: ethers.parseEther("1000") });
-    const wethInterface = new ethers.Interface(["function transfer(address to, uint256 amount) returns (bool)"]);
-    await owner.sendTransaction({
-      to: await mockWETH.getAddress(),
-      data: wethInterface.encodeFunctionData("transfer", [await proxyGeneral.getAddress(), ethers.parseEther("500")])
-    });
+    await mockWETH.mint(await proxyGeneral.getAddress(), ethers.parseEther("500"));
     console.log("   ✅ High-volume WETH liquidity provided for stress testing");
 
     console.log("\n🎯 ECOSYSTEM DEPLOYMENT COMPLETE - READY FOR STRESS TESTING!");
@@ -152,7 +150,9 @@ describe("LF-005: Stress Testing", function () {
         const user = users[i % users.length];
         const depositStart = Date.now();
         
-        await liquidityManager.connect(user).deposit({ value: depositAmount });
+        await mockWETH.mint(user.address, depositAmount);
+        await mockWETH.connect(user).approve(await liquidityManager.getAddress(), depositAmount);
+        await liquidityManager.connect(user).deposit(depositAmount);
         
         const depositTime = Date.now() - depositStart;
         console.log(`     ✅ Deposit ${i+1}/10: ${depositTime}ms (User: ${user.address.slice(0,8)}...)`);
@@ -196,7 +196,9 @@ describe("LF-005: Stress Testing", function () {
       const setupAmount = ethers.parseEther("10.0"); // Increased from 1.0 to 10.0
       
       for (let i = 0; i < 7; i++) {
-        await liquidityManager.connect(testUsers[i]).deposit({ value: setupAmount });
+        await mockWETH.mint(testUsers[i].address, setupAmount);
+        await mockWETH.connect(testUsers[i]).approve(await liquidityManager.getAddress(), setupAmount);
+        await liquidityManager.connect(testUsers[i]).deposit(setupAmount);
         const lpBalance = await proxyGeneral.balanceOf(testUsers[i].address);
         console.log(`     🎫 User${i+1} setup LP: ${ethers.formatEther(lpBalance)} LP`);
       }
@@ -219,10 +221,12 @@ describe("LF-005: Stress Testing", function () {
       
       // Remaining 8: Deposits
       for (let i = 7; i < 15; i++) {
+        await mockWETH.mint(testUsers[i].address, operationAmount);
+        await mockWETH.connect(testUsers[i]).approve(await liquidityManager.getAddress(), operationAmount);
         operations.push({
           type: 'deposit',
           user: testUsers[i],
-          promise: liquidityManager.connect(testUsers[i]).deposit({ value: operationAmount })
+          promise: liquidityManager.connect(testUsers[i]).deposit(operationAmount)
         });
       }
 
@@ -296,7 +300,9 @@ describe("LF-005: Stress Testing", function () {
       const initAmount = ethers.parseEther("8.0"); // Increased from 0.8 to 8.0
       
       for (let i = 0; i < 8; i++) { // Reduced from 10 to 8
-        await liquidityManager.connect(burstUsers[i]).deposit({ value: initAmount });
+        await mockWETH.mint(burstUsers[i].address, initAmount);
+        await mockWETH.connect(burstUsers[i]).approve(await liquidityManager.getAddress(), initAmount);
+        await liquidityManager.connect(burstUsers[i]).deposit(initAmount);
       }
       console.log("     ✅ 8 users initialized with LP tokens for burst testing");
 
@@ -320,10 +326,12 @@ describe("LF-005: Stress Testing", function () {
           });
         } else {
           // Last 8: Deposits
+          await mockWETH.mint(user.address, burstAmount);
+          await mockWETH.connect(user).approve(await liquidityManager.getAddress(), burstAmount);
           burstOperations.push({
             type: 'deposit',
             user: user,
-            promise: liquidityManager.connect(user).deposit({ value: burstAmount })
+            promise: liquidityManager.connect(user).deposit(burstAmount)
           });
         }
       }

@@ -2,6 +2,7 @@
 pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "../interfaces/IEulerLensAdapter.sol";
 import "../interfaces/ILensAdapter.sol";
 import "../interfaces/IProtocolAdapter.sol";
@@ -59,21 +60,6 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     
     // ==================== CONSTANTS ====================
     
-    /// @notice AccountLens address on Arbitrum
-    address public constant ACCOUNT_LENS = 0x90a52DDcb232e7bb003DD9258fA1235c553eC956;
-    
-    /// @notice VaultLens address on Arbitrum
-    address public constant VAULT_LENS = 0xc99FCEE6174Bc92eBe9C78690fFD5067018a8380;
-    
-    /// @notice UtilsLens address on Arbitrum
-    address public constant UTILS_LENS = 0xDAf44060DCe217Fd603908A49fcaa1FA900304BE;
-    
-    /// @notice EVC address on Arbitrum
-    address public constant EVC_ADDRESS = 0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066;
-    
-    /// @notice WETH address on Arbitrum
-    address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
-    
     /// @notice Time to liquidation constants
     int256 public constant TTL_LIQUIDATION = -1;
     int256 public constant TTL_INFINITY = type(int256).max;
@@ -87,6 +73,21 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     
     /// @notice Beacon for module resolution
     address public immutable beacon;
+
+    /// @notice AccountLens address (chain-specific, injected at deploy time)
+    address public immutable accountLens;
+
+    /// @notice VaultLens address (chain-specific, injected at deploy time)
+    address public immutable vaultLens;
+
+    /// @notice UtilsLens address (chain-specific, injected at deploy time)
+    address public immutable utilsLens;
+
+    /// @notice EVC address (chain-specific, injected at deploy time)
+    address public immutable evcAddress;
+
+    /// @notice Base asset code for value denomination
+    string public baseAssetCode;
     
     // ==================== ERRORS ====================
     
@@ -106,10 +107,30 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     /**
      * @notice Constructs the EulerLensAdapter
      * @param _beacon Beacon address for module resolution
+     * @param _accountLens AccountLens address (chain-specific)
+     * @param _vaultLens VaultLens address (chain-specific)
+     * @param _utilsLens UtilsLens address (chain-specific)
+     * @param _evcAddress EVC address (chain-specific)
      */
-    constructor(address _beacon) Ownable() {
+    constructor(
+        address _beacon,
+        string memory _baseAssetCode,
+        address _accountLens,
+        address _vaultLens,
+        address _utilsLens,
+        address _evcAddress
+    ) Ownable() {
         if (_beacon == address(0)) revert InvalidBeacon();
+        if (_accountLens == address(0)) revert InvalidBeacon();
+        if (_vaultLens == address(0)) revert InvalidBeacon();
+        if (_utilsLens == address(0)) revert InvalidBeacon();
+        if (_evcAddress == address(0)) revert InvalidBeacon();
         beacon = _beacon;
+        accountLens = _accountLens;
+        vaultLens = _vaultLens;
+        utilsLens = _utilsLens;
+        evcAddress = _evcAddress;
+        baseAssetCode = _baseAssetCode;
     }
     
     // ============================================================================
@@ -127,7 +148,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     // ==================== ILensAdapter IMPLEMENTATIONS ====================
     
     /// @inheritdoc ILensAdapter
-    function getTotalValue() external view override returns (uint256 netValueEth) {
+    function getTotalValue() external view override returns (uint256 netValue) {
         return this.getTotalEulerValue();
     }
     
@@ -135,18 +156,18 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     function getValueBreakdown() external view override returns (ILensAdapter.ValueBreakdown memory breakdown) {
         (uint256 totalCollateral, uint256 totalDebt, ) = _calculateTotalValues();
         
-        breakdown.totalCollateralEth = totalCollateral;
-        breakdown.totalDebtEth = totalDebt;
-        breakdown.netValueEth = totalCollateral > totalDebt ? totalCollateral - totalDebt : 0;
+        breakdown.totalCollateral = totalCollateral;
+        breakdown.totalDebt = totalDebt;
+        breakdown.netValue = totalCollateral > totalDebt ? totalCollateral - totalDebt : 0;
         
         // Simplified: available = collateral - (debt / 0.8)
         if (totalDebt > 0) {
             uint256 requiredCollateral = (totalDebt * 10) / 8;
-            breakdown.availableToWithdrawEth = totalCollateral > requiredCollateral 
+            breakdown.availableToWithdraw = totalCollateral > requiredCollateral 
                 ? totalCollateral - requiredCollateral 
                 : 0;
         } else {
-            breakdown.availableToWithdrawEth = totalCollateral;
+            breakdown.availableToWithdraw = totalCollateral;
         }
     }
     
@@ -201,7 +222,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
             totalDbt += debtAssets;
             
             // Get health factor
-            IAccountLens lens = IAccountLens(ACCOUNT_LENS);
+            IAccountLens lens = IAccountLens(accountLens);
             IAccountLens.AccountLiquidityInfo memory liq = lens.getAccountLiquidityInfo(subAccount, pos.borrowVault);
             uint256 hf = type(uint256).max;
             if (!liq.queryFailure && liq.liabilityValueBorrowing > 0) {
@@ -213,9 +234,9 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         summary = ILensAdapter.ProtocolSummary({
             name: "Euler",
             protocolType: IProtocolAdapter.ProtocolType.LENDING,
-            totalCollateralEth: totalColl,
-            totalDebtEth: totalDbt,
-            netValueEth: totalColl > totalDbt ? totalColl - totalDbt : 0,
+            totalCollateral: totalColl,
+            totalDebt: totalDbt,
+            netValue: totalColl > totalDbt ? totalColl - totalDbt : 0,
             activePositionCount: activeCount,
             lowestHealthFactor: lowestHF,
             isHealthy: lowestHF >= 1.2e18
@@ -239,7 +260,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         override 
         returns (uint256 healthFactor) 
     {
-        IEVC evc = IEVC(EVC_ADDRESS);
+        IEVC evc = IEVC(evcAddress);
         address[] memory controllers = evc.getControllers(account);
         
         if (controllers.length == 0) {
@@ -250,7 +271,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         // Use first controller for query
         address controllerVault = controllers[0];
         
-        IAccountLens lens = IAccountLens(ACCOUNT_LENS);
+        IAccountLens lens = IAccountLens(accountLens);
         IAccountLens.AccountLiquidityInfo memory liquidity = 
             lens.getAccountLiquidityInfo(account, controllerVault);
         
@@ -275,7 +296,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         override 
         returns (uint256 healthFactor) 
     {
-        IAccountLens lens = IAccountLens(ACCOUNT_LENS);
+        IAccountLens lens = IAccountLens(accountLens);
         IAccountLens.AccountLiquidityInfo memory liquidity = 
             lens.getAccountLiquidityInfo(subAccount, controllerVault);
         
@@ -295,7 +316,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         override 
         returns (int256 ttl, string memory status) 
     {
-        IAccountLens lens = IAccountLens(ACCOUNT_LENS);
+        IAccountLens lens = IAccountLens(accountLens);
         ttl = lens.getTimeToLiquidation(account, vault);
         
         if (ttl == TTL_LIQUIDATION) {
@@ -375,14 +396,14 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         // If has debt, need to maintain health factor
         // Get health factor
         address pluginAddr = _getEulerV2Plugin();
-        IEVC evc = IEVC(EVC_ADDRESS);
+        IEVC evc = IEVC(evcAddress);
         address[] memory controllers = evc.getControllers(pluginAddr);
         
         if (controllers.length == 0) {
             return balance;
         }
         
-        IAccountLens lens = IAccountLens(ACCOUNT_LENS);
+        IAccountLens lens = IAccountLens(accountLens);
         IAccountLens.AccountLiquidityInfo memory liquidity = 
             lens.getAccountLiquidityInfo(pluginAddr, controllers[0]);
         
@@ -481,7 +502,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         override 
         returns (address vault) 
     {
-        IEVC evc = IEVC(EVC_ADDRESS);
+        IEVC evc = IEVC(evcAddress);
         address[] memory controllers = evc.getControllers(plugin);
         
         if (controllers.length > 0) {
@@ -649,12 +670,12 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
             
             address asset = IEVault(vault).asset();
             
-            // Convert to ETH
+            // Convert to base asset
             if (balance > 0) {
-                totalCollateral += _convertToEthValue(asset, balance);
+                totalCollateral += _convertToBaseAssetValue(asset, balance);
             }
             if (debt > 0) {
-                totalDebt += _convertToEthValue(asset, debt);
+                totalDebt += _convertToBaseAssetValue(asset, debt);
             }
         }
         
@@ -673,8 +694,8 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     
     /**
      * @notice Calculate values from leverage positions
-     * @return collateral Total collateral from leverage positions in ETH
-     * @return debt Total debt from leverage positions in ETH
+     * @return collateral Total collateral from leverage positions in base asset
+     * @return debt Total debt from leverage positions in base asset
      */
     function _calculateLeverageValues()
         internal
@@ -695,32 +716,33 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
             
             // Calculate estimated total collateral
             // For leverage: total collateral ≈ initial + (borrowed converted to collateral)
-            uint256 borrowInEth = _convertToEthValue(borrowAsset, pos.borrowedAmount);
-            uint256 initialInEth = _convertToEthValue(collateralAsset, pos.initialCollateral);
+            uint256 borrowVal = _convertToBaseAssetValue(borrowAsset, pos.borrowedAmount);
+            uint256 initialVal = _convertToBaseAssetValue(collateralAsset, pos.initialCollateral);
             
             // Leverage collateral = initial + borrowed value
-            collateral += initialInEth + borrowInEth;
+            collateral += initialVal + borrowVal;
             
             // Leverage debt = borrowed amount
-            debt += borrowInEth;
+            debt += borrowVal;
         }
     }
     
     /**
-     * @notice Convert token amount to ETH value
+     * @notice Convert token amount to base asset value
      * @param token Token address
      * @param amount Amount in token decimals
-     * @return ethValue Value in ETH (18 decimals)
+     * @return Value in base asset decimals
      */
-    function _convertToEthValue(address token, uint256 amount)
+    function _convertToBaseAssetValue(address token, uint256 amount)
         internal
         view
-        returns (uint256 ethValue)
+        returns (uint256)
     {
         if (amount == 0) return 0;
         
-        // If token is WETH, return directly (1 WETH = 1 ETH)
-        if (token == WETH) {
+        // If token is the base asset, return directly
+        address baseAsset = IBeacon(beacon).getImplementation("BASE_ASSET");
+        if (token == baseAsset) {
             return amount;
         }
         
@@ -746,24 +768,21 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         }
         
         if (!found) {
-            // Token not found in registry, return 0
             return 0;
         }
         
-        // Get price from TokenManager - returns price in ETH directly via ChainlinkAdapter
-        // ChainlinkAdapter converts from USD to ETH automatically using reference feed
-        try tokenManager.getTokenPriceForModule(tokenCode) returns (uint256 priceInEth) {
-            if (priceInEth == 0) {
-                return 0;
-            }
+        // Cross-rate conversion: token → base asset
+        try tokenManager.getTokenPriceForModule(tokenCode) returns (uint256 tokenPrice) {
+            if (tokenPrice == 0) return 0;
             
-            // Get token decimals
-            ITokenManagerForModules.TokenInfo memory info = tokenManager.getTokenInfo(tokenCode);
+            uint256 baseAssetPrice = tokenManager.getBaseAssetPrice();
+            if (baseAssetPrice == 0) return 0;
             
-            // Calculate ETH value
-            // priceInEth is already in ETH with 18 decimals (from ChainlinkAdapter conversion)
-            // ethValue = amount * priceInEth / 10^tokenDecimals
-            ethValue = (amount * priceInEth) / (10**info.tokenDecimals);
+            uint8 tokenDecimals = IERC20Metadata(token).decimals();
+            uint8 baseDecimals = IERC20Metadata(baseAsset).decimals();
+            
+            // valueInBaseAsset = amount * tokenPrice * 10^baseDecimals / (baseAssetPrice * 10^tokenDecimals)
+            return (amount * tokenPrice * (10 ** baseDecimals)) / (baseAssetPrice * (10 ** tokenDecimals));
         } catch {
             return 0;
         }
@@ -788,7 +807,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         address subAccount = _getSubAccountAddress(pluginAddr, pos.subAccountId);
         
         // Query health factor from AccountLens
-        IAccountLens lens = IAccountLens(ACCOUNT_LENS);
+        IAccountLens lens = IAccountLens(accountLens);
         IAccountLens.AccountLiquidityInfo memory liquidity = 
             lens.getAccountLiquidityInfo(subAccount, pos.borrowVault);
         
@@ -949,7 +968,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
             uint256 hf = _getPositionHealthFactor(pos);
             (int256 ttl, string memory status) = _getTimeToLiquidationInternal(pos);
             
-            (uint256 collEth, uint256 debtEth) = _getPositionValueInEth(pos);
+            (uint256 collVal, uint256 debtVal) = _getPositionValue(pos);
             
             positions[i] = ILensAdapter.PositionWithRisk({
                 positionId: positionIds[i],
@@ -957,8 +976,8 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
                 healthFactor: hf,
                 timeToLiquidation: ttl,
                 riskLevel: status,
-                collateralEth: collEth,
-                debtEth: debtEth,
+                collateral: collVal,
+                debt: debtVal,
                 shouldAutoClose: hf < minHealthFactor
             });
         }
@@ -979,7 +998,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         for (uint256 i = 0; i < sorted.length; i++) {
             IEulerRegistry.LeveragePositionStorage memory pos = IEulerRegistry(registry).getPosition(sorted[i].positionId);
             (int256 ttl, string memory status) = _getTimeToLiquidationInternal(pos);
-            (uint256 collEth, uint256 debtEth) = _getPositionValueInEth(pos);
+            (uint256 collVal, uint256 debtVal) = _getPositionValue(pos);
             
             string memory riskLevel = "SAFE";
             if (sorted[i].healthFactor <= 1e18) riskLevel = "LIQUIDATABLE";
@@ -992,8 +1011,8 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
                 healthFactor: sorted[i].healthFactor,
                 timeToLiquidation: ttl,
                 riskLevel: riskLevel,
-                collateralEth: collEth,
-                debtEth: debtEth,
+                collateral: collVal,
+                debt: debtVal,
                 shouldAutoClose: sorted[i].healthFactor < DEFAULT_SAFE_HEALTH_FACTOR
             });
         }
@@ -1029,14 +1048,14 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     function getNetAPY() external view override returns (int256 netAPY) {
         // Simplified: average of all positions' net APY
         // In reality, would need to weight by position size
-        ILensAdapter.YieldInfo memory wethYield = this.getYieldInfo("WETH");
-        return wethYield.netAPY;
+        ILensAdapter.YieldInfo memory baseYield = this.getYieldInfo(baseAssetCode);
+        return baseYield.netAPY;
     }
     
 
     
     /// @inheritdoc ILensAdapter
-    function estimateWethFromCloseAll() external view override returns (uint256 wethAmount) {
+    function estimateBaseAssetFromCloseAll() external view override returns (uint256 amount) {
         (uint256 collateral, uint256 debt, uint256 net) = this.getEulerPositionValues();
         // Estimate: net value minus some slippage for swaps
         return net * 95 / 100;  // 5% slippage estimate
@@ -1045,22 +1064,22 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     // ==================== INTERNAL HELPERS ====================
     
     /**
-     * @notice Get position value in ETH
+     * @notice Get position value in base asset
      */
-    function _getPositionValueInEth(IEulerRegistry.LeveragePositionStorage memory pos) 
-        internal view returns (uint256 collateralEth, uint256 debtEth) 
+    function _getPositionValue(IEulerRegistry.LeveragePositionStorage memory pos) 
+        internal view returns (uint256 collateralVal, uint256 debtVal) 
     {
         if (!pos.isActive) return (0, 0);
         
         // Get collateral value
         address collateralToken = IEVault(pos.collateralVault).asset();
         uint256 collateralBalance = IEVault(pos.collateralVault).maxWithdraw(_getSubAccountAddress(_getEulerV2Plugin(), pos.subAccountId));
-        collateralEth = _convertToEthValue(collateralToken, collateralBalance);
+        collateralVal = _convertToBaseAssetValue(collateralToken, collateralBalance);
         
         // Get debt value
         address debtToken = IEVault(pos.borrowVault).asset();
         uint256 debtBalance = IEVault(pos.borrowVault).debtOf(_getSubAccountAddress(_getEulerV2Plugin(), pos.subAccountId));
-        debtEth = _convertToEthValue(debtToken, debtBalance);
+        debtVal = _convertToBaseAssetValue(debtToken, debtBalance);
     }
     
     /**
@@ -1098,7 +1117,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         external 
         view 
         override 
-        returns (uint256 thresholdEth) 
+        returns (uint256 threshold) 
     {
         address registry = _getRegistry();
         IEulerRegistry.LeveragePositionStorage memory pos = 
@@ -1112,11 +1131,11 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         // Get debt value
         address borrowToken = IEVault(pos.borrowVault).asset();
         uint256 debtBalance = IEVault(pos.borrowVault).debtOf(subAccount);
-        uint256 debtValueEth = _convertToEthValue(borrowToken, debtBalance);
+        uint256 debtVal = _convertToBaseAssetValue(borrowToken, debtBalance);
         
         // Liquidation threshold = debt / LTV
         // Assuming 80% LTV, liquidation at ~83% (1 / 0.8 * 1.05)
-        thresholdEth = (debtValueEth * 10000) / 8300;
+        threshold = (debtVal * 10000) / 8300;
     }
 
     /// @inheritdoc ILensAdapter
@@ -1130,8 +1149,8 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         view 
         override 
         returns (
-            uint256 newCollateralEth,
-            uint256 newDebtEth,
+            uint256 newCollateral,
+            uint256 newDebt,
             uint256 newHealthFactor
         ) 
     {
@@ -1170,14 +1189,14 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
             newDebtBalance += amountOut;
         }
         
-        // Calculate new values in ETH
-        newCollateralEth = _convertToEthValue(collateralToken, newCollateralBalance);
-        newDebtEth = _convertToEthValue(borrowToken, newDebtBalance);
+        // Calculate new values in base asset
+        newCollateral = _convertToBaseAssetValue(collateralToken, newCollateralBalance);
+        newDebt = _convertToBaseAssetValue(borrowToken, newDebtBalance);
         
         // Calculate new health factor
-        newHealthFactor = newDebtEth == 0 
+        newHealthFactor = newDebt == 0 
             ? type(uint256).max 
-            : (newCollateralEth * 80 * 1e18) / (newDebtEth * 100);
+            : (newCollateral * 80 * 1e18) / (newDebt * 100);
     }
 
     /// @inheritdoc ILensAdapter
@@ -1224,7 +1243,7 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         
         // Get health factor
         uint256 hf = type(uint256).max;
-        IAccountLens lens = IAccountLens(ACCOUNT_LENS);
+        IAccountLens lens = IAccountLens(accountLens);
         IAccountLens.AccountLiquidityInfo memory liq = lens.getAccountLiquidityInfo(subAccount, pos.borrowVault);
         if (!liq.queryFailure && liq.liabilityValueBorrowing > 0) {
             hf = (liq.collateralValueBorrowing * 1e18) / liq.liabilityValueBorrowing;
@@ -1234,9 +1253,9 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
             positionId: positionId,
             protocolName: "Euler",
             status: pos.isActive ? ILensAdapter.PositionStatus.ACTIVE : ILensAdapter.PositionStatus.CLOSED,
-            collateralValueEth: collValue,
-            debtValueEth: debtValue,
-            netValueEth: collValue > debtValue ? collValue - debtValue : 0,
+            collateralValue: collValue,
+            debtValue: debtValue,
+            netValue: collValue > debtValue ? collValue - debtValue : 0,
             healthFactor: hf,
             openTimestamp: pos.createdAt,
             collateralToken: pos.collateralVault,
@@ -1245,3 +1264,4 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
     }
     
 }
+

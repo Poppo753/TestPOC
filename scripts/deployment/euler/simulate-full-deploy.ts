@@ -15,6 +15,9 @@
 import { ethers } from "hardhat";
 import { ARBITRUM_ADDRESSES, EULER_VAULTS } from "../../config/arbitrum.config";
 
+// Base Asset Configuration
+const BASE_ASSET_CODE = "USDC";
+
 const BEACON_ADDRESS = ARBITRUM_ADDRESSES.BEACON;
 const OLD_PLUGIN = "0x490139F3b29786D64056a236a0062CA23A7313f6";
 const EULER_REGISTRY = "0xa2bE49a4b89F7e7131f8e72015E8a6CD20201BC6";
@@ -88,7 +91,7 @@ async function main() {
     console.log("━".repeat(70));
 
     const EulerV2Plugin = await ethers.getContractFactory("EulerV2Plugin", deployer);
-    const pluginTx = await EulerV2Plugin.deploy(BEACON_ADDRESS);
+    const pluginTx = await EulerV2Plugin.deploy(BEACON_ADDRESS, BASE_ASSET_CODE, ARBITRUM_ADDRESSES.EVC, ARBITRUM_ADDRESSES.ACCOUNT_LENS);
     const pluginReceipt = await pluginTx.deploymentTransaction()!.wait();
     const newPluginAddress = await pluginTx.getAddress();
     

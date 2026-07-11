@@ -7,12 +7,11 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./interfaces/IBeacon.sol";
-import "./interfaces/IWETH.sol";
 import "./interfaces/ITokenManagerForModules.sol";
 
 /**
  * @title ProxyGeneral
- * @dev Custode centrale di tutti gli asset (WETH + ERC20 tokens) + LP Token ERC20
+ * @dev Custode centrale di tutti gli asset (base asset + ERC20 tokens) + LP Token ERC20
  * @notice Contratto che gestisce la custodia asset, l'autorizzazione moduli e il controllo emergency
  * @custom:security-contact security@yourdomain.com
  */
@@ -21,6 +20,9 @@ contract ProxyGeneral is ERC20, Ownable, ReentrancyGuard {
     
     /// @notice Indirizzo del contratto Beacon per resolution moduli
     address public immutable beacon;
+    
+    /// @notice Base asset code for this pool (e.g. "WETH", "USDC", "WBTC")
+    string public baseAssetCode;
     
     /// @notice Flag per emergency pause di tutto il sistema
     bool public paused;
@@ -136,9 +138,11 @@ contract ProxyGeneral is ERC20, Ownable, ReentrancyGuard {
      * @dev Constructor che imposta il Beacon e inizializza LP token
      * @param _beacon Indirizzo del contratto Beacon
      */
-    constructor(address _beacon) ERC20("LP Token", "LPT") Ownable() {
+    constructor(address _beacon, string memory _baseAssetCode) ERC20("LP Token", "LPT") Ownable() {
         require(_beacon != address(0), "Invalid beacon address");
+        require(bytes(_baseAssetCode).length > 0, "Invalid base asset code");
         beacon = _beacon;
+        baseAssetCode = _baseAssetCode;
         paused = false;
     }
 
@@ -252,23 +256,7 @@ contract ProxyGeneral is ERC20, Ownable, ReentrancyGuard {
         require(amount > 0, "Invalid amount");
         require(to != address(0), "Invalid recipient");
         
-        address tokenAddress;
-        
-        // SPECIAL CASE: WETH is resolved via Beacon directly (not in TokenManager)
-        if (keccak256(bytes(tokenCode)) == keccak256(bytes("WETH"))) {
-            tokenAddress = IBeacon(beacon).getImplementation("WETH");
-            require(tokenAddress != address(0), "WETH not found in Beacon");
-        } else {
-            // RESOLVE OTHER TOKENS via TokenManager
-            address tokenManagerAddr = IBeacon(beacon).getImplementation("TokenManager");
-            require(tokenManagerAddr != address(0), "TokenManager not found");
-            
-            ITokenManagerForModules tokenManager = ITokenManagerForModules(tokenManagerAddr);
-            ITokenManagerForModules.TokenInfo memory tokenInfo = tokenManager.getTokenInfo(tokenCode);
-            
-            tokenAddress = tokenInfo.tokenAddress;
-            require(tokenAddress != address(0), "Invalid token address");
-        }
+        address tokenAddress = _resolveTokenAddress(tokenCode);
         
         // CHECK BALANCE
         uint256 currentBalance = IERC20(tokenAddress).balanceOf(address(this));
@@ -312,14 +300,30 @@ contract ProxyGeneral is ERC20, Ownable, ReentrancyGuard {
         require(amount > 0, "Invalid amount");
         require(from != address(0), "Invalid sender");
         
-        address tokenAddress;
+        address tokenAddress = _resolveTokenAddress(tokenCode);
         
-        // SPECIAL CASE: WETH is resolved via Beacon directly (not in TokenManager)
-        if (keccak256(bytes(tokenCode)) == keccak256(bytes("WETH"))) {
-            tokenAddress = IBeacon(beacon).getImplementation("WETH");
-            require(tokenAddress != address(0), "WETH not found in Beacon");
+        // EXECUTE TRANSFER FROM (SafeERC20 auto-reverts on failure)
+        IERC20(tokenAddress).safeTransferFrom(from, address(this), amount);
+        
+        // EMIT EVENT
+        emit TokenDeposited(tokenCode, amount, from);
+    }
+
+    // ==================== INTERNAL TOKEN RESOLUTION ====================
+
+    /**
+     * @notice Resolve token address from token code
+     * @dev Base asset is resolved via Beacon("BASE_ASSET"), other tokens via TokenManager
+     * @param tokenCode Token identifier (e.g. "WETH", "USDC", "WBTC")
+     * @return tokenAddress Resolved ERC20 address
+     */
+    function _resolveTokenAddress(string memory tokenCode) internal view returns (address tokenAddress) {
+        // Base asset is resolved via Beacon directly (not in TokenManager)
+        if (keccak256(bytes(tokenCode)) == keccak256(bytes(baseAssetCode))) {
+            tokenAddress = IBeacon(beacon).getImplementation("BASE_ASSET");
+            require(tokenAddress != address(0), "Base asset not found in Beacon");
         } else {
-            // RESOLVE OTHER TOKENS via TokenManager
+            // Other tokens resolved via TokenManager
             address tokenManagerAddr = IBeacon(beacon).getImplementation("TokenManager");
             require(tokenManagerAddr != address(0), "TokenManager not found");
             
@@ -329,12 +333,6 @@ contract ProxyGeneral is ERC20, Ownable, ReentrancyGuard {
             tokenAddress = tokenInfo.tokenAddress;
             require(tokenAddress != address(0), "Invalid token address");
         }
-        
-        // EXECUTE TRANSFER FROM (SafeERC20 auto-reverts on failure)
-        IERC20(tokenAddress).safeTransferFrom(from, address(this), amount);
-        
-        // EMIT EVENT
-        emit TokenDeposited(tokenCode, amount, from);
     }
 
     // ==================== SWAP SUPPORT ====================
@@ -461,16 +459,16 @@ contract ProxyGeneral is ERC20, Ownable, ReentrancyGuard {
     function emergencyTransferAll(address recipient) external onlyOwner whenPaused {
         require(recipient != address(0), "Invalid recipient");
         
-        // Transfer WETH
-        address wethAddress = IBeacon(beacon).getImplementation("WETH");
-        if (wethAddress != address(0)) {
-            uint256 wethBalance = IERC20(wethAddress).balanceOf(address(this));
-            if (wethBalance > 0) {
-                IERC20(wethAddress).transfer(recipient, wethBalance);
+        // Transfer base asset
+        address baseAssetAddr = IBeacon(beacon).getImplementation("BASE_ASSET");
+        if (baseAssetAddr != address(0)) {
+            uint256 baseBalance = IERC20(baseAssetAddr).balanceOf(address(this));
+            if (baseBalance > 0) {
+                IERC20(baseAssetAddr).safeTransfer(recipient, baseBalance);
             }
         }
         
-        // Transfer ETH se presente
+        // Transfer ETH se presente (from DepositHelper or other sources)
         uint256 ethBalance = address(this).balance;
         if (ethBalance > 0) {
             (bool success, ) = recipient.call{value: ethBalance}("");
@@ -697,7 +695,7 @@ contract ProxyGeneral is ERC20, Ownable, ReentrancyGuard {
      * @notice Accetta ETH diretto (per WETH unwrapping e depositi diretti)
      */
     receive() external payable {
-        // Accetta ETH silenziosamente per supportare WETH.withdraw() e depositi
+        // Accetta ETH per supportare DepositHelper wrapping e operazioni WETH
     }
 
     /**

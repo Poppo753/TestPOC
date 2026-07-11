@@ -34,6 +34,13 @@ describe("Integration: Deposit Flow", function () {
   const SMALL_DEPOSIT = ethers.parseEther("0.1");   // 0.1 ETH
   const DEFAULT_DEPOSIT_FEE = 100; // 1% (100 basis points)
 
+  // Helper: wrap ETH→WETH, approve, and deposit via ERC20 flow
+  async function depositWETH(signer: any, amount: bigint) {
+    await signer.sendTransaction({ to: mockWETH.target, value: amount });
+    await mockWETH.connect(signer).approve(liquidityManager.target, amount);
+    return liquidityManager.connect(signer).deposit(amount);
+  }
+
   async function deployIntegrationFixture() {
     const [owner, user1, user2, feeRecipient] = await ethers.getSigners();
 
@@ -58,30 +65,31 @@ describe("Integration: Deposit Flow", function () {
     const Beacon = await ethers.getContractFactory("Beacon");
     const beacon = await Beacon.deploy();
     await beacon.updateImplementation("WETH", mockWETH.target);
+    await beacon.updateImplementation("BASE_ASSET", mockWETH.target);
 
     // Deploy ChainlinkAdapter
     const ChainlinkAdapter = await ethers.getContractFactory("ChainlinkAdapter");
     const chainlinkAdapter = await ChainlinkAdapter.deploy();
     
     // Setup price feeds in ChainlinkAdapter
-    await chainlinkAdapter.setPriceFeed("USDC", mockOracle.target, 8, 3600);
-    await chainlinkAdapter.setPriceFeed("WBTC", mockOracle.target, 8, 3600);
+    await chainlinkAdapter.setPriceFeed("USDC", mockOracle.target, 8, 3600, "USD");
+    await chainlinkAdapter.setPriceFeed("WBTC", mockOracle.target, 8, 3600, "USD");
 
     // Deploy all core contracts
     const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
-    const proxyGeneral = await ProxyGeneral.deploy(beacon.target);
+    const proxyGeneral = await ProxyGeneral.deploy(beacon.target, "WETH");
 
     const TokenManager = await ethers.getContractFactory("TokenManager");
     const tokenManager = await TokenManager.deploy(beacon.target, chainlinkAdapter.target);
 
     const ValueCalculator = await ethers.getContractFactory("ValueCalculator");
-    const valueCalculator = await ValueCalculator.deploy(beacon.target);
+    const valueCalculator = await ValueCalculator.deploy(beacon.target, "WETH");
 
     const ParameterManager = await ethers.getContractFactory("ParameterManager");
-    const parameterManager = await ParameterManager.deploy(beacon.target);
+    const parameterManager = await ParameterManager.deploy(beacon.target, 18);
 
     const LiquidityManager = await ethers.getContractFactory("LiquidityManager");
-    const liquidityManager = await LiquidityManager.deploy(beacon.target);
+    const liquidityManager = await LiquidityManager.deploy(beacon.target, "WETH");
 
     // Register contracts in Beacon
     await beacon.updateImplementation("ProxyGeneral", proxyGeneral.target);
@@ -174,7 +182,7 @@ describe("Integration: Deposit Flow", function () {
     );
     
     // BOOTSTRAP POOL: Initial deposit from owner to establish LP shares baseline
-    await liquidityManager.connect(owner).deposit({ value: ethers.parseEther("10") });
+    await depositWETH(owner, ethers.parseEther("10"));
   });
 
   describe("⚡ HIGH: Complete Deposit Flow Tests", function () {
@@ -200,7 +208,7 @@ describe("Integration: Deposit Flow", function () {
       console.log(`   💰 Initial LP Price: ${initialLPPrice.toFixed(6)} ETH per LP token`);
       
       // Execute deposit
-      const tx = await liquidityManager.connect(user1).deposit({ value: depositAmount });
+      const tx = await depositWETH(user1, depositAmount);
       const receipt = await tx.wait();
       
       // Calculate metrics
@@ -252,7 +260,7 @@ describe("Integration: Deposit Flow", function () {
       console.log(`   💳 Depositing: ${ethers.formatEther(DEPOSIT_AMOUNT)} ETH`);
       
       // Execute deposit
-      const tx = await liquidityManager.connect(user1).deposit({ value: DEPOSIT_AMOUNT });
+      const tx = await depositWETH(user1, DEPOSIT_AMOUNT);
       const receipt = await tx.wait();
       
       // Get updated pool value
@@ -293,7 +301,7 @@ describe("Integration: Deposit Flow", function () {
       console.log(`   📍 ProxyGeneral Address: ${proxyGeneral.target.slice(0,10)}...`);
       
       // Execute deposit
-      const tx = await liquidityManager.connect(user1).deposit({ value: depositAmount });
+      const tx = await depositWETH(user1, depositAmount);
       const receipt = await tx.wait();
       
       // Calculate expected values
@@ -327,7 +335,7 @@ describe("Integration: Deposit Flow", function () {
       const expectedFee = (depositAmount * BigInt(DEFAULT_DEPOSIT_FEE)) / 10000n;
       
       // Get initial fee recipient ETH balance (not WETH - fees sent as ETH)
-      const initialFeeBalance = await ethers.provider.getBalance(feeRecipient.address);
+      const initialFeeBalance = await mockWETH.balanceOf(feeRecipient.address);
       const initialPoolValue = await valueCalculator.getTotalPoolValueView();
       const initialTotalSupply = await proxyGeneral.totalSupply();
       const initialLPPrice = initialTotalSupply > 0n ? Number(initialPoolValue) / Number(initialTotalSupply) : 0;
@@ -342,11 +350,11 @@ describe("Integration: Deposit Flow", function () {
       console.log(`   💰 Initial LP Price: ${initialLPPrice.toFixed(6)} ETH per LP token`);
       
       // Execute deposit
-      const tx = await liquidityManager.connect(user1).deposit({ value: depositAmount });
+      const tx = await depositWETH(user1, depositAmount);
       const receipt = await tx.wait();
       
       // Verify fee received as ETH
-      const finalFeeBalance = await ethers.provider.getBalance(feeRecipient.address);
+      const finalFeeBalance = await mockWETH.balanceOf(feeRecipient.address);
       const feeReceived = finalFeeBalance - initialFeeBalance;
       const finalPoolValue = await valueCalculator.getTotalPoolValueView();
       const finalTotalSupply = await proxyGeneral.totalSupply();
@@ -380,7 +388,7 @@ describe("Integration: Deposit Flow", function () {
       // First deposit from user1
       console.log(`\n🔸 DEPOSIT 1 - User1:`);
       console.log(`   💰 Amount: ${ethers.formatEther(DEPOSIT_AMOUNT)} ETH`);
-      const tx1 = await liquidityManager.connect(user1).deposit({ value: DEPOSIT_AMOUNT });
+      const tx1 = await depositWETH(user1, DEPOSIT_AMOUNT);
       const receipt1 = await tx1.wait();
       const supplyAfterFirst = await proxyGeneral.totalSupply();
       const user1BalanceFirst = await proxyGeneral.balanceOf(user1.address);
@@ -398,7 +406,7 @@ describe("Integration: Deposit Flow", function () {
       // Second deposit from user2
       console.log(`\n🔸 DEPOSIT 2 - User2:`);
       console.log(`   💰 Amount: ${ethers.formatEther(LARGE_DEPOSIT)} ETH (Large deposit)`);
-      const tx2 = await liquidityManager.connect(user2).deposit({ value: LARGE_DEPOSIT });
+      const tx2 = await depositWETH(user2, LARGE_DEPOSIT);
       const receipt2 = await tx2.wait();
       const supplyAfterSecond = await proxyGeneral.totalSupply();
       const user2Balance = await proxyGeneral.balanceOf(user2.address);
@@ -416,7 +424,7 @@ describe("Integration: Deposit Flow", function () {
       // Third deposit from user1 again
       console.log(`\n🔸 DEPOSIT 3 - User1 (again):`);
       console.log(`   💰 Amount: ${ethers.formatEther(SMALL_DEPOSIT)} ETH (Small deposit)`);
-      const tx3 = await liquidityManager.connect(user1).deposit({ value: SMALL_DEPOSIT });
+      const tx3 = await depositWETH(user1, SMALL_DEPOSIT);
       const receipt3 = await tx3.wait();
       const finalSupply = await proxyGeneral.totalSupply();
       const user1BalanceFinal = await proxyGeneral.balanceOf(user1.address);

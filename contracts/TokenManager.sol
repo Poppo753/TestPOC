@@ -3,6 +3,7 @@ pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "./interfaces/IBeacon.sol";
 import "./interfaces/IParameterManagerForModules.sol";
 import "./interfaces/IOracleAdapter.sol";
@@ -46,8 +47,11 @@ contract TokenManager is Ownable {
     /// @notice Massimo numero di token per operazione
     uint256 public maxTokensPerOperation = 10;
     
-    /// @notice Indirizzo del Beacon per resolution WETH
+    /// @notice Indirizzo del Beacon per resolution base asset
     address public immutable beacon;
+
+    /// @notice Code of the base asset (e.g., "USDC", "WETH") — set by owner
+    string public baseAssetCode;
 
     // ==================== EVENTS ====================
     
@@ -59,6 +63,7 @@ contract TokenManager is Ownable {
     event ErrorThresholdReached(string indexed tokenCode);
     event TokenErrorsReset(string indexed tokenCode);
     event OracleAdapterUpdated(address indexed oldAdapter, address indexed newAdapter);
+    event BaseAssetCodeSet(string baseAssetCode);
 
     // ==================== CONSTRUCTOR ====================
 
@@ -91,6 +96,18 @@ contract TokenManager is Ownable {
         emit OracleAdapterUpdated(oldAdapter, _newAdapter);
     }
 
+    /**
+     * @notice Sets the base asset code used for price lookups
+     * @dev Owner only — must match a token supported by the oracle adapter
+     * @param _code The base asset code (e.g., "USDC", "WETH", "WBTC")
+     */
+    function setBaseAssetCode(string memory _code) external onlyOwner {
+        require(bytes(_code).length > 0 && bytes(_code).length <= 16, "Invalid code");
+        require(oracleAdapter.supportsToken(_code), "Token not supported by oracle");
+        baseAssetCode = _code;
+        emit BaseAssetCodeSet(_code);
+    }
+
     // ==================== TOKEN MANAGEMENT ====================
 
     /**
@@ -115,9 +132,10 @@ contract TokenManager is Ownable {
         // VERIFY ORACLE SUPPORTS TOKEN (NEW VALIDATION)
         require(oracleAdapter.supportsToken(_tokenCode), "Token not supported by oracle");
         
-        // WETH EXCLUSION CHECK (CRITICO)
-        address wethAddress = IBeacon(beacon).getImplementation("WETH");
-        require(_tokenAddress != wethAddress, "Cannot add WETH as token");
+        // BASE ASSET EXCLUSION CHECK (CRITICO)
+        // Il base asset (WETH, USDC, etc.) è risolto via Beacon, non registrato qui
+        address baseAsset = IBeacon(beacon).getImplementation("BASE_ASSET");
+        require(_tokenAddress != baseAsset, "Cannot add base asset as token");
         
         // MAX TOKENS LIMIT CHECK
         if (!tokenData[_tokenCode].isActive) {
@@ -171,9 +189,9 @@ contract TokenManager is Ownable {
         // VERIFY ORACLE SUPPORTS TOKEN
         require(oracleAdapter.supportsToken(_tokenCode), "Token not supported by oracle");
         
-        // WETH EXCLUSION CHECK (CRITICO)
-        address wethAddress = IBeacon(beacon).getImplementation("WETH");
-        require(_tokenAddress != wethAddress, "Cannot add WETH as token");
+        // BASE ASSET EXCLUSION CHECK (CRITICO)
+        address baseAsset = IBeacon(beacon).getImplementation("BASE_ASSET");
+        require(_tokenAddress != baseAsset, "Cannot add base asset as token");
         
         // MAX TOKENS LIMIT CHECK
         if (!tokenData[_tokenCode].isActive) {
@@ -389,6 +407,60 @@ contract TokenManager is Ownable {
     function getTokenPriceForModule(string memory _tokenCode) external view returns (uint256) {
         (uint256 price, , ) = getTokenPrice(_tokenCode);
         return price;
+    }
+
+    /**
+     * @notice Gets the base asset price from oracle adapter
+     * @dev Returns the price of the configured base asset (set via setBaseAssetCode).
+     *      Bypasses token registration check since base asset is intentionally excluded
+     *      from TokenManager registration (to avoid error tracking/heartbeat interference).
+     * @return price Current base asset price from oracle adapter (18 decimals normalized)
+     */
+    function getBaseAssetPrice() external view returns (uint256) {
+        require(bytes(baseAssetCode).length > 0, "Base asset code not set");
+        (uint256 price, , bool isValid) = oracleAdapter.getPrice(baseAssetCode);
+        require(isValid, "Oracle price invalid");
+        return price;
+    }
+
+    /**
+     * @notice Converts a USD-denominated value to base asset units
+     * @dev Used by LensAdapters for protocols that return aggregated USD values
+     *      (Aave, Compound, GMX). Formula uses overflow-safe variable exponent.
+     *      The base asset price is fetched from the oracle adapter (18-dec normalized).
+     * @param valueInUsd The value in USD (with usdDecimals precision)
+     * @param usdDecimals Number of decimals in the USD value (8 for Aave/Compound, 30 for GMX)
+     * @return Value in base asset units (with baseDecimals precision)
+     */
+    function convertUsdToBaseAsset(
+        uint256 valueInUsd,
+        uint8 usdDecimals
+    ) external view returns (uint256) {
+        if (valueInUsd == 0) return 0;
+        require(bytes(baseAssetCode).length > 0, "Base asset code not set");
+
+        // Base asset price in USD, normalized to 18 decimals.
+        // IMPORTANT: We use getPriceInUsd (not getPrice) because the base asset price
+        // must be expressed in USD to convert a USD value, regardless of the oracle's
+        // targetDenomination. getPrice would return a denomination-relative price
+        // (e.g. 1.0 when base asset == targetDenomination), which is wrong here.
+        (uint256 baseAssetPrice, , bool isValid) = oracleAdapter.getPriceInUsd(baseAssetCode);
+        require(isValid, "Oracle price invalid");
+        if (baseAssetPrice == 0) return 0;
+
+        // Base asset decimals (6 for USDC, 18 for WETH, 8 for WBTC)
+        address baseAsset = IBeacon(beacon).getImplementation("BASE_ASSET");
+        uint8 baseDecimals = IERC20Metadata(baseAsset).decimals();
+
+        // Overflow-safe formula with variable exponent
+        // exponent = baseDecimals + 18 - usdDecimals
+        int256 exponent = int256(uint256(baseDecimals)) + 18 - int256(uint256(usdDecimals));
+
+        if (exponent >= 0) {
+            return (valueInUsd * (10 ** uint256(exponent))) / baseAssetPrice;
+        } else {
+            return valueInUsd / (baseAssetPrice * (10 ** uint256(-exponent)));
+        }
     }
 
     /**

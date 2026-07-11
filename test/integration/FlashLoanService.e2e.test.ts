@@ -275,6 +275,17 @@ describe("FlashLoanService + EulerV2Plugin - Atomic Leverage E2E", function () {
             // Register existing TokenManager as ProtocolManager (for plugin authorization)
             await (await beaconAsOwner.updateImplementation("ProtocolManager", ADDRESSES.TOKEN_MANAGER)).wait();
             console.log(`   ✅ TokenManager registered as ProtocolManager`);
+
+            // Deploy MockTokenManager with prices for FlashLoanService fallback
+            const MockTokenManagerFactory = await ethers.getContractFactory("MockTokenManager");
+            const mockTokenManager = await MockTokenManagerFactory.deploy();
+            await mockTokenManager.waitForDeployment();
+            await mockTokenManager.setTokenAddress("WETH", ADDRESSES.WETH);
+            await mockTokenManager.setTokenAddress("USDC", ADDRESSES.USDC);
+            await mockTokenManager.setTokenPrice("WETH", ethers.parseUnits("3000", 8)); // $3000
+            await mockTokenManager.setTokenPrice("USDC", ethers.parseUnits("1", 8));    // $1
+            await (await beaconAsOwner.updateImplementation("TokenManager", await mockTokenManager.getAddress())).wait();
+            console.log(`   ✅ MockTokenManager registered with prices`);
         });
         
         it("Should deploy FlashLoanService", async function () {
@@ -302,7 +313,7 @@ describe("FlashLoanService + EulerV2Plugin - Atomic Leverage E2E", function () {
             console.log("\n   Deploying EulerV2Plugin...");
             
             const EulerV2Plugin = await ethers.getContractFactory("EulerV2Plugin");
-            eulerV2Plugin = await EulerV2Plugin.deploy(ADDRESSES.BEACON);
+            eulerV2Plugin = await EulerV2Plugin.deploy(ADDRESSES.BEACON, "WETH");
             await eulerV2Plugin.waitForDeployment();
             
             const address = await eulerV2Plugin.getAddress();

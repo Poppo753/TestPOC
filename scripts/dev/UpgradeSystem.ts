@@ -124,7 +124,21 @@ export class UpgradeSystemScript extends BaseScript {
 
     const beaconAddr = await this.contracts.beacon.getAddress();
     const ModuleFactory = await ethers.getContractFactory(this.upgradeOptions.module);
-    const newModule = await ModuleFactory.deploy(beaconAddr);
+
+    // Modules requiring baseAssetCode or baseDecimals
+    const modulesNeedingBaseAssetCode = [
+      "SwapManager", "ValueCalculator", "LiquidityManager", "ProxyGeneral",
+      "MorphoLensAdapter", "EulerLensAdapter", "AaveV3LensAdapter", "MorphoVaultLensAdapter",
+      "EulerV2Plugin", "AaveV3Plugin", "MorphoPlugin"
+    ];
+    let newModule;
+    if (this.upgradeOptions.module === "ParameterManager") {
+      newModule = await ModuleFactory.deploy(beaconAddr, 6); // baseDecimals for USDC
+    } else if (modulesNeedingBaseAssetCode.includes(this.upgradeOptions.module)) {
+      newModule = await ModuleFactory.deploy(beaconAddr, "USDC");
+    } else {
+      newModule = await ModuleFactory.deploy(beaconAddr);
+    }
     await newModule.waitForDeployment();
 
     this.newImplementation = await newModule.getAddress();

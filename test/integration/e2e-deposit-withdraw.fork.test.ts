@@ -38,6 +38,8 @@ const FORK_ENABLED = process.env.FORK_ENABLED === "true";
 
     // USDC whale on Arbitrum (EOA with ~2.5M USDC)
     const USDC_WHALE = "0x1AB4973a48dc892Cd9971ECE8e01DcC7688f8F23";
+    // WETH whale on Arbitrum
+    const WETH_WHALE = "0xC3E5607Cd4ca0D5Fe51e09B60Ed97a0Ae6F874dd";
 
     // Amounts
     const WETH_DEPOSIT = ethers.parseEther("0.0005");   // 0.0005 WETH (~$1.25)
@@ -140,6 +142,19 @@ const FORK_ENABLED = process.env.FORK_ENABLED === "true";
         await network.provider.request({
             method: "hardhat_stopImpersonatingAccount",
             params: [USDC_WHALE],
+        });
+
+        // Fund ProxyGeneral with WETH from whale
+        await network.provider.request({
+            method: "hardhat_impersonateAccount",
+            params: [WETH_WHALE],
+        });
+        const wethWhale = await ethers.getSigner(WETH_WHALE);
+        await network.provider.send("hardhat_setBalance", [WETH_WHALE, ethers.toQuantity(ethers.parseEther("10"))]);
+        await weth.connect(wethWhale).transfer(PROXY_GENERAL, ethers.parseEther("0.01"));
+        await network.provider.request({
+            method: "hardhat_stopImpersonatingAccount",
+            params: [WETH_WHALE],
         });
 
         console.log("\n=== Pre-Test Balances ===");

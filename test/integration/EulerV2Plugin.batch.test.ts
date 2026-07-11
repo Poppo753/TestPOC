@@ -14,7 +14,7 @@ import { Contract, Signer } from "ethers";
  * 5. ClosePosition (batch atomico: repay + disableController + redeem + disableCollateral)
  * 6. OpenLeverageAtomic (flash loan + batch: enableCollateral, deposit, enableController, borrow)
  * 7. CloseLeverageAtomic (flash loan + batch: repay, redeem, disableController, disableCollateral)
- * 8. ClosePositionsForWeth (self-call pattern per liquidazioni)
+ * 8. ClosePositionsForBaseAsset (self-call pattern per liquidazioni)
  * 9. Circuit Breaker, Access Control, Edge cases
  * 
  * REQUISITI:
@@ -113,12 +113,13 @@ describe("EulerV2Plugin — EVC Batch Integration Tests", function () {
         await beacon.setImplementation("ProxyGeneral", await mockProxyGeneral.getAddress());
         await beacon.setImplementation("EulerRegistry", await registry.getAddress());
         await beacon.setImplementation("WETH", WETH);
+        await beacon.setImplementation("BASE_ASSET", WETH);
         await beacon.setImplementation("ProtocolManager", ownerAddress);
 
         // ==================== DEPLOY PLUGIN ====================
 
         const PluginFactory = await ethers.getContractFactory("EulerV2Plugin");
-        plugin = await PluginFactory.deploy(await beacon.getAddress());
+        plugin = await PluginFactory.deploy(await beacon.getAddress(), "WETH");
         await plugin.waitForDeployment();
 
         // Transfer registry ownership to plugin (needed for createPositionOnDemand)

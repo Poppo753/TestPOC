@@ -453,6 +453,50 @@ contract ChainlinkAdapter is IOracleAdapter, Ownable {
     
     /**
      * @inheritdoc IOracleAdapter
+     * @dev Returns the raw USD-denominated feed price normalized to 18 decimals,
+     *      WITHOUT applying denomination conversion. The token's feed must be
+     *      denominated in "USD". Used for USD→baseAsset conversions where the base
+     *      asset price must always be in USD terms regardless of targetDenomination.
+     */
+    function getPriceInUsd(string memory tokenCode)
+        external
+        view
+        override
+        returns (
+            uint256 price,
+            uint256 timestamp,
+            bool isValid
+        )
+    {
+        PriceFeedConfig memory config = priceFeeds[tokenCode];
+
+        if (!config.isActive) {
+            revert TokenNotSupported(tokenCode);
+        }
+
+        // Feed must be USD-denominated for a meaningful USD price
+        require(
+            keccak256(bytes(config.denomination)) == keccak256(bytes("USD")),
+            "Feed not USD-denominated"
+        );
+
+        if (config.errorCount >= maxErrorThreshold) {
+            return (0, block.timestamp, false);
+        }
+
+        (uint256 rawPrice, uint256 rawTimestamp, bool rawValid) = _getRawPrice(config);
+
+        if (!rawValid) {
+            return (0, rawTimestamp, false);
+        }
+
+        // Normalize to 18 decimals (no denomination conversion)
+        uint256 normalizedPrice = rawPrice * (10 ** (18 - config.decimals));
+        return (normalizedPrice, rawTimestamp, true);
+    }
+
+    /**
+     * @inheritdoc IOracleAdapter
      * @dev Always returns 18 decimals since prices are normalized to ETH format
      */
     function getPriceDecimals(string memory tokenCode)

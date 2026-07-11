@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jethos Protocol — Modular ETH Yield on Arbitrum</title>
-    <meta name="description" content="Deposit ETH. Let Jethos allocate across battle-tested DeFi strategies automatically. Modular, audited, non-custodial.">
+    <title>Jethos Protocol — Universal DeFi Yield Aggregator on Arbitrum</title>
+    <meta name="description" content="One deposit, every protocol. Jethos routes your assets across Aave, Euler, Morpho and more — automatically, non-custodially, on Arbitrum.">
     <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
     <meta name="googlebot" content="noindex, nofollow">
 
@@ -325,7 +325,10 @@
             </a>
             <div class="hidden md:flex items-center gap-1">
                 <a href="#how-it-works" class="px-3 py-1.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all">How It Works</a>
+                <a href="#pools" class="px-3 py-1.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all">Pools</a>
                 <a href="#plugins" class="px-3 py-1.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all">Plugins</a>
+                <a href="#architecture" class="px-3 py-1.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all">Architecture</a>
+                <a href="#pyramid" class="px-3 py-1.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all">Pyramid</a>
                 <a href="#roadmap" class="px-3 py-1.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all">Roadmap</a>
                 <a href="#security" class="px-3 py-1.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all">Security</a>
                 <a href="documentation.html" class="px-3 py-1.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all">Docs</a>
@@ -339,7 +342,10 @@
     <div id="mobile-menu" class="md:hidden hidden bg-gray-900/98 backdrop-blur-xl border-t border-white/10">
         <div class="px-4 py-3 space-y-1">
             <a href="#how-it-works" class="block px-4 py-3 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10">How It Works</a>
+            <a href="#pools" class="block px-4 py-3 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10">Pools</a>
             <a href="#plugins" class="block px-4 py-3 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10">Plugins</a>
+            <a href="#architecture" class="block px-4 py-3 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10">Architecture</a>
+            <a href="#pyramid" class="block px-4 py-3 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10">Pyramid</a>
             <a href="#roadmap" class="block px-4 py-3 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10">Roadmap</a>
             <a href="#security" class="block px-4 py-3 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10">Security</a>
             <a href="documentation.html" class="block px-4 py-3 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10">Docs</a>
@@ -360,12 +366,12 @@
 
     <div class="relative z-10 text-center px-4 sm:px-6 max-w-4xl mx-auto">
         <h1 class="text-4xl sm:text-5xl lg:text-7xl font-extrabold text-white mb-6 leading-tight opacity-0 animate-fade-in-up" style="animation-fill-mode:forwards">
-            The Modular ETH Yield<br>
-            <span class="bg-gradient-to-r from-purple-400 via-indigo-400 to-blue-400 bg-clip-text text-transparent">Protocol on Arbitrum</span>
+            One Deposit. Every Protocol.<br>
+            <span class="bg-gradient-to-r from-purple-400 via-indigo-400 to-blue-400 bg-clip-text text-transparent">Maximum Yield on Arbitrum</span>
         </h1>
         <p class="text-lg sm:text-xl text-white/70 max-w-2xl mx-auto mb-10 opacity-0 animate-fade-in-up-delayed" style="animation-fill-mode:forwards">
-            Deposit ETH. Let Jethos allocate across battle-tested DeFi strategies automatically.<br class="hidden sm:inline">
-            Modular. Audited. Non-custodial.
+            Deposit ETH, USDC or WBTC into isolated pools — each one routes capital across Aave, Euler, Morpho and more via modular plugins.<br class="hidden sm:inline">
+            Non-custodial. Auto-compounding. No lock-ups.
         </p>
         <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
             <a href="index.html"
@@ -402,7 +408,7 @@
                 <p id="stat-apy" class="text-2xl sm:text-3xl font-bold text-green-400 counter">—</p>
             </div>
             <div>
-                <p class="text-xs uppercase tracking-wider text-white/50 mb-1">Active Plugins</p>
+                <p class="text-xs uppercase tracking-wider text-white/50 mb-1">Active Protocols</p>
                 <p id="stat-plugins" class="text-2xl sm:text-3xl font-bold text-purple-400 counter">5</p>
             </div>
             <div>
@@ -422,9 +428,9 @@
 <section id="how-it-works" class="relative z-10 py-24 sm:py-32 px-4">
     <div class="max-w-6xl mx-auto">
         <div class="text-center mb-16 reveal">
-            <p class="text-purple-400 font-semibold text-sm uppercase tracking-widest mb-3">Simple & Transparent</p>
+            <p class="text-purple-400 font-semibold text-sm uppercase tracking-widest mb-3">Simple by Design</p>
             <h2 class="text-3xl sm:text-5xl font-bold text-white mb-4">How It Works</h2>
-            <p class="text-white/50 max-w-xl mx-auto">Three steps. No complexity. Your ETH works across the best DeFi protocols simultaneously.</p>
+            <p class="text-white/50 max-w-xl mx-auto">Three steps. Your capital is distributed across Aave, Euler, Morpho and every future protocol — simultaneously, automatically.</p>
         </div>
 
         <!-- Desktop: Animated conveyor-belt pipeline -->
@@ -479,7 +485,7 @@
                     </g>
                     <!-- Label -->
                     <text x="160" y="235" text-anchor="middle" fill="#c084fc" font-size="12" font-weight="700" letter-spacing="2">DEPOSIT</text>
-                    <text x="160" y="253" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="10">ETH → JHETH</text>
+                    <text x="160" y="253" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="10">Asset → JH-token</text>
                 </g>
 
                 <!-- ═══ STATION 2: ROUTING ENGINE ═══ -->
@@ -516,8 +522,8 @@
                         <text x="-30" y="12" fill="rgba(255,255,255,0.35)" font-size="8">Aave</text>
                         <text x="8" y="12" fill="rgba(255,255,255,0.35)" font-size="8">Uni</text>
                     </g>
-                    <text x="510" y="250" text-anchor="middle" fill="#a5b4fc" font-size="12" font-weight="700" letter-spacing="2">ROUTE</text>
-                    <text x="510" y="265" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="10">Beacon Engine</text>
+                    <text x="510" y="250" text-anchor="middle" fill="#a5b4fc" font-size="12" font-weight="700" letter-spacing="2">ALLOCATE</text>
+                    <text x="510" y="265" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="10">Beacon System</text>
                 </g>
 
                 <!-- ═══ STATION 3: YIELD OUTPUT ═══ -->
@@ -542,7 +548,7 @@
                         <line x1="-30" y1="2" x2="35" y2="2" stroke="#34d399" stroke-width="1" opacity="0.4"/>
                     </g>
                     <text x="940" y="235" text-anchor="middle" fill="#34d399" font-size="12" font-weight="700" letter-spacing="2">EARN</text>
-                    <text x="940" y="253" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="10">Auto-compound</text>
+                    <text x="940" y="253" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="10">Auto-Compound</text>
                 </g>
 
                 <!-- ═══ FLOWING TOKENS along belt ═══ -->
@@ -583,9 +589,9 @@
                         <span class="w-5 h-5 bg-purple-500/30 rounded-full flex items-center justify-center text-[10px] font-bold">1</span>
                         DEPOSIT
                     </div>
-                    <h3 class="text-xl font-bold text-white mb-3">Deposit ETH</h3>
+                    <h3 class="text-xl font-bold text-white mb-3">Deposit Your Asset</h3>
                     <p class="text-white/50 text-sm leading-relaxed">
-                        Connect your wallet and deposit ETH. You receive <strong class="text-purple-300">JHETH</strong> tokens representing your share of the pool.
+                        Deposit ETH, USDC or WBTC into dedicated pools. You receive a <strong class="text-purple-300">JH-token</strong> (JH-ETH, JH-USDC, JH-WBTC) — a yield-bearing receipt representing your share.
                     </p>
                     <div class="mt-4 flex items-center justify-center gap-2 text-xs text-white/30">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
@@ -604,9 +610,9 @@
                         <span class="w-5 h-5 bg-indigo-500/30 rounded-full flex items-center justify-center text-[10px] font-bold">2</span>
                         ALLOCATE
                     </div>
-                    <h3 class="text-xl font-bold text-white mb-3">Strategies Execute</h3>
+                    <h3 class="text-xl font-bold text-white mb-3">Beacon Allocates</h3>
                     <p class="text-white/50 text-sm leading-relaxed">
-                        Jethos routes funds via <strong class="text-indigo-300">modular plugins</strong> — Morpho, Euler, Aave, Uniswap — for optimized, diversified yield.
+                        The <strong class="text-indigo-300">Beacon system</strong> routes capital across plugins — Morpho, Euler V2, Aave V3 — optimizing allocation in real time with per-protocol risk monitoring.
                     </p>
                     <div class="mt-4 flex flex-wrap items-center justify-center gap-1.5">
                         <span class="text-[10px] bg-white/5 text-white/40 rounded px-1.5 py-0.5 border border-white/10">Morpho</span>
@@ -627,9 +633,9 @@
                         <span class="w-5 h-5 bg-green-500/30 rounded-full flex items-center justify-center text-[10px] font-bold">3</span>
                         EARN
                     </div>
-                    <h3 class="text-xl font-bold text-white mb-3">Earn Yield</h3>
+                    <h3 class="text-xl font-bold text-white mb-3">Earn & Withdraw</h3>
                     <p class="text-white/50 text-sm leading-relaxed">
-                        Withdraw anytime. Your <strong class="text-green-300">JHETH grows in value</strong> as strategies generate returns. No lock-ups.
+                        Withdraw anytime. Your <strong class="text-green-300">JH-token continuously appreciates</strong> as protocol yields auto-compound across every integration. No lock-ups, no permissions required.
                     </p>
                     <div class="mt-4 flex items-center justify-center gap-2 text-xs text-white/30">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
@@ -650,8 +656,8 @@
                     </div>
                     <div>
                         <div class="text-purple-400 font-bold text-xs mb-1">STEP 1 — DEPOSIT</div>
-                        <h3 class="text-lg font-bold text-white mb-1">Deposit ETH</h3>
-                        <p class="text-white/50 text-sm">Connect wallet, deposit ETH, receive <strong class="text-purple-300">JHETH</strong> tokens.</p>
+                        <h3 class="text-lg font-bold text-white mb-1">Deposit Your Asset</h3>
+                        <p class="text-white/50 text-sm">Deposit any supported asset — receive a <strong class="text-purple-300">JH-token</strong> (JH-ETH, JH-USDC…) yield-bearing receipt.</p>
                     </div>
                 </div>
             </div>
@@ -668,8 +674,8 @@
                     </div>
                     <div>
                         <div class="text-indigo-400 font-bold text-xs mb-1">STEP 2 — ALLOCATE</div>
-                        <h3 class="text-lg font-bold text-white mb-1">Strategies Execute</h3>
-                        <p class="text-white/50 text-sm">Funds routed via <strong class="text-indigo-300">modular plugins</strong> for diversified yield.</p>
+                        <h3 class="text-lg font-bold text-white mb-1">Beacon Allocates</h3>
+                        <p class="text-white/50 text-sm">Capital distributed via <strong class="text-indigo-300">modular plugins</strong> across all active protocols simultaneously.</p>
                     </div>
                 </div>
             </div>
@@ -686,8 +692,8 @@
                     </div>
                     <div>
                         <div class="text-green-400 font-bold text-xs mb-1">STEP 3 — EARN</div>
-                        <h3 class="text-lg font-bold text-white mb-1">Earn Yield</h3>
-                        <p class="text-white/50 text-sm"><strong class="text-green-300">JHETH grows</strong> as strategies generate returns. No lock-ups.</p>
+                        <h3 class="text-lg font-bold text-white mb-1">Earn & Withdraw</h3>
+                        <p class="text-white/50 text-sm">Your <strong class="text-green-300">JH-token appreciates</strong> continuously. Withdraw any time — no lock-ups.</p>
                     </div>
                 </div>
             </div>
@@ -703,13 +709,90 @@
                 <svg class="w-6 h-4 text-white/20 hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 16"><path stroke-linecap="round" stroke-width="2" d="M1 8h20m0 0l-5-5m5 5l-5 5"/></svg>
                 <div class="flex items-center gap-2">
                     <span class="w-8 h-8 bg-indigo-500/20 border border-indigo-500/30 rounded-lg flex items-center justify-center text-indigo-400 text-xs">⚡</span>
-                    <span class="text-white/60">Beacon routes to plugins</span>
+                    <span class="text-white/60">Beacon distributes across protocols</span>
                 </div>
                 <svg class="w-6 h-4 text-white/20 hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 16"><path stroke-linecap="round" stroke-width="2" d="M1 8h20m0 0l-5-5m5 5l-5 5"/></svg>
                 <div class="flex items-center gap-2">
                     <span class="w-8 h-8 bg-green-500/20 border border-green-500/30 rounded-lg flex items-center justify-center text-green-400 font-bold text-xs">↑</span>
-                    <span class="text-white/60">JHETH value increases</span>
+                    <span class="text-white/60">JH-token appreciates continuously</span>
                 </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 3B — MULTI-POOL ARCHITECTURE
+     ═══════════════════════════════════════════════════════════════ -->
+<section id="pools" class="relative z-10 py-24 sm:py-32 px-4">
+    <div class="max-w-6xl mx-auto">
+        <div class="text-center mb-16 reveal">
+            <p class="text-indigo-400 font-semibold text-sm uppercase tracking-widest mb-3">One Architecture, Many Assets</p>
+            <h2 class="text-3xl sm:text-5xl font-bold text-white mb-4">Multi-Pool Design</h2>
+            <p class="text-white/50 max-w-2xl mx-auto">
+                Each asset class gets its own isolated pool with a dedicated <strong class="text-indigo-300">JH-token</strong>. Same 9 core contracts, same plugins — different base asset. Deploy a new pool in one transaction.
+            </p>
+        </div>
+
+        <!-- Pool cards grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-12">
+            <!-- ETH Pool -->
+            <div class="reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-2xl p-6 sm:p-8 text-center hover:border-purple-500/40 transition-all duration-300 group">
+                <div class="w-16 h-16 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-purple-500/20 to-indigo-500/20 border border-purple-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <span class="text-3xl">⟠</span>
+                </div>
+                <h3 class="text-xl font-bold text-white mb-1">ETH Pool</h3>
+                <p class="text-purple-400 font-semibold text-sm mb-3">JH-ETH</p>
+                <p class="text-white/40 text-sm leading-relaxed">Deposit ETH or WETH. Capital lent across Aave, Euler, Morpho for optimized ETH yield.</p>
+                <div class="mt-4 flex flex-wrap items-center justify-center gap-1.5">
+                    <span class="text-[10px] bg-green-500/10 text-green-400 rounded px-2 py-0.5 border border-green-500/20">Live</span>
+                    <span class="text-[10px] bg-white/5 text-white/30 rounded px-2 py-0.5 border border-white/10">Aave</span>
+                    <span class="text-[10px] bg-white/5 text-white/30 rounded px-2 py-0.5 border border-white/10">Euler</span>
+                    <span class="text-[10px] bg-white/5 text-white/30 rounded px-2 py-0.5 border border-white/10">Morpho</span>
+                </div>
+            </div>
+            <!-- USDC Pool -->
+            <div class="reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-2xl p-6 sm:p-8 text-center hover:border-blue-500/40 transition-all duration-300 group" style="transition-delay:0.1s">
+                <div class="w-16 h-16 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <span class="text-3xl">💲</span>
+                </div>
+                <h3 class="text-xl font-bold text-white mb-1">USDC Pool</h3>
+                <p class="text-blue-400 font-semibold text-sm mb-3">JH-USDC</p>
+                <p class="text-white/40 text-sm leading-relaxed">Stablecoin yield — lend USDC across the same protocol set for consistent, lower-risk returns.</p>
+                <div class="mt-4 flex flex-wrap items-center justify-center gap-1.5">
+                    <span class="text-[10px] bg-yellow-500/10 text-yellow-400 rounded px-2 py-0.5 border border-yellow-500/20">Q2 2026</span>
+                    <span class="text-[10px] bg-white/5 text-white/30 rounded px-2 py-0.5 border border-white/10">Aave</span>
+                    <span class="text-[10px] bg-white/5 text-white/30 rounded px-2 py-0.5 border border-white/10">Morpho</span>
+                    <span class="text-[10px] bg-white/5 text-white/30 rounded px-2 py-0.5 border border-white/10">Euler</span>
+                </div>
+            </div>
+            <!-- WBTC Pool -->
+            <div class="reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-2xl p-6 sm:p-8 text-center hover:border-orange-500/40 transition-all duration-300 group" style="transition-delay:0.2s">
+                <div class="w-16 h-16 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-orange-500/20 to-amber-500/20 border border-orange-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <span class="text-3xl">₿</span>
+                </div>
+                <h3 class="text-xl font-bold text-white mb-1">WBTC Pool</h3>
+                <p class="text-orange-400 font-semibold text-sm mb-3">JH-WBTC</p>
+                <p class="text-white/40 text-sm leading-relaxed">Bitcoin-denominated yield — hold BTC exposure while earning across lending protocols.</p>
+                <div class="mt-4 flex flex-wrap items-center justify-center gap-1.5">
+                    <span class="text-[10px] bg-yellow-500/10 text-yellow-400 rounded px-2 py-0.5 border border-yellow-500/20">Q2 2026</span>
+                    <span class="text-[10px] bg-white/5 text-white/30 rounded px-2 py-0.5 border border-white/10">Aave</span>
+                    <span class="text-[10px] bg-white/5 text-white/30 rounded px-2 py-0.5 border border-white/10">Morpho</span>
+                    <span class="text-[10px] bg-white/5 text-white/30 rounded px-2 py-0.5 border border-white/10">Euler</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Shared core explainer -->
+        <div class="reveal">
+            <div class="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-white/10 rounded-xl p-5 sm:p-6 flex flex-col sm:flex-row items-center gap-4 sm:gap-8" style="background: linear-gradient(to right, rgba(99,102,241,0.12), rgba(168,85,247,0.12)); border-color: rgba(255,255,255,0.12);">
+                <div class="flex items-center gap-3 flex-shrink-0">
+                    <svg class="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+                    <span class="text-indigo-300 font-bold text-sm">Same Core</span>
+                </div>
+                <p class="text-white/50 text-sm leading-relaxed">
+                    Every pool runs the same 9 core contracts (Beacon, ProxyGeneral, LiquidityManager, ProtocolManager, TokenManager, ValueCalculator, SwapManager, ParameterManager, EmergencyHandler) and every plugin integration. A new pool type is just a new <code class="text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded text-xs">baseAsset</code> configuration — no new code required.
+                </p>
             </div>
         </div>
     </div>
@@ -722,10 +805,9 @@
     <div class="max-w-6xl mx-auto">
         <div class="text-center mb-6 reveal">
             <p class="text-purple-400 font-semibold text-sm uppercase tracking-widest mb-3">Modular Architecture</p>
-            <h2 class="text-3xl sm:text-5xl font-bold text-white mb-4">Plugin Ecosystem</h2>
+            <h2 class="text-3xl sm:text-5xl font-bold text-white mb-4">Protocol Integrations</h2>
             <p class="text-white/50 max-w-2xl mx-auto">
-                The <strong class="text-purple-300">Beacon System</strong> lets Jethos add new yield sources without changing the core contract. 
-                Each plugin is an independent, auditable strategy module.
+                Every integration follows the <strong class="text-purple-300">3 Musketeers pattern</strong> — Registry, Plugin, LensAdapter — written once, working across all pool types and all supported chains. New protocols join without touching the core.
             </p>
         </div>
 
@@ -733,7 +815,7 @@
         <div class="flex justify-center mb-12 reveal">
             <div class="inline-flex items-center gap-2 bg-purple-500/10 border border-purple-500/30 rounded-full px-5 py-2 text-sm text-purple-300">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                Upgradeable via Beacon pattern — zero downtime, zero migration
+                Beacon upgrades — add new protocols with zero downtime, zero fund migration
             </div>
         </div>
 
@@ -752,7 +834,7 @@
         <div class="text-center mb-6 reveal">
             <p class="text-purple-400 font-semibold text-sm uppercase tracking-widest mb-3">The Path Forward</p>
             <h2 class="text-3xl sm:text-5xl font-bold text-white mb-4">Roadmap</h2>
-            <p class="text-white/50 max-w-xl mx-auto">Building the most modular and capital-efficient yield protocol on Arbitrum.</p>
+            <p class="text-white/50 max-w-xl mx-auto">From single-asset vault to a universal multi-pool, multi-chain, multi-protocol aggregator — built progressively, one abstraction at a time.</p>
         </div>
 
         <!-- F1 CIRCUIT (Desktop) — car animated by JS on scroll -->
@@ -865,14 +947,289 @@
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════════
+     SECTION 5B — UNDER THE HOOD (9 Core Contracts)
+     ═══════════════════════════════════════════════════════════════ -->
+<section id="architecture" class="relative z-10 py-24 sm:py-32 px-4 bg-gradient-to-b from-transparent via-indigo-950/20 to-transparent">
+    <div class="max-w-6xl mx-auto">
+        <div class="text-center mb-16 reveal">
+            <p class="text-cyan-400 font-semibold text-sm uppercase tracking-widest mb-3">Under the Hood</p>
+            <h2 class="text-3xl sm:text-5xl font-bold text-white mb-4">9 Core Contracts</h2>
+            <p class="text-white/50 max-w-2xl mx-auto">
+                Every pool is powered by the same modular contract stack. Each contract has a single responsibility — no monoliths, no god contracts. Plugins connect via the Beacon registry and never touch user funds directly.
+            </p>
+        </div>
+
+        <!-- Contract flow diagram -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
+            <!-- Beacon -->
+            <div class="reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-xl p-5 hover:border-cyan-500/40 transition-colors group">
+                <div class="flex items-center gap-3 mb-3">
+                    <span class="w-9 h-9 bg-cyan-500/15 border border-cyan-500/30 rounded-lg flex items-center justify-center text-cyan-400 text-lg">🔗</span>
+                    <h3 class="text-white font-bold">Beacon</h3>
+                </div>
+                <p class="text-white/40 text-xs leading-relaxed">Central registry — stores plugin addresses and their versions. All other contracts look up protocols through Beacon.</p>
+            </div>
+            <!-- ProxyGeneral -->
+            <div class="reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-xl p-5 hover:border-purple-500/40 transition-colors group" style="transition-delay:0.05s">
+                <div class="flex items-center gap-3 mb-3">
+                    <span class="w-9 h-9 bg-purple-500/15 border border-purple-500/30 rounded-lg flex items-center justify-center text-purple-400 text-lg">🏦</span>
+                    <h3 class="text-white font-bold">ProxyGeneral</h3>
+                </div>
+                <p class="text-white/40 text-xs leading-relaxed">Sole custodian of all assets. Mints/burns JH-tokens. Plugins execute actions on its behalf — they never hold funds.</p>
+            </div>
+            <!-- LiquidityManager -->
+            <div class="reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-xl p-5 hover:border-green-500/40 transition-colors group" style="transition-delay:0.1s">
+                <div class="flex items-center gap-3 mb-3">
+                    <span class="w-9 h-9 bg-green-500/15 border border-green-500/30 rounded-lg flex items-center justify-center text-green-400 text-lg">🚿</span>
+                    <h3 class="text-white font-bold">LiquidityManager</h3>
+                </div>
+                <p class="text-white/40 text-xs leading-relaxed">User-facing entry point — handles deposits and withdrawals. Calculates share price, mints JH-tokens, orchestrates fund flows.</p>
+            </div>
+            <!-- ProtocolManager -->
+            <div class="reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-xl p-5 hover:border-indigo-500/40 transition-colors group" style="transition-delay:0.15s">
+                <div class="flex items-center gap-3 mb-3">
+                    <span class="w-9 h-9 bg-indigo-500/15 border border-indigo-500/30 rounded-lg flex items-center justify-center text-indigo-400 text-lg">🎛️</span>
+                    <h3 class="text-white font-bold">ProtocolManager</h3>
+                </div>
+                <p class="text-white/40 text-xs leading-relaxed">Strategy orchestrator — decides how to distribute and rebalance capital across active protocol plugins.</p>
+            </div>
+            <!-- TokenManager -->
+            <div class="reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-xl p-5 hover:border-yellow-500/40 transition-colors group" style="transition-delay:0.2s">
+                <div class="flex items-center gap-3 mb-3">
+                    <span class="w-9 h-9 bg-yellow-500/15 border border-yellow-500/30 rounded-lg flex items-center justify-center text-yellow-400 text-lg">📡</span>
+                    <h3 class="text-white font-bold">TokenManager</h3>
+                </div>
+                <p class="text-white/40 text-xs leading-relaxed">Oracle adapter — resolves token addresses, decimals and Chainlink price feeds. Maps tokens to their protocol-specific receipt tokens.</p>
+            </div>
+            <!-- ValueCalculator -->
+            <div class="reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-xl p-5 hover:border-teal-500/40 transition-colors group" style="transition-delay:0.25s">
+                <div class="flex items-center gap-3 mb-3">
+                    <span class="w-9 h-9 bg-teal-500/15 border border-teal-500/30 rounded-lg flex items-center justify-center text-teal-400 text-lg">🧮</span>
+                    <h3 class="text-white font-bold">ValueCalculator</h3>
+                </div>
+                <p class="text-white/40 text-xs leading-relaxed">Reads every open position via LensAdapters and computes the total pool value — the number that determines your JH-token share price.</p>
+            </div>
+            <!-- SwapManager -->
+            <div class="reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-xl p-5 hover:border-pink-500/40 transition-colors group" style="transition-delay:0.3s">
+                <div class="flex items-center gap-3 mb-3">
+                    <span class="w-9 h-9 bg-pink-500/15 border border-pink-500/30 rounded-lg flex items-center justify-center text-pink-400 text-lg">🔄</span>
+                    <h3 class="text-white font-bold">SwapManager</h3>
+                </div>
+                <p class="text-white/40 text-xs leading-relaxed">Uniswap V3 routing engine — converts reward tokens and handles asset swaps needed during rebalancing and deposits.</p>
+            </div>
+            <!-- ParameterManager -->
+            <div class="reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-xl p-5 hover:border-amber-500/40 transition-colors group" style="transition-delay:0.35s">
+                <div class="flex items-center gap-3 mb-3">
+                    <span class="w-9 h-9 bg-amber-500/15 border border-amber-500/30 rounded-lg flex items-center justify-center text-amber-400 text-lg">⚙️</span>
+                    <h3 class="text-white font-bold">ParameterManager</h3>
+                </div>
+                <p class="text-white/40 text-xs leading-relaxed">Governance config — enforces timelocked parameter changes, deposit/withdraw rate limits, and protocol allocation caps.</p>
+            </div>
+            <!-- EmergencyHandler -->
+            <div class="reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-xl p-5 hover:border-red-500/40 transition-colors group" style="transition-delay:0.4s">
+                <div class="flex items-center gap-3 mb-3">
+                    <span class="w-9 h-9 bg-red-500/15 border border-red-500/30 rounded-lg flex items-center justify-center text-red-400 text-lg">🚨</span>
+                    <h3 class="text-white font-bold">EmergencyHandler</h3>
+                </div>
+                <p class="text-white/40 text-xs leading-relaxed">Circuit breaker — pause all operations, close individual protocol positions, recover assets. 1-day cooldown prevents abuse.</p>
+            </div>
+        </div>
+
+        <!-- Plugin pattern explainer -->
+        <div class="reveal">
+            <div class="bg-gradient-to-r from-cyan-500/10 to-indigo-500/10 border border-white/10 rounded-xl p-5 sm:p-6" style="background: linear-gradient(to right, rgba(34,211,238,0.10), rgba(99,102,241,0.10)); border-color: rgba(255,255,255,0.12);">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <span class="text-xl">🤺</span>
+                        <span class="text-cyan-300 font-bold text-sm">3 Musketeers</span>
+                    </div>
+                    <p class="text-white/50 text-sm leading-relaxed">
+                        Each external protocol (Morpho, Euler, Aave…) is integrated as a <strong class="text-cyan-300">Registry</strong> (addresses & config), a <strong class="text-cyan-300">Plugin</strong> (deposit/withdraw/claim execution), and a <strong class="text-cyan-300">LensAdapter</strong> (position reading & health monitoring). Write once — works across every pool type and every chain.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 5C — VAULT PYRAMID (Vision)
+     ═══════════════════════════════════════════════════════════════ -->
+<section id="pyramid" class="relative z-10 py-24 sm:py-32 px-4">
+    <div class="max-w-6xl mx-auto">
+        <div class="text-center mb-16 reveal">
+            <p class="text-amber-400 font-semibold text-sm uppercase tracking-widest mb-3">Composable Architecture</p>
+            <h2 class="text-3xl sm:text-5xl font-bold text-white mb-4">Vault Pyramid</h2>
+            <p class="text-white/50 max-w-2xl mx-auto">
+                Higher-level vaults invest in lower-level vaults — each one is itself a JH-token. This creates a composable yield hierarchy where risk, strategy and asset exposure are independent layers.
+            </p>
+        </div>
+
+        <!-- SVG Pyramid -->
+        <div class="reveal flex justify-center mb-12">
+            <svg class="w-full max-w-3xl" viewBox="0 0 800 520" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="pyr-l3" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.25"/>
+                        <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.08"/>
+                    </linearGradient>
+                    <linearGradient id="pyr-l2" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#a855f7" stop-opacity="0.22"/>
+                        <stop offset="100%" stop-color="#a855f7" stop-opacity="0.08"/>
+                    </linearGradient>
+                    <linearGradient id="pyr-l1" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#6366f1" stop-opacity="0.20"/>
+                        <stop offset="100%" stop-color="#6366f1" stop-opacity="0.06"/>
+                    </linearGradient>
+                    <linearGradient id="pyr-l0" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.18"/>
+                        <stop offset="100%" stop-color="#22d3ee" stop-opacity="0.05"/>
+                    </linearGradient>
+                    <filter id="pyr-glow">
+                        <feGaussianBlur stdDeviation="6" result="blur"/>
+                        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                    </filter>
+                </defs>
+
+                <!-- ═══ LEVEL 3 (top) — Risk-Tiered Vaults ═══ -->
+                <g class="pyramid-level" data-level="3">
+                    <rect x="250" y="20" width="300" height="90" rx="14" fill="url(#pyr-l3)" stroke="rgba(245,158,11,0.4)" stroke-width="1.5"/>
+                    <text x="400" y="50" text-anchor="middle" fill="#fbbf24" font-size="11" font-weight="700" letter-spacing="1.5">LEVEL 3 — GENERAL VAULTS</text>
+                    <text x="400" y="72" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="10">One token per asset class — maximum diversification</text>
+                    <!-- Vault chips -->
+                    <g transform="translate(400, 96)">
+                        <rect x="-120" y="-12" width="72" height="22" rx="6" fill="rgba(245,158,11,0.15)" stroke="rgba(245,158,11,0.35)" stroke-width="1"/>
+                        <text x="-84" y="3" text-anchor="middle" fill="#fcd34d" font-size="9" font-weight="600">ETH General</text>
+                        <rect x="-36" y="-12" width="72" height="22" rx="6" fill="rgba(245,158,11,0.15)" stroke="rgba(245,158,11,0.35)" stroke-width="1"/>
+                        <text x="0" y="3" text-anchor="middle" fill="#fcd34d" font-size="9" font-weight="600">USDC General</text>
+                        <rect x="48" y="-12" width="72" height="22" rx="6" fill="rgba(245,158,11,0.15)" stroke="rgba(245,158,11,0.35)" stroke-width="1"/>
+                        <text x="84" y="3" text-anchor="middle" fill="#fcd34d" font-size="9" font-weight="600">WBTC General</text>
+                    </g>
+                </g>
+
+                <!-- Connector arrows L3 → L2 -->
+                <g opacity="0.3">
+                    <line x1="330" y1="115" x2="220" y2="145" stroke="#a855f7" stroke-width="1" stroke-dasharray="4 4"/>
+                    <line x1="400" y1="115" x2="400" y2="145" stroke="#a855f7" stroke-width="1" stroke-dasharray="4 4"/>
+                    <line x1="470" y1="115" x2="580" y2="145" stroke="#a855f7" stroke-width="1" stroke-dasharray="4 4"/>
+                </g>
+
+                <!-- ═══ LEVEL 2 — Strategy Vaults ═══ -->
+                <g class="pyramid-level" data-level="2">
+                    <rect x="140" y="145" width="520" height="90" rx="14" fill="url(#pyr-l2)" stroke="rgba(168,85,247,0.35)" stroke-width="1.5"/>
+                    <text x="400" y="175" text-anchor="middle" fill="#c084fc" font-size="11" font-weight="700" letter-spacing="1.5">LEVEL 2 — STRATEGY VAULTS</text>
+                    <text x="400" y="197" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="10">Combine base vaults into specific strategies</text>
+                    <g transform="translate(400, 221)">
+                        <rect x="-140" y="-12" width="88" height="22" rx="6" fill="rgba(168,85,247,0.12)" stroke="rgba(168,85,247,0.30)" stroke-width="1"/>
+                        <text x="-96" y="3" text-anchor="middle" fill="#d8b4fe" font-size="9" font-weight="600">Delta-Neutral</text>
+                        <rect x="-40" y="-12" width="80" height="22" rx="6" fill="rgba(168,85,247,0.12)" stroke="rgba(168,85,247,0.30)" stroke-width="1"/>
+                        <text x="0" y="3" text-anchor="middle" fill="#d8b4fe" font-size="9" font-weight="600">Yield Optimizer</text>
+                        <rect x="52" y="-12" width="88" height="22" rx="6" fill="rgba(168,85,247,0.12)" stroke="rgba(168,85,247,0.30)" stroke-width="1"/>
+                        <text x="96" y="3" text-anchor="middle" fill="#d8b4fe" font-size="9" font-weight="600">Leverage Long</text>
+                    </g>
+                </g>
+
+                <!-- Connector arrows L2 → L1 -->
+                <g opacity="0.3">
+                    <line x1="240" y1="240" x2="160" y2="270" stroke="#6366f1" stroke-width="1" stroke-dasharray="4 4"/>
+                    <line x1="400" y1="240" x2="400" y2="270" stroke="#6366f1" stroke-width="1" stroke-dasharray="4 4"/>
+                    <line x1="560" y1="240" x2="640" y2="270" stroke="#6366f1" stroke-width="1" stroke-dasharray="4 4"/>
+                </g>
+
+                <!-- ═══ LEVEL 1 — Base Vaults (Thematic) ═══ -->
+                <g class="pyramid-level" data-level="1">
+                    <rect x="60" y="270" width="680" height="90" rx="14" fill="url(#pyr-l1)" stroke="rgba(99,102,241,0.30)" stroke-width="1.5"/>
+                    <text x="400" y="300" text-anchor="middle" fill="#a5b4fc" font-size="11" font-weight="700" letter-spacing="1.5">LEVEL 1 — BASE VAULTS</text>
+                    <text x="400" y="322" text-anchor="middle" fill="rgba(255,255,255,0.40)" font-size="10">Thematic groupings — each is a JH-token investable by higher levels</text>
+                    <g transform="translate(400, 346)">
+                        <rect x="-180" y="-12" width="78" height="22" rx="6" fill="rgba(99,102,241,0.12)" stroke="rgba(99,102,241,0.28)" stroke-width="1"/>
+                        <text x="-141" y="3" text-anchor="middle" fill="#c7d2fe" font-size="9" font-weight="600">Lending</text>
+                        <rect x="-90" y="-12" width="78" height="22" rx="6" fill="rgba(99,102,241,0.12)" stroke="rgba(99,102,241,0.28)" stroke-width="1"/>
+                        <text x="-51" y="3" text-anchor="middle" fill="#c7d2fe" font-size="9" font-weight="600">Stablecoin</text>
+                        <rect x="0" y="-12" width="78" height="22" rx="6" fill="rgba(99,102,241,0.12)" stroke="rgba(99,102,241,0.28)" stroke-width="1"/>
+                        <text x="39" y="3" text-anchor="middle" fill="#c7d2fe" font-size="9" font-weight="600">No-Risk</text>
+                        <rect x="90" y="-12" width="78" height="22" rx="6" fill="rgba(99,102,241,0.12)" stroke="rgba(99,102,241,0.28)" stroke-width="1"/>
+                        <text x="129" y="3" text-anchor="middle" fill="#c7d2fe" font-size="9" font-weight="600">Degen</text>
+                    </g>
+                </g>
+
+                <!-- Connector arrows L1 → L0 -->
+                <g opacity="0.3">
+                    <line x1="180" y1="365" x2="120" y2="395" stroke="#22d3ee" stroke-width="1" stroke-dasharray="4 4"/>
+                    <line x1="340" y1="365" x2="300" y2="395" stroke="#22d3ee" stroke-width="1" stroke-dasharray="4 4"/>
+                    <line x1="460" y1="365" x2="500" y2="395" stroke="#22d3ee" stroke-width="1" stroke-dasharray="4 4"/>
+                    <line x1="620" y1="365" x2="680" y2="395" stroke="#22d3ee" stroke-width="1" stroke-dasharray="4 4"/>
+                </g>
+
+                <!-- ═══ LEVEL 0 (bottom) — Protocol Positions ═══ -->
+                <g class="pyramid-level" data-level="0">
+                    <rect x="20" y="395" width="760" height="100" rx="14" fill="url(#pyr-l0)" stroke="rgba(34,211,238,0.25)" stroke-width="1.5"/>
+                    <text x="400" y="425" text-anchor="middle" fill="#67e8f9" font-size="11" font-weight="700" letter-spacing="1.5">LEVEL 0 — PROTOCOL POSITIONS</text>
+                    <text x="400" y="447" text-anchor="middle" fill="rgba(255,255,255,0.35)" font-size="10">Direct allocations into DeFi protocols via 3 Musketeers plugins</text>
+                    <g transform="translate(400, 472)">
+                        <rect x="-230" y="-12" width="70" height="22" rx="6" fill="rgba(34,211,238,0.10)" stroke="rgba(34,211,238,0.25)" stroke-width="1"/>
+                        <text x="-195" y="3" text-anchor="middle" fill="#a5f3fc" font-size="8" font-weight="600">Aave V3</text>
+                        <rect x="-148" y="-12" width="70" height="22" rx="6" fill="rgba(34,211,238,0.10)" stroke="rgba(34,211,238,0.25)" stroke-width="1"/>
+                        <text x="-113" y="3" text-anchor="middle" fill="#a5f3fc" font-size="8" font-weight="600">Euler V2</text>
+                        <rect x="-66" y="-12" width="70" height="22" rx="6" fill="rgba(34,211,238,0.10)" stroke="rgba(34,211,238,0.25)" stroke-width="1"/>
+                        <text x="-31" y="3" text-anchor="middle" fill="#a5f3fc" font-size="8" font-weight="600">Morpho</text>
+                        <rect x="16" y="-12" width="70" height="22" rx="6" fill="rgba(34,211,238,0.10)" stroke="rgba(34,211,238,0.25)" stroke-width="1"/>
+                        <text x="51" y="3" text-anchor="middle" fill="#a5f3fc" font-size="8" font-weight="600">Pendle</text>
+                        <rect x="98" y="-12" width="70" height="22" rx="6" fill="rgba(34,211,238,0.10)" stroke="rgba(34,211,238,0.25)" stroke-width="1"/>
+                        <text x="133" y="3" text-anchor="middle" fill="#a5f3fc" font-size="8" font-weight="600">GMX V2</text>
+                        <rect x="180" y="-12" width="52" height="22" rx="6" fill="rgba(34,211,238,0.10)" stroke="rgba(34,211,238,0.25)" stroke-width="1"/>
+                        <text x="206" y="3" text-anchor="middle" fill="#a5f3fc" font-size="8" font-weight="600">…more</text>
+                    </g>
+                </g>
+
+                <!-- Right-side level labels -->
+                <g font-size="9" fill="rgba(255,255,255,0.20)" font-weight="600">
+                    <text x="790" y="70" text-anchor="end">L3</text>
+                    <text x="790" y="195" text-anchor="end">L2</text>
+                    <text x="790" y="320" text-anchor="end">L1</text>
+                    <text x="790" y="450" text-anchor="end">L0</text>
+                </g>
+            </svg>
+        </div>
+
+        <!-- Key insight cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            <div class="reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-xl p-5 text-center">
+                <span class="text-2xl mb-3 block">🧩</span>
+                <h3 class="text-white font-bold text-sm mb-2">Every Vault Is a JH-token</h3>
+                <p class="text-white/40 text-xs leading-relaxed">A Level 1 vault is itself an ERC-20 JH-token. Level 2 and Level 3 vaults hold JH-tokens of lower levels — composability is the default.</p>
+            </div>
+            <div class="reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-xl p-5 text-center" style="transition-delay:0.1s">
+                <span class="text-2xl mb-3 block">🎯</span>
+                <h3 class="text-white font-bold text-sm mb-2">Risk Isolation</h3>
+                <p class="text-white/40 text-xs leading-relaxed">A "Degen" base vault can't affect a "No-Risk" vault. Strategy and risk exposure are separated into independent layers.</p>
+            </div>
+            <div class="reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-xl p-5 text-center" style="transition-delay:0.2s">
+                <span class="text-2xl mb-3 block">🔝</span>
+                <h3 class="text-white font-bold text-sm mb-2">One Token at the Top</h3>
+                <p class="text-white/40 text-xs leading-relaxed">Users can buy a single Level 3 "ETH General" token and get exposure to every lending protocol, every strategy, every risk tier — automatically.</p>
+            </div>
+        </div>
+
+        <!-- Status badge -->
+        <div class="flex justify-center mt-8 reveal">
+            <div class="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-full px-5 py-2 text-sm text-amber-300">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Vault Pyramid — planned for 2027+. Current pools operate at Level 0.
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
      SECTION 6 — SECURITY & TRUST (Enhanced)
      ═══════════════════════════════════════════════════════════════ -->
 <section id="security" class="relative z-10 py-24 sm:py-32 px-4 bg-gradient-to-b from-transparent via-indigo-950/25 to-transparent">
     <div class="max-w-5xl mx-auto">
         <div class="text-center mb-16 reveal">
-            <p class="text-indigo-400 font-semibold text-sm uppercase tracking-widest mb-3">Battle-Tested</p>
+            <p class="text-indigo-400 font-semibold text-sm uppercase tracking-widest mb-3">Non-Custodial Architecture</p>
             <h2 class="text-3xl sm:text-5xl font-bold text-white mb-4">Security First</h2>
-            <p class="text-white/50 max-w-xl mx-auto">Your funds are protected by multiple layers of security, transparency, and battle-tested smart contract patterns.</p>
+            <p class="text-white/50 max-w-xl mx-auto">Nine independent core contracts with layered protections — ProxyGeneral as sole custodian, EmergencyHandler as circuit breaker, and LensAdapters monitoring every open position in real time.</p>
         </div>
 
         <!-- Audit badges row -->
@@ -896,7 +1253,7 @@
             <div class="bg-gradient-to-r from-indigo-500/15 to-purple-500/15 border border-white/10 rounded-2xl p-6 sm:p-8" style="background: linear-gradient(to right, rgba(99,102,241,0.18), rgba(168,85,247,0.18)); border-color: rgba(255,255,255,0.14);">
                 <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-2">
                     <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                    How We Protect Your Funds
+                    Layered Protection Architecture
                 </h3>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="flex items-start gap-3">
@@ -905,7 +1262,7 @@
                         </span>
                         <div>
                             <p class="text-white text-sm font-semibold">Beacon Proxy Pattern</p>
-                            <p class="text-white/40 text-xs mt-0.5">Upgradeable plugins without migrating user funds. Core contracts remain immutable.</p>
+                            <p class="text-white/40 text-xs mt-0.5">New protocols added without migrating funds or modifying core contracts. Upgrades go live instantly.</p>
                         </div>
                     </div>
                     <div class="flex items-start gap-3">
@@ -913,8 +1270,8 @@
                             <svg class="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
                         </span>
                         <div>
-                            <p class="text-white text-sm font-semibold">Emergency Handler</p>
-                            <p class="text-white/40 text-xs mt-0.5">Built-in circuit breaker. Automatic pause on anomalous activity with emergency withdrawal.</p>
+                            <p class="text-white text-sm font-semibold">EmergencyHandler</p>
+                            <p class="text-white/40 text-xs mt-0.5">Dedicated circuit-breaker contract. Pause all operations, recover assets, 1-day cooldown between emergency actions.</p>
                         </div>
                     </div>
                     <div class="flex items-start gap-3">
@@ -922,8 +1279,8 @@
                             <svg class="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
                         </span>
                         <div>
-                            <p class="text-white text-sm font-semibold">Rate Limiting</p>
-                            <p class="text-white/40 text-xs mt-0.5">ParameterManager enforces deposit/withdraw limits to protect against flash-loan attacks.</p>
+                            <p class="text-white text-sm font-semibold">ParameterManager Timelock</p>
+                            <p class="text-white/40 text-xs mt-0.5">All parameter changes require a 1h–7d timelock. Deposit/withdraw rate limits protect against flash-loan and MEV attacks.</p>
                         </div>
                     </div>
                     <div class="flex items-start gap-3">
@@ -931,8 +1288,8 @@
                             <svg class="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
                         </span>
                         <div>
-                            <p class="text-white text-sm font-semibold">Lens Monitoring</p>
-                            <p class="text-white/40 text-xs mt-0.5">Real-time risk monitoring via dedicated Lens adapter contracts for each integrated protocol.</p>
+                            <p class="text-white text-sm font-semibold">LensAdapter Monitoring</p>
+                            <p class="text-white/40 text-xs mt-0.5">Each protocol has a dedicated LensAdapter tracking health factors, liquidation risk, and position valuations in real time.</p>
                         </div>
                     </div>
                 </div>
@@ -942,34 +1299,34 @@
         <!-- Security feature cards with mouse-tracking glow -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
             <div class="security-card reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-xl p-6 hover:border-indigo-500/40 transition-colors">
-                <div class="text-3xl mb-4">🛡️</div>
-                <h3 class="text-lg font-bold text-white mb-2">Audited Patterns</h3>
-                <p class="text-white/50 text-sm">Built on top of OpenZeppelin, battle-tested proxy patterns. Underlying protocol integrations (Morpho, Euler, Aave) are independently audited.</p>
+                <div class="text-3xl mb-4">🏛️</div>
+                <h3 class="text-lg font-bold text-white mb-2">ProxyGeneral Custody</h3>
+                <p class="text-white/50 text-sm">A single dedicated contract holds all assets. No protocol plugin ever owns funds directly — they only act as execution agents on behalf of ProxyGeneral.</p>
             </div>
             <div class="security-card reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-xl p-6 hover:border-indigo-500/40 transition-colors" style="transition-delay:0.1s">
                 <div class="text-3xl mb-4">🔓</div>
                 <h3 class="text-lg font-bold text-white mb-2">Non-Custodial</h3>
-                <p class="text-white/50 text-sm">Your ETH stays in smart contracts on Arbitrum. No centralized custody. Withdraw anytime, no lock-ups, no permissions needed.</p>
+                <p class="text-white/50 text-sm">Your assets remain in Arbitrum smart contracts at all times. No centralized custody, no intermediary. Withdraw anytime with no lock-ups.</p>
             </div>
             <div class="security-card reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-xl p-6 hover:border-indigo-500/40 transition-colors" style="transition-delay:0.2s">
                 <div class="text-3xl mb-4">🔍</div>
                 <h3 class="text-lg font-bold text-white mb-2">Open Source</h3>
-                <p class="text-white/50 text-sm">All contracts verified on Arbiscan. Full source code available for review and community auditing.</p>
+                <p class="text-white/50 text-sm">All 9 core contracts and every protocol plugin are verified on Arbiscan. Full source available for public review and community auditing.</p>
             </div>
             <div class="security-card reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-xl p-6 hover:border-indigo-500/40 transition-colors" style="transition-delay:0.1s">
                 <div class="text-3xl mb-4">⚡</div>
                 <h3 class="text-lg font-bold text-white mb-2">Beacon Upgrades</h3>
-                <p class="text-white/50 text-sm">Modular upgrades via Beacon pattern. Add new strategies without migrating funds or changing core contracts.</p>
+                <p class="text-white/50 text-sm">New protocol plugins deploy and activate instantly via Beacon pattern — zero fund migration, zero downtime, backward compatible.</p>
             </div>
             <div class="security-card reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-xl p-6 hover:border-indigo-500/40 transition-colors" style="transition-delay:0.2s">
                 <div class="text-3xl mb-4">🚨</div>
-                <h3 class="text-lg font-bold text-white mb-2">Emergency Handler</h3>
-                <p class="text-white/50 text-sm">Built-in emergency withdrawal mechanism. Rate limiting and parameter controls protect against flash-loan attacks.</p>
+                <h3 class="text-lg font-bold text-white mb-2">EmergencyHandler</h3>
+                <p class="text-white/50 text-sm">Dedicated circuit-breaker contract with pause, per-protocol position close, and full fund recovery. 1-day cooldown prevents abuse.</p>
             </div>
             <div class="security-card reveal bg-gray-800/90 backdrop-blur-sm border border-white/15 card-solid rounded-xl p-6 hover:border-indigo-500/40 transition-colors" style="transition-delay:0.3s">
                 <div class="text-3xl mb-4">📊</div>
-                <h3 class="text-lg font-bold text-white mb-2">Lens Adapters</h3>
-                <p class="text-white/50 text-sm">Real-time risk monitoring via dedicated Lens contracts for each protocol (Morpho, Euler, Aave).</p>
+                <h3 class="text-lg font-bold text-white mb-2">3 Musketeers Pattern</h3>
+                <p class="text-white/50 text-sm">Every protocol integration is split into Registry, Plugin and LensAdapter — so risk monitoring, execution and configuration are always independently auditable.</p>
             </div>
         </div>
 
@@ -977,9 +1334,9 @@
         <div class="reveal bg-gradient-to-r from-green-500/15 to-emerald-500/15 border border-green-500/20 rounded-2xl p-6 sm:p-8 mb-8" style="background: linear-gradient(to right, rgba(34,197,94,0.18), rgba(52,211,153,0.18)); border-color: rgba(34,197,94,0.25);">
             <h3 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
                 <span class="text-2xl">📄</span>
-                Audit Reports & References
+                Underlying Protocol Audits
             </h3>
-            <p class="text-white/40 text-sm mb-5">Jethos integrates with protocols that have been independently audited. Review the underlying security documentation:</p>
+            <p class="text-white/40 text-sm mb-5">Jethos allocates into protocols with rigorous independent security track records. Review their full audit documentation:</p>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <a href="https://docs.morpho.org/security/audits" target="_blank" rel="noopener noreferrer"
                    class="flex items-center justify-between bg-white/5 rounded-lg px-4 py-3 border border-white/10 hover:border-green-500/40 hover:bg-green-500/5 transition-all group">
@@ -1044,7 +1401,7 @@
                     <a href="https://arbiscan.io/address/0xfb26C7A0CF5b4e86Dcf870b2349A29DA4F630150" target="_blank" rel="noopener noreferrer" class="text-purple-400 font-mono text-xs hover:text-purple-300 flex items-center gap-1">0xfb26...0150 <span class="text-white/20 group-hover:text-purple-400 transition-colors">↗</span></a>
                 </div>
                 <div class="flex items-center justify-between bg-white/5 rounded-lg px-4 py-2.5 group hover:bg-purple-500/5 transition-colors">
-                    <span class="text-white/60">ProxyGeneral (JHETH)</span>
+                    <span class="text-white/60">ProxyGeneral (JH-tokens)</span>
                     <a href="https://arbiscan.io/address/0x8750344c6cf493f4F5d13F52b7F7Bf1d285978e1" target="_blank" rel="noopener noreferrer" class="text-purple-400 font-mono text-xs hover:text-purple-300 flex items-center gap-1">0x8750...78e1 <span class="text-white/20 group-hover:text-purple-400 transition-colors">↗</span></a>
                 </div>
                 <div class="flex items-center justify-between bg-white/5 rounded-lg px-4 py-2.5 group hover:bg-purple-500/5 transition-colors">
@@ -1067,7 +1424,7 @@
                     <span class="text-2xl">🌊</span>
                     <span class="text-lg font-bold text-white">Jethos Protocol</span>
                 </div>
-                <p class="text-white/40 text-sm">Modular ETH yield strategies on Arbitrum. Non-custodial. Audited. Open source.</p>
+                <p class="text-white/40 text-sm">Universal DeFi yield aggregator on Arbitrum. One deposit — every protocol. Non-custodial. Open source.</p>
             </div>
             <div>
                 <h4 class="text-white font-semibold mb-3">Protocol</h4>

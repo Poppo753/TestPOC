@@ -76,6 +76,10 @@ const CHAINLINK_FEEDS = {
 
 // ==================== DEPLOYMENT CONFIG ====================
 
+// Base Asset Configuration
+const BASE_ASSET_CODE = "USDC";  // Change to "WETH" for ETH-based deployment
+const BASE_DECIMALS = 6;          // Change to 18 for WETH
+
 interface DeploymentResult {
     beacon: string;
     chainlinkAdapter: string;
@@ -173,11 +177,12 @@ async function main() {
         console.log(`      Heartbeat: ${config.heartbeat}s`);
         
         try {
-            const tx = await chainlinkAdapter.addPriceFeed(
+            const tx = await chainlinkAdapter.setPriceFeed(
                 tokenCode,
                 config.feed,
                 config.decimals,
-                config.heartbeat
+                config.heartbeat,
+                "USD"
             );
             await tx.wait();
             console.log(`      ✅ ${tokenCode} configured\n`);
@@ -203,12 +208,16 @@ async function main() {
     );
     await tokenManager.waitForDeployment();
     result.tokenManager = await tokenManager.getAddress();
-    console.log(`   ✅ TokenManager: ${result.tokenManager}\n`);
+    console.log(`   ✅ TokenManager: ${result.tokenManager}`);
+
+    // Set base asset code for price lookups
+    await tokenManager.setBaseAssetCode(BASE_ASSET_CODE);
+    console.log(`   ✅ BaseAssetCode set to: ${BASE_ASSET_CODE}\n`);
 
     // SwapManager
     console.log("2️⃣ Deploying SwapManager...");
     const SwapManager = await ethers.getContractFactory("SwapManager");
-    const swapManager = await SwapManager.deploy(beaconAddress);
+    const swapManager = await SwapManager.deploy(beaconAddress, BASE_ASSET_CODE);
     await swapManager.waitForDeployment();
     result.swapManager = await swapManager.getAddress();
     console.log(`   ✅ SwapManager: ${result.swapManager}\n`);
@@ -216,7 +225,7 @@ async function main() {
     // ValueCalculator
     console.log("3️⃣ Deploying ValueCalculator...");
     const ValueCalculator = await ethers.getContractFactory("ValueCalculator");
-    const valueCalculator = await ValueCalculator.deploy(beaconAddress);
+    const valueCalculator = await ValueCalculator.deploy(beaconAddress, BASE_ASSET_CODE);
     await valueCalculator.waitForDeployment();
     result.valueCalculator = await valueCalculator.getAddress();
     console.log(`   ✅ ValueCalculator: ${result.valueCalculator}\n`);
@@ -224,7 +233,7 @@ async function main() {
     // ParameterManager
     console.log("4️⃣ Deploying ParameterManager...");
     const ParameterManager = await ethers.getContractFactory("ParameterManager");
-    const parameterManager = await ParameterManager.deploy(beaconAddress);
+    const parameterManager = await ParameterManager.deploy(beaconAddress, BASE_DECIMALS);
     await parameterManager.waitForDeployment();
     result.parameterManager = await parameterManager.getAddress();
     console.log(`   ✅ ParameterManager: ${result.parameterManager}\n`);
@@ -240,7 +249,7 @@ async function main() {
     // LiquidityManager
     console.log("6️⃣ Deploying LiquidityManager...");
     const LiquidityManager = await ethers.getContractFactory("LiquidityManager");
-    const liquidityManager = await LiquidityManager.deploy(beaconAddress);
+    const liquidityManager = await LiquidityManager.deploy(beaconAddress, BASE_ASSET_CODE);
     await liquidityManager.waitForDeployment();
     result.liquidityManager = await liquidityManager.getAddress();
     console.log(`   ✅ LiquidityManager: ${result.liquidityManager}\n`);

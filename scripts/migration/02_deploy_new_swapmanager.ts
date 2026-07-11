@@ -70,10 +70,10 @@ async function main() {
     // ========== STEP 3: DEPLOY NEW SWAPMANAGER ==========
     
     console.log("🚀 Step 3: Deploying new SwapManager...");
-    console.log(`   Constructor parameter: beacon = ${BEACON_ADDRESS}`);
+    console.log(`   Constructor parameters: beacon = ${BEACON_ADDRESS}, baseAssetCode = USDC`);
     
     const SwapManager = await ethers.getContractFactory("SwapManager");
-    const swapManager = await SwapManager.deploy(BEACON_ADDRESS);
+    const swapManager = await SwapManager.deploy(BEACON_ADDRESS, "USDC");
     
     await swapManager.waitForDeployment();
     const swapManagerAddr = await swapManager.getAddress();

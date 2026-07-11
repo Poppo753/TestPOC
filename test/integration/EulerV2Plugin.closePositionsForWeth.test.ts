@@ -3,15 +3,15 @@ import { ethers } from "hardhat";
 import { Contract, Signer } from "ethers";
 
 /**
- * Test E2E per closePositionsForWeth()
+ * Test E2E per closePositionsForBaseAsset()
  * 
  * Scenario:
  * 1. Apri 2-3 posizioni leverage con HF diversi
- * 2. Chiama closePositionsForWeth con un target
+ * 2. Chiama closePositionsForBaseAsset con un target
  * 3. Verifica che chiuda le posizioni riskiest-first
  * 4. Verifica che ritorni il WETH corretto
  */
-describe("EulerV2Plugin - closePositionsForWeth E2E", function () {
+describe("EulerV2Plugin - closePositionsForBaseAsset E2E", function () {
     this.timeout(300000); // 5 minuti per fork tests
     
     // Contracts
@@ -41,8 +41,8 @@ describe("EulerV2Plugin - closePositionsForWeth E2E", function () {
     
     before(async function () {
         console.log("\n" + "=".padEnd(70, "="));
-        console.log("🔍 CLOSE POSITIONS FOR WETH - E2E TEST");
-        console.log("   Testing automatic position closing to obtain target WETH");
+        console.log("🔍 CLOSE POSITIONS FOR BASE ASSET - E2E TEST");
+        console.log("   Testing automatic position closing to obtain target base asset");
         console.log("=".padEnd(70, "=") + "\n");
         
         [deployer] = await ethers.getSigners();
@@ -92,6 +92,7 @@ describe("EulerV2Plugin - closePositionsForWeth E2E", function () {
         await beacon.updateImplementation("TokenManager", await tokenManager.getAddress());
         await sleep(DELAY_MS);
         await beacon.updateImplementation("WETH", WETH);
+        await beacon.updateImplementation("BASE_ASSET", WETH);
         await sleep(DELAY_MS);
         
         // Configure TokenManager
@@ -130,15 +131,19 @@ describe("EulerV2Plugin - closePositionsForWeth E2E", function () {
         
         // EulerV2Plugin
         const EulerV2PluginFactory = await ethers.getContractFactory("EulerV2Plugin");
-        eulerV2Plugin = await EulerV2PluginFactory.deploy(await beacon.getAddress());
+        eulerV2Plugin = await EulerV2PluginFactory.deploy(await beacon.getAddress(), "WETH");
         await eulerV2Plugin.waitForDeployment();
         
         console.log(`   ✅ EulerV2Plugin deployed: ${await eulerV2Plugin.getAddress()}`);
         await sleep(DELAY_MS);
+
+        // Transfer registry ownership to plugin (needed for createPositionOnDemand)
+        await EulerRegistry.transferOwnership(await eulerV2Plugin.getAddress());
+        await sleep(DELAY_MS);
         
         // Deploy EulerLensAdapter
         const EulerLensAdapterFactory = await ethers.getContractFactory("EulerLensAdapter");
-        eulerLensAdapter = await EulerLensAdapterFactory.deploy(await beacon.getAddress());
+        eulerLensAdapter = await EulerLensAdapterFactory.deploy(await beacon.getAddress(), "WETH");
         await eulerLensAdapter.waitForDeployment();
         console.log(`   ✅ EulerLensAdapter deployed: ${await eulerLensAdapter.getAddress()}`);
         await sleep(DELAY_MS);
@@ -227,13 +232,13 @@ describe("EulerV2Plugin - closePositionsForWeth E2E", function () {
         });
     });
     
-    describe("2. closePositionsForWeth - Core Functionality", function () {
+    describe("2. closePositionsForBaseAsset - Core Functionality", function () {
         it("Should close riskiest position first when requesting small amount", async function () {
             // Request 0.5 WETH - should close just the riskiest position
             console.log("\n   🎯 Requesting 0.5 WETH (should close 1 risky position)...");
             
             const targetWeth = ethers.parseEther("0.5");
-            const tx = await eulerV2Plugin.closePositionsForWeth(targetWeth);
+            const tx = await eulerV2Plugin.closePositionsForBaseAsset(targetWeth);
             const receipt = await tx.wait();
             await sleep(DELAY_MS * 2);
             
@@ -251,7 +256,7 @@ describe("EulerV2Plugin - closePositionsForWeth E2E", function () {
             
             await sleep(DELAY_MS);
             const targetWeth = ethers.parseEther("3");
-            const tx = await eulerV2Plugin.closePositionsForWeth(targetWeth);
+            const tx = await eulerV2Plugin.closePositionsForBaseAsset(targetWeth);
             const receipt = await tx.wait();
             await sleep(DELAY_MS * 2);
             
@@ -266,7 +271,7 @@ describe("EulerV2Plugin - closePositionsForWeth E2E", function () {
             console.log("\n   🎯 Requesting WETH with no positions...");
             
             await sleep(DELAY_MS);
-            const [wethObtained, positionsClosed] = await eulerV2Plugin.closePositionsForWeth.staticCall(
+            const [wethObtained, positionsClosed] = await eulerV2Plugin.closePositionsForBaseAsset.staticCall(
                 ethers.parseEther("1")
             );
             
@@ -323,7 +328,7 @@ describe("EulerV2Plugin - closePositionsForWeth E2E", function () {
             
             console.log("\n   🎯 Requesting 100 WETH (more than available)...");
             
-            const tx = await eulerV2Plugin.closePositionsForWeth(ethers.parseEther("100"));
+            const tx = await eulerV2Plugin.closePositionsForBaseAsset(ethers.parseEther("100"));
             await tx.wait();
             await sleep(DELAY_MS * 2);
             
@@ -337,7 +342,7 @@ describe("EulerV2Plugin - closePositionsForWeth E2E", function () {
     
     after(async function () {
         console.log("\n" + "=".padEnd(70, "="));
-        console.log("✅ closePositionsForWeth E2E tests completed");
+        console.log("✅ closePositionsForBaseAsset E2E tests completed");
         console.log("=".padEnd(70, "=") + "\n");
     });
 });

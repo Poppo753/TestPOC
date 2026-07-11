@@ -30,6 +30,9 @@ import * as path from "path";
 const BEACON = "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870";
 const PROXY_GENERAL = "0x8750344c6cf493f4F5d13F52b7F7Bf1d285978e1";
 
+// Base Asset Configuration
+const BASE_ASSET_CODE = "USDC";
+
 // Aave V3 Pool su Arbitrum (entry point per tutte le operazioni)
 const AAVE_POOL = "0x794a61358D6845594F94dc1DB02A252b5b4814aD";
 
@@ -121,7 +124,7 @@ async function main() {
 
     console.log("\n📦 Step 3/6: Deploying AaveV3Plugin...");
     const PluginFactory = await ethers.getContractFactory("AaveV3Plugin");
-    const plugin = await PluginFactory.deploy(BEACON);
+    const plugin = await PluginFactory.deploy(BEACON, BASE_ASSET_CODE, AAVE_POOL);
     await plugin.waitForDeployment();
     const pluginAddress = await plugin.getAddress();
     console.log(`   ✅ AaveV3Plugin deployed: ${pluginAddress}`);
@@ -148,7 +151,7 @@ async function main() {
 
     console.log("\n📦 Step 5/6: Deploying AaveV3LensAdapter...");
     const AdapterFactory = await ethers.getContractFactory("AaveV3LensAdapter");
-    const lensAdapter = await AdapterFactory.deploy(BEACON);
+    const lensAdapter = await AdapterFactory.deploy(BEACON, BASE_ASSET_CODE, AAVE_POOL);
     await lensAdapter.waitForDeployment();
     const lensAdapterAddress = await lensAdapter.getAddress();
     console.log(`   ✅ AaveV3LensAdapter deployed: ${lensAdapterAddress}`);

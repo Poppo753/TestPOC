@@ -224,7 +224,7 @@ export class DeployFullScript extends BaseScript {
     Logger.section("DEPLOYING PARAMETERMANAGER");
     
     const ParameterManagerFactory = await ethers.getContractFactory("ParameterManager");
-    const parameterManager = await ParameterManagerFactory.deploy(this.deployedAddresses.beacon!);
+    const parameterManager = await ParameterManagerFactory.deploy(this.deployedAddresses.beacon!, 6);
     await parameterManager.waitForDeployment();
     
     const address = await parameterManager.getAddress();
@@ -241,7 +241,7 @@ export class DeployFullScript extends BaseScript {
     Logger.section("DEPLOYING VALUECALCULATOR");
     
     const ValueCalculatorFactory = await ethers.getContractFactory("ValueCalculator");
-    const valueCalculator = await ValueCalculatorFactory.deploy(this.deployedAddresses.beacon!);
+    const valueCalculator = await ValueCalculatorFactory.deploy(this.deployedAddresses.beacon!, "USDC");
     await valueCalculator.waitForDeployment();
     
     const address = await valueCalculator.getAddress();
@@ -258,7 +258,7 @@ export class DeployFullScript extends BaseScript {
     Logger.section("DEPLOYING PROXYGENERAL");
     
     const ProxyGeneralFactory = await ethers.getContractFactory("ProxyGeneral");
-    const proxyGeneral = await ProxyGeneralFactory.deploy(this.deployedAddresses.beacon!);
+    const proxyGeneral = await ProxyGeneralFactory.deploy(this.deployedAddresses.beacon!, "USDC");
     await proxyGeneral.waitForDeployment();
     
     const address = await proxyGeneral.getAddress();
@@ -275,7 +275,7 @@ export class DeployFullScript extends BaseScript {
     Logger.section("DEPLOYING LIQUIDITYMANAGER");
     
     const LiquidityManagerFactory = await ethers.getContractFactory("LiquidityManager");
-    const liquidityManager = await LiquidityManagerFactory.deploy(this.deployedAddresses.beacon!);
+    const liquidityManager = await LiquidityManagerFactory.deploy(this.deployedAddresses.beacon!, "USDC");
     await liquidityManager.waitForDeployment();
     
     const address = await liquidityManager.getAddress();
@@ -292,7 +292,7 @@ export class DeployFullScript extends BaseScript {
     Logger.section("DEPLOYING SWAPMANAGER");
     
     const SwapManagerFactory = await ethers.getContractFactory("SwapManager");
-    const swapManager = await SwapManagerFactory.deploy(this.deployedAddresses.beacon!);
+    const swapManager = await SwapManagerFactory.deploy(this.deployedAddresses.beacon!, "USDC");
     await swapManager.waitForDeployment();
     
     const address = await swapManager.getAddress();

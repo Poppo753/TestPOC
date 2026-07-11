@@ -61,6 +61,10 @@ describe("Migration Scripts - Integration Test", function () {
             BEACON_ADDRESS = await beacon.getAddress();
             console.log(`   Beacon: ${BEACON_ADDRESS}`);
 
+            // Register BASE_ASSET in Beacon (required by SwapManager constructor)
+            await beacon.updateImplementation("BASE_ASSET", await weth.getAddress());
+            console.log(`   BASE_ASSET registered: ${await weth.getAddress()}`);
+
             // Deploy SimpleSwap (old plugin)
             const SimpleSwapFactory = await ethers.getContractFactory("MockSimpleSwap");
             simpleSwap = await SimpleSwapFactory.deploy();
@@ -73,7 +77,7 @@ describe("Migration Scripts - Integration Test", function () {
 
             // Deploy OLD SwapManager (single plugin architecture - uses Beacon)
             const SwapManagerFactory = await ethers.getContractFactory("SwapManager");
-            oldSwapManager = await SwapManagerFactory.deploy(BEACON_ADDRESS);
+            oldSwapManager = await SwapManagerFactory.deploy(BEACON_ADDRESS, "WETH");
             OLD_SWAP_MANAGER_ADDRESS = await oldSwapManager.getAddress();
             console.log(`   Old SwapManager: ${OLD_SWAP_MANAGER_ADDRESS}`);
 
@@ -165,7 +169,7 @@ describe("Migration Scripts - Integration Test", function () {
             console.log("Step 2: Deploying new SwapManager...");
 
             const SwapManagerFactory = await ethers.getContractFactory("SwapManager");
-            newSwapManager = await SwapManagerFactory.deploy(BEACON_ADDRESS);
+            newSwapManager = await SwapManagerFactory.deploy(BEACON_ADDRESS, "WETH");
             NEW_SWAP_MANAGER_ADDRESS = await newSwapManager.getAddress();
 
             console.log(`   ✅ New SwapManager deployed: ${NEW_SWAP_MANAGER_ADDRESS}`);

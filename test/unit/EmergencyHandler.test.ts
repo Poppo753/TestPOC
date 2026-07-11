@@ -64,10 +64,11 @@ describe("EmergencyHandler Contract", function () {
     const Beacon = await ethers.getContractFactory("Beacon");
     const beacon = await Beacon.deploy();
     await beacon.updateImplementation("WETH", mockWETH.target);
+    await beacon.updateImplementation("BASE_ASSET", mockWETH.target);
 
     // Deploy ProxyGeneral
     const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
-    const proxyGeneral = await ProxyGeneral.deploy(beacon.target);
+    const proxyGeneral = await ProxyGeneral.deploy(beacon.target, "WETH");
 
     // Deploy TokenManager
     const TokenManager = await ethers.getContractFactory("TokenManager");
@@ -75,7 +76,7 @@ describe("EmergencyHandler Contract", function () {
 
     // Deploy ValueCalculator
     const ValueCalculator = await ethers.getContractFactory("ValueCalculator");
-    const valueCalculator = await ValueCalculator.deploy(beacon.target);
+    const valueCalculator = await ValueCalculator.deploy(beacon.target, "WETH");
 
     // Deploy EmergencyHandler
     const EmergencyHandler = await ethers.getContractFactory("EmergencyHandler");
@@ -746,15 +747,16 @@ describe("EmergencyHandler Contract", function () {
       const Beacon = await ethers.getContractFactory("Beacon");
       const localBeacon = await Beacon.deploy();
       await localBeacon.updateImplementation("WETH", mockWETH.target);
+      await localBeacon.updateImplementation("BASE_ASSET", mockWETH.target);
       
       const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
-      localProxyGeneral = await ProxyGeneral.deploy(localBeacon.target);
+      localProxyGeneral = await ProxyGeneral.deploy(localBeacon.target, "WETH");
       
       const TokenManager = await ethers.getContractFactory("TokenManager");
       const localTokenManager = await TokenManager.deploy(localBeacon.target, mockOracleAdapter.target);
       
       const ValueCalculator = await ethers.getContractFactory("ValueCalculator");
-      const localValueCalculator = await ValueCalculator.deploy(localBeacon.target);
+      const localValueCalculator = await ValueCalculator.deploy(localBeacon.target, "WETH");
       
       const EmergencyHandler = await ethers.getContractFactory("EmergencyHandler");
       localEmergencyHandler = await EmergencyHandler.deploy(localBeacon.target);
@@ -983,7 +985,7 @@ describe("EmergencyHandler Contract", function () {
       const freshBeacon = await Beacon.deploy();
       
       const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
-      const freshProxy = await ProxyGeneral.deploy(freshBeacon.target);
+      const freshProxy = await ProxyGeneral.deploy(freshBeacon.target, "WETH");
       
       const EmergencyHandler = await ethers.getContractFactory("EmergencyHandler");
       const freshEmergency = await EmergencyHandler.deploy(freshBeacon.target);
