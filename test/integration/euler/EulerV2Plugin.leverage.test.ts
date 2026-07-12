@@ -54,7 +54,7 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
     before(async function () {
         // Skip se non siamo su fork
         const network = await ethers.provider.getNetwork();
-        if (process.env.FORK_ENABLED !== "true" && network.chainId !== 42161n) {
+        if (process.env.FORK_ENABLED !== "true") {
             console.log("⚠️  Skipping leverage fork tests - not running on Arbitrum fork");
             console.log("   Run with: $env:FORK_ENABLED=\"true\"; npx hardhat test test/integration/EulerV2Plugin.leverage.test.ts");
             this.skip();

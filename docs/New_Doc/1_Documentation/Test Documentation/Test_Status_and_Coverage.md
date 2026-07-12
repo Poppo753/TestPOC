@@ -36,21 +36,48 @@
 
 ## 1. Struttura della directory `test/`
 
+> **Aggiornato**: 11 Luglio 2026 — dopo riorganizzazione cartelle. I file sono stati distribuiti in sottocartelle tematiche; i test obsoleti archiviati in `old/`.
+
 ```
 test/
-├── unit/                    # 26 file — test logica contratti con mock, senza fork
-├── e2e/                     # 20 file — test su fork Arbitrum mainnet
-├── integration/             # 51 file — test flussi multi-contratto (misti: mock + fork)
-├── helpers/                 # Utilities condivise tra test
+├── unit/               30 file — test logica contratti con mock, nessun fork
+│                           (include QuickSmokeTest, SimpleComplianceTests, ValueCalculatorFix)
+│
+├── e2e/                17 file — test su fork Arbitrum mainnet
+│                           (include TokenConfigurationDiagnostic come tool diagnostico)
+│
+├── integration/        45 file — test flussi multi-contratto, suddivisi per protocollo
+│   ├── aave/            2  (AaveV3Plugin.fork, AaveV3Plugin.leverage)
+│   ├── euler/           9  (fork, leverage, leverage.e2e, manualLeverage.e2e,
+│   │                        phase3, realfunds, batch, closePositionsForWeth, LensAdapter.e2e)
+│   ├── morpho/          2  (MorphoPlugin.fork, MorphoVaultPlugin.fork)
+│   ├── dolomite/        2  (DolomitePlugin.fork, DolomitePlugin.borrow.fork)
+│   ├── flash-loan/      2  (FlashLoanService.e2e, FlashLoanPlugin.e2e)
+│   ├── liquidity/       8  (LF-001..005 + Deposit + Withdraw + e2e-deposit-withdraw)
+│   ├── swap/            6  (SF-001..005 + SwapManager.Phase1B)
+│   ├── governance/      5  (PG-001..005)
+│   ├── system/          7  (BeaconModules, Emergency, LiquidityFlow, OracleAdapter,
+│   │                        ProtocolManager x2, MigrationScripts)
+│   └── scripts/         2  (Phase1.Core.test.ts + fixtures.ts)
+│
+├── performance/         2  (PerformanceBenchmarks + OracleAdapter.gas)
+│
+├── helpers/             4 file — utilities condivise, non eseguiti come test
 │   ├── fixtures/contracts.ts    # Funzioni di deploy standardizzate
 │   ├── mocks/oracles.ts         # Mock Chainlink
+│   ├── mocks/MockERC20.sol      # Token ERC20 mintabile per test
 │   └── utils/test-utils.ts      # Helpers (⚠️ ESM issue — vedi nota sotto)
-├── benchmarks/              # 1 file — misure di gas
-├── performance/             # 1 file — benchmark performance
-├── old/                     # File archiviati, non eseguiti
-├── QuickSmokeTest.test.ts   # Smoke test rapido del sistema
-├── SimpleComplianceTests.test.ts  # Test di compliance basici
-└── ValueCalculatorFix.test.ts     # Fix specifico ValueCalculator
+│
+├── docs/                2 md (euler.test.doc.md, Integration_Tests_Strategy.md)
+│
+└── old/                13 file — obsoleti, non eseguiti
+        GMXv2Plugin (3 file) — strutturalmente rotti (keeper pattern asincrono)
+        EulerV2Plugin.debug, EulerV2Plugin.closePositionsForWeth (duplicati da integration/old)
+        EulerV2Plugin.leverage.e2e (duplicato da integration/old)
+        EnhancedLiquidityPoolETH, ComplianceTestSuite — contratto rimosso
+        OracleAdapterVerification — richiede fork, senza guard
+        ValueCalculator.selectTokenForSwap — logica rimossa
+        Withdraw.AutomaticSwap.mainnet, Withdraw.deadline.mainnet — stale post-refactoring
 ```
 
 > **Nota ESM**: `test/helpers/utils/test-utils.ts` usa `@nomicfoundation/hardhat-network-helpers` che in alcune versioni è ESM-only. Questo causa un errore quando si esegue `npx hardhat test test/unit/` come directory glob. **Workaround**: specificare i file individualmente invece della cartella.

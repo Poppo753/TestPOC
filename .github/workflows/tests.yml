@@ -1,0 +1,108 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # ==================== UNIT TESTS (no fork) ====================
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile contracts
+        run: npx hardhat compile
+
+      - name: Run unit tests
+        run: npx hardhat test test/unit/**/*.test.ts
+
+  # ==================== INTEGRATION TESTS (no fork) ====================
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+      - run: npm ci
+      - run: npx hardhat compile
+      - name: Run integration tests (no fork)
+        run: npx hardhat test test/integration/**/*.test.ts
+
+  # ==================== SECURITY TESTS (no fork) ====================
+  security-tests:
+    name: Security Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+      - run: npm ci
+      - run: npx hardhat compile
+      - name: Run security tests
+        run: npx hardhat test test/security/Reentrancy.attack.test.ts test/security/AccessControl.comprehensive.test.ts test/security/OracleManipulation.attack.test.ts test/security/GriefingResistance.test.ts test/security/FlashLoan.selfAttack.test.ts
+
+  # ==================== INVARIANT TESTS (no fork) ====================
+  invariant-tests:
+    name: Invariant Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+      - run: npm ci
+      - run: npx hardhat compile
+      - name: Run invariant tests (no fork)
+        run: npx hardhat test test/invariants/*.test.ts
+
+  # ==================== FORK TESTS (require RPC secret) ====================
+  fork-tests:
+    name: Fork Tests (Arbitrum)
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    env:
+      FORK_ENABLED: "true"
+      ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+      - run: npm ci
+      - run: npx hardhat compile
+      - name: Run fork e2e tests
+        run: |
+          npx hardhat test test/e2e/Aave.BorrowRepay.e2e.test.ts
+          npx hardhat test test/e2e/Euler.BorrowRepay.e2e.test.ts
+          npx hardhat test test/e2e/Morpho.FullCycle.e2e.test.ts

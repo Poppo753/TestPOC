@@ -30,7 +30,7 @@ describe("⛽ Oracle Adapter - Gas Benchmarks", function () {
     // Setup WETH in beacon (required by TokenManager constructor)
     const MockERC20Factory = await ethers.getContractFactory("MockERC20");
     const wethForBeacon = await MockERC20Factory.deploy("Wrapped Ether", "WETH", 18);
-    await beacon.updateImplementation("WETH", await wethForBeacon.getAddress());
+    await beacon.updateImplementation("BASE_ASSET", await wethForBeacon.getAddress());
 
     // Deploy MockOracleAdapter
     const MockOracleAdapterFactory = await ethers.getContractFactory("MockOracleAdapter");

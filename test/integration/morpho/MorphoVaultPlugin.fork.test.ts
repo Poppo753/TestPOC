@@ -59,7 +59,7 @@ describe("MorphoVault Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", fun
     before(async function () {
         // Skip if not on fork
         const network = await ethers.provider.getNetwork();
-        if (process.env.FORK_ENABLED !== "true" && network.chainId !== 42161n) {
+        if (process.env.FORK_ENABLED !== "true") {
             console.log("⚠️  Skipping fork tests - not running on Arbitrum fork");
             console.log("   Run with: $env:FORK_ENABLED=\"true\"; npx hardhat test test/integration/MorphoVaultPlugin.fork.test.ts");
             this.skip();

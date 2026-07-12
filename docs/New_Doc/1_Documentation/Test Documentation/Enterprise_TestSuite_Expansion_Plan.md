@@ -1653,6 +1653,653 @@ Prima di deployare qualsiasi versione su Arbitrum mainnet con fondi reali, i seg
 
 ---
 
+## 12. Master Implementation Checklist
+
+> Ogni task è atomico e verificabile. Spunta ogni voce solo quando il file compila, i test passano (o skippano correttamente senza fork), e non ci sono regressioni nei test già verdi.  
+> Sequenza: **Fase 0 → 1 → 2 → 3 → 4 → 5** — non saltare fasi.
+
+---
+
+### 🏗️ PRE-REQUISITI STRUTTURA DIRECTORY
+
+- [ ] Creare directory `test/invariants/`
+- [ ] Creare directory `test/security/`
+
+---
+
+### ⚡ FASE 0 — Fix Bug Bloccanti (target: ~114 test sbloccati)
+
+#### Fix #1 — `test/integration/euler/EulerV2Plugin.fork.test.ts`
+- [ ] Aprire il file e cercare tutte le occorrenze di `EulerV2Plugin.deploy(`
+- [ ] Aggiungere in cima costanti: `EVC_ADDRESS = "0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066"` e `ACCOUNT_LENS = "0x90a52DDcb232e7bb003DD9258fA1235c553eC956"`
+- [ ] Aggiornare ogni deploy a 4 argomenti: `deploy(beacon, "WETH", EVC_ADDRESS, ACCOUNT_LENS)`
+- [ ] Eseguire senza fork: verificare che i test skippino gracefully (`this.skip()`)
+- [ ] Eseguire con fork: verificare ~30 test passano
+
+#### Fix #2 — `test/integration/morpho/MorphoPlugin.fork.test.ts`
+- [ ] Cercare tutte le occorrenze di `.MORPHO_ADDRESS()` nel file
+- [ ] Sostituire ogni occorrenza con `.morpho()`
+- [ ] Cercare eventuali occorrenze di `lensAdapter.MORPHO()` e sostituire analogamente
+- [ ] Eseguire senza fork: verificare che i 27 test mock passano ancora
+- [ ] Eseguire con fork: verificare ~20 test aggiuntivi passano
+
+#### Fix #3 — `test/integration/aave/AaveV3Plugin.fork.test.ts`
+- [ ] Localizzare la funzione `before()` (o `beforeAll()`)
+- [ ] Aggiungere come prima riga del `before()`:
+  ```typescript
+  if (process.env.FORK_ENABLED !== "true") { this.skip(); return; }
+  ```
+- [ ] Eseguire senza fork: verificare che i test skippino senza errori
+- [ ] Eseguire con fork: verificare ~40 test passano
+
+#### Fix #4 — `test/e2e/Withdraw.AutomaticSwap.fork.test.ts`
+- [ ] Aggiungere costante: `const AAVE_V3_POOL = "0x794a61358D6845594F94dc1DB02A252b5b4814aD";`
+- [ ] Trovare ogni deploy di `AaveV3Plugin` → aggiungere `AAVE_V3_POOL` come 3° argomento
+- [ ] Trovare ogni deploy di `AaveV3LensAdapter` → aggiungere `AAVE_V3_POOL` come 3° argomento
+- [ ] Eseguire senza fork: verificare che skippa correttamente
+- [ ] Eseguire con fork: verificare ~10 test passano
+
+#### Fix #5 — `test/integration/euler/EulerV2Plugin.closePositionsForWeth.test.ts`
+- [ ] Localizzare la funzione `before()` o `beforeEach()`
+- [ ] Aggiungere come prima riga: `if (process.env.FORK_ENABLED !== "true") { this.skip(); return; }`
+- [ ] Eseguire senza fork: verificare 0 failing (skip)
+- [ ] Eseguire con fork: verificare che il test esegue
+
+#### Fix #6 — `test/unit/SimpleComplianceTests.test.ts`
+- [ ] Cercare tutte le occorrenze di `EnhancedLiquidityPoolETH` nel file
+- [ ] Rimuovere o commentare i 4 test che referenziano quel contratto
+- [ ] Se il test copre funzionalità ancora valide, rimpiazzare con `LiquidityManager`
+- [ ] Eseguire: verificare che ora tutti i test passano (target 17/17)
+
+#### Fix #7 — `test/performance/PerformanceBenchmarks.test.ts`
+- [ ] Localizzare il blocco `before()` del setup
+- [ ] Aggiungere dopo il deploy del MockOracle:
+  ```typescript
+  await mockOracle.setPrice("WETH", ethers.parseUnits("3000", 8));
+  await mockOracle.setPrice("USDC", ethers.parseUnits("1", 8));
+  await mockOracle.setPrice("WBTC", ethers.parseUnits("60000", 8));
+  await mockOracle.setPrice("USDT", ethers.parseUnits("1", 8));
+  ```
+- [ ] Eseguire: verificare che ora 17/17 test passano
+
+#### ✅ Checkpoint Fase 0
+- [ ] Eseguire l'intera suite senza fork: `npx hardhat test test/unit/ test/integration/liquidity/ test/integration/swap/ test/integration/governance/ test/integration/system/`
+- [ ] Verificare zero regressioni — nessun test precedentemente verde è diventato rosso
+
+---
+
+### 🔐 FASE 1 — Invarianti di Sistema (nuovi file)
+
+#### B.3 — `test/invariants/ShareAccounting.invariant.test.ts` 🔴 ALTA
+- [ ] Creare il file con import e describe block
+- [ ] Implementare setup: deploy stack con 5 signer
+- [ ] Implementare `checkShareInvariant()`: `sumShares === proxyGeneral.totalSupply()`
+- [ ] Implementare sequenza: 5 deposit alternati tra utenti diversi
+- [ ] Aggiungere `checkShareInvariant()` dopo ogni deposit
+- [ ] Implementare sequenza: 5 withdraw alternati tra utenti diversi
+- [ ] Aggiungere `checkShareInvariant()` dopo ogni withdraw
+- [ ] Verificare che l'invariante regge su 20+ operazioni consecutive
+
+#### B.1 — `test/invariants/ValueConservation.invariant.test.ts` 🔴 ALTA
+- [ ] Creare il file con import e describe block
+- [ ] Implementare tracking: `totalDeposited`, `totalWithdrawn`, `totalFees` accumulati
+- [ ] Implementare `checkValueInvariant()`: `totalWithdrawable >= totalDeposited - totalWithdrawn - totalFees - DUST_TOLERANCE`
+- [ ] Implementare sequenza: 10 deposit di importi diversi da utenti diversi
+- [ ] Implementare sequenza: 5 withdraw parziali
+- [ ] Implementare: accumulo di fee (configurare `depositFee > 0`)
+- [ ] Verificare invariante dopo ogni operazione
+- [ ] Testare con `DUST_TOLERANCE` appropriato per evitare false positive da rounding
+
+#### B.2 — `test/invariants/LPPrice.invariant.test.ts` 🟡 MEDIA
+- [ ] Creare il file con import e describe block
+- [ ] Implementare `getLPPrice()` helper tramite `ValueCalculator`
+- [ ] Scenario 1: registrare prezzo prima e dopo un deposit → deve restare uguale
+- [ ] Scenario 2: registrare prezzo prima e dopo un withdraw → deve restare uguale
+- [ ] Scenario 3: aggiungere fee al pool (simulare rendimento) → prezzo deve crescere
+- [ ] Scenario 4: simulare rendimento Aave con MockLensAdapter → prezzo deve crescere
+- [ ] Verificare che il prezzo non scende mai in nessun scenario
+
+#### B.4 — `test/invariants/HealthFactor.accuracy.test.ts` 🟡 MEDIA (richiede fork)
+- [ ] Creare il file con import e skip guard se `FORK_ENABLED !== "true"`
+- [ ] Implementare setup: posizione Aave reale su fork (supply WETH, borrow USDC)
+- [ ] Leggere health factor da `AaveV3LensAdapter.getHealthFactor()`
+- [ ] Leggere health factor direttamente da `aavePool.getUserAccountData(plugin)`
+- [ ] Implementare invariant: `|lensHF - nativeHF| < ethers.parseEther("0.001")`
+- [ ] Testare con posizione safe (HF > 1.5)
+- [ ] Testare con posizione a rischio (HF ≈ 1.1) — avanzare tempo con `evm_increaseTime`
+
+#### B.5 — `test/invariants/NoFundLeakage.invariant.test.ts` 🟡 MEDIA
+- [ ] Creare il file con import e describe block
+- [ ] Implementare aggregazione: `proxyBalance + aaveValue + eulerValue + morphoValue`
+- [ ] Implementare `checkNoLeakage()`: `totalAccountedFor ≈ totalUserDeposits` (entro DUST)
+- [ ] Testare: deposit su Aave → verifica tutti i fondi sono contabilizzati
+- [ ] Testare: deposit su Euler → verifica aggregazione corretta
+- [ ] Testare: deposit multi-protocollo → verifica somma totale
+
+#### ✅ Checkpoint Fase 1
+- [ ] Eseguire: `npx hardhat test test/invariants/`
+- [ ] Tutti e 5 i file degli invarianti devono passare
+- [ ] Nessuna regressione nelle fasi precedenti
+
+---
+
+### 🔌 FASE 2 — Protocol Advanced Fork Tests (nuovi file, richiedono fork)
+
+> Prima di iniziare: eseguire i 7 test E2E core su fork per verificare che il sistema funzioni.  
+> `$env:FORK_ENABLED="true"; npx hardhat test test/e2e/USDC.BaseAsset.e2e.test.ts test/e2e/WETH.BaseAsset.e2e.test.ts`
+
+#### A.1 — `test/e2e/Aave.BorrowRepay.e2e.test.ts` 🔴 ALTA
+- [ ] Creare il file con import, skip guard, e setup (deploy full stack WETH base + whale impersonation)
+- [ ] Implementare `before()`: deploy + whale funding + AaveV3Plugin configurato
+- [ ] Implementare SCENARIO 1 - Basic Borrow/Repay (10 passi):
+  - [ ] User deposita 1 WETH nel sistema
+  - [ ] `AaveV3Plugin.deposit("WETH", 1 ether)` → verifica aWETH balance > 0
+  - [ ] `AaveV3Plugin.borrow("USDC", 500e6)` → verifica variableDebtUSDC > 0
+  - [ ] Verifica `AaveV3LensAdapter.getHealthFactor()` > 1.0
+  - [ ] `AaveV3Plugin.repay("USDC", 500e6)` → verifica debt ≈ 0
+  - [ ] `AaveV3Plugin.withdraw("WETH", type(uint256).max)` → verifica WETH ricevuto
+- [ ] Implementare SCENARIO 2 - Interest Accrual:
+  - [ ] Apri posizione: supply WETH, borrow USDC
+  - [ ] `evm_increaseTime(30 * 24 * 3600)` (30 giorni)
+  - [ ] Verifica: variableDebtUSDC è cresciuto
+  - [ ] Verifica: `getHealthFactor()` è sceso
+  - [ ] Repay il debito aumentato (incluso interesse)
+  - [ ] Verifica: posizione completamente chiusa
+- [ ] Implementare SCENARIO 3 - Near-Liquidation:
+  - [ ] Supply 1 WETH, borrow al 75% del LTV (≈ 2000 USDC)
+  - [ ] Verifica: HF ≈ 1.1
+  - [ ] `AaveV3LensAdapter.getPositionsAtRisk(1.2e18)` → trova la posizione
+  - [ ] `evm_increaseTime(180 * 24 * 3600)` → HF scende ulteriormente
+- [ ] Implementare SCENARIO 4 - Partial Repay:
+  - [ ] Borrow 1000 USDC, repay 500, verifica debt ≈ 500 + interesse
+  - [ ] Verifica HF migliorato dopo repay parziale
+
+#### A.2 — `test/e2e/Euler.BorrowRepay.e2e.test.ts` 🔴 ALTA
+- [ ] Creare il file con import, skip guard, e setup
+- [ ] Implementare `before()`: EulerV2Plugin + EulerRegistry + EulerLensAdapter
+- [ ] Implementare SCENARIO 1 - Supply e Borrow Base:
+  - [ ] `EulerV2Plugin.deposit("WETH", amount)` → verifica shares vault > 0
+  - [ ] Enable collateral per il vault WETH via EVC
+  - [ ] `EulerV2Plugin.borrow("USDC", amount)` → verifica debt
+  - [ ] Verifica `EulerLensAdapter.getHealthFactor()` > 1.0
+  - [ ] `EulerV2Plugin.repay("USDC", amount)` → verifica debt ≈ 0
+  - [ ] Disable collateral + redeem shares → verifica WETH ricevuto
+- [ ] Implementare SCENARIO 2 - EVC Batch Operation:
+  - [ ] Supply + borrow in singola transazione EVC batch
+  - [ ] Verifica atomicità: tutto o niente
+  - [ ] Verifica stato posizione dopo batch
+- [ ] Implementare SCENARIO 3 - Close All Positions:
+  - [ ] Apri posizione leverage
+  - [ ] Chiama `EulerV2Plugin.closePositionsForBaseAsset("WETH")`
+  - [ ] Verifica: debito USDC ripagato, collateral WETH sbloccato
+- [ ] Implementare SCENARIO 4 - Multi-Vault:
+  - [ ] Supply WETH + Supply USDC come collateral separati
+  - [ ] Borrow WBTC usando entrambi
+  - [ ] Verifica health factor aggregato da `EulerLensAdapter`
+  - [ ] Repay tutto e chiudi
+
+#### A.3 — `test/e2e/Morpho.FullCycle.e2e.test.ts` 🔴 ALTA
+- [ ] Creare il file con import, skip guard, e setup
+- [ ] Implementare `before()`: MorphoPlugin + MorphoRegistry + MorphoLensAdapter
+- [ ] Implementare SCENARIO 1 - Supply Collateral + Borrow:
+  - [ ] `MorphoPlugin.deposit("WETH", amount)` → verifica collateral in Morpho
+  - [ ] `MorphoPlugin.borrow("USDC", amount)` → verifica debt
+  - [ ] Verifica `MorphoLensAdapter.getHealthFactor()` >= 1.0 (calcolato manualmente)
+  - [ ] `MorphoPlugin.repay("USDC", amount)` → verifica debt ≈ 0
+  - [ ] `MorphoPlugin.withdraw("WETH", amount)` → verifica WETH ricevuto
+- [ ] Implementare SCENARIO 2 - Liquidation Simulation:
+  - [ ] Apri posizione all'80% del LLTV
+  - [ ] Manipola oracle price: abbassa WETH del 20% via `hardhat_setStorageAt` o MockOracle
+  - [ ] Verifica: `MorphoLensAdapter.getHealthFactor()` < 1.0
+  - [ ] Verifica: `getPositionsAtRisk()` trova la posizione
+  - [ ] Simula liquidatore che chiama `morpho.liquidate()`
+  - [ ] Verifica: posizione liquidata correttamente
+- [ ] Implementare SCENARIO 3 - Multi-Collateral:
+  - [ ] Crea 3 posizioni con WETH, WBTC, ARB come collateral
+  - [ ] `MorphoLensAdapter.getValueBreakdown()` aggrega tutte e 3
+  - [ ] Chiudi una posizione → le altre rimangono intatte
+
+#### A.4 — `test/e2e/UniswapV3.SwapExecution.e2e.test.ts` 🟡 MEDIA
+- [ ] Creare il file con import, skip guard, e setup (SwapManager + UniswapV3Plugin)
+- [ ] Implementare SCENARIO 1 - Basic Swap USDC→WETH:
+  - [ ] ProxyGeneral ha 1000 USDC
+  - [ ] `SwapManager.executeSwap("USDC", "WETH", 1000e6, minOut, deadline)`
+  - [ ] Verifica: WETH ricevuto ≈ atteso dal quoter (≤ 1% slippage)
+  - [ ] Verifica: nessun USDC residuo nel ProxyGeneral
+- [ ] Implementare SCENARIO 2 - Multi-Hop WBTC→USDC→WETH:
+  - [ ] ProxyGeneral ha 0.01 WBTC
+  - [ ] Esegui swap multi-hop via USDC bridge
+  - [ ] Verifica: WETH ricevuto corretto, no token intermedio residuo
+- [ ] Implementare SCENARIO 3 - Slippage Protection:
+  - [ ] Configura max slippage 0.5%
+  - [ ] Simula swap ad alto impatto → verifica revert `SlippageExceeded`
+  - [ ] Riduci importo → verifica che ora passa
+- [ ] Implementare SCENARIO 4 - Deadline Enforcement:
+  - [ ] `deadline = block.timestamp - 1` → verifica revert `DeadlineExpired`
+  - [ ] `deadline = block.timestamp + 20 minutes` → verifica che passa
+- [ ] Implementare SCENARIO 5 - Withdraw con Automatic Swap:
+  - [ ] Pool ha 5000 USDC + 2 WETH + 0.1 WBTC
+  - [ ] User ha LP tokens equivalenti a 3000 USDC
+  - [ ] User withdrawa: SwapManager converte automaticamente WETH/WBTC→USDC
+  - [ ] User riceve 3000 USDC, pool ridotta proporzionalmente
+
+#### A.5 — `test/e2e/FlashLoan.LeverageAave.e2e.test.ts` 🟡 MEDIA
+- [ ] Creare il file con import, skip guard, e setup (FlashLoanService + AaveV3Plugin)
+- [ ] Implementare `before()`: deploy FlashLoanService, registrare AaveV3Plugin nel Beacon
+- [ ] Implementare SCENARIO 1 - 2x Leverage su WETH:
+  - [ ] User ha 1 WETH
+  - [ ] Flash loan 1 WETH da Balancer via FlashLoanService
+  - [ ] Supply 2 WETH su Aave come collateral
+  - [ ] Borrow ~1.5 WETH equivalente in USDC
+  - [ ] Swap USDC → 1 WETH per ripagare flash loan
+  - [ ] Verifica: healthFactor > 1.3, leverage ≈ 2x
+- [ ] Implementare SCENARIO 2 - Chiusura Flash Loan Position:
+  - [ ] Flash loan dell'intero debito USDC
+  - [ ] Repay Aave con USDC
+  - [ ] Withdraw tutto il collateral WETH
+  - [ ] Ripaga flash loan
+  - [ ] Verifica: posizione chiusa, user riceve WETH netto
+- [ ] Implementare SCENARIO 3 - Fee Calculation:
+  - [ ] Verifica che Balancer premium (0%) sia incluso correttamente
+  - [ ] Verifica che flash loan non fallisca per fee non coperta
+
+#### A.6 — `test/e2e/Dolomite.FullCycle.e2e.test.ts` 🟡 MEDIA
+- [ ] Creare il file con import, skip guard, e setup (DolomitePlugin + whale impersonation)
+- [ ] Implementare SCENARIO 1 - Deposit e Borrow Base:
+  - [ ] Impersona whale con WETH
+  - [ ] `DolomitePlugin.deposit("WETH", 1 ether)` → verifica balance in Dolomite
+  - [ ] `DolomitePlugin.borrow("USDC", 500e6)` → verifica debito registrato
+  - [ ] `DolomitePlugin.repay("USDC", 500e6)` → verifica debt ≈ 0
+  - [ ] `DolomitePlugin.withdraw("WETH", balance)` → verifica WETH ricevuto
+- [ ] Implementare SCENARIO 2 - Via ProtocolManager:
+  - [ ] `ProtocolManager.deposit("DolomitePlugin", "WETH", amount)` → va su Dolomite
+  - [ ] Configurare whitelist selectors per funzioni Dolomite-specific
+  - [ ] `ProtocolManager.executeProtocolCall(...)` → verifica successo
+
+#### A.7 — `test/e2e/MorphoVault.FullCycle.e2e.test.ts` 🟡 MEDIA [NUOVO]
+- [ ] Creare il file con import, skip guard
+- [ ] Implementare `before()`: `MorphoVaultPlugin.deploy(beaconAddress)` — **solo 1 argomento**
+- [ ] Configurare `MorphoRegistry.getDefaultVault("USDC")` con vault MetaMorpho
+- [ ] Implementare SCENARIO 1 - Deposit e Accumulo Yield:
+  - [ ] `morphoVaultPlugin.deposit("USDC", 10_000e6)` → verifica shares > 0
+  - [ ] Verifica: `vault.balanceOf(plugin) > 0`
+  - [ ] `evm_increaseTime(30 days)` → verifica `vault.convertToAssets(shares) > 10_000e6`
+  - [ ] Withdraw parziale 5000 USDC → verifica assets ricevuti
+  - [ ] Verifica shares rimanenti per resto + yield
+- [ ] Implementare SCENARIO 2 - Full Redeem via `vaultRedeem()`:
+  - [ ] Supply 1 WETH nel vault
+  - [ ] `morphoVaultPlugin.vaultRedeem(vaultAddress, shares)` → verifica WETH ricevuto
+  - [ ] Verifica: `vault.balanceOf(plugin) == 0` dopo redeem
+- [ ] Implementare SCENARIO 3 - Via ProtocolManager IProtocolAdapter:
+  - [ ] `ProtocolManager.deposit("MorphoVault", "USDC", 1000e6)` → routes a plugin
+  - [ ] Verifica: `vault.balanceOf(plugin) > 0`
+  - [ ] `ProtocolManager.withdraw("MorphoVault", "USDC", 500e6)` → USDC in ProxyGeneral
+- [ ] Implementare SCENARIO 4 - `VaultNotApproved`:
+  - [ ] Tenta deposit in vault non approvato → verifica revert `VaultNotApproved(vault)`
+- [ ] Implementare SCENARIO 5 - `DepositExceedsMax`:
+  - [ ] Deposita oltre `vault.maxDeposit(receiver)` → verifica revert `DepositExceedsMax`
+- [ ] Implementare SCENARIO 6 - MorphoVaultLensAdapter:
+  - [ ] Supply 10_000 USDC nel vault
+  - [ ] `MorphoVaultLensAdapter.getTotalValue()` → verifica valore in base asset
+  - [ ] `evm_increaseTime(30 days)` → verifica che `getTotalValue()` aumenta
+  - [ ] Verifica: `ValueCalculator` include MorphoVault nella computazione aggregata
+
+#### ✅ Checkpoint Fase 2
+- [ ] Eseguire tutti i file A con fork: `$env:FORK_ENABLED="true"; npx hardhat test test/e2e/Aave.BorrowRepay.e2e.test.ts test/e2e/Euler.BorrowRepay.e2e.test.ts test/e2e/Morpho.FullCycle.e2e.test.ts`
+- [ ] Nessuna regressione nei test delle fasi precedenti
+
+---
+
+### 🔒 FASE 3 — Security & Attack Tests (nuovi file)
+
+#### C.1 — `test/security/Reentrancy.attack.test.ts` 🔴 ALTA
+- [ ] Creare il file con import e describe block
+- [ ] Creare contratto attaccante `ReentrantDepositor` (in `contracts/mock/` o come stringa inline):
+  - [ ] `attack()`: chiama `liquidityManager.deposit()`, nell'`onERC20Received` callback ritenta `deposit()`
+- [ ] Creare contratto attaccante `ReentrantWithdrawer`:
+  - [ ] Nella `receive()` fallback: ritenta `withdraw()` con le stesse shares
+- [ ] Implementare ATTACCO 1 - ReentrantDeposit:
+  - [ ] Deploy ReentrantDepositor, fonda con token
+  - [ ] Chiama `ReentrantDepositor.attack()`
+  - [ ] Verifica: seconda chiamata reverta con `ReentrancyGuard` error
+  - [ ] Verifica: balance stato non corrotto
+- [ ] Implementare ATTACCO 2 - ReentrantWithdraw:
+  - [ ] Deposita fondi legittimi, poi chiama `ReentrantWithdrawer.attack()`
+  - [ ] Verifica: seconda withdraw reverta
+  - [ ] Verifica: user non riceve fondi doppi
+- [ ] Implementare ATTACCO 3 - Cross-Function Reentrancy:
+  - [ ] Deploy attaccante che chiama `deposit` dalla callback di `withdraw`
+  - [ ] Verifica: stato finale coerente, nessun arricchimento illegittimo
+
+#### C.3 — `test/security/AccessControl.comprehensive.test.ts` 🔴 ALTA
+- [ ] Creare il file con import e describe block
+- [ ] Definire lista completa funzioni `onlyOwner` di tutti i contratti:
+  - [ ] `LiquidityManager`: `setFeeRecipient`, `setDepositFee`, `setWithdrawFee`, `setDepositsEnabled`, `setWithdrawsEnabled`, `setWithdrawLimits`
+  - [ ] `ProxyGeneral`: `authorizeModule`, `deauthorizeModule`, `pause`, `unpause`
+  - [ ] `Beacon`: `updateImplementation`, `freezeModule`, `unfreezeModule`, `setGlobalFreeze`
+  - [ ] `ParameterManager`: `proposeParameterChange` (solo owner/EmergencyHandler)
+  - [ ] `EmergencyHandler`: `addEmergencyContact`, `removeEmergencyContact`, `setUnpauseTimelock`
+  - [ ] `ProtocolManager`: `registerProtocol`, `setProtocolActive`, `allowSelector`
+- [ ] Definire lista funzioni `onlyAuthorizedModule`:
+  - [ ] `ProxyGeneral`: `mint`, `burn`, `transferFunds`, `withdrawToken`, `trackOperation`
+- [ ] Definire lista funzioni `onlyEmergencyAuthorized`:
+  - [ ] `EmergencyHandler`: `emergencyPause`, `emergencyWithdrawAll`, `generateReport`
+- [ ] Implementare loop test: per ogni funzione protetta, chiamata da `attacker` → revert atteso
+- [ ] Verificare i messaggi di errore corretti per ogni categoria
+
+#### C.2 — `test/security/OracleManipulation.attack.test.ts` 🟡 MEDIA
+- [ ] Creare il file con import e describe block
+- [ ] Implementare ATTACCO 1 - Stale Price:
+  - [ ] `evm_increaseTime(2 * 3600)` (oltre l'heartbeat Chainlink)
+  - [ ] Tenta `getPrice()` su ChainlinkAdapter → verifica revert con `StalePriceError` o simile
+  - [ ] Verifica: nessuna transazione deposit/withdraw può passare con prezzo stale
+- [ ] Implementare ATTACCO 2 - Price Spike:
+  - [ ] Imposta prezzo WETH a +1000% tramite MockOracle
+  - [ ] User malevolo deposita → ottiene LP token inflati
+  - [ ] Ripristina prezzo reale
+  - [ ] Verifica: user non può withdraware più del depositato in valore
+- [ ] Implementare ATTACCO 3 - Oracle Freshness (fork):
+  - [ ] Su fork Arbitrum, verificare che heartbeat configurato sia sufficiente
+  - [ ] Verifica: il sistema usa il heartbeat configurato, non quello del feed originale
+
+#### C.5 — `test/security/GriefingResistance.test.ts` 🟡 MEDIA
+- [ ] Creare il file con import e describe block
+- [ ] Implementare GRIEF 1 - Deposit Spam:
+  - [ ] 100 deposit minimi consecutivi dallo stesso indirizzo
+  - [ ] Verifica: rate limiting blocca dopo il limite orario
+  - [ ] Verifica: altri utenti non sono bloccati
+- [ ] Implementare GRIEF 2 - Share Dilution Attack:
+  - [ ] Attaccante deposita per primo (enorme % del pool)
+  - [ ] Utenti legittimi depositano
+  - [ ] Attaccante withdrawa tutto
+  - [ ] Verifica: utenti legittimi non hanno perso fondi, LP price stabile
+- [ ] Implementare GRIEF 3 - Dead Share Attack:
+  - [ ] Pool a 0 TVL
+  - [ ] Attaccante deposita 1 wei → ottiene shares
+  - [ ] Attaccante trasferisce 1 wei di token direttamente al ProxyGeneral (no deposit)
+  - [ ] Verifica: LP price non diventa infinito o NaN
+  - [ ] Verifica: utenti successivi possono depositare normalmente
+- [ ] Implementare GRIEF 4 - Withdrawal Limit Saturation:
+  - [ ] Configura limite orario a 10,000 USDC
+  - [ ] Satura il limite con withdrawal
+  - [ ] Verifica: utenti legittimi ricevono messaggio di errore corretto
+  - [ ] `evm_increaseTime(1 hour)` → verifica che il limite si ripristina
+
+#### C.4 — `test/security/FlashLoan.selfAttack.test.ts` 🟢 BASSA
+- [ ] Creare il file con import, skip guard fork, e describe block
+- [ ] Creare contratto `FakePlugin` (non registrato nel Beacon)
+- [ ] Creare contratto `AttackPlugin` (registrato nel Beacon per test interni)
+- [ ] Implementare ATTACCO 1 - Non-Plugin Flash Loan:
+  - [ ] `FakePlugin.attack()` chiama `FlashLoanService.executeFlashLoan(...)`
+  - [ ] Verifica: revert `NotRegisteredPlugin(FakePlugin.address)`
+- [ ] Implementare ATTACCO 2 - Flash Loan Price Manipulation:
+  - [ ] `AttackPlugin` prende 1M USDC flash loan, deposita nel protocollo
+  - [ ] Swap massiccio su UniswapV3 per skew prezzo
+  - [ ] Tenta withdraw con prezzo skewato
+  - [ ] Verifica: sistema resistente a manipolazione intra-block
+- [ ] Implementare ATTACCO 3 - Reentrancy su Flash Loan Callback:
+  - [ ] Tenta `executeFlashLoan` da dentro `onFlashLoanReceived`
+  - [ ] Verifica: revert `ReentrantCall()` (flag `_inFlashLoan`)
+- [ ] Implementare ATTACCO 4 - Unauthorized `receiveFlashLoan`:
+  - [ ] Chiama direttamente `FlashLoanService.receiveFlashLoan(...)` senza passare per Balancer
+  - [ ] Verifica: revert `NotBalancerVault`
+- [ ] Implementare ATTACCO 5 - Swap da non-plugin:
+  - [ ] Chiama `FlashLoanService.swap(...)` da EOA non registrato
+  - [ ] Verifica: accesso bloccato
+
+#### ✅ Checkpoint Fase 3
+- [ ] Eseguire: `npx hardhat test test/security/`
+- [ ] Tutti gli attacchi bloccati → zero false positive
+- [ ] Nessuna regressione nelle fasi precedenti
+
+---
+
+### 🔗 FASE 4 — Cross-Module, DepositHelper e Infrastruttura
+
+#### D.1 — `test/e2e/CrossProtocol.Rebalance.e2e.test.ts` 🟡 MEDIA
+- [ ] Creare il file con import, skip guard fork, e setup
+- [ ] Implementare `before()`: ProtocolManager + AaveV3Plugin + EulerV2Plugin entrambi registrati
+- [ ] Implementare SCENARIO - Rebalance Aave→Euler:
+  - [ ] Deposit 10,000 USDC → va su Aave (protocollo attivo)
+  - [ ] Verifica: TVL su Aave = 10,000 USDC, TVL su Euler = 0
+  - [ ] `ProtocolManager.switchActiveProtocol("AaveV3", "EulerV2")` + `rebalance()`
+  - [ ] Verifica: TVL su Aave ≈ 0, TVL su Euler ≈ 10,000 USDC
+  - [ ] Verifica: LP token price non cambiato (value preservata)
+  - [ ] Verifica: utente può withdraware i suoi fondi
+- [ ] Implementare SCENARIO - Multi-Protocol Allocation:
+  - [ ] Alloca 50% Aave, 30% Euler, 20% Morpho
+  - [ ] `evm_increaseTime(30 days)` → ogni protocollo matura interessi diversi
+  - [ ] Verifica: `ValueCalculator.getPoolValue()` include tutti e 3
+  - [ ] Verifica: LP price riflette rendimenti aggregati
+
+#### D.2 — `test/e2e/FullSystem.MultiUser.fork.e2e.test.ts` 🟡 MEDIA
+- [ ] Creare il file con import, skip guard fork, e setup
+- [ ] Implementare `before()`: 10 signer con USDC diversi ($100–$50,000)
+- [ ] Implementare sequenza temporale:
+  - [ ] T=0: 5 utenti depositano
+  - [ ] T=7d: 2 utenti withdrawano il 50%
+  - [ ] T=14d: 3 nuovi utenti depositano
+  - [ ] T=20d: 1 utente withdrawa tutto
+  - [ ] T=30d: tutti i rimanenti withdrawano tutto
+- [ ] Ad ogni step verificare: `sum(userShares) == totalSupply`
+- [ ] Ad ogni step verificare: LP price non scende
+- [ ] Ad ogni step verificare: nessun utente riceve più del dovuto
+- [ ] Ad ogni step verificare: fee accumulate nel `feeRecipient` corrette
+- [ ] Verifica finale: `proxyGeneral.balanceOf(proxy) ≈ 0`, `totalSupply == 0`, nessun fondo bloccato
+
+#### D.3 — `test/e2e/EmergencyOnLivePosition.e2e.test.ts` 🟡 MEDIA
+- [ ] Creare il file con import, skip guard fork, e setup
+- [ ] Implementare SCENARIO - Emergency con Posizione Aave:
+  - [ ] 3 utenti depositano USDC, fondi deployati su Aave
+  - [ ] `EmergencyHandler.emergencyPause("Critical bug")`
+  - [ ] Verifica: deposit/withdraw normali revertano con "Contract is paused"
+  - [ ] `EmergencyHandler.emergencyWithdrawAll()` → AaveV3Plugin withdrawa tutto da Aave
+  - [ ] Verifica: fondi arrivano in ProxyGeneral
+  - [ ] Verifica: ogni utente può fare emergency withdraw proporzionale
+- [ ] Implementare SCENARIO - Emergency con Posizione a Rischio:
+  - [ ] Apri posizione leverage, abbassa HF vicino a 1.0
+  - [ ] Attiva emergency
+  - [ ] Verifica: emergency withdraw gestisce anche il debito outstanding
+  - [ ] Verifica: sistema non si blocca con posizione problematica
+
+#### D.4 — `test/e2e/DepositHelper.integration.e2e.test.ts` 🟡 MEDIA [NUOVO]
+- [ ] Creare il file con import, skip guard fork, e setup
+- [ ] Implementare `before()`: `DepositHelper.deploy(beaconAddress)` — **solo beacon nel costruttore**
+- [ ] Implementare SCENARIO 1 - Deposit ETH nativo:
+  - [ ] Verifica pre-condizione: `beacon["BASE_ASSET"] == WETH.address`
+  - [ ] `helper.depositETH{ value: 1 ether }()` → verifica WETH in ProxyGeneral + LP tokens all'utente
+  - [ ] Verifica: nessun WETH residuo nel DepositHelper
+- [ ] Implementare SCENARIO 2 - ZeroDeposit revert:
+  - [ ] `helper.depositETH{ value: 0 }()` → verifica revert `ZeroDeposit()`
+- [ ] Implementare SCENARIO 3 - ETH grande importo:
+  - [ ] 100 ETH → verifica WETH.balanceOf(proxyGeneral) +100 ether
+  - [ ] Verifica LP token proporzionali
+- [ ] Implementare SCENARIO 4 - Sequenza deposit-withdraw:
+  - [ ] Deposita 2 ETH via DepositHelper → ottieni LP
+  - [ ] Withdrawa LP via `LiquidityManager.withdraw()` → ricevi WETH
+- [ ] Implementare SCENARIO 5 - Fork WETH reale Arbitrum:
+  - [ ] `beacon["BASE_ASSET"] = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1`
+  - [ ] Deposita 0.5 ETH → verifica WETH.balanceOf() del pool aumenta
+
+#### Infrastruttura 9.2 — Shared Fixture System
+- [ ] Creare `test/helpers/fixtures/fullStack.ts`
+- [ ] Implementare `deployFullProtocolFixture()` con deploy completo di tutti i contratti core
+- [ ] Implementare `deployWithAaveFixture()` — stack + AaveV3Plugin configurato
+- [ ] Implementare `deployWithEulerFixture()` — stack + EulerV2Plugin configurato
+- [ ] Testare `loadFixture(deployFullProtocolFixture)` in almeno un test e misurare velocità
+
+#### Infrastruttura 9.3 — Whale Registry
+- [ ] Creare `test/helpers/whales.ts`
+- [ ] Definire `WHALES`: USDC, WETH, WBTC, USDT, ARB
+- [ ] Implementare `fundUser(token, userAddress, amount)` con impersonation + ETH per gas
+- [ ] Aggiornare almeno 2 test e2e esistenti per usare `fundUser()` invece di codice ripetuto
+
+#### Infrastruttura 9.1 — Fork Pinning
+- [ ] Aprire `hardhat.config.ts`
+- [ ] Aggiungere `blockNumber: 340_000_000` (o blocco più recente stabile) nella config `forking`
+- [ ] Eseguire un test fork per verificare che il blocco pinned sia accettato dall'RPC
+- [ ] Commentare il blockNumber scelto con data e motivazione
+
+#### Infrastruttura 9.4 — Coverage Reporting
+- [ ] Aggiungere script `"test:coverage"` a `package.json`
+- [ ] Aggiungere script `"test:unit"` a `package.json`
+- [ ] Aggiungere script `"test:fork"` a `package.json`
+- [ ] Creare `.solcover.js` con `skipFiles: ['mocks/', 'interfaces/', 'old/']`
+- [ ] Eseguire `npx hardhat coverage` e verificare che produce output HTML
+
+#### Infrastruttura 9.5 — CI Pipeline
+- [ ] Creare directory `.github/workflows/` (se non esiste)
+- [ ] Creare `.github/workflows/tests.yml`
+- [ ] Configurare job `unit-tests`: esegue `test:unit` senza fork
+- [ ] Configurare job `fork-tests`: esegue con secret `ARBITRUM_RPC_URL` e `FORK_ENABLED=true`
+- [ ] Configurare job `security-tests`: esegue `test/security/` senza fork
+
+#### Infrastruttura 9.6 — Gas Snapshot Testing
+- [ ] Creare `test/helpers/gasSnapshot.ts` con `assertGasSnapshot(name, actualGas)`
+- [ ] Creare `test/gas-snapshots.json` vuoto (`{}`)
+- [ ] Aggiungere snapshot per `LiquidityManager.deposit()` in almeno un test
+- [ ] Aggiungere snapshot per `LiquidityManager.withdraw()` in almeno un test
+- [ ] Aggiungere snapshot per `AaveV3Plugin.deposit()` (su fork)
+- [ ] Eseguire una volta per creare le baseline, poi verificare che le esecuzioni successive non regrediscano
+
+#### ✅ Checkpoint Fase 4
+- [ ] Eseguire: `npx hardhat test test/e2e/CrossProtocol.Rebalance.e2e.test.ts test/e2e/DepositHelper.integration.e2e.test.ts`
+- [ ] Nessuna regressione nelle fasi precedenti
+- [ ] `npx hardhat coverage` produce report senza errori
+
+---
+
+### 📐 FASE 5 — Edge Cases e Completamento
+
+#### F.1 — `test/unit/EdgeCases.tokenDecimals.test.ts` 🟡 MEDIA
+- [ ] Creare il file con import e describe block
+- [ ] Implementare setup con MockERC20 a 2 decimali + MockOracle configurato
+- [ ] Implementare setup con MockERC20 a 6 decimali (simula USDC)
+- [ ] Implementare setup con MockERC20 a 8 decimali (simula WBTC)
+- [ ] Implementare setup con MockERC20 a 18 decimali (simula WETH)
+- [ ] Per ogni decimale verificare: calcolo valore pool senza overflow
+- [ ] Per ogni decimale verificare: conversione prezzo oracle corretta
+- [ ] Per ogni decimale verificare: LP price calcolata correttamente
+- [ ] Per ogni decimale verificare: deposit e withdraw amounts scalati correttamente
+
+#### F.2 — `test/unit/EdgeCases.zeroValues.test.ts` 🟡 MEDIA
+- [ ] Creare il file con import e describe block
+- [ ] Implementare: deposit di 1 wei → revert (sotto `minDeposit`)
+- [ ] Implementare: `withdraw(0)` → revert con errore chiaro
+- [ ] Implementare: `ValueCalculator.getLPPrice()` su pool con 0 TVL → non divide per zero
+- [ ] Implementare: `getHealthFactor()` senza posizione aperta → ritorna `MaxUint256` o `0` (documentare quale)
+- [ ] Implementare: `borrow(0)` → revert con errore chiaro
+- [ ] Implementare: ultimo utente withdrawa tutto → `totalSupply == 0`, sistema non si blocca
+- [ ] Implementare: secondo deposit dopo pool vuota → prezzo non manipolabile dal primo utente
+
+#### F.5 — `test/unit/EdgeCases.beaconUpgrade.test.ts` 🟡 MEDIA [NUOVO]
+- [ ] Creare il file con import e describe block
+- [ ] Implementare SCENARIO 1 - Upgrade base:
+  - [ ] Deploy Beacon, registra LiquidityManager V1
+  - [ ] `beacon.updateImplementation("LiquidityManager", v2.address)` → immediato
+  - [ ] Verifica: `getImplementation()` ritorna v2
+  - [ ] Verifica: history contiene v1 tramite `getImplementationHistory()`
+- [ ] Implementare SCENARIO 2 - Freeze/Unfreeze:
+  - [ ] `beacon.freezeModule("AaveV3Plugin")`
+  - [ ] Verifica: `getImplementation("AaveV3Plugin")` reverta (frozen)
+  - [ ] Verifica: `updateImplementation` reverta (frozen)
+  - [ ] `beacon.unfreezeModule("AaveV3Plugin")` → ora accessibile
+- [ ] Implementare SCENARIO 3 - Global Freeze:
+  - [ ] `beacon.setGlobalFreeze(true)` → tutte le `getImplementation()` revertano
+  - [ ] `beacon.setGlobalFreeze(false)` → tutto torna accessibile
+- [ ] Implementare SCENARIO 4 - Non-contract:
+  - [ ] `beacon.updateImplementation("LiquidityManager", EOA_address)` → revert `"Implementation must be a contract"`
+- [ ] Implementare SCENARIO 5 - Same address:
+  - [ ] `beacon.updateImplementation("LiquidityManager", stessa_address)` → revert `"Same implementation address"`
+- [ ] Implementare SCENARIO 6 - 2-step ownership:
+  - [ ] `beacon.initiateOwnershipTransfer(newOwner)` → `pendingOwner == newOwner`
+  - [ ] `beacon.acceptOwnership()` da newOwner → `owner == newOwner`
+  - [ ] Vecchio owner non può più fare `updateImplementation`
+
+#### F.6 — `test/unit/EdgeCases.parameterTimelock.test.ts` 🟡 MEDIA [NUOVO]
+- [ ] Creare il file con import e describe block
+- [ ] Implementare SCENARIO 1 - Parametro non-critical (senza timelock):
+  - [ ] `proposeParameterChange("minDeposit", nuovoValore)`
+  - [ ] `executeParameterChange("minDeposit")` immediatamente → passa
+  - [ ] Verifica: `getCurrentParameterValue("minDeposit") == nuovoValore`
+- [ ] Implementare SCENARIO 2 - Parametro critical (con timelock):
+  - [ ] `proposeParameterChange("maxDeposit", nuovoValore)`
+  - [ ] `executeParameterChange("maxDeposit")` immediatamente → revert (timelock)
+  - [ ] `evm_increaseTime(24 hours)` → ora `executeParameterChange` passa
+- [ ] Implementare SCENARIO 3 - Parametro fuori range:
+  - [ ] `proposeParameterChange("maxSlippage", 9999)` → revert (fuori range, max 1000)
+- [ ] Implementare SCENARIO 4 - Annullamento proposta:
+  - [ ] Proponi, poi annulla (se funzione esiste)
+  - [ ] `evm_increaseTime(24 hours)` → `executeParameterChange` reverta (cancellata)
+- [ ] Implementare SCENARIO 5 - Due proposte stesso parametro:
+  - [ ] Proponi 50e18, poi proponi 75e18 → documentare quale vince
+  - [ ] `evm_increaseTime(24 hours)` + execute → verifica valore applicato
+- [ ] Implementare SCENARIO 6 - `onlyAuthorizedUpdater`:
+  - [ ] `proposeParameterChange` da account non autorizzato → revert
+- [ ] Implementare SCENARIO 7 - Emergency change (nessun timelock):
+  - [ ] EmergencyHandler chiama `emergencyParameterChange` (se esiste) → immediato
+  - [ ] Verifica: evento `ParameterEmergencyChanged` emesso
+
+#### F.3 — `test/unit/EdgeCases.timelock.test.ts` 🟢 BASSA
+- [ ] Creare il file (oppure notare che è già coperto da F.6 sopra — valutare se unire)
+- [ ] Implementare: proposta eseguita prima del timelock → fallisce
+- [ ] Implementare: proposta → timelock esatto → eseguita
+- [ ] Implementare: timelock durante pause del sistema → comportamento documentato
+
+#### F.4 — `test/unit/EdgeCases.rateLimit.test.ts` 🟢 BASSA
+- [ ] Creare il file con import e describe block
+- [ ] Implementare: N deposit fino al limite orario → N+1 fallisce con `RateLimitExceeded`
+- [ ] Implementare: limite giornaliero separato dall'orario
+- [ ] Implementare: `evm_increaseTime(1 hour)` → limite si azzera, N+1 ora passa
+- [ ] Implementare: `userA` satura il suo limite "deposit" → `userB` può ancora depositare (limiti separati)
+- [ ] Implementare: `userA` satura "deposit" → "withdraw" di `userA` ha ancora budget pieno (tipi separati)
+- [ ] Implementare: `globalRateLimits` satura → tutti bloccati anche con budget per-user
+- [ ] Implementare: verifica `checkRateLimit()` view → ritorna `(ok, hourlyRemaining, dailyRemaining)` corretti
+
+#### E.1 — `test/e2e/GasOptimization.benchmark.e2e.test.ts` 🟢 BASSA (fork)
+- [ ] Creare il file con import, skip guard fork, e setup
+- [ ] Definire `GAS_LIMITS`: deposit=500k, withdraw=600k, borrow=300k, repay=250k, emergencyPause=100k, beaconLookup=50k, lensAdapterQuery=200k
+- [ ] Implementare misura gas per: `LiquidityManager.deposit()`
+- [ ] Implementare misura gas per: `LiquidityManager.withdraw()`
+- [ ] Implementare misura gas per: `AaveV3Plugin.borrow()`
+- [ ] Implementare misura gas per: `AaveV3Plugin.repay()`
+- [ ] Implementare misura gas per: `EmergencyHandler.emergencyPause()`
+- [ ] Implementare misura gas per: `Beacon.getImplementation()`
+- [ ] Implementare misura gas per: `AaveV3LensAdapter.getHealthFactor()`
+- [ ] Per ognuno: `expect(receipt.gasUsed).to.be.lessThan(GAS_LIMITS[op])`
+- [ ] Integrare con `assertGasSnapshot()` dell'infrastruttura 9.6
+
+#### E.2 — `test/e2e/HighLoad.concurrent.fork.test.ts` 🟢 BASSA (fork)
+- [ ] Creare il file con import, skip guard fork, e setup
+- [ ] Implementare `before()`: 50 signer con USDC (da whale)
+- [ ] Implementare: 50 deposit sequenziali (Hardhat processa in sequenza)
+- [ ] Verifica dopo tutti i deposit: `sum(userShares) == totalSupply`
+- [ ] Verifica: LP price corretta
+- [ ] Verifica: nessuna transazione reverted inaspettatamente
+- [ ] Verifica: rate limit per-user funziona correttamente (ogni user ha budget separato)
+
+#### ✅ Checkpoint Fase 5 — Finale
+- [ ] Eseguire intera suite senza fork: `npx hardhat test test/unit/ test/invariants/ test/security/`
+- [ ] Eseguire intera suite con fork: `$env:FORK_ENABLED="true"; npx hardhat test test/e2e/ test/integration/**/*.test.ts`
+- [ ] `npx hardhat coverage` → report coverage > 85% contratti core
+- [ ] Revisione finale: zero test failing, zero regressioni
+
+---
+
+### 📊 Conteggio task totali per fase
+
+| Fase | Task | File nuovi | File modificati |
+|---|---|---|---|
+| Fase 0 — Fix Bug | ~35 | 0 | 7 |
+| Fase 1 — Invarianti | ~35 | 5 | 0 |
+| Fase 2 — Protocol Fork | ~80 | 7 | 0 |
+| Fase 3 — Security | ~40 | 5 | +2 (contratti mock) |
+| Fase 4 — Cross-Module + Infra | ~55 | 4 + 5 infra | 2 (config) |
+| Fase 5 — Edge Cases | ~50 | 8 | 0 |
+| **TOTALE** | **~295** | **~34** | **~9** |
+
+---
+
 *Documento aggiornato in revisione tecnica del 11 Luglio 2026 sulla base di analisi approfondita di:*  
 *`LiquidityManager`, `ProxyGeneral`, `ProtocolManager`, `EmergencyHandler`, `Beacon`, `ParameterManager`,*  
 *`AaveV3Plugin`, `EulerV2Plugin`, `MorphoPlugin`, `MorphoVaultPlugin`, `DolomitePlugin` (struttura),*  

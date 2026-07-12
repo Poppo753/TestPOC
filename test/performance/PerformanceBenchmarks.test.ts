@@ -48,6 +48,7 @@ describe("Performance Benchmarks - TEST-002", function () {
     let tokenManager: any;
     let liquidityManager: any;
     let swapManager: any;
+    let mockOracleAdapter: any;  // stored at test scope for per-test price registration
     let valueCalculator: any;
     let owner: SignerWithAddress;
     let user: SignerWithAddress;
@@ -87,12 +88,24 @@ describe("Performance Benchmarks - TEST-002", function () {
 
         const MockOracleAdapterFactory = await ethers.getContractFactory("MockOracleAdapter");
 
-        const mockOracleAdapter = await MockOracleAdapterFactory.deploy();
+        mockOracleAdapter = await MockOracleAdapterFactory.deploy();
 
         await mockOracleAdapter.waitForDeployment();
 
-        
-
+        // Set oracle prices for all tokens used in the tests
+        await mockOracleAdapter.setPrice("WETH", ethers.parseUnits("3000", 8));
+        await mockOracleAdapter.setPrice("USDC", ethers.parseUnits("1", 8));
+        await mockOracleAdapter.setPrice("WBTC", ethers.parseUnits("60000", 8));
+        await mockOracleAdapter.setPrice("USDT", ethers.parseUnits("1", 8));
+        await mockOracleAdapter.setPrice("TK1", ethers.parseUnits("2000", 8));
+        await mockOracleAdapter.setPrice("TK2", ethers.parseUnits("1", 8));
+        await mockOracleAdapter.setPrice("TK3", ethers.parseUnits("100", 8));
+        await mockOracleAdapter.setPrice("COMP", ethers.parseUnits("50", 8));
+        await mockOracleAdapter.setPrice("UNI", ethers.parseUnits("10", 8));
+        // Pre-register dynamic TK0–TK19 for token batch registration benchmarks
+        for (let i = 0; i < 20; i++) {
+            await mockOracleAdapter.setPrice(`TK${i}`, ethers.parseUnits((1000 + i * 100).toString(), 8));
+        }
         tokenManager = await TokenManagerFactory.deploy(
 
           await beacon.getAddress(),
@@ -104,9 +117,9 @@ describe("Performance Benchmarks - TEST-002", function () {
 
         // Deploy MockWETH as BASE_ASSET for LiquidityManager
         const MockWETHFactory = await ethers.getContractFactory("MockWETH");
-        const mockWeth = await MockWETHFactory.deploy();
-        await mockWeth.waitForDeployment();
-        await beacon.updateImplementation("BASE_ASSET", await mockWeth.getAddress());
+        weth = await MockWETHFactory.deploy();
+        await weth.waitForDeployment();
+        await beacon.updateImplementation("BASE_ASSET", await weth.getAddress());
 
         const LiquidityManagerFactory = await ethers.getContractFactory("LiquidityManager");
         liquidityManager = await LiquidityManagerFactory.deploy(await beacon.getAddress(), "WETH");
@@ -119,11 +132,6 @@ describe("Performance Benchmarks - TEST-002", function () {
         const ValueCalculatorFactory = await ethers.getContractFactory("ValueCalculator");
         valueCalculator = await ValueCalculatorFactory.deploy(await beacon.getAddress(), "WETH");
         await valueCalculator.waitForDeployment();
-
-        // Deploy WETH first (needed for TokenManager validation)
-        const WETHFactory = await ethers.getContractFactory("MockWETH");
-        weth = await WETHFactory.deploy();
-        await weth.waitForDeployment();
 
         // Deploy ProxyGeneral (needed for LiquidityManager)
         const ProxyGeneralFactory = await ethers.getContractFactory("ProxyGeneral");
@@ -167,6 +175,12 @@ describe("Performance Benchmarks - TEST-002", function () {
         await mockToken2.connect(owner).approve(await liquidityManager.getAddress(), ethers.MaxUint256);
         await mockToken1.connect(user).approve(await swapManager.getAddress(), ethers.MaxUint256);
         await mockToken2.connect(user).approve(await swapManager.getAddress(), ethers.MaxUint256);
+
+        // LiquidityManager.deposit() accepts an ERC-20 amount, not native ETH.
+        await weth.connect(owner).deposit({ value: ethers.parseEther("100") });
+        await weth.connect(user).deposit({ value: ethers.parseEther("100") });
+        await weth.connect(owner).approve(await liquidityManager.getAddress(), ethers.MaxUint256);
+        await weth.connect(user).approve(await liquidityManager.getAddress(), ethers.MaxUint256);
     });
 
     describe("Gas Benchmarks - Parameter Operations", function () {
@@ -293,9 +307,7 @@ describe("Performance Benchmarks - TEST-002", function () {
         it("Should measure gas for ETH deposit (bootstrap)", async function () {
             const depositAmount = ethers.parseEther("10");
 
-            const tx = await liquidityManager.connect(owner).deposit({
-                value: depositAmount
-            });
+            const tx = await liquidityManager.connect(owner).deposit(depositAmount);
             const receipt = await tx.wait();
 
             console.log(`\n⛽ ETH Deposit Gas (bootstrap): ${formatGas(receipt!.gasUsed)}`);
@@ -305,9 +317,7 @@ describe("Performance Benchmarks - TEST-002", function () {
         it("Should measure gas for ETH withdrawal", async function () {
             // Prima deposita ETH
             const depositAmount = ethers.parseEther("10");
-            const depositTx = await liquidityManager.connect(owner).deposit({
-                value: depositAmount
-            });
+            const depositTx = await liquidityManager.connect(owner).deposit(depositAmount);
             await depositTx.wait();
 
             // Get ProxyGeneral to check balance
@@ -333,9 +343,7 @@ describe("Performance Benchmarks - TEST-002", function () {
             const gasResults: bigint[] = [];
 
             for (const amount of amounts) {
-                const tx = await liquidityManager.connect(user).deposit({
-                    value: amount
-                });
+                const tx = await liquidityManager.connect(user).deposit(amount);
                 const receipt = await tx.wait();
                 gasResults.push(receipt!.gasUsed);
             }
@@ -594,9 +602,7 @@ describe("Performance Benchmarks - TEST-002", function () {
                 "COMP", mockToken3.getAddress(), await mockOracle.getAddress(), 18, 8, 3600
             );
             
-            await liquidityManager.connect(owner).deposit({
-                value: ethers.parseEther("10")
-            });
+            await liquidityManager.connect(owner).deposit(ethers.parseEther("10"));
 
             const operations = {
                 "Parameter Proposal": async () => {
@@ -610,9 +616,7 @@ describe("Performance Benchmarks - TEST-002", function () {
                     );
                 },
                 "ETH Deposit": async () => {
-                    return await liquidityManager.connect(user).deposit({
-                        value: ethers.parseEther("1")
-                    });
+                    return await liquidityManager.connect(user).deposit(ethers.parseEther("1"));
                 },
                 "Parameter Execution": async () => {
                     // Execute previously proposed parameter

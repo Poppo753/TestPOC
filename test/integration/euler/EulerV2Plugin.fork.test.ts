@@ -32,6 +32,7 @@ describe("EulerV2Plugin - Fork Tests (Arbitrum Mainnet)", function () {
     
     // Euler V2 Core (da documentazione)
     const EVC_ADDRESS = "0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066";
+    const ACCOUNT_LENS = "0x90a52DDcb232e7bb003DD9258fA1235c553eC956";
     
     // Euler V2 Vaults su Arbitrum (da discovery script)
     // Trovati via eVaultFactory.proxyList()
@@ -57,7 +58,7 @@ describe("EulerV2Plugin - Fork Tests (Arbitrum Mainnet)", function () {
     before(async function () {
         // Skip se non siamo su fork
         const network = await ethers.provider.getNetwork();
-        if (process.env.FORK_ENABLED !== "true" && network.chainId !== 42161n) {
+        if (process.env.FORK_ENABLED !== "true") {
             console.log("⚠️  Skipping fork tests - not running on Arbitrum fork");
             console.log("   Run with: $env:FORK_ENABLED=\"true\"; npx hardhat test test/integration/EulerV2Plugin.fork.test.ts");
             this.skip();
@@ -108,7 +109,12 @@ describe("EulerV2Plugin - Fork Tests (Arbitrum Mainnet)", function () {
         // ==================== DEPLOY EULER V2 PLUGIN ====================
         
         const EulerPluginFactory = await ethers.getContractFactory("EulerV2Plugin");
-        plugin = await EulerPluginFactory.deploy(await mockBeacon.getAddress(), "WETH");
+        plugin = await EulerPluginFactory.deploy(
+            await mockBeacon.getAddress(),
+            "WETH",
+            EVC_ADDRESS,
+            ACCOUNT_LENS
+        );
         await plugin.waitForDeployment();
         console.log(`   EulerV2Plugin: ${await plugin.getAddress()}`);
 

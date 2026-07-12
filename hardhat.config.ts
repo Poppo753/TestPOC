@@ -44,6 +44,9 @@ const config: HardhatUserConfig = {
       chainId: 42161, // Arbitrum mainnet chain ID
       timeout: 600000, // 10 minutes for fork tests
       allowUnlimitedContractSize: true, // Allow large contracts in tests (EulerV2Plugin ~30KB)
+      // Increase stack trace limit to suppress "Failed to generate N stack traces" warning from DolomitePlugin
+      throwOnCallFailures: true,
+      throwOnTransactionFailures: true,
     },
   },
   gasReporter: {

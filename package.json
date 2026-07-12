@@ -5,6 +5,12 @@
   "main": "index.js",
   "scripts": {
     "test": "hardhat test",
+    "test:unit": "hardhat test test/unit/**/*.test.ts",
+    "test:integration": "hardhat test test/integration/**/*.test.ts",
+    "test:security": "hardhat test test/security/*.test.ts",
+    "test:invariants": "hardhat test test/invariants/*.test.ts",
+    "test:fork": "cross-env FORK_ENABLED=true hardhat test test/e2e/**/*.test.ts",
+    "test:coverage": "hardhat coverage",
     "test:e2e": "powershell -ExecutionPolicy Bypass -File ./test-e2e.ps1",
     "test:gmx": "FORK_ENABLED=true hardhat test test/integration/GMXv2Plugin.e2e.test.ts --network hardhat",
     "compile": "hardhat compile",

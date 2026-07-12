@@ -58,7 +58,7 @@ describe("Morpho Blue Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", fun
     before(async function () {
         // Skip if not on fork
         const network = await ethers.provider.getNetwork();
-        if (process.env.FORK_ENABLED !== "true" && network.chainId !== 42161n) {
+        if (process.env.FORK_ENABLED !== "true") {
             console.log("⚠️  Skipping fork tests - not running on Arbitrum fork");
             console.log("   Run with: $env:FORK_ENABLED=\"true\"; npx hardhat test test/integration/MorphoPlugin.fork.test.ts");
             this.skip();
@@ -294,7 +294,7 @@ describe("Morpho Blue Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", fun
         });
 
         it("Should have correct Morpho Blue address", async function () {
-            expect(await plugin.MORPHO_ADDRESS()).to.equal(MORPHO);
+            expect(await plugin.morpho()).to.equal(MORPHO);
         });
 
         it("Should have circuit breaker OFF", async function () {

@@ -55,4 +55,21 @@ contract MockTokenManager {
     function isTokenActive(string memory tokenCode) external view returns (bool) {
         return tokenAddresses[tokenCode] != address(0);
     }
+
+    /**
+     * @notice Converts a USD value (in usdDecimals precision) to base asset amount
+     * @dev Simple mock: assumes base asset price is stored in tokenPrices["WETH"] (Aave 8 dec base)
+     *      Formula: baseAmount = (valueInUsd * 1e18) / priceInUsd
+     */
+    function convertUsdToBaseAsset(uint256 valueInUsd, uint8 usdDecimals) external view returns (uint256) {
+        if (valueInUsd == 0) return 0;
+        // Get base asset price (stored as Aave-style 8 dec USD price)
+        uint256 baseAssetPriceUsd = tokenPrices["WETH"];
+        if (baseAssetPriceUsd == 0) {
+            // Fallback: assume 1 USD = 1e10 wei (rough estimate)
+            return valueInUsd * (10 ** (18 - usdDecimals));
+        }
+        // Convert: valueInUsd (usdDecimals) / baseAssetPrice (8 dec) → base asset (18 dec)
+        return (valueInUsd * 1e18) / baseAssetPriceUsd;
+    }
 }

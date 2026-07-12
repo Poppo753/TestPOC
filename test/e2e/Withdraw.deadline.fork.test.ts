@@ -56,6 +56,11 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
 
   before(async function () {
     // This test requires fork - skip if not forking
+    if (process.env.FORK_ENABLED !== "true") {
+      console.log("\u26a0\ufe0f  Skipping fork tests - FORK_ENABLED not set");
+      this.skip();
+      return;
+    }
     const network = await ethers.provider.getNetwork();
     if (network.chainId !== 42161n && network.chainId !== 31337n) {
       console.log("⚠️  Skipping fork tests - not on Arbitrum or local fork");

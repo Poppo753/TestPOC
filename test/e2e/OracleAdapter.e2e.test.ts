@@ -74,6 +74,8 @@ describe("🎬 Oracle Adapter - End-to-End Tests", function () {
 
     // Setup WETH in beacon (required)
     await beacon.updateImplementation("WETH", await weth.getAddress());
+    // BASE_ASSET required by TokenManager.manageTokenData
+    await beacon.updateImplementation("BASE_ASSET", await weth.getAddress());
 
     // Deploy TokenManager
     const TokenManagerFactory = await ethers.getContractFactory("TokenManager");
@@ -98,13 +100,16 @@ describe("🎬 Oracle Adapter - End-to-End Tests", function () {
     const ChainlinkAdapterFactory = await ethers.getContractFactory("ChainlinkAdapter");
     chainlinkAdapter = await ChainlinkAdapterFactory.deploy();
 
+    // Set targetDenomination to "USD" so USD-denominated feeds don't need conversion
+    await chainlinkAdapter.setTargetDenomination("USD");
+
     // Deploy and setup Chainlink oracles
     const MockChainlinkOracleFactory = await ethers.getContractFactory("MockChainlinkOracle");
     mockChainlinkOracle = await MockChainlinkOracleFactory.deploy(INITIAL_PRICES.USDC, 8, "USDC / USD");
-    await chainlinkAdapter.setPriceFeed("USDC", await mockChainlinkOracle.getAddress(), 8, HEARTBEAT);
+    await chainlinkAdapter.setPriceFeed("USDC", await mockChainlinkOracle.getAddress(), 8, HEARTBEAT, "USD");
     
     const wbtcOracle = await MockChainlinkOracleFactory.deploy(INITIAL_PRICES.WBTC, 8, "WBTC / USD");
-    await chainlinkAdapter.setPriceFeed("WBTC", await wbtcOracle.getAddress(), 8, HEARTBEAT);
+    await chainlinkAdapter.setPriceFeed("WBTC", await wbtcOracle.getAddress(), 8, HEARTBEAT, "USD");
   });
 
   describe("💼 Multi-User Portfolio Price Queries", function () {

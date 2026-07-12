@@ -48,11 +48,12 @@ describe("E2E: Automatic Swap on Withdraw (Fresh Fork Deploy)", function () {
   const UNISWAP_V3_QUOTER_V2 = "0x61fFE014bA17989E743c5F6cB21bF9697530B21e";
 
   before(async function () {
-    const network = await ethers.provider.getNetwork();
-    if (network.chainId !== 42161n && network.chainId !== 31337n) {
-      console.log("⚠️  Skipping - requires Arbitrum fork");
+    if (process.env.FORK_ENABLED !== "true") {
+      console.log("\u26a0\ufe0f  Skipping - requires Arbitrum fork (set FORK_ENABLED=true)");
       this.skip();
+      return;
     }
+    const network = await ethers.provider.getNetwork();
 
     [owner, user1] = await ethers.getSigners();
 

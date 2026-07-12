@@ -60,13 +60,14 @@ describe("AaveV3 Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", function
 
     before(async function () {
         // Skip se non siamo su fork
-        const network = await ethers.provider.getNetwork();
-        if (process.env.FORK_ENABLED !== "true" && network.chainId !== 42161n) {
-            console.log("⚠️  Skipping fork tests - not running on Arbitrum fork");
-            console.log("   Run with: $env:FORK_ENABLED=\"true\"; npx hardhat test test/integration/AaveV3Plugin.fork.test.ts");
+        if (process.env.FORK_ENABLED !== "true") {
+            console.log("⚠️  Skipping fork tests - FORK_ENABLED not set");
+            console.log("   Run with: $env:FORK_ENABLED=\"true\"; npx hardhat test test/integration/aave/AaveV3Plugin.fork.test.ts");
             this.skip();
+            return;
         }
 
+        const network = await ethers.provider.getNetwork();
         [owner] = await ethers.getSigners();
         console.log("\n🔧 Setting up AaveV3 Fork Test Environment...");
         console.log(`   Owner: ${owner.address}`);

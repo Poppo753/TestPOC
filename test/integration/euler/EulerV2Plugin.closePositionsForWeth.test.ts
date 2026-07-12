@@ -40,6 +40,12 @@ describe("EulerV2Plugin - closePositionsForBaseAsset E2E", function () {
     const DELAY_MS = 1500; // 1.5 seconds between RPC calls
     
     before(async function () {
+        if (process.env.FORK_ENABLED !== "true") {
+            console.log("⚠️  Skipping fork tests - FORK_ENABLED not set");
+            this.skip();
+            return;
+        }
+
         console.log("\n" + "=".padEnd(70, "="));
         console.log("🔍 CLOSE POSITIONS FOR BASE ASSET - E2E TEST");
         console.log("   Testing automatic position closing to obtain target base asset");

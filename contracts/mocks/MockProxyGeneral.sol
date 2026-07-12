@@ -61,4 +61,32 @@ contract MockProxyGeneral {
         require(token != address(0), "Token not registered");
         IERC20(token).safeTransfer(to, amount);
     }
+
+    // ==================== RATE LIMIT SUPPORT ====================
+
+    mapping(address => mapping(uint256 => uint256)) private _hourlyWithdrawn;
+    mapping(address => mapping(uint256 => uint256)) private _dailyWithdrawn;
+    mapping(address => uint256) private _lpBalances;
+    uint256 private _totalSupply;
+
+    function getHourlyWithdrawn(address user, uint256 hour) external view returns (uint256) {
+        return _hourlyWithdrawn[user][hour];
+    }
+
+    function getDailyWithdrawn(address user, uint256 day) external view returns (uint256) {
+        return _dailyWithdrawn[user][day];
+    }
+
+    function balanceOf(address user) external view returns (uint256) {
+        return _lpBalances[user];
+    }
+
+    function totalSupply() external view returns (uint256) {
+        return _totalSupply;
+    }
+
+    function setBalance(address user, uint256 amount) external {
+        _lpBalances[user] = amount;
+        _totalSupply += amount;
+    }
 }
