@@ -37,10 +37,8 @@ describe("Edge Cases F.3 — Timelock Behaviors", function () {
                 ? info.currentValue - unit
                 : info.currentValue + unit;
 
-            if (proposalValue < info.minValue || proposalValue > info.maxValue) {
-                this.skip();
-                return;
-            }
+            expect(proposalValue).to.be.within(info.minValue, info.maxValue);
+            expect(proposalValue).to.not.equal(info.currentValue);
         });
 
         it("F.3.1a — proposta ha 24h timelock", async function () {
@@ -49,11 +47,6 @@ describe("Edge Cases F.3 — Timelock Behaviors", function () {
         });
 
         it("F.3.1b — proposta accettata dal sistema", async function () {
-            const info = await pm.getParameterInfo("withdrawLimitPerHour");
-            if (proposalValue < info.minValue || proposalValue > info.maxValue || proposalValue === info.currentValue) {
-                this.skip();
-                return;
-            }
             await expect(
                 pm.connect(owner).proposeParameterChange("withdrawLimitPerHour", proposalValue)
             ).to.not.be.reverted;
@@ -82,16 +75,10 @@ describe("Edge Cases F.3 — Timelock Behaviors", function () {
             expect(tl).to.equal(BigInt(newTimelock));
         });
 
-        it("F.3.2b — timelock 0 è accettato (cambio immediato)", async function () {
-            try {
-                await pm.connect(owner).setParameterTimelock(0);
-                const tl = await pm.getParameterTimelock();
-                expect(tl).to.equal(0n);
-                // Ripristina
-                await pm.connect(owner).setParameterTimelock(24 * 3600);
-            } catch {
-                this.skip();
-            }
+        it("F.3.2b — timelock 0 è rifiutato dal limite minimo di sicurezza", async function () {
+            await expect(pm.connect(owner).setParameterTimelock(0))
+                .to.be.revertedWith("Timelock below minimum");
+            expect(await pm.getParameterTimelock()).to.equal(12n * 3600n);
         });
     });
 });

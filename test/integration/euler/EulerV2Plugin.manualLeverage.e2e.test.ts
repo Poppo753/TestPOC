@@ -48,6 +48,7 @@ describe("EulerV2Plugin - Manual Leverage E2E (via Uniswap V3)", function () {
 
     // Whale addresses con WETH
     const WETH_WHALE = "0xC3E5607Cd4ca0D5Fe51e09B60Ed97a0Ae6F874dd";
+    const USDC_WHALE = "0x489ee077994B6658eAfA855C308275EAd8097C4A";
 
     // Contracts
     let owner: Signer;
@@ -169,6 +170,7 @@ describe("EulerV2Plugin - Manual Leverage E2E (via Uniswap V3)", function () {
             "function withdraw(uint256 assets, address receiver, address owner) external returns (uint256)",
             "function borrow(uint256 amount, address receiver) external returns (uint256)",
             "function repay(uint256 amount, address receiver) external returns (uint256)",
+            "function disableController() external",
             "function balanceOf(address) view returns (uint256)",
             "function maxWithdraw(address) view returns (uint256)",
             "function debtOf(address) view returns (uint256)",
@@ -644,68 +646,78 @@ describe("EulerV2Plugin - Manual Leverage E2E (via Uniswap V3)", function () {
         });
     });
 
-    describe("Phase 6: Unwind Position (Optional)", function () {
+    describe("Phase 6: Unwind Position", function () {
         it("Should partially unwind - withdraw some collateral", async function () {
-            // Get max withdrawable
+            // Repay part of the debt first to create a safe withdrawal buffer.
+            const debtBefore = await usdcVault.debtOf(ownerAddress);
+            const bootstrapRepay = debtBefore + ethers.parseUnits("1", 6);
+            await network.provider.request({
+                method: "hardhat_impersonateAccount",
+                params: [USDC_WHALE],
+            });
+            await network.provider.send("hardhat_setBalance", [
+                USDC_WHALE,
+                ethers.toQuantity(ethers.parseEther("1"))
+            ]);
+            const usdcWhale = await ethers.getSigner(USDC_WHALE);
+            await (await usdc.connect(usdcWhale).transfer(ownerAddress, bootstrapRepay)).wait();
+            await network.provider.request({
+                method: "hardhat_stopImpersonatingAccount",
+                params: [USDC_WHALE],
+            });
+            await (await usdc.approve(ADDRESSES.USDC_VAULT, bootstrapRepay)).wait();
+            await (await usdcVault.repay(ethers.MaxUint256, ownerAddress)).wait();
+            expect(await usdcVault.debtOf(ownerAddress)).to.equal(0n);
+            await (await usdcVault.disableController()).wait();
+
             const maxWithdraw = await wethVault.maxWithdraw(ownerAddress);
-            
-            // Try to withdraw 10% of max
+            expect(maxWithdraw).to.be.gt(0n);
             const withdrawAmount = maxWithdraw / 10n;
-            
-            if (withdrawAmount === 0n) {
-                console.log("   ⚠️  Cannot withdraw any collateral (fully utilized)");
-                this.skip();
-            }
             
             console.log(`\n   Withdrawing ${ethers.formatEther(withdrawAmount)} WETH...`);
             
-            try {
-                await (await wethVault.withdraw(withdrawAmount, ownerAddress, ownerAddress)).wait();
-                
-                const wethBal = await weth.balanceOf(ownerAddress);
-                console.log(`   ✅ Withdrawn! WETH balance: ${ethers.formatEther(wethBal)}`);
-            } catch (error: any) {
-                console.log(`   ⚠️  Cannot withdraw: ${error.message?.slice(0, 100)}`);
-            }
+            await (await wethVault.withdraw(withdrawAmount, ownerAddress, ownerAddress)).wait();
+            const wethBal = await weth.balanceOf(ownerAddress);
+            expect(wethBal).to.be.gt(0n);
+            console.log(`   ✅ Withdrawn! WETH balance: ${ethers.formatEther(wethBal)}`);
+
+            // Recreate a small debt and move the borrowed USDC away, so the next
+            // case proves repayment specifically from the withdrawn collateral.
+            await (await evc.enableController(ownerAddress, ADDRESSES.USDC_VAULT)).wait();
+            await (await usdcVault.borrow(ethers.parseUnits("100", 6), ownerAddress)).wait();
+            const looseUsdc = await usdc.balanceOf(ownerAddress);
+            await (await usdc.transfer(USDC_WHALE, looseUsdc)).wait();
+            expect(await usdc.balanceOf(ownerAddress)).to.equal(0n);
         });
 
         it("Should repay some debt with withdrawn collateral", async function () {
             const wethBalance = await weth.balanceOf(ownerAddress);
             
-            if (wethBalance === 0n) {
-                console.log("   ⚠️  No WETH to swap for repayment");
-                this.skip();
-            }
+            expect(wethBalance).to.be.gt(0n);
             
             console.log(`\n   Swapping ${ethers.formatEther(wethBalance)} WETH → USDC for repayment...`);
             
             // Swap WETH → USDC
             await (await weth.approve(ADDRESSES.SIMPLE_SWAP, wethBalance)).wait();
             
-            try {
-                await (await simpleSwap.inputSwap(
-                    ADDRESSES.WETH,
-                    ADDRESSES.USDC,
-                    wethBalance
-                )).wait();
-                
-                const usdcBal = await usdc.balanceOf(ownerAddress);
-                console.log(`   ✅ Got ${ethers.formatUnits(usdcBal, 6)} USDC`);
-                
-                // Repay debt
-                if (usdcBal > 0n) {
-                    const debtBefore = await usdcVault.debtOf(ownerAddress);
-                    const repayAmount = usdcBal < debtBefore ? usdcBal : debtBefore;
-                    
-                    await (await usdc.approve(ADDRESSES.USDC_VAULT, repayAmount)).wait();
-                    await (await usdcVault.repay(repayAmount, ownerAddress)).wait();
-                    
-                    const debtAfter = await usdcVault.debtOf(ownerAddress);
-                    console.log(`   ✅ Repaid! Debt reduced: ${ethers.formatUnits(debtBefore, 6)} → ${ethers.formatUnits(debtAfter, 6)} USDC`);
-                }
-            } catch (error: any) {
-                console.log(`   ⚠️  Repayment failed: ${error.message?.slice(0, 100)}`);
-            }
+            await (await simpleSwap.inputSwap(
+                ADDRESSES.WETH,
+                ADDRESSES.USDC,
+                wethBalance
+            )).wait();
+
+            const usdcBal = await usdc.balanceOf(ownerAddress);
+            expect(usdcBal).to.be.gt(0n);
+            console.log(`   ✅ Got ${ethers.formatUnits(usdcBal, 6)} USDC`);
+
+            const debtBefore = await usdcVault.debtOf(ownerAddress);
+            const repayAmount = usdcBal < debtBefore ? usdcBal : debtBefore;
+            await (await usdc.approve(ADDRESSES.USDC_VAULT, repayAmount)).wait();
+            await (await usdcVault.repay(repayAmount, ownerAddress)).wait();
+
+            const debtAfter = await usdcVault.debtOf(ownerAddress);
+            expect(debtAfter).to.be.lt(debtBefore);
+            console.log(`   ✅ Repaid! Debt reduced: ${ethers.formatUnits(debtBefore, 6)} → ${ethers.formatUnits(debtAfter, 6)} USDC`);
         });
     });
 

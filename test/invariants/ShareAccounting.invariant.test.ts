@@ -113,7 +113,10 @@ describe("Invariant B.3 — Share Accounting", function () {
 
         // Finanzia ogni utente con ETH
         for (const u of users) {
-            await owner.sendTransaction({ to: u.address, value: ethers.parseEther("50") });
+            await ethers.provider.send("hardhat_setBalance", [
+                u.address,
+                ethers.toQuantity(ethers.parseEther("100"))
+            ]);
         }
 
         return { beacon, proxyGeneral, liquidityManager, mockWETH, owner, users };

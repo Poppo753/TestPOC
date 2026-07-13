@@ -440,7 +440,20 @@ contract LiquidityManager is ILiquidityManager, ReentrancyGuard, Ownable {
                 );
             }
             
-            (string memory tokenToSwap, uint256 amountToSwap) = calculator.selectTokenForSwap(stillNeeded);
+            string memory tokenToSwap;
+            uint256 amountToSwap;
+            try calculator.selectTokenForSwap(stillNeeded) returns (
+                string memory selectedToken,
+                uint256 selectedAmount
+            ) {
+                tokenToSwap = selectedToken;
+                amountToSwap = selectedAmount;
+            } catch {
+                // No single asset can cover the deficit. Fall through to the
+                // aggregate liquid-token path, which can consume several assets.
+                tokenToSwap = "";
+                amountToSwap = 0;
+            }
             
             if (bytes(tokenToSwap).length == 0 || amountToSwap == 0) {
                 // STEP 1: Swap liquid tokens

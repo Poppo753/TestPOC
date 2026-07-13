@@ -26,6 +26,7 @@ const ADDRESSES = {
     
     // Euler V2
     EVC: "0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066",
+    ACCOUNT_LENS: "0x90a52DDcb232e7bb003DD9258fA1235c553eC956",
     WETH_VAULT: "0x78E3E051D32157AACD550fBB78458762d8f7edFF",
     USDC_VAULT: "0x0a1eCC5Fe8C9be3C809844fcBe615B46A869b899",
     SWAPPER: "0x6eE488A00A2ef1E2764cD7245F8a77C40060A7C7",
@@ -55,6 +56,7 @@ describe("EulerV2Plugin - Real Funds on Fork", function () {
     let usdcVault: Contract;
     let evc: Contract;
     let beacon: Contract;
+    let snapshotId: string | undefined;
     
     // Track state across tests
     let initialWethBalance: bigint;
@@ -66,6 +68,8 @@ describe("EulerV2Plugin - Real Funds on Fork", function () {
             console.log("⚠️  Not on Arbitrum fork, skipping test");
             this.skip();
         }
+
+        snapshotId = await network.provider.send("evm_snapshot");
 
         console.log("\n" + "=".repeat(70));
         console.log("🚀 EULER V2 PLUGIN - REAL FUNDS TEST ON FORK");
@@ -144,7 +148,19 @@ describe("EulerV2Plugin - Real Funds on Fork", function () {
         );
 
         // Check initial WETH balance
-        const proxyWeth = await weth.balanceOf(ADDRESSES.PROXY_GENERAL);
+        let proxyWeth = await weth.balanceOf(ADDRESSES.PROXY_GENERAL);
+        if (proxyWeth === 0n) {
+            const wethWhale = "0xC3E5607Cd4ca0D5Fe51e09B60Ed97a0Ae6F874dd";
+            await network.provider.request({ method: "hardhat_impersonateAccount", params: [wethWhale] });
+            await network.provider.send("hardhat_setBalance", [
+                wethWhale,
+                ethers.toQuantity(ethers.parseEther("1"))
+            ]);
+            const whale = await ethers.getSigner(wethWhale);
+            await (await weth.connect(whale).transfer(ADDRESSES.PROXY_GENERAL, ethers.parseEther("1"))).wait();
+            await network.provider.request({ method: "hardhat_stopImpersonatingAccount", params: [wethWhale] });
+            proxyWeth = await weth.balanceOf(ADDRESSES.PROXY_GENERAL);
+        }
         initialWethBalance = proxyWeth;
         console.log(`\n📊 ProxyGeneral WETH: ${ethers.formatEther(proxyWeth)}`);
 
@@ -186,6 +202,15 @@ describe("EulerV2Plugin - Real Funds on Fork", function () {
                 console.log("   ✅ WETH address registered in Beacon");
             }
 
+            try {
+                const existingBaseAsset = await beacon.getImplementation("BASE_ASSET");
+                if (existingBaseAsset.toLowerCase() !== ADDRESSES.WETH.toLowerCase()) {
+                    await (await beacon.updateImplementation("BASE_ASSET", ADDRESSES.WETH)).wait();
+                }
+            } catch {
+                await (await beacon.updateImplementation("BASE_ASSET", ADDRESSES.WETH)).wait();
+            }
+
             // Check if ProtocolManager is already in Beacon
             try {
                 const existingPM = await beacon.getImplementation("ProtocolManager");
@@ -205,7 +230,9 @@ describe("EulerV2Plugin - Real Funds on Fork", function () {
             console.log("\n📦 Deploying EulerV2Plugin...");
             
             const EulerV2Plugin = await ethers.getContractFactory("EulerV2Plugin", owner);
-            eulerPlugin = await EulerV2Plugin.deploy(ADDRESSES.BEACON, "WETH");
+            eulerPlugin = await EulerV2Plugin.deploy(
+                ADDRESSES.BEACON, "WETH", ADDRESSES.EVC, ADDRESSES.ACCOUNT_LENS
+            );
             await eulerPlugin.waitForDeployment();
             
             const pluginAddress = await eulerPlugin.getAddress();
@@ -535,7 +562,9 @@ describe("EulerV2Plugin - Real Funds on Fork", function () {
             
             // Deploy a NEW plugin specifically for leverage test
             const EulerV2Plugin = await ethers.getContractFactory("EulerV2Plugin", owner);
-            leveragePlugin = await EulerV2Plugin.deploy(ADDRESSES.BEACON, "WETH");
+            leveragePlugin = await EulerV2Plugin.deploy(
+                ADDRESSES.BEACON, "WETH", ADDRESSES.EVC, ADDRESSES.ACCOUNT_LENS
+            );
             await leveragePlugin.waitForDeployment();
             
             const pluginAddress = await leveragePlugin.getAddress();
@@ -648,5 +677,8 @@ describe("EulerV2Plugin - Real Funds on Fork", function () {
         console.log("   - Borrow/Repay tested");
         console.log("   - Leverage position tested with fresh deployment");
         console.log("\n💡 Ready to deploy to mainnet!");
+        if (snapshotId !== undefined) {
+            await network.provider.send("evm_revert", [snapshotId]);
+        }
     });
 });

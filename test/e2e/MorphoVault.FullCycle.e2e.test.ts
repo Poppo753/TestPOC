@@ -77,7 +77,7 @@ describe("E2E A.7 — MorphoVault Full Cycle", function () {
 
         // Deploy MorphoVaultLensAdapter
         const MorphoVaultLensFactory = await ethers.getContractFactory("MorphoVaultLensAdapter");
-        vaultLensAdapter = await MorphoVaultLensFactory.deploy(await mockBeacon.getAddress());
+        vaultLensAdapter = await MorphoVaultLensFactory.deploy(await mockBeacon.getAddress(), "WETH");
         await mockBeacon.setImplementation("MorphoVaultLensAdapter", await vaultLensAdapter.getAddress());
 
         wethContract = await ethers.getContractAt("IERC20", WETH);
@@ -119,6 +119,7 @@ describe("E2E A.7 — MorphoVault Full Cycle", function () {
 
     describe("SCENARIO 2 — MorphoRegistry setDefaultVault", function () {
         it("A.7.5 — setDefaultVault non reverta per WETH", async function () {
+            await morphoRegistry.configureVault(MORPHO_WETH_VAULT, "WETH");
             await morphoRegistry.setDefaultVault("WETH", MORPHO_WETH_VAULT);
             const vaultAddr = await morphoRegistry.getDefaultVault("WETH");
             expect(vaultAddr.toLowerCase()).to.equal(MORPHO_WETH_VAULT.toLowerCase());
@@ -146,7 +147,7 @@ describe("E2E A.7 — MorphoVault Full Cycle", function () {
             const rndVault = ethers.Wallet.createRandom().address;
             await fundPluginWETH(ethers.parseEther("0.1"));
             await expect(
-                vaultPlugin.connect(owner).deposit("WETH", ethers.parseEther("0.01"))
+                vaultPlugin.connect(owner).vaultDeposit(rndVault, ethers.parseEther("0.01"))
             ).to.be.reverted;
         });
     });

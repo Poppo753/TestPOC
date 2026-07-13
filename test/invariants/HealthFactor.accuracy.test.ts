@@ -17,7 +17,7 @@ describe("Invariant B.4 — Health Factor Accuracy (Fork)", function () {
     const AAVE_POOL = "0x794a61358D6845594F94dc1DB02A252b5b4814aD";
     const WETH = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
     const USDC = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";
-    const WETH_WHALE = "0x489ee077994B6658eAfA855C308275EAd8097C4A";
+    const WETH_WHALE = "0xC3E5607Cd4ca0D5Fe51e09B60Ed97a0Ae6F874dd";
 
     let aavePool: any;
     let aavePlugin: any;
@@ -36,21 +36,19 @@ describe("Invariant B.4 — Health Factor Accuracy (Fork)", function () {
 
         [owner] = await ethers.getSigners();
 
-        // Deploy MockWETH stub per beacon (solo per init, non usato su fork)
-        const MockWETH = await ethers.getContractFactory("MockWETH");
-        const mockWETH = await MockWETH.deploy();
-
         const Beacon = await ethers.getContractFactory("Beacon");
         beacon = await Beacon.deploy();
-        await beacon.updateImplementation("WETH", mockWETH.target);
-        await beacon.updateImplementation("BASE_ASSET", mockWETH.target);
+        await beacon.updateImplementation("WETH", WETH);
+        await beacon.updateImplementation("BASE_ASSET", WETH);
 
         const ProxyGeneral = await ethers.getContractFactory("ProxyGeneral");
         proxyGeneral = await ProxyGeneral.deploy(beacon.target, "WETH");
+        await beacon.updateImplementation("ProxyGeneral", proxyGeneral.target);
+        await beacon.updateImplementation("ProtocolManager", proxyGeneral.target);
 
         // Deploy AaveV3Registry
         const AaveV3Registry = await ethers.getContractFactory("AaveV3Registry");
-        registry = await AaveV3Registry.deploy(beacon.target, AAVE_POOL);
+        registry = await AaveV3Registry.deploy();
 
         // Scopri aToken e debtToken
         aavePool = await ethers.getContractAt(
@@ -66,8 +64,8 @@ describe("Invariant B.4 — Health Factor Accuracy (Fork)", function () {
         const varDebtUSDC = usdcReserve[10]; // variableDebtTokenAddress
 
         // Configura token WETH in registry
-        await registry.configureToken("WETH", WETH, aWETH, ethers.ZeroAddress, varDebtUSDC, false);
-        await registry.configureToken("USDC", USDC, usdcReserve[8], ethers.ZeroAddress, varDebtUSDC, false);
+        await registry.configureToken("WETH", WETH, aWETH, wethReserve[10]);
+        await registry.configureToken("USDC", USDC, usdcReserve[8], varDebtUSDC);
 
         await beacon.updateImplementation("AaveV3Registry", registry.target);
 
@@ -78,7 +76,7 @@ describe("Invariant B.4 — Health Factor Accuracy (Fork)", function () {
 
         // Deploy LensAdapter
         const AaveV3LensAdapter = await ethers.getContractFactory("AaveV3LensAdapter");
-        lensAdapter = await AaveV3LensAdapter.deploy(beacon.target, "WETH");
+        lensAdapter = await AaveV3LensAdapter.deploy(beacon.target, "WETH", AAVE_POOL);
         await beacon.updateImplementation("AaveV3LensAdapter", lensAdapter.target);
 
         // ProxyGeneral autorizza plugin
@@ -107,15 +105,15 @@ describe("Invariant B.4 — Health Factor Accuracy (Fork)", function () {
     // TEST 2: dopo deposit su Aave, healthFactor = MAX (nessun borrow)
     // ============================
     it("B.4.2 — health factor = MAX dopo deposit senza borrow", async function () {
-        // ProxyGeneral approva plugin a spendere WETH
-        const wethBalance = await wethContract.balanceOf(proxyGeneral.target);
-        if (wethBalance === 0n) {
-            this.skip();
-            return;
-        }
-
-        // Deposit su Aave (tramite plugin)
         const depositAmount = ethers.parseEther("2");
+        await ethers.provider.send("hardhat_impersonateAccount", [WETH_WHALE]);
+        const whale = await ethers.getSigner(WETH_WHALE);
+        await wethContract.connect(whale).transfer(aavePlugin.target, depositAmount);
+        await ethers.provider.send("hardhat_stopImpersonatingAccount", [WETH_WHALE]);
+        await aavePlugin.deposit("WETH", depositAmount);
+
+        const aTokenBalance = await ethers.getContractAt("IERC20", await registry.getAToken("WETH"));
+        expect(await aTokenBalance.balanceOf(aavePlugin.target)).to.be.closeTo(depositAmount, 10n);
 
         // Il plugin fa supply direttamente: owner deve eseguire via proxyGeneral
         // Il pattern corretto è: proxyGeneral.executeModule(plugin, depositData)

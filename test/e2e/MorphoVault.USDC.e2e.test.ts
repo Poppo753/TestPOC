@@ -56,8 +56,10 @@ const FORK_ENABLED = process.env.FORK_ENABLED === "true";
     let user1: any;
     let user2: any;
     let feeRecipient: any;
+    let suiteSnapshotId: string;
 
     before(async function () {
+        suiteSnapshotId = await ethers.provider.send("evm_snapshot", []);
         [owner, user1, user2, feeRecipient] = await ethers.getSigners();
 
         console.log("\n🔧 Deploying full protocol with USDC base asset (MorphoVault)...\n");
@@ -429,5 +431,9 @@ const FORK_ENABLED = process.env.FORK_ENABLED === "true";
             const remaining = await usdcContract.balanceOf(proxyGeneral.target);
             console.log(`   Pool remaining: ${ethers.formatUnits(remaining, 6)} USDC (fees + seed)`);
         });
+    });
+
+    after(async function () {
+        await ethers.provider.send("evm_revert", [suiteSnapshotId]);
     });
 });

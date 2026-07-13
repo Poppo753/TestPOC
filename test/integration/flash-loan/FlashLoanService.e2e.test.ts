@@ -78,6 +78,8 @@ describe("FlashLoanService + EulerV2Plugin - Atomic Leverage E2E", function () {
     let usdcVault: Contract;
     let evc: Contract;
     let accountLens: Contract;
+    let eulerRegistry: Contract;
+    let snapshotId: string;
 
     // Test state
     let initialWethBalance: bigint;
@@ -149,6 +151,8 @@ describe("FlashLoanService + EulerV2Plugin - Atomic Leverage E2E", function () {
             console.log("⚠️  Skipping - set FORK_ENABLED=true");
             this.skip();
         }
+
+        snapshotId = await network.provider.send("evm_snapshot");
 
         console.log("\n" + "=".repeat(70));
         console.log("⚡ FLASH LOAN SERVICE + EULER V2 PLUGIN E2E TEST");
@@ -238,7 +242,7 @@ describe("FlashLoanService + EulerV2Plugin - Atomic Leverage E2E", function () {
             
             // Deploy and register EulerRegistry
             const EulerRegistry = await ethers.getContractFactory("EulerRegistry");
-            const eulerRegistry = await EulerRegistry.deploy();
+            eulerRegistry = await EulerRegistry.deploy();
             await eulerRegistry.waitForDeployment();
             
             await (await beaconAsOwner.updateImplementation("EulerRegistry", await eulerRegistry.getAddress())).wait();
@@ -272,6 +276,15 @@ describe("FlashLoanService + EulerV2Plugin - Atomic Leverage E2E", function () {
             }
             console.log(`   ✅ Tokens registered`);
             
+            try {
+                const existingBase = await beacon.getImplementation("BASE_ASSET");
+                if (existingBase.toLowerCase() !== ADDRESSES.WETH.toLowerCase()) {
+                    await (await beaconAsOwner.updateImplementation("BASE_ASSET", ADDRESSES.WETH)).wait();
+                }
+            } catch {
+                await (await beaconAsOwner.updateImplementation("BASE_ASSET", ADDRESSES.WETH)).wait();
+            }
+
             // Register existing TokenManager as ProtocolManager (for plugin authorization)
             await (await beaconAsOwner.updateImplementation("ProtocolManager", ADDRESSES.TOKEN_MANAGER)).wait();
             console.log(`   ✅ TokenManager registered as ProtocolManager`);
@@ -313,14 +326,16 @@ describe("FlashLoanService + EulerV2Plugin - Atomic Leverage E2E", function () {
             console.log("\n   Deploying EulerV2Plugin...");
             
             const EulerV2Plugin = await ethers.getContractFactory("EulerV2Plugin");
-            eulerV2Plugin = await EulerV2Plugin.deploy(ADDRESSES.BEACON, "WETH");
+            eulerV2Plugin = await EulerV2Plugin.deploy(
+                ADDRESSES.BEACON, "WETH", ADDRESSES.EVC, ADDRESSES.ACCOUNT_LENS
+            );
             await eulerV2Plugin.waitForDeployment();
             
             const address = await eulerV2Plugin.getAddress();
             console.log(`   ✅ EulerV2Plugin deployed at: ${address}`);
             
             // Verify Euler V2 configuration
-            const evcAddress = await eulerV2Plugin.EVC_ADDRESS();
+            const evcAddress = await eulerV2Plugin.evc();
             expect(evcAddress).to.equal(ADDRESSES.EVC);
             
             console.log(`   ✅ EVC: ${evcAddress}`);
@@ -362,11 +377,7 @@ describe("FlashLoanService + EulerV2Plugin - Atomic Leverage E2E", function () {
             console.log(`   ✅ Verified: EulerV2Plugin = ${registered}`);
             
             // Transfer EulerRegistry ownership to plugin (required for createPosition)
-            const eulerRegistry = (this as any).eulerRegistry;
-            if (eulerRegistry) {
-                await (await eulerRegistry.transferOwnership(await eulerV2Plugin.getAddress())).wait();
-                console.log(`   ✅ EulerRegistry ownership transferred to plugin`);
-            }
+            await (await eulerRegistry.transferOwnership(await eulerV2Plugin.getAddress())).wait();
         });
 
         it("Should register FlashLoanService in Beacon", async function () {
@@ -580,7 +591,7 @@ describe("FlashLoanService + EulerV2Plugin - Atomic Leverage E2E", function () {
             console.log(`      USDC Balance After: ${formatAmount(usdcBalanceAfter, 6)}`);
             
             // Should have gotten some USDC back (equity, since we swap all WETH→USDC)
-            expect(usdcReturned).to.be.gt(0);
+            expect(usdcReturned).to.be.gt(0n);
         });
 
         it("Should have no debt remaining", async function () {
@@ -612,7 +623,7 @@ describe("FlashLoanService + EulerV2Plugin - Atomic Leverage E2E", function () {
             // Initial collateral was ~0.3 WETH, leveraged 2x → ~0.6 WETH collateral, ~900 USDC debt
             // After close: ~0.6 WETH → ~1500 USDC (at 2500 ETH/USD), minus 900 debt = ~600 USDC equity
             // Accounting for slippage, should get at least 400 USDC back
-            expect(usdcBalance).to.be.gt(ethers.parseUnits("400", 6)); // At least 400 USDC
+            expect(usdcBalance).to.be.gt(ethers.parseUnits("400", 6));
         });
     });
 
@@ -686,5 +697,9 @@ describe("FlashLoanService + EulerV2Plugin - Atomic Leverage E2E", function () {
             console.log("   • Full lifecycle: OPEN + CLOSE leverage");
             console.log("=".repeat(70) + "\n");
         });
+    });
+
+    after(async function () {
+        if (snapshotId) await network.provider.send("evm_revert", [snapshotId]);
     });
 });

@@ -116,6 +116,7 @@ describe("ProtocolManager + EulerV2Plugin Integration", function () {
         await mockBeacon.setImplementation("TokenManager", await mockTokenManager.getAddress());
         await mockBeacon.setImplementation("ProxyGeneral", await mockProxyGeneral.getAddress());
         await mockBeacon.setImplementation("WETH", WETH);
+        await mockBeacon.setImplementation("BASE_ASSET", WETH);
         await mockBeacon.setImplementation("EulerRegistry", await vaultRegistry.getAddress());
         await mockBeacon.setImplementation("EulerV2Plugin", await eulerPlugin.getAddress());
         await mockBeacon.setImplementation("ProtocolManager", await protocolManager.getAddress());

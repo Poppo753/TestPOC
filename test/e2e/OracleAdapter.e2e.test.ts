@@ -25,6 +25,10 @@ import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
  * works correctly in realistic end-to-end scenarios.
  */
 describe("🎬 Oracle Adapter - End-to-End Tests", function () {
+  // Public fork providers can legitimately spend tens of seconds retrying
+  // rate-limited archive reads. Keep the timeout above the provider retry
+  // window so infrastructure latency cannot abort an otherwise valid hook.
+  this.timeout(180000);
   let owner: SignerWithAddress;
   let admin: SignerWithAddress;
   let trader1: SignerWithAddress;

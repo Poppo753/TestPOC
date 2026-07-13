@@ -25,8 +25,8 @@ describe("E2E A.2 — Euler V2 Borrow/Repay Full Cycle", function () {
     const UTILS_LENS  = "0xDAf44060DCe217Fd603908A49fcaa1FA900304BE";
     const WETH_VAULT  = "0x78E3E051D32157AACD550fBB78458762d8f7edFF";
     const USDC_VAULT  = "0x0a1eCC5Fe8C9be3C809844fcBe615B46A869b899";
-    const WETH_WHALE  = "0x489ee077994B6658eAfA855C308275EAd8097C4A";
-    const USDC_WHALE  = "0x489ee077994B6658eAfA855C308275EAd8097C4A";
+    const WETH_WHALE  = "0xC3E5607Cd4ca0D5Fe51e09B60Ed97a0Ae6F874dd";
+    const USDC_WHALE  = "0x1AB4973a48dc892Cd9971ECE8e01DcC7688f8F23";
 
     // ==================== STATE ====================
     let mockBeacon: any;
@@ -38,6 +38,7 @@ describe("E2E A.2 — Euler V2 Borrow/Repay Full Cycle", function () {
     let wethContract: any;
     let usdcContract: any;
     let owner: any;
+    let snapshotId: string;
 
     // ==================== SETUP ====================
 
@@ -120,19 +121,12 @@ describe("E2E A.2 — Euler V2 Borrow/Repay Full Cycle", function () {
         await ethers.provider.send("hardhat_stopImpersonatingAccount", [USDC_WHALE]);
     }
 
+    beforeEach(async function () {
+        snapshotId = await ethers.provider.send("evm_snapshot", []);
+    });
+
     afterEach(async function () {
-        // Cleanup: ripaga debiti e withdrawa collateral
-        try {
-            const debt = await plugin.getDebt("USDC");
-            if (debt > 0n) {
-                await fundPluginUSDC(debt + debt / 10n);
-                await plugin.connect(owner).repay("USDC", 0);
-            }
-        } catch {}
-        try {
-            const bal = await plugin.getBalance("WETH");
-            if (bal > 0n) await plugin.connect(owner).withdraw("WETH", 0);
-        } catch {}
+        expect(await ethers.provider.send("evm_revert", [snapshotId])).to.equal(true);
     });
 
     // ==================== SCENARIO 1: Supply + Borrow + Repay ====================
@@ -201,14 +195,7 @@ describe("E2E A.2 — Euler V2 Borrow/Repay Full Cycle", function () {
             await plugin.connect(owner).borrow("USDC", borrowAmt);
 
             // LensAdapter deve poter leggere la posizione
-            let hf: bigint;
-            try {
-                hf = await lensAdapter.getHealthFactor();
-            } catch {
-                // Se non supportato su questo fork, skip gracefully
-                this.skip();
-                return;
-            }
+            const hf: bigint = await lensAdapter.getHealthFactor();
             expect(hf).to.be.gt(0n, "Health factor deve essere > 0");
         });
     });
@@ -249,15 +236,7 @@ describe("E2E A.2 — Euler V2 Borrow/Repay Full Cycle", function () {
             // Fondi per chiudere: USDC per ripagare il debito
             await fundPluginUSDC(borrowAmt + BigInt(20e6));
 
-            // Chiudi tutte le posizioni
-            try {
-                await plugin.connect(owner).closePositionsForBaseAsset("WETH");
-            } catch {
-                // Potrebbe non esistere questa funzione su questa versione
-                // Fallback: ripaga manualmente
-                await plugin.connect(owner).repay("USDC", 0);
-                await plugin.connect(owner).withdraw("WETH", 0);
-            }
+            await plugin.connect(owner)["closePosition(string,string)"]("USDC", "WETH");
 
             const debtAfter = await plugin.getDebt("USDC");
             expect(debtAfter).to.equal(0n, "Debito dovrebbe essere 0 dopo chiusura");

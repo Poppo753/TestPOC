@@ -1055,7 +1055,9 @@ describe("Integration: Beacon ↔ Modules", function () {
 
         // Test 3: Prevent non-contract address update
         console.log("\n   🚫 TEST 3: Preventing non-contract address update");
-        await expect(beacon.updateImplementation("TokenManager", user1.address))
+        const guaranteedEOA = ethers.Wallet.createRandom().address;
+        expect(await ethers.provider.getCode(guaranteedEOA)).to.equal("0x");
+        await expect(beacon.updateImplementation("TokenManager", guaranteedEOA))
           .to.be.revertedWith("Implementation must be a contract");
         console.log(`      ✅ Non-contract address correctly rejected`);
 
@@ -1357,4 +1359,4 @@ describe("Integration: Beacon ↔ Modules", function () {
 
   });
 
-}); 
+});

@@ -101,7 +101,10 @@ describe("Invariant B.1 — Value Conservation", function () {
         await liquidityManager.setWithdrawFee(0);
 
         for (const u of users) {
-            await owner.sendTransaction({ to: u.address, value: ethers.parseEther("50") });
+            await ethers.provider.send("hardhat_setBalance", [
+                u.address,
+                ethers.toQuantity(ethers.parseEther("50"))
+            ]);
         }
 
         return { beacon, proxyGeneral, liquidityManager, mockWETH, mockOracle, owner, feeRecipient, users };

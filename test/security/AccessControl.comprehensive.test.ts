@@ -181,17 +181,12 @@ describe("Security C.3 — Access Control Comprehensive", function () {
 
     describe("ParameterManager — onlyOwner e onlyAuthorized", function () {
         it("C.3.16 — proposeParameterChange() reverta da attacker", async function () {
-            try {
-                await expect(
-                    parameterManager.connect(attacker).proposeParameterChange(
-                        "MAX_DEPOSIT",
-                        ethers.parseEther("1000000")
-                    )
-                ).to.be.reverted;
-            } catch {
-                // Se la funzione ha firma diversa, skip
-                this.skip();
-            }
+            await expect(
+                parameterManager.connect(attacker).proposeParameterChange(
+                    "maxDeposit",
+                    ethers.parseEther("99")
+                )
+            ).to.be.revertedWith("Not authorized to update parameters");
         });
     });
 

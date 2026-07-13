@@ -52,6 +52,17 @@ describe("E2E D.3 — Emergency on Live Position", function () {
         await mockTokenManager.setTokenAddress("WETH", WETH);
         await mockTokenManager.setTokenPrice("WETH", ethers.parseUnits("3000", 8));
 
+        const dataProvider = await ethers.getContractAt([
+            "function getReserveAToken(address) view returns (address)",
+            "function getReserveVariableDebtToken(address) view returns (address)"
+        ], AAVE_POOL);
+        const aWETH = await dataProvider.getReserveAToken(WETH);
+        const debtWETH = await dataProvider.getReserveVariableDebtToken(WETH);
+        const RegistryFactory = await ethers.getContractFactory("AaveV3Registry");
+        const registry = await RegistryFactory.deploy();
+        await registry.configureToken("WETH", WETH, aWETH, debtWETH);
+        await mockBeacon.setImplementation("AaveV3Registry", await registry.getAddress());
+
         // Deploy EmergencyHandler
         const EHFactory = await ethers.getContractFactory("EmergencyHandler");
         emergencyHandler = await EHFactory.deploy(await mockBeacon.getAddress());
@@ -66,11 +77,12 @@ describe("E2E D.3 — Emergency on Live Position", function () {
     });
 
     async function fundPlugin(amount: bigint) {
-        await ethers.provider.send("hardhat_impersonateAccount", [WETH_WHALE]);
-        await ethers.provider.send("hardhat_setBalance", [WETH_WHALE, ethers.toQuantity(ethers.parseEther("10"))]);
-        const whale = await ethers.getSigner(WETH_WHALE);
-        await wethContract.connect(whale).transfer(await aavePlugin.getAddress(), amount);
-        await ethers.provider.send("hardhat_stopImpersonatingAccount", [WETH_WHALE]);
+        const pluginAddress = await aavePlugin.getAddress();
+        await ethers.provider.send("hardhat_setBalance", [pluginAddress, ethers.toQuantity(amount + ethers.parseEther("1"))]);
+        await ethers.provider.send("hardhat_impersonateAccount", [pluginAddress]);
+        const pluginSigner = await ethers.getSigner(pluginAddress);
+        await pluginSigner.sendTransaction({ to: WETH, value: amount, data: "0xd0e30db0" });
+        await ethers.provider.send("hardhat_stopImpersonatingAccount", [pluginAddress]);
     }
 
     describe("SCENARIO 1 — EmergencyHandler struttura", function () {
@@ -117,7 +129,7 @@ describe("E2E D.3 — Emergency on Live Position", function () {
         });
 
         it("D.3.6 — AavePlugin circuitBreaker può essere attivato dall'owner", async function () {
-            await aavePlugin.connect(owner).tripCircuitBreaker();
+            await aavePlugin.connect(owner).activateCircuitBreaker();
             const tripped = await aavePlugin.circuitBreakerTripped();
             expect(tripped).to.be.true;
         });
@@ -129,7 +141,7 @@ describe("E2E D.3 — Emergency on Live Position", function () {
         });
 
         it("D.3.8 — reset circuit breaker per cleanup", async function () {
-            await aavePlugin.connect(owner).resetCircuitBreaker();
+            await aavePlugin.connect(owner).deactivateCircuitBreaker();
             const tripped = await aavePlugin.circuitBreakerTripped();
             expect(tripped).to.be.false;
         });

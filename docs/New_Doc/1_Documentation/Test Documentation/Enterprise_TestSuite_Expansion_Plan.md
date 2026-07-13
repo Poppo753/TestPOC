@@ -1,5 +1,18 @@
 # Enterprise Test Suite Expansion Plan
 
+## Stato di attuazione verificato — 13 luglio 2026
+
+Il piano è stato implementato e validato sulle suite attive con fork Arbitrum
+fissato al blocco `483105327`: **1.193 unit**, **654 integration**, **230 E2E**,
+**83 invariants/security** e **29 performance/gas**, senza failure funzionali o
+pending. Le suite dedicate a Dolomite e GMX sono escluse su richiesta perché i
+plugin sono incompleti. La sezione checklist storica in fondo resta come traccia
+del piano originario; lo stato autorevole è la Master Implementation Checklist.
+
+La RPC pubblica ha causato due interruzioni E2E (429/timeout); i file coinvolti
+sono poi passati integralmente 32/32 sul medesimo blocco. Per automazione CI
+riproducibile è richiesta una RPC privata/stabile. Nessun test è stato eliminato.
+
 > **Progetto**: TestSmartContract  
 > **Documento**: Piano di espansione verso qualità enterprise  
 > **Data**: 11 Luglio 2026 — **Revisione tecnica**: 11 Luglio 2026  

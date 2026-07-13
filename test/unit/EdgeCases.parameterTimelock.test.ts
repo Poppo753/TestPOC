@@ -11,19 +11,25 @@ describe("Edge Cases F.6 — Parameter Timelock", function () {
 
     let beacon: any;
     let pm: any;
+    let proxyGeneral: any;
     let owner: any;
     let attacker: any;
 
     before(async function () {
         [owner, attacker] = await ethers.getSigners();
 
-        const MockBeaconFactory = await ethers.getContractFactory("MockBeacon");
-        beacon = await MockBeaconFactory.deploy();
+        const BeaconFactory = await ethers.getContractFactory("Beacon");
+        beacon = await BeaconFactory.deploy();
+
+        const ProxyGeneralFactory = await ethers.getContractFactory("ProxyGeneral");
+        proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress(), "WETH");
+        await beacon.updateImplementation("ProxyGeneral", await proxyGeneral.getAddress());
 
         // ParameterManager(beacon, 18 decimali)
         const PMFactory = await ethers.getContractFactory("ParameterManager");
         pm = await PMFactory.deploy(await beacon.getAddress(), 18);
-        await beacon.setImplementation("ParameterManager", await pm.getAddress());
+        await beacon.updateImplementation("ParameterManager", await pm.getAddress());
+        await proxyGeneral.authorizeModule(owner.address, "TestEmergencyController");
     });
 
     // ==================== SCENARIO 1: Parametro non-critical ====================
@@ -110,16 +116,11 @@ describe("Edge Cases F.6 — Parameter Timelock", function () {
 
     describe("SCENARIO 5 — Emergency parameter change", function () {
         it("F.6.9 — emergencySetParameter cambia valore immediatamente", async function () {
-            try {
-                const before = await pm.getParameterInfo("maxSlippage");
-                // emergencySetParameter è immediato
-                await pm.connect(owner).emergencySetParameter("maxSlippage", 300n);
-                const after = await pm.getParameterInfo("maxSlippage");
-                expect(after.currentValue).to.equal(300n);
-            } catch (e: any) {
-                // Se la funzione si chiama diversamente
-                this.skip();
-            }
+            await proxyGeneral.connect(owner).pause();
+            await expect(pm.connect(owner).emergencySetParameter("maxSlippage", 300n))
+                .to.emit(pm, "ParameterEmergencyChanged");
+            const after = await pm.getParameterInfo("maxSlippage");
+            expect(after.currentValue).to.equal(300n);
         });
     });
 });

@@ -28,26 +28,21 @@ describe("Edge Cases F.4 — Rate Limiting", function () {
         [owner, userA, userB] = await ethers.getSigners();
 
         const MockERC20Factory  = await ethers.getContractFactory("MockERC20");
-        const MockBeaconFactory = await ethers.getContractFactory("MockBeacon");
-        const MockTMFactory     = await ethers.getContractFactory("MockTokenManager");
-        const MockPGFactory     = await ethers.getContractFactory("MockProxyGeneral");
+        const BeaconFactory = await ethers.getContractFactory("Beacon");
+        const ProxyGeneralFactory = await ethers.getContractFactory("ProxyGeneral");
 
         baseToken    = await MockERC20Factory.deploy("MockWETH", "mWETH", 18);
-        beacon       = await MockBeaconFactory.deploy();
-        tokenManager = await MockTMFactory.deploy();
-        proxyGeneral = await MockPGFactory.deploy();
+        beacon = await BeaconFactory.deploy();
+        proxyGeneral = await ProxyGeneralFactory.deploy(await beacon.getAddress(), "WETH");
 
-        await tokenManager.setTokenAddress("WETH", await baseToken.getAddress());
-        await tokenManager.setTokenPrice("WETH", ethers.parseUnits("3000", 8));
-
-        await beacon.setImplementation("TokenManager",    await tokenManager.getAddress());
-        await beacon.setImplementation("ProxyGeneral",    await proxyGeneral.getAddress());
-        await beacon.setImplementation("ProtocolManager", owner.address);
-        await beacon.setImplementation("BASE_ASSET",      await baseToken.getAddress());
+        await beacon.updateImplementation("ProxyGeneral", await proxyGeneral.getAddress());
+        await beacon.updateImplementation("BASE_ASSET", await baseToken.getAddress());
 
         const LMFactory = await ethers.getContractFactory("LiquidityManager");
         liquidityManager = await LMFactory.deploy(await beacon.getAddress(), "WETH");
-        await beacon.setImplementation("LiquidityManager", await liquidityManager.getAddress());
+        await beacon.updateImplementation("LiquidityManager", await liquidityManager.getAddress());
+        await proxyGeneral.setRateLimit("deposit", ethers.parseEther("100"), ethers.parseEther("1000"));
+        await proxyGeneral.setRateLimit("withdraw", ethers.parseEther("100"), ethers.parseEther("1000"));
 
         // Imposta limiti bassi per testare facilmente
         await liquidityManager.connect(owner).setWithdrawLimits(
@@ -114,21 +109,19 @@ describe("Edge Cases F.4 — Rate Limiting", function () {
 
     describe("F.4.3 — checkRateLimit deposit vs withdraw separati", function () {
         it("F.4.3a — checkDepositRateLimit funziona per owner", async function () {
-            try {
-                const [ok] = await liquidityManager.checkDepositRateLimit(owner.address, ethers.parseEther("1"));
-                expect(typeof ok).to.equal("boolean");
-            } catch {
-                this.skip();
-            }
+            const [ok, hourlyRemaining, dailyRemaining] =
+                await liquidityManager.checkDepositRateLimit(owner.address, ethers.parseEther("1"));
+            expect(ok).to.equal(true);
+            expect(hourlyRemaining).to.equal(ethers.parseEther("100"));
+            expect(dailyRemaining).to.equal(ethers.parseEther("1000"));
         });
 
         it("F.4.3b — checkWithdrawRateLimit funziona per owner", async function () {
-            try {
-                const [ok] = await liquidityManager.checkWithdrawRateLimit(owner.address, ethers.parseEther("1"));
-                expect(typeof ok).to.equal("boolean");
-            } catch {
-                this.skip();
-            }
+            const [ok, hourlyRemaining, dailyRemaining] =
+                await liquidityManager.checkWithdrawRateLimit(owner.address, ethers.parseEther("1"));
+            expect(ok).to.equal(true);
+            expect(hourlyRemaining).to.equal(ethers.parseEther("100"));
+            expect(dailyRemaining).to.equal(ethers.parseEther("1000"));
         });
     });
 

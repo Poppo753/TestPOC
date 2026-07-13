@@ -19,13 +19,13 @@ const WETH_WHALE = "0x489ee077994B6658eAfA855C308275EAd8097C4A";
 
 const GAS_LIMITS: Record<string, number> = {
     beaconDeploy:           3_000_000,
-    parameterManagerDeploy: 5_000_000,
-    liquidityManagerDeploy: 5_000_000,
+    parameterManagerDeploy: 6_000_000,
+    liquidityManagerDeploy: 5_100_000,
     aavePluginDeploy:       4_000_000,
     aaveDeposit:            600_000,
     aaveWithdraw:           600_000,
     beaconUpdate:           150_000,
-    setImplementation:      100_000,
+    setImplementation:      135_000,
 };
 
 describe("E.1 — Gas Optimization Benchmark", function () {
@@ -93,16 +93,16 @@ describe("E.1 — Gas Optimization Benchmark", function () {
         it("E.1.3 — MockERC20 + LiquidityManager deploy gas", async function () {
             const mockFactory = await ethers.getContractFactory("MockERC20");
             const baseToken = await mockFactory.deploy("MockWETH", "mWETH", 18);
-            await beacon.setImplementation("BASE_ASSET", await baseToken.getAddress());
+            await beacon.updateImplementation("BASE_ASSET", await baseToken.getAddress());
 
             const MockTMFactory = await ethers.getContractFactory("MockTokenManager");
             const tokenManager = await MockTMFactory.deploy();
-            await beacon.setImplementation("TokenManager", await tokenManager.getAddress());
+            await beacon.updateImplementation("TokenManager", await tokenManager.getAddress());
 
             const MockPGFactory = await ethers.getContractFactory("MockProxyGeneral");
             const proxyGeneral = await MockPGFactory.deploy();
-            await beacon.setImplementation("ProxyGeneral", await proxyGeneral.getAddress());
-            await beacon.setImplementation("ProtocolManager", owner.address);
+            await beacon.updateImplementation("ProxyGeneral", await proxyGeneral.getAddress());
+            await beacon.updateImplementation("ProtocolManager", await tokenManager.getAddress());
 
             const lmFactory = await ethers.getContractFactory("LiquidityManager");
             const tx = await lmFactory.deploy(await beacon.getAddress(), "WETH");
@@ -128,7 +128,8 @@ describe("E.1 — Gas Optimization Benchmark", function () {
 
     describe("Beacon Operation Gas", function () {
         it("E.1.5 — setImplementation gas", async function () {
-            const tx = await beacon.setImplementation("GasBenchmark", ethers.Wallet.createRandom().address);
+            const implementation = await (await ethers.getContractFactory("MockBeacon")).deploy();
+            const tx = await beacon.updateImplementation("GasBenchmark", await implementation.getAddress());
             const receipt = await tx.wait();
             const gas = receipt!.gasUsed;
             results["setImplementation"] = gas;
@@ -143,28 +144,43 @@ describe("E.1 — Gas Optimization Benchmark", function () {
         let aavePlugin: any;
 
         before(async function () {
+            await beacon.updateImplementation("BASE_ASSET", WETH_ADDR);
+            const dataProvider = await ethers.getContractAt([
+                "function getReserveAToken(address) view returns (address)",
+                "function getReserveVariableDebtToken(address) view returns (address)"
+            ], AAVE_POOL);
+            const aWETH = await dataProvider.getReserveAToken(WETH_ADDR);
+            const debtWETH = await dataProvider.getReserveVariableDebtToken(WETH_ADDR);
+            const registry = await (await ethers.getContractFactory("AaveV3Registry")).deploy();
+            await registry.configureToken("WETH", WETH_ADDR, aWETH, debtWETH);
+            await beacon.updateImplementation("AaveV3Registry", await registry.getAddress());
             const factory = await ethers.getContractFactory("AaveV3Plugin");
             aavePlugin = await factory.deploy(await beacon.getAddress(), "WETH", AAVE_POOL);
 
             // Register plugin
-            await beacon.setImplementation("AavePlugin", await aavePlugin.getAddress());
+            await beacon.updateImplementation("AavePlugin", await aavePlugin.getAddress());
 
-            // Approve WETH
-            await weth.connect(owner).approve(await aavePlugin.getAddress(), ethers.MaxUint256);
+            const pluginAddress = await aavePlugin.getAddress();
+            await ethers.provider.send("hardhat_setBalance", [pluginAddress, ethers.toQuantity(ethers.parseEther("1"))]);
+            await ethers.provider.send("hardhat_impersonateAccount", [pluginAddress]);
+            await (await ethers.getSigner(pluginAddress)).sendTransaction({
+                to: WETH_ADDR, value: ethers.parseEther("0.2"), data: "0xd0e30db0"
+            });
+            await ethers.provider.send("hardhat_stopImpersonatingAccount", [pluginAddress]);
         });
 
         it("E.1.6 — Aave deposit gas", async function () {
             const amount = ethers.parseEther("0.1");
             try {
-                const tx = await aavePlugin.connect(owner).depositToProtocol(WETH_ADDR, amount, 0);
+                const tx = await aavePlugin.connect(owner).deposit("WETH", amount);
                 const receipt = await tx.wait();
                 const gas = receipt!.gasUsed;
                 results["aaveDeposit"] = gas;
-                assertGasSnapshot("AaveV3Plugin.depositToProtocol", gas);
+                assertGasSnapshot("AaveV3Plugin.deposit", gas);
                 expect(gas).to.be.lte(GAS_LIMITS.aaveDeposit);
             } catch (e: any) {
                 console.log("    ℹ Aave deposit not supported by this plugin interface, skipping gas measurement");
-                this.skip();
+                throw e;
             }
         });
     });

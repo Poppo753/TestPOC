@@ -103,13 +103,14 @@ describe("Security C.4 — Flash Loan Self-Attack", function () {
     // ==================== ATTACCO 3: Reentrancy su Flash Loan ====================
 
     describe("ATTACCO 3 — Reentrancy su Flash Loan Callback (senza fork)", function () {
-        it("C.4.3 — circuitBreaker = false inizialmente", async function () {
-            try {
-                const tripped = await flashLoanService.circuitBreakerTripped();
-                expect(tripped).to.be.false;
-            } catch {
-                this.skip();
-            }
+        it("C.4.3 — il callback Balancer è bloccato quando non esiste un flash loan attivo", async function () {
+            await ethers.provider.send("hardhat_impersonateAccount", [BALANCER_VAULT]);
+            await ethers.provider.send("hardhat_setBalance", [BALANCER_VAULT, ethers.toQuantity(ethers.parseEther("1"))]);
+            const balancerSigner = await ethers.getSigner(BALANCER_VAULT);
+            await expect(
+                flashLoanService.connect(balancerSigner).receiveFlashLoan([], [], [], "0x")
+            ).to.be.revertedWithCustomError(flashLoanService, "NotInFlashLoan");
+            await ethers.provider.send("hardhat_stopImpersonatingAccount", [BALANCER_VAULT]);
         });
 
         it("C.4.4 — _inFlashLoan flag è privato (non accessibile dall'esterno)", async function () {

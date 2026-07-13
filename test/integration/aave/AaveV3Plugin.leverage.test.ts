@@ -136,7 +136,7 @@ describe("AaveV3 Plugin - Leverage via FlashLoanService (Fork)", function () {
         // ==================== DEPLOY AAVE V3 PLUGIN ====================
         console.log("   Deploying AaveV3Plugin...");
         const PluginFactory = await ethers.getContractFactory("AaveV3Plugin");
-        plugin = await PluginFactory.deploy(await mockBeacon.getAddress(), "WETH");
+        plugin = await PluginFactory.deploy(await mockBeacon.getAddress(), "WETH", AAVE_POOL);
         await plugin.waitForDeployment();
         await mockBeacon.setImplementation("AaveV3Plugin", await plugin.getAddress());
 
@@ -195,7 +195,7 @@ describe("AaveV3 Plugin - Leverage via FlashLoanService (Fork)", function () {
 
     describe("2. openLeverageAtomic - Validation", function () {
         it("Should revert with expired deadline", async function () {
-            const pastDeadline = Math.floor(Date.now() / 1000) - 3600;
+            const pastDeadline = (await ethers.provider.getBlock("latest"))!.timestamp - 1;
             await expect(
                 plugin.connect(owner).openLeverageAtomic({
                     collateralToken: "WETH",
@@ -325,9 +325,9 @@ describe("AaveV3 Plugin - Leverage via FlashLoanService (Fork)", function () {
 
             // 2x leverage on 0.5 WETH → should have ~1 WETH collateral
             expect(aTokenBalance).to.be.gt(COLLATERAL_AMOUNT);
-            // Allow range: 0.7 - 1.3 WETH (accounting for swap slippage)
-            expect(aTokenBalance).to.be.gt(ethers.parseEther("0.7"));
-            expect(aTokenBalance).to.be.lt(ethers.parseEther("1.3"));
+            // At the pinned ETH/USD price, $1500 of flash liquidity adds ~0.83 WETH.
+            expect(aTokenBalance).to.be.gt(ethers.parseEther("1.25"));
+            expect(aTokenBalance).to.be.lt(ethers.parseEther("1.4"));
         });
 
         it("Should have USDC debt (borrowed to repay flash loan)", async function () {
@@ -475,9 +475,27 @@ describe("AaveV3 Plugin - Leverage via FlashLoanService (Fork)", function () {
         });
 
         it("Should revert with expired deadline (when position exists)", async function () {
-            // Create a small position first to trigger deadline check before NoPositionToClose
-            // Actually, deadline is checked first in the function
-            const pastDeadline = Math.floor(Date.now() / 1000) - 3600;
+            const now = (await ethers.provider.getBlock("latest"))!.timestamp;
+            const collateral = ethers.parseEther("0.1");
+            await ethers.provider.send("hardhat_impersonateAccount", [WETH_WHALE]);
+            await ethers.provider.send("hardhat_setBalance", [
+                WETH_WHALE,
+                ethers.toQuantity(ethers.parseEther("1")),
+            ]);
+            const whale = await ethers.getSigner(WETH_WHALE);
+            await wethContract.connect(whale).transfer(owner.address, collateral);
+            await ethers.provider.send("hardhat_stopImpersonatingAccount", [WETH_WHALE]);
+            await wethContract.connect(owner).approve(await plugin.getAddress(), collateral);
+            await plugin.connect(owner).openLeverageAtomic({
+                collateralToken: "WETH",
+                borrowToken: "USDC",
+                collateralAmount: collateral,
+                targetLeverageX100: 150,
+                minHealthFactor: ethers.parseEther("1.05"),
+                deadline: now + 3600,
+            });
+
+            const pastDeadline = (await ethers.provider.getBlock("latest"))!.timestamp - 1;
             await expect(
                 plugin.connect(owner).closeLeverageAtomic({
                     collateralToken: "WETH",
@@ -486,6 +504,13 @@ describe("AaveV3 Plugin - Leverage via FlashLoanService (Fork)", function () {
                     deadline: pastDeadline,
                 })
             ).to.be.revertedWithCustomError(plugin, "DeadlineExpired");
+
+            await plugin.connect(owner).closeLeverageAtomic({
+                collateralToken: "WETH",
+                borrowToken: "USDC",
+                maxSlippageBps: 100,
+                deadline: (await ethers.provider.getBlock("latest"))!.timestamp + 3600,
+            });
         });
     });
 

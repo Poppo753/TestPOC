@@ -34,6 +34,10 @@ describe("EulerV2Plugin - closePositionsForBaseAsset E2E", function () {
     const USDC_VAULT = "0x0a1eCC5Fe8C9be3C809844fcBe615B46A869b899";
     const WETH_WHALE = "0xC3E5607Cd4ca0D5Fe51e09B60Ed97a0Ae6F874dd"; // Known Arbitrum WETH holder
     const ETH_USD_FEED = "0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612";
+    const EVC_ADDRESS = "0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066";
+    const ACCOUNT_LENS = "0x90a52DDcb232e7bb003DD9258fA1235c553eC956";
+    const VAULT_LENS = "0xc99FCEE6174Bc92eBe9C78690fFD5067018a8380";
+    const UTILS_LENS = "0xDAf44060DCe217Fd603908A49fcaa1FA900304BE";
     
     // Helper - delay to avoid RPC rate limiting
     const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -137,7 +141,12 @@ describe("EulerV2Plugin - closePositionsForBaseAsset E2E", function () {
         
         // EulerV2Plugin
         const EulerV2PluginFactory = await ethers.getContractFactory("EulerV2Plugin");
-        eulerV2Plugin = await EulerV2PluginFactory.deploy(await beacon.getAddress(), "WETH");
+        eulerV2Plugin = await EulerV2PluginFactory.deploy(
+            await beacon.getAddress(),
+            "WETH",
+            EVC_ADDRESS,
+            ACCOUNT_LENS
+        );
         await eulerV2Plugin.waitForDeployment();
         
         console.log(`   ✅ EulerV2Plugin deployed: ${await eulerV2Plugin.getAddress()}`);
@@ -149,7 +158,14 @@ describe("EulerV2Plugin - closePositionsForBaseAsset E2E", function () {
         
         // Deploy EulerLensAdapter
         const EulerLensAdapterFactory = await ethers.getContractFactory("EulerLensAdapter");
-        eulerLensAdapter = await EulerLensAdapterFactory.deploy(await beacon.getAddress(), "WETH");
+        eulerLensAdapter = await EulerLensAdapterFactory.deploy(
+            await beacon.getAddress(),
+            "WETH",
+            ACCOUNT_LENS,
+            VAULT_LENS,
+            UTILS_LENS,
+            EVC_ADDRESS
+        );
         await eulerLensAdapter.waitForDeployment();
         console.log(`   ✅ EulerLensAdapter deployed: ${await eulerLensAdapter.getAddress()}`);
         await sleep(DELAY_MS);
@@ -187,8 +203,8 @@ describe("EulerV2Plugin - closePositionsForBaseAsset E2E", function () {
         console.log("\n" + "-".padEnd(70, "-") + "\n");
     });
     
-    describe("1. Setup - Open Multiple Leverage Positions", function () {
-        it("Should open 3 leverage positions with different leverage levels", async function () {
+    describe("1. Setup - Open Supported Leverage Position", function () {
+        it("Should open one active position for the WETH/USDC vault pair", async function () {
             const weth = await ethers.getContractAt("IERC20", WETH);
             const pluginAddr = await eulerV2Plugin.getAddress();
             
@@ -214,27 +230,19 @@ describe("EulerV2Plugin - closePositionsForBaseAsset E2E", function () {
                 await sleep(DELAY_MS * 2); // Extra delay for leverage operations
             }
             
-            // Position 1: 2x leverage (safest)
-            await openPosition(200, "Position 1: 2x leverage (safe)");
-            
-            // Position 2: 3x leverage (medium risk)
-            await openPosition(300, "Position 2: 3x leverage (medium)");
-            
-            // Position 3: 4x leverage (risky)
-            await openPosition(400, "Position 3: 4x leverage (risky)");
+            // The registry deliberately permits one active position per vault
+            // pair because Euler aggregates this pair on a single account.
+            await openPosition(400, "WETH/USDC position: 4x leverage");
             
             // Verify positions
             await sleep(DELAY_MS);
             const activeCount = await EulerRegistry.getActivePositionCount();
             console.log(`\n   📊 Active positions: ${activeCount}`);
-            expect(activeCount).to.equal(3);
-            
-            // Log health factors
-            for (let i = 0; i < 3; i++) {
-                await sleep(DELAY_MS);
-                const hf = await eulerLensAdapter.getPositionHealthFactor(i);
-                console.log(`      Position ${i}: HF = ${ethers.formatEther(hf)}`);
-            }
+            expect(activeCount).to.equal(1);
+
+            const hf = await eulerLensAdapter.getPositionHealthFactor(0);
+            expect(hf).to.be.lt(ethers.MaxUint256);
+            console.log(`      Position 0: HF = ${ethers.formatEther(hf)}`);
         });
     });
     
@@ -252,13 +260,13 @@ describe("EulerV2Plugin - closePositionsForBaseAsset E2E", function () {
             const activeCount = await EulerRegistry.getActivePositionCount();
             console.log(`   📊 Active positions after: ${activeCount}`);
             
-            // Should have closed the riskiest one (Position 3 with 4x leverage)
-            expect(activeCount).to.equal(2);
+            // Closing is atomic per vault pair, so the sole active position closes.
+            expect(activeCount).to.equal(0);
         });
         
         it("Should close multiple positions when requesting larger amount", async function () {
-            // Request 3 WETH - should close remaining positions
-            console.log("\n   🎯 Requesting 3 WETH (should close remaining positions)...");
+            // A second request after the atomic close must be a clean no-op.
+            console.log("\n   🎯 Requesting 3 WETH after all positions are closed...");
             
             await sleep(DELAY_MS);
             const targetWeth = ethers.parseEther("3");
@@ -269,7 +277,6 @@ describe("EulerV2Plugin - closePositionsForBaseAsset E2E", function () {
             const activeCount = await EulerRegistry.getActivePositionCount();
             console.log(`   📊 Active positions after: ${activeCount}`);
             
-            // Should have closed all remaining
             expect(activeCount).to.equal(0);
         });
         
@@ -290,26 +297,6 @@ describe("EulerV2Plugin - closePositionsForBaseAsset E2E", function () {
     });
     
     describe("3. Edge Cases", function () {
-        before(async function () {
-            // Refund and open new position for edge case tests
-            await sleep(DELAY_MS);
-            await ethers.provider.send("hardhat_impersonateAccount", [WETH_WHALE]);
-            await sleep(DELAY_MS);
-            await ethers.provider.send("hardhat_setBalance", [
-                WETH_WHALE,
-                "0x" + ethers.parseEther("10").toString(16)
-            ]);
-            const whale = await ethers.getSigner(WETH_WHALE);
-            const weth = await ethers.getContractAt("IERC20", WETH);
-            await sleep(DELAY_MS);
-            await weth.connect(whale).transfer(
-                await eulerV2Plugin.getAddress(),
-                ethers.parseEther("5")
-            );
-            await sleep(DELAY_MS);
-            await ethers.provider.send("hardhat_stopImpersonatingAccount", [WETH_WHALE]);
-        });
-        
         it("Should handle target larger than available value", async function () {
             const weth = await ethers.getContractAt("IERC20", WETH);
             const pluginAddr = await eulerV2Plugin.getAddress();

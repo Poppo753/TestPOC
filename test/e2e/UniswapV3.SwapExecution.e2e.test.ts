@@ -62,9 +62,9 @@ describe("E2E A.4 — UniswapV3 Swap Execution", function () {
         // Deploy ChainlinkAdapter
         const ChainlinkFactory = await ethers.getContractFactory("ChainlinkAdapter");
         chainlinkAdapter = await ChainlinkFactory.deploy();
-        await chainlinkAdapter.addFeed("WETH", "0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612", 3600);
-        await chainlinkAdapter.addFeed("USDC", "0x50834F3163758fcC1Df9973b6e91f0F0F0434aD3", 86400);
-        await chainlinkAdapter.addFeed("WBTC", "0x6ce185860a4963106506C203335A2910413708e9", 3600);
+        await chainlinkAdapter.setPriceFeed("WETH", "0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612", 8, 3600, "USD");
+        await chainlinkAdapter.setPriceFeed("USDC", "0x50834F3163758fcC1Df9973b6e91f0F0F0434aD3", 8, 86400, "USD");
+        await chainlinkAdapter.setPriceFeed("WBTC", "0x6ce185860a4963106506C203335A2910413708e9", 8, 3600, "USD");
 
         // Deploy TokenManager
         const TokenManagerFactory = await ethers.getContractFactory("TokenManager");
@@ -72,11 +72,10 @@ describe("E2E A.4 — UniswapV3 Swap Execution", function () {
         await beacon.updateImplementation("TokenManager", await tokenManager.getAddress());
 
         // Register tokens
-        await tokenManager.addToken("WETH", WETH, 18);
-        await tokenManager.addToken("USDC", USDC, 6);
+        await tokenManager["manageTokenData(string,address,uint8,uint256)"]("USDC", USDC, 6, 86400);
 
         // Deploy UniswapV3Plugin
-        const UniswapFactory = await ethers.getContractFactory("UniswapV3Plugin");
+        const UniswapFactory = await ethers.getContractFactory("UniswapV3PluginDirect");
         uniswapPlugin = await UniswapFactory.deploy(
             await beacon.getAddress(),
             UNIV3_ROUTER,

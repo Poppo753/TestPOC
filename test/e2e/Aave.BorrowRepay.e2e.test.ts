@@ -20,8 +20,7 @@ describe("E2E A.1 — Aave Borrow/Repay Full Cycle", function () {
     const AAVE_POOL = "0x794a61358D6845594F94dc1DB02A252b5b4814aD";
     const WETH = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
     const USDC = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";
-    const WETH_WHALE = "0x489ee077994B6658eAfA855C308275EAd8097C4A";
-    const USDC_WHALE = "0x489ee077994B6658eAfA855C308275EAd8097C4A";
+    const USDC_WHALE = "0x1AB4973a48dc892Cd9971ECE8e01DcC7688f8F23";
 
     // ==================== STATE ====================
     let mockBeacon: any;
@@ -36,6 +35,7 @@ describe("E2E A.1 — Aave Borrow/Repay Full Cycle", function () {
     let aWETH: string;
     let aUSDC: string;
     let variableDebtUSDC: string;
+    let snapshotId: string;
 
     // ==================== SETUP ====================
 
@@ -151,8 +151,12 @@ describe("E2E A.1 — Aave Borrow/Repay Full Cycle", function () {
         } catch {}
     }
 
+    beforeEach(async function () {
+        snapshotId = await ethers.provider.send("evm_snapshot", []);
+    });
+
     afterEach(async function () {
-        await cleanPosition();
+        expect(await ethers.provider.send("evm_revert", [snapshotId])).to.equal(true);
     });
 
     // ==================== SCENARIO 1: Basic Borrow/Repay ====================

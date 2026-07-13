@@ -27,6 +27,7 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
     let plugin: EulerV2Plugin;
     let vaultRegistry: EulerRegistry;
     let eulerLensAdapter: any;
+    let flashLoanService: any;
     let owner: SignerWithAddress;
     let mockBeacon: any;
     let mockProxyGeneral: any;
@@ -37,6 +38,9 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
     // ==================== ARBITRUM MAINNET ADDRESSES ====================
     
     const EVC_ADDRESS = "0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066";
+    const ACCOUNT_LENS = "0x90a52DDcb232e7bb003DD9258fA1235c553eC956";
+    const VAULT_LENS = "0xc99FCEE6174Bc92eBe9C78690fFD5067018a8380";
+    const UTILS_LENS = "0xDAf44060DCe217Fd603908A49fcaa1FA900304BE";
     const SWAPPER_ADDRESS = "0x6eE488A00A2ef1E2764cD7245F8a77C40060A7C7";
     const SWAP_VERIFIER_ADDRESS = "0x7b16DAaFa76CfeC8C08D7a68aF31949B37ebfdF5";
     
@@ -48,7 +52,9 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
     const WETH = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
     const USDC = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";
     
-    const WETH_WHALE = "0x489ee077994B6658eAfA855C308275EAd8097C4A";
+    // Stable WETH holder at the pinned fork block. Avoid protocol vaults whose
+    // balance is mutated by unrelated integration suites in the same process.
+    const WETH_WHALE = "0xC3E5607Cd4ca0D5Fe51e09B60Ed97a0Ae6F874dd";
     const USDC_WHALE = "0x489ee077994B6658eAfA855C308275EAd8097C4A";
 
     before(async function () {
@@ -90,23 +96,35 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
         await vaultRegistry.waitForDeployment();
         await mockBeacon.setImplementation("EulerRegistry", await vaultRegistry.getAddress());
 
+        const FlashLoanServiceFactory = await ethers.getContractFactory("FlashLoanService");
+        flashLoanService = await FlashLoanServiceFactory.deploy(await mockBeacon.getAddress());
+        await flashLoanService.waitForDeployment();
+        await mockBeacon.setImplementation("FlashLoanService", await flashLoanService.getAddress());
+
         // ==================== DEPLOY EULER V2 PLUGIN ====================
         
         const EulerPluginFactory = await ethers.getContractFactory("EulerV2Plugin");
-        plugin = await EulerPluginFactory.deploy(await mockBeacon.getAddress(), "WETH");
+        plugin = await EulerPluginFactory.deploy(
+            await mockBeacon.getAddress(), "WETH", EVC_ADDRESS, ACCOUNT_LENS
+        );
         await plugin.waitForDeployment();
 
         // Deploy EulerLensAdapter
         const EulerLensAdapterFactory = await ethers.getContractFactory("EulerLensAdapter");
-        eulerLensAdapter = await EulerLensAdapterFactory.deploy(await mockBeacon.getAddress(), "WETH");
+        eulerLensAdapter = await EulerLensAdapterFactory.deploy(
+            await mockBeacon.getAddress(), "WETH", ACCOUNT_LENS,
+            VAULT_LENS, UTILS_LENS, EVC_ADDRESS
+        );
         await eulerLensAdapter.waitForDeployment();
         await mockBeacon.setImplementation("EulerLensAdapter", await eulerLensAdapter.getAddress());
         await mockBeacon.setImplementation("EulerV2Plugin", await plugin.getAddress());
+        await mockBeacon.setImplementation("LiquidityManager", await mockProxyGeneral.getAddress());
 
         // ==================== SETUP VAULTS AND TOKENS ====================
         
         await vaultRegistry.setVault("WETH", EULER_VAULTS.WETH);
         await vaultRegistry.setVault("USDC", EULER_VAULTS.USDC);
+        await vaultRegistry.transferOwnership(await plugin.getAddress());
         await mockTokenManager.setTokenAddress("WETH", WETH);
         await mockTokenManager.setTokenAddress("USDC", USDC);
 
@@ -138,7 +156,7 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
                 collateralAmount: ethers.parseEther("0.1"),
                 targetLeverageX100: 200,
                 minHealthFactor: ethers.parseEther("1.05"),
-                deadline: Math.floor(Date.now() / 1000) - 3600 // 1 ora fa
+                deadline: (await ethers.provider.getBlock("latest"))!.timestamp - 1
             };
 
             await expect(
@@ -188,15 +206,15 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
                 deadline: Math.floor(Date.now() / 1000) + 3600
             };
 
-            await expect(
-                plugin.openLeverageAtomic(params)
-            ).to.be.reverted;
+            await mockBeacon.setImplementation("FlashLoanService", ethers.ZeroAddress);
+            await expect(plugin.openLeverageAtomic(params)).to.be.reverted;
+            await mockBeacon.setImplementation("FlashLoanService", await flashLoanService.getAddress());
             
             console.log("   \u2705 Correctly reverts without FlashLoanService configured");
         });
     });
 
-    describe("3. Open Leverage Position - Basic Flow (senza swap)", function () {
+    describe("3. Open Leverage Position - Full Atomic Flow", function () {
         /**
          * NOTA: Il batch EVC per openLeveragePosition richiede swapData valido.
          * Senza un aggregator (1inch, Paraswap) configurato, il batch fallisce.
@@ -216,15 +234,13 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
             await ethers.provider.send("hardhat_setBalance", [WETH_WHALE, ethers.toQuantity(ethers.parseEther("10"))]);
             
             // Trasferisci 0.5 WETH al plugin per test
-            await wethContract.connect(wethWhale).transfer(
-                await plugin.getAddress(), 
-                ethers.parseEther("0.5")
-            );
-            
-            console.log(`   Plugin WETH balance: ${ethers.formatEther(await wethContract.balanceOf(await plugin.getAddress()))}`);
+            await wethContract.connect(wethWhale).transfer(owner.address, ethers.parseEther("0.5"));
+            await wethContract.approve(await plugin.getAddress(), ethers.parseEther("0.5"));
+
+            console.log(`   Owner WETH balance: ${ethers.formatEther(await wethContract.balanceOf(owner.address))}`);
         });
 
-        it("Should fail without FlashLoanService in mock setup (expected behavior)", async function () {
+        it("Should open leverage atomically with the configured FlashLoanService", async function () {
             // openLeverageAtomic requires FlashLoanService registered in Beacon
             // In this mock setup, FlashLoanService is not deployed
             
@@ -238,16 +254,14 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
             };
 
             // Should fail because FlashLoanService is not configured in MockBeacon
-            await expect(
-                plugin.openLeverageAtomic(params)
-            ).to.be.reverted;
+            await expect(plugin.openLeverageAtomic(params)).to.not.be.reverted;
             
             console.log("   \u2705 Correctly reverts without FlashLoanService");
         });
 
-        it("Should have zero active positions (openLeverageAtomic failed)", async function () {
+        it("Should have one active position after atomic open", async function () {
             const count = await vaultRegistry.getActivePositionCount();
-            expect(count).to.equal(0);
+            expect(count).to.equal(1);
             console.log(`   Active positions: ${count}`);
         });
     });
@@ -329,7 +343,7 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
             const count = await vaultRegistry.getActivePositionCount();
             if (count === 0n) {
                 console.log("   ⚠️ No active positions, skipping add/remove collateral tests");
-                this.skip();
+                expect.fail("Atomic leverage setup did not create the required position");
             }
             testPositionId = 0n; // Prima posizione
         });
@@ -362,6 +376,7 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
                 console.log(`   ✅ Added ${ethers.formatEther(addAmount)} WETH collateral`);
             } catch (error: any) {
                 console.log(`   ⚠️ addCollateralToPosition failed: ${error.message.slice(0, 200)}`);
+                throw error;
             }
         });
 
@@ -382,7 +397,7 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
             const count = await vaultRegistry.getActivePositionCount();
             if (count === 0n) {
                 console.log("   ⚠️ No active positions to close, skipping");
-                this.skip();
+                expect.fail("No active leverage position available for close test");
             }
             testPositionId = 0n;
         });
@@ -390,14 +405,14 @@ describe("EulerV2Plugin - Leverage Fork Tests (Arbitrum Mainnet)", function () {
         it("Should fail to close non-existent position", async function () {
             await expect(
                 plugin["closePosition(uint256)"](999n)
-            ).to.be.revertedWithCustomError(plugin, "PositionNotFound");
+            ).to.be.revertedWithCustomError(vaultRegistry, "PositionNotFound");
         });
 
         it("Should close position (with debt repayment)", async function () {
             const pos = await vaultRegistry.getPosition(testPositionId);
             if (!pos.isActive) {
                 console.log("   ⚠️ Position already closed, skipping");
-                this.skip();
+                expect.fail("Position was unexpectedly closed before the close test");
             }
 
             const breakdown = await eulerLensAdapter.getValueBreakdown();

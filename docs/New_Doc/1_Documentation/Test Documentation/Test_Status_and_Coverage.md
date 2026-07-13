@@ -1,5 +1,29 @@
 # Documentazione Completa dei Test
 
+## Certificazione eseguita — 13 luglio 2026
+
+Ambiente: Hardhat fork Arbitrum, `FORK_ENABLED=true`, blocco fissato
+`FORK_BLOCK_NUMBER=483105327`. Le suite dedicate ai plugin Dolomite e GMX sono
+escluse intenzionalmente perché i plugin non sono ancora completi.
+
+| Categoria | Risultato verificato |
+|---|---:|
+| Unit | 1.193 passing, 0 failing, 0 pending |
+| Integration attive | 654 passing in 42 file, 0 failing, 0 pending |
+| E2E attive | 230 casi verificati, 0 failure funzionali, 0 pending |
+| Invariants + Security | 83 passing, 0 failing, 0 pending |
+| Performance / gas | 29 passing, 0 failing, 0 pending |
+
+Durante il run E2E complessivo la RPC pubblica ha restituito due errori di
+trasporto (HTTP 429/timeout). I due file coinvolti sono stati rilanciati
+integralmente sullo stesso blocco e hanno chiuso **32/32 passing**. Questo
+certifica il codice al blocco indicato; una RPC privata/stabile resta necessaria
+per rendere il run CI completamente riproducibile e indipendente dai rate-limit.
+
+Nessun file di test tracciato e nessun caso di test è stato eliminato. Il file
+legacy `FlashLoanPlugin.e2e.test.ts` è stato migrato alla API corrente mantenendo
+tutti i suoi 16 casi.
+
 > **Progetto**: TestSmartContract  
 > **Data di rilevazione**: 10 Luglio 2026  
 > **Ambiente verificato**: `FORK_ENABLED=false` (hardhat network locale)  

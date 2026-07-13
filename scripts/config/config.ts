@@ -3,7 +3,7 @@
  * Configurazione centralizzata per tutti gli script di interazione
  */
 
-import { ethers } from "ethers";
+import { ethers } from "hardhat";
 import dotenv from "dotenv";
 import { getCurrentNetworkConfig, NetworkConfig as NetConfig } from "./networks";
 import { SCRIPT_AMOUNTS, CONSTANTS_UTILS } from "./constants";

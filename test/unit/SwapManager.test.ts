@@ -609,21 +609,13 @@ describe("SwapManager Contract", function () {
       await swapManager.setSwapsEnabled(true);
     });
 
-    // SM-SWAP-CRIT-006: Swap when paused (revert)
-    it.skip("SM-SWAP-CRIT-006: should revert when contract is paused", async function () {
-      // ARCHITECTURAL DIFFERENCE:
-      // SwapManager uses custom 'swapsEnabled' pattern instead of OpenZeppelin Pausable.
-      // This is a design choice for module-specific control and flexibility.
-      //
-      // EQUIVALENT FUNCTIONALITY: SM-SWAP-CRIT-005 (✅ PASSING)
-      // Tests the same emergency stop mechanism using setSwapsEnabled(false).
-      //
-      // Both patterns provide identical protection:
-      // - Pausable: pause() → blocks all whenNotPaused functions
-      // - Custom: setSwapsEnabled(false) → blocks all whenSwapsEnabled functions
-      //
-      // Implementation: See SwapManager.sol lines 60-85 for swapsEnabled pattern.
-      // No action required - functionality is present and tested via CRIT-005.
+    // SwapManager uses a module-specific emergency stop rather than Pausable.
+    it("SM-SWAP-CRIT-006: should enforce the module emergency-stop state", async function () {
+      await swapManager.setSwapsEnabled(false);
+      await expect(swapManager.performSwapAuto("USDC", "WBTC", ethers.parseUnits("1", 6)))
+        .to.be.revertedWith("Swaps are disabled");
+      await swapManager.setSwapsEnabled(true);
+      expect(await swapManager.swapsEnabled()).to.equal(true);
     });
 
     // SM-SWAP-CRIT-007: Insufficient balance (revert)

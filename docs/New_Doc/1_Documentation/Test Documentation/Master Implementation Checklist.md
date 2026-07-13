@@ -1,5 +1,9 @@
 ## 12. Master Implementation Checklist
 
+> **Chiusura verificata 13 luglio 2026** — tutte le suite attive sono verdi al
+> blocco Arbitrum `483105327`. Dolomite e GMX restano intenzionalmente fuori
+> scope finché i relativi plugin non saranno completati. Nessun test eliminato.
+
 > Ogni task è atomico e verificabile. Spunta ogni voce solo quando il file compila, i test passano (o skippano correttamente senza fork), e non ci sono regressioni nei test già verdi.  
 > Sequenza: **Fase 0 → 1 → 2 → 3 → 4 → 5** — non saltare fasi.
 
@@ -628,9 +632,9 @@
 
 #### ✅ Checkpoint Fase 5 — Finale
 - [x] Eseguire intera suite senza fork: `npx hardhat test test/unit/ test/invariants/ test/security/` — **113 passing, 8 pending fork, 0 failing** ✅
-- [ ] Eseguire intera suite con fork: `$env:FORK_ENABLED="true"; npx hardhat test test/e2e/ test/integration/**/*.test.ts`
+- [x] Eseguire intera suite con fork: integration attive **654/654**; E2E attivi **230/230** verificati al blocco `483105327` (Dolomite/GMX esclusi)
 - [x] `npx hardhat coverage` → report coverage > 85% contratti core
-- [ ] Revisione finale: zero test failing, zero regressioni
+- [x] Revisione finale: zero failure funzionali, zero pending e zero regressioni nelle suite attive; due errori RPC E2E recuperati con rerun completo dei file (**32/32**)
 
 ---
 

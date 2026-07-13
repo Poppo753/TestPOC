@@ -89,7 +89,7 @@ describe("E2E: Automatic Swap on Withdraw (Fresh Fork Deploy)", function () {
     
     // 2. Deploy ProxyGeneral
     const ProxyFactory = await ethers.getContractFactory("ProxyGeneral");
-    proxyGeneral = await ProxyFactory.deploy(await beacon.getAddress());
+    proxyGeneral = await ProxyFactory.deploy(await beacon.getAddress(), "WETH");
     await proxyGeneral.waitForDeployment();
     console.log(`   ✅ ProxyGeneral: ${await proxyGeneral.getAddress()}`);
     await delay(1000);
@@ -113,6 +113,7 @@ describe("E2E: Automatic Swap on Withdraw (Fresh Fork Deploy)", function () {
     await chainlinkAdapter.setPriceFeed("WETH", ETH_USD_FEED, 8, 3600, "USD");
     await chainlinkAdapter.setPriceFeed("WBTC", BTC_USD_FEED, 8, 3600, "USD");
     await chainlinkAdapter.setPriceFeed("USDC", USDC_USD_FEED, 8, 86400, "USD");
+    await chainlinkAdapter.setReferenceFeed("USD", ETH_USD_FEED, 8, 3600);
     await beacon.updateImplementation("ChainlinkAdapter", await chainlinkAdapter.getAddress());
     await delay(1000);
     
@@ -125,6 +126,8 @@ describe("E2E: Automatic Swap on Withdraw (Fresh Fork Deploy)", function () {
     await tokenManager.waitForDeployment();
     console.log(`   ✅ TokenManager: ${await tokenManager.getAddress()}`);
     await beacon.updateImplementation("TokenManager", await tokenManager.getAddress());
+    await tokenManager.manageTokenData("USDC", ARBITRUM_USDC, USDC_USD_FEED, 6, 8, 86400);
+    await tokenManager.manageTokenData("WBTC", ARBITRUM_WBTC, BTC_USD_FEED, 8, 8, 3600);
     await delay(1000);
     
     // 6. Deploy ValueCalculator
@@ -239,6 +242,9 @@ describe("E2E: Automatic Swap on Withdraw (Fresh Fork Deploy)", function () {
     
     expect(usdcBalance).to.be.gt(0);
     expect(wbtcBalance).to.be.gt(0);
+    expect(await tokenManager.getActiveTokens()).to.deep.equal(["USDC", "WBTC"]);
+    expect(await valueCalculator.calculateTokenValuePure("USDC")).to.be.gt(0n);
+    expect(await valueCalculator.calculateTokenValuePure("WBTC")).to.be.gt(0n);
   });
 
   it("Should allow user to deposit small ETH amount", async function () {
@@ -249,10 +255,11 @@ describe("E2E: Automatic Swap on Withdraw (Fresh Fork Deploy)", function () {
     
     await delay(1000);
     
-    const tx = await liquidityManager.connect(user1).deposit({ 
-      value: depositAmount,
-      gasLimit: 3000000 
-    });
+    const wethWrapper = await ethers.getContractAt("IWETH", ARBITRUM_WETH);
+    await wethWrapper.connect(user1).deposit({ value: depositAmount });
+    const wethErc20 = await ethers.getContractAt("IERC20", ARBITRUM_WETH);
+    await wethErc20.connect(user1).approve(await liquidityManager.getAddress(), depositAmount);
+    const tx = await liquidityManager.connect(user1).deposit(depositAmount, { gasLimit: 3000000 });
     const receipt = await tx.wait();
     
     await delay(1000);
@@ -275,6 +282,17 @@ describe("E2E: Automatic Swap on Withdraw (Fresh Fork Deploy)", function () {
     
     const lpBalance = await proxyGeneral.balanceOf(await user1.getAddress());
     console.log(`   User LP balance: ${ethers.formatEther(lpBalance)} LP`);
+
+    // Simula WETH già allocato a un protocollo: il withdraw deve quindi
+    // convertire gli altri asset custoditi invece di usare il WETH depositato.
+    const proxyAddress = await proxyGeneral.getAddress();
+    await ethers.provider.send("hardhat_setBalance", [proxyAddress, ethers.toQuantity(ethers.parseEther("1"))]);
+    await ethers.provider.send("hardhat_impersonateAccount", [proxyAddress]);
+    const proxySigner = await ethers.getSigner(proxyAddress);
+    const proxyWeth = await ethers.getContractAt("IERC20", ARBITRUM_WETH);
+    const allocatedWeth = await proxyWeth.balanceOf(proxyAddress);
+    await proxyWeth.connect(proxySigner).transfer(await owner.getAddress(), allocatedWeth);
+    await ethers.provider.send("hardhat_stopImpersonatingAccount", [proxyAddress]);
     
     // Get balances before withdrawal
     const wethContract = await ethers.getContractAt("IERC20", ARBITRUM_WETH);
@@ -303,7 +321,7 @@ describe("E2E: Automatic Swap on Withdraw (Fresh Fork Deploy)", function () {
     await delay(2000);
     
     // Execute withdrawal
-    const userEthBefore = await ethers.provider.getBalance(await user1.getAddress());
+    const userWethBefore = await wethContract.balanceOf(await user1.getAddress());
     
     console.log(`\n⏳ Executing withdrawal...`);
     
@@ -315,12 +333,11 @@ describe("E2E: Automatic Swap on Withdraw (Fresh Fork Deploy)", function () {
     
     await delay(1000);
     
-    const gasUsed = receipt!.gasUsed * receipt!.gasPrice;
-    const userEthAfter = await ethers.provider.getBalance(await user1.getAddress());
-    const ethReceived = userEthAfter - userEthBefore + BigInt(gasUsed);
+    const userWethAfter = await wethContract.balanceOf(await user1.getAddress());
+    const wethReceived = userWethAfter - userWethBefore;
     
     console.log(`\n✅ WITHDRAWAL COMPLETED:`);
-    console.log(`   ETH received: ${ethers.formatEther(ethReceived)} ETH`);
+    console.log(`   WETH received: ${ethers.formatEther(wethReceived)} WETH`);
     console.log(`   Gas used: ${receipt!.gasUsed.toLocaleString()}`);
     
     // Check for swap events
@@ -344,7 +361,7 @@ describe("E2E: Automatic Swap on Withdraw (Fresh Fork Deploy)", function () {
       console.log(`   Amount: ${parsed?.args.tokenToSwap === "USDC" ? 
         ethers.formatUnits(parsed?.args.amountToSwap, 6) : 
         ethers.formatUnits(parsed?.args.amountToSwap, 8)}`);
-      console.log(`   WETH received: ${ethers.formatEther(parsed?.args.wethNeeded)} WETH`);
+      console.log(`   WETH needed: ${ethers.formatEther(parsed?.args.baseAssetNeeded)} WETH`);
     }
     
     // Check balances after withdrawal
@@ -372,6 +389,6 @@ describe("E2E: Automatic Swap on Withdraw (Fresh Fork Deploy)", function () {
       console.log(`\nℹ️  No swap needed (sufficient WETH available)`);
     }
     
-    expect(ethReceived).to.be.gt(0);
+    expect(wethReceived).to.be.gt(0);
   });
 });

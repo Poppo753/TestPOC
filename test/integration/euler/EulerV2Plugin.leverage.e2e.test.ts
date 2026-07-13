@@ -39,6 +39,10 @@ describe("EulerV2Plugin - Leverage E2E Tests (Atomic)", function () {
     };
     const WETH_WHALE = "0x489ee077994B6658eAfA855C308275EAd8097C4A";
     const USDC_WHALE = "0x489ee077994B6658eAfA855C308275EAd8097C4A";
+    const EVC_ADDRESS = "0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066";
+    const ACCOUNT_LENS = "0x90a52DDcb232e7bb003DD9258fA1235c553eC956";
+    const VAULT_LENS = "0xc99FCEE6174Bc92eBe9C78690fFD5067018a8380";
+    const UTILS_LENS = "0xDAf44060DCe217Fd603908A49fcaa1FA900304BE";
 
     before(async function () {
         // Skip se non siamo su fork
@@ -85,12 +89,17 @@ describe("EulerV2Plugin - Leverage E2E Tests (Atomic)", function () {
 
         // Deploy Plugin
         const EulerPluginFactory = await ethers.getContractFactory("EulerV2Plugin");
-        plugin = await EulerPluginFactory.deploy(await mockBeacon.getAddress(), "WETH");
+        plugin = await EulerPluginFactory.deploy(
+            await mockBeacon.getAddress(), "WETH", EVC_ADDRESS, ACCOUNT_LENS
+        );
         await plugin.waitForDeployment();
 
         // Deploy EulerLensAdapter
         const EulerLensAdapterFactory = await ethers.getContractFactory("EulerLensAdapter");
-        eulerLensAdapter = await EulerLensAdapterFactory.deploy(await mockBeacon.getAddress(), "WETH");
+        eulerLensAdapter = await EulerLensAdapterFactory.deploy(
+            await mockBeacon.getAddress(), "WETH", ACCOUNT_LENS,
+            VAULT_LENS, UTILS_LENS, EVC_ADDRESS
+        );
         await eulerLensAdapter.waitForDeployment();
         await mockBeacon.setImplementation("EulerLensAdapter", await eulerLensAdapter.getAddress());
         await mockBeacon.setImplementation("EulerV2Plugin", await plugin.getAddress());

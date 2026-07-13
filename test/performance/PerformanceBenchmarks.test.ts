@@ -43,6 +43,9 @@ import { ethers } from "hardhat";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 describe("Performance Benchmarks - TEST-002", function () {
+    // Allow for RPC backoff when this otherwise-local benchmark runs on a pinned fork.
+    this.timeout(180_000);
+
     let beacon: any;
     let parameterManager: any;
     let tokenManager: any;

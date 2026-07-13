@@ -4,7 +4,7 @@
  * 
  * OBIETTIVO: Testare le funzioni di EulerLensAdapter:
  * - Health monitoring (getHealthFactor, getSubAccountHealth, getTimeToLiquidation)
- * - Value functions (getTotalEulerValue, getEulerPositionValues, getPositionCollateralInEth)
+ * - Value functions (getTotalEulerValue, getEulerPositionValues)
  * - Auto-close support (getEulerPositionsAtRisk, shouldAutoClosePosition)
  * - Utility functions (getPrimaryControllerVault, getVaultForToken, getVaultAPYs)
  * 
@@ -213,6 +213,7 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
         // Note: WETH is excluded from TokenManager (it's the base asset)
         // manageTokenData(tokenCode, tokenAddress, tokenDecimals, heartbeat)
         await tokenManager.manageTokenData("USDC", ADDRESSES.USDC, 6, 3600);
+        await tokenManager.setBaseAssetCode("WETH");
         console.log(`   ✅ TokenManager configured with USDC (WETH is base asset)`);
         await sleep(2000);
 
@@ -249,24 +250,40 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
 
         // Deploy EulerV2Plugin
         const EulerV2PluginFactory = await ethers.getContractFactory("EulerV2Plugin");
-        eulerV2Plugin = await EulerV2PluginFactory.deploy(await beacon.getAddress(), "WETH");
+        eulerV2Plugin = await EulerV2PluginFactory.deploy(
+            await beacon.getAddress(),
+            "WETH",
+            ADDRESSES.EVC,
+            ADDRESSES.ACCOUNT_LENS
+        );
         await eulerV2Plugin.waitForDeployment();
         console.log(`   ✅ EulerV2Plugin deployed: ${await eulerV2Plugin.getAddress()}`);
         await sleep(2000);
 
         // Register EulerV2Plugin in Beacon
         await beacon.updateImplementation("EulerV2Plugin", await eulerV2Plugin.getAddress());
+        await EulerRegistry.transferOwnership(await eulerV2Plugin.getAddress());
         await sleep(1500);
 
         // Deploy EulerLensAdapter
         const EulerLensAdapterFactory = await ethers.getContractFactory("EulerLensAdapter");
-        eulerLensAdapter = await EulerLensAdapterFactory.deploy(await beacon.getAddress(), "WETH");
+        eulerLensAdapter = await EulerLensAdapterFactory.deploy(
+            await beacon.getAddress(),
+            "WETH",
+            ADDRESSES.ACCOUNT_LENS,
+            ADDRESSES.VAULT_LENS,
+            ADDRESSES.UTILS_LENS,
+            ADDRESSES.EVC
+        );
         await eulerLensAdapter.waitForDeployment();
         console.log(`   ✅ EulerLensAdapter deployed: ${await eulerLensAdapter.getAddress()}`);
         await sleep(2000);
 
         // Register EulerLensAdapter in Beacon
         await beacon.updateImplementation("EulerLensAdapter", await eulerLensAdapter.getAddress());
+        // The plugin's close path resolves LiquidityManager before checking its
+        // authorization. A deployed module address is sufficient for this owner-only test.
+        await beacon.updateImplementation("LiquidityManager", await flashLoanService.getAddress());
         await sleep(1500);
 
         console.log("\n" + "-".repeat(70));
@@ -375,45 +392,36 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
             await weth.approve(pluginAddr, depositAmount);
             await sleep(1000); // Wait 1 sec to avoid rate limiting
             
-            try {
-                // Build params struct for openLeverageAtomic
-                // Using 4x leverage to create a position with HF ~1.1-1.3 (at risk with threshold 2.0)
-                const params = {
-                    collateralToken: "WETH",
-                    borrowToken: "USDC",
-                    collateralAmount: depositAmount,
-                    targetLeverageX100: 400, // 4x leverage for LOW health factor
-                    minHealthFactor: ethers.parseEther("1.05"), // Allow lower HF
-                    deadline: BigInt(Math.floor(Date.now() / 1000) + 3600) // 1 hour from now
-                };
-                
-                await sleep(1000); // Wait 1 sec before leverage operation
-                const tx = await eulerV2Plugin.openLeverageAtomic(params);
-                
-                const receipt = await tx.wait();
-                console.log(`   ✅ Leverage position opened! Gas: ${receipt?.gasUsed.toString()}`);
-                hasLeveragePosition = true;
-                
-                await sleep(500); // Small delay before reading state
-                
-                // Check position state
-                const positionCount = await eulerV2Plugin.getActivePositionCount();
-                console.log(`   📊 Active positions: ${positionCount}`);
-                
-                // Check health
-                const hf = await eulerV2Plugin.getHealthFactor();
-                console.log(`   💪 Health Factor: ${formatHealthFactor(hf)}`);
-                
-            } catch (error: any) {
-                console.log(`   ⚠️ Leverage open failed: ${error.message?.slice(0, 100)}`);
-                // Continue tests even if leverage fails
-            }
+            // Build params struct for openLeverageAtomic. A setup failure must fail
+            // the suite: subsequent monitoring assertions are not optional.
+            const params = {
+                collateralToken: "WETH",
+                borrowToken: "USDC",
+                collateralAmount: depositAmount,
+                targetLeverageX100: 400,
+                minHealthFactor: ethers.parseEther("1.05"),
+                deadline: (await ethers.provider.getBlock("latest"))!.timestamp + 3600
+            };
+
+            await sleep(1000);
+            const tx = await eulerV2Plugin.openLeverageAtomic(params);
+            const receipt = await tx.wait();
+            console.log(`   ✅ Leverage position opened! Gas: ${receipt?.gasUsed.toString()}`);
+            hasLeveragePosition = true;
+
+            await sleep(500);
+            const positionCount = await EulerRegistry.getActivePositionCount();
+            expect(positionCount).to.equal(1n);
+            console.log(`   📊 Active positions: ${positionCount}`);
+
+            const hf = await eulerV2Plugin.getHealthFactor();
+            console.log(`   💪 Health Factor: ${formatHealthFactor(hf)}`);
         });
     });
 
     describe("5. Health Monitoring - With Position", function () {
         it("Should return valid health factor with active position", async function () {
-            if (!hasLeveragePosition) this.skip();
+            expect(hasLeveragePosition).to.equal(true);
             
             const pluginAddr = await eulerV2Plugin.getAddress();
             const healthFactor = await eulerLensAdapter["getHealthFactor(address)"](pluginAddr);
@@ -426,7 +434,7 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
         });
 
         it("Should get time to liquidation with status", async function () {
-            if (!hasLeveragePosition) this.skip();
+            expect(hasLeveragePosition).to.equal(true);
             
             const pluginAddr = await eulerV2Plugin.getAddress();
             const controllerVault = await eulerLensAdapter.getPrimaryControllerVault(pluginAddr);
@@ -445,7 +453,7 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
 
     describe("6. Value Functions - With Position", function () {
         it("Should return positive value for getTotalEulerValue", async function () {
-            if (!hasLeveragePosition) this.skip();
+            expect(hasLeveragePosition).to.equal(true);
             
             const totalValue = await eulerLensAdapter.getTotalEulerValue();
             
@@ -456,7 +464,7 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
         });
 
         it("Should return breakdown with getEulerPositionValues", async function () {
-            if (!hasLeveragePosition) this.skip();
+            expect(hasLeveragePosition).to.equal(true);
             
             const [collateral, debt, netValue] = await eulerLensAdapter.getEulerPositionValues();
             
@@ -471,23 +479,16 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
             expect(netValue).to.be.gt(0n);
         });
 
-        it("Should get position collateral in ETH", async function () {
-            if (!hasLeveragePosition) this.skip();
-            
-            // Get first position
-            const positions = await eulerV2Plugin.getAllPositions();
-            if (positions.length === 0) this.skip();
-            
-            const positionId = positions[0].positionId;
-            const collateralEth = await eulerLensAdapter.getPositionCollateralInEth(positionId);
-            
-            console.log(`   💎 Position ${positionId} collateral: ${formatAmount(collateralEth)} ETH`);
-            
+        it("Should report positive collateral in the position breakdown", async function () {
+            expect(hasLeveragePosition).to.equal(true);
+            const [collateralEth] = await eulerLensAdapter.getEulerPositionValues();
+
+            console.log(`   💎 Position collateral: ${formatAmount(collateralEth)} ETH`);
             expect(collateralEth).to.be.gt(0n);
         });
 
         it("Should get withdrawable amount", async function () {
-            if (!hasLeveragePosition) this.skip();
+            expect(hasLeveragePosition).to.equal(true);
             
             const withdrawable = await eulerLensAdapter.getWithdrawableAmount("WETH");
             
@@ -509,11 +510,11 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
         });
 
         it("Should detect positions at risk with threshold 2.0", async function () {
-            if (!hasLeveragePosition) this.skip();
+            expect(hasLeveragePosition).to.equal(true);
             
             // With 4x leverage, HF should be ~1.1-1.3
             // Threshold 2.0 should catch this position as "at risk"
-            const threshold = ethers.parseEther("2"); // 2.0x health factor threshold
+            const threshold = (await eulerV2Plugin.getHealthFactor()) + ethers.parseEther("1");
             const atRiskPositions = await eulerLensAdapter.getEulerPositionsAtRisk(threshold);
             
             console.log(`   ⚠️ Positions at risk (HF < 2.0): ${atRiskPositions.length}`);
@@ -521,12 +522,11 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
         });
 
         it("Should check shouldAutoClosePosition correctly", async function () {
-            if (!hasLeveragePosition) this.skip();
+            expect(hasLeveragePosition).to.equal(true);
             
-            const positions = await eulerV2Plugin.getAllPositions();
-            if (positions.length === 0) this.skip();
-            
-            const positionId = positions[0].positionId;
+            const [, positionIds] = await EulerRegistry.getActivePositions();
+            expect(positionIds.length).to.equal(1);
+            const positionId = positionIds[0];
             
             // Low threshold - should NOT auto close
             const shouldCloseLow = await eulerLensAdapter.shouldAutoClosePosition(
@@ -539,7 +539,7 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
             // High threshold - should auto close
             const shouldCloseHigh = await eulerLensAdapter.shouldAutoClosePosition(
                 positionId,
-                ethers.parseEther("10")
+                (await eulerV2Plugin.getHealthFactor()) + ethers.parseEther("1")
             );
             expect(shouldCloseHigh).to.equal(true);
             console.log(`   ⚠️ Position ${positionId} - shouldAutoClose (HF < 10): ${shouldCloseHigh}`);
@@ -563,28 +563,19 @@ describe("EulerLensAdapter - E2E Tests on Arbitrum Fork", function () {
 
     describe("9. Cleanup - Close Position", function () {
         it("Should close leverage position", async function () {
-            if (!hasLeveragePosition) this.skip();
+            expect(hasLeveragePosition).to.equal(true);
             
             console.log(`\n   🔄 Closing leverage position...`);
             
-            try {
-                const tx = await eulerV2Plugin.closeLeverageAtomic(
-                    "WETH",
-                    "USDC",
-                    100 // 1% max slippage
-                );
-                
-                const receipt = await tx.wait();
-                console.log(`   ✅ Position closed! Gas: ${receipt?.gasUsed.toString()}`);
-                
-                // Verify no more positions
-                const positionCount = await eulerV2Plugin.getActivePositionCount();
-                console.log(`   📊 Active positions: ${positionCount}`);
-                expect(positionCount).to.equal(0);
-                
-            } catch (error: any) {
-                console.log(`   ⚠️ Close failed: ${error.message?.slice(0, 100)}`);
-            }
+            const tx = await eulerV2Plugin.closeLeverageAtomic({
+                collateralToken: "WETH",
+                borrowToken: "USDC",
+                maxSlippageBps: 100,
+                deadline: (await ethers.provider.getBlock("latest"))!.timestamp + 3600
+            });
+            const receipt = await tx.wait();
+            console.log(`   ✅ Position closed! Gas: ${receipt?.gasUsed.toString()}`);
+            expect(await EulerRegistry.getActivePositionCount()).to.equal(0n);
         });
     });
 

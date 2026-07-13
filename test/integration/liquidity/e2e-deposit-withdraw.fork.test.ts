@@ -54,8 +54,10 @@ const FORK_ENABLED = process.env.FORK_ENABLED === "true";
     let weth: Contract;
     let vaultPlugin: Contract;
     let hexaVault: Contract;
+    let snapshotId: string;
 
     before(async function () {
+        snapshotId = await network.provider.send("evm_snapshot");
         // Impersonate deployer (owner of everything)
         await network.provider.request({
             method: "hardhat_impersonateAccount",
@@ -519,5 +521,9 @@ const FORK_ENABLED = process.env.FORK_ENABLED === "true";
             expect(pluginWeth).to.equal(0n, "No WETH in MorphoPlugin");
             expect(vaultUsdc).to.equal(0n, "No USDC in VaultPlugin");
         });
+    });
+
+    after(async function () {
+        await network.provider.send("evm_revert", [snapshotId]);
     });
 });

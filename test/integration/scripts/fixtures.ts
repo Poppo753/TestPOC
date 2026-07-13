@@ -12,6 +12,7 @@
 
 import { ethers } from "hardhat";
 import { expect } from "chai";
+import { CONTRACT_ADDRESSES } from "../../../scripts/config/config";
 
 /**
  * @notice Deploy complete DeFi system for script testing
@@ -27,12 +28,9 @@ export async function deployScriptTestFixture() {
   const mockWETH = await MockWETH.deploy();
 
   // Deploy MockChainlinkOracle
-  const MockChainlinkOracle = await ethers.getContractFactory("MockChainlinkOracle");
-  const mockOracle = await MockChainlinkOracle.deploy(
-    ethers.parseUnits("2000", 8), // $2000 ETH price
-    8,
-    "ETH/USD"
-  );
+  const MockOracleAdapter = await ethers.getContractFactory("MockOracleAdapter");
+  const mockOracle = await MockOracleAdapter.deploy();
+  await mockOracle.setupToken("WETH", ethers.parseEther("1"), 18, true);
 
   // Deploy mock tokens
   const MockERC20 = await ethers.getContractFactory("MockERC20");
@@ -56,7 +54,8 @@ export async function deployScriptTestFixture() {
 
   // Deploy TokenManager
   const TokenManager = await ethers.getContractFactory("TokenManager");
-  const tokenManager = await TokenManager.deploy(await beacon.getAddress());
+  const tokenManager = await TokenManager.deploy(await beacon.getAddress(), await mockOracle.getAddress());
+  await tokenManager.setBaseAssetCode("WETH");
 
   // Deploy ValueCalculator
   const ValueCalculator = await ethers.getContractFactory("ValueCalculator");
@@ -87,6 +86,17 @@ export async function deployScriptTestFixture() {
   await beacon.updateImplementation("LiquidityManager", await liquidityManager.getAddress());
   await beacon.updateImplementation("SwapManager", await swapManager.getAddress());
   await beacon.updateImplementation("EmergencyHandler", await emergencyHandler.getAddress());
+
+  Object.assign(CONTRACT_ADDRESSES, {
+    beacon: await beacon.getAddress(),
+    liquidityManager: await liquidityManager.getAddress(),
+    valueCalculator: await valueCalculator.getAddress(),
+    tokenManager: await tokenManager.getAddress(),
+    parameterManager: await parameterManager.getAddress(),
+    proxyGeneral: await proxyGeneral.getAddress(),
+    swapManager: await swapManager.getAddress(),
+    emergencyHandler: await emergencyHandler.getAddress()
+  });
 
   // ==================== SYSTEM CONFIGURATION ====================
   
@@ -121,8 +131,11 @@ export async function deployScriptTestFixture() {
 
   // ==================== INITIAL LIQUIDITY ====================
   
-  // Bootstrap pool with 10 ETH
-  await liquidityManager.connect(owner).deposit({ value: ethers.parseEther("10") });
+  // Bootstrap pool with the current ERC20-only deposit API.
+  const bootstrap = ethers.parseEther("10");
+  await mockWETH.connect(owner).deposit({ value: bootstrap });
+  await mockWETH.connect(owner).approve(await liquidityManager.getAddress(), bootstrap);
+  await liquidityManager.connect(owner).deposit(bootstrap);
 
   return {
     // Contracts
@@ -153,12 +166,18 @@ export async function deployScriptTestFixture() {
  * @dev Creates deposits, swaps, and activity for testing
  */
 export async function populateTestData(fixture: any) {
-  const { liquidityManager, user1, user2, user3 } = fixture;
+  const { liquidityManager, mockWETH, user1, user2, user3 } = fixture;
 
   // Multiple deposits from different users
-  await liquidityManager.connect(user1).deposit({ value: ethers.parseEther("5") });
-  await liquidityManager.connect(user2).deposit({ value: ethers.parseEther("3") });
-  await liquidityManager.connect(user3).deposit({ value: ethers.parseEther("2") });
+  for (const [user, amount] of [
+    [user1, ethers.parseEther("5")],
+    [user2, ethers.parseEther("3")],
+    [user3, ethers.parseEther("2")]
+  ] as const) {
+    await mockWETH.connect(user).deposit({ value: amount });
+    await mockWETH.connect(user).approve(await liquidityManager.getAddress(), amount);
+    await liquidityManager.connect(user).deposit(amount);
+  }
 
   return {
     totalDeposited: ethers.parseEther("20"), // 10 bootstrap + 10 from users

@@ -26,6 +26,9 @@ const ADDRESSES = {
     
     // Euler V2
     EVC: "0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066",
+    ACCOUNT_LENS: "0x90a52DDcb232e7bb003DD9258fA1235c553eC956",
+    VAULT_LENS: "0xc99FCEE6174Bc92eBe9C78690fFD5067018a8380",
+    UTILS_LENS: "0xDAf44060DCe217Fd603908A49fcaa1FA900304BE",
     WETH_VAULT: "0x78E3E051D32157AACD550fBB78458762d8f7edFF",
     USDC_VAULT: "0x0a1eCC5Fe8C9be3C809844fcBe615B46A869b899",
     SWAPPER: "0x6eE488A00A2ef1E2764cD7245F8a77C40060A7C7",
@@ -55,6 +58,7 @@ describe("EulerV2Plugin - FASE 3: Leverage Atomico", function () {
     let usdcVault: Contract;
     let evc: Contract;
     let beacon: Contract;
+    let snapshotId: string | undefined;
 
     // Helper: Ottiene quote da 1inch
     async function get1inchQuote(
@@ -151,6 +155,8 @@ describe("EulerV2Plugin - FASE 3: Leverage Atomico", function () {
             this.skip();
         }
 
+        snapshotId = await network.provider.send("evm_snapshot");
+
         console.log("\n" + "=".repeat(70));
         console.log("🚀 FASE 3: LEVERAGE ATOMICO TEST");
         console.log("=".repeat(70));
@@ -218,11 +224,15 @@ describe("EulerV2Plugin - FASE 3: Leverage Atomico", function () {
         await (await EulerRegistry.setVault("USDC", ADDRESSES.USDC_VAULT)).wait();
         console.log("   ✅ EulerRegistry deployed and configured");
 
-        // Check if WETH is in Beacon
-        try {
-            await beacon.getImplementation("WETH");
-        } catch {
+        if ((await beacon.getImplementation("WETH")).toLowerCase() !== ADDRESSES.WETH.toLowerCase()) {
             await (await beacon.updateImplementation("WETH", ADDRESSES.WETH)).wait();
+        }
+        let configuredBaseAsset = ethers.ZeroAddress;
+        try {
+            configuredBaseAsset = await beacon.getImplementation("BASE_ASSET");
+        } catch {}
+        if (configuredBaseAsset.toLowerCase() !== ADDRESSES.WETH.toLowerCase()) {
+            await (await beacon.updateImplementation("BASE_ASSET", ADDRESSES.WETH)).wait();
         }
 
         // Check ProtocolManager
@@ -234,16 +244,27 @@ describe("EulerV2Plugin - FASE 3: Leverage Atomico", function () {
 
         // Deploy EulerV2Plugin
         const EulerV2Plugin = await ethers.getContractFactory("EulerV2Plugin", owner);
-        eulerPlugin = await EulerV2Plugin.deploy(ADDRESSES.BEACON);
+        eulerPlugin = await EulerV2Plugin.deploy(
+            ADDRESSES.BEACON, "WETH", ADDRESSES.EVC, ADDRESSES.ACCOUNT_LENS
+        );
         await eulerPlugin.waitForDeployment();
         console.log(`   ✅ EulerV2Plugin deployed: ${await eulerPlugin.getAddress()}`);
 
         // Deploy EulerLensAdapter
         const EulerLensAdapter = await ethers.getContractFactory("EulerLensAdapter", owner);
-        eulerLensAdapter = await EulerLensAdapter.deploy(ADDRESSES.BEACON);
+        eulerLensAdapter = await EulerLensAdapter.deploy(
+            ADDRESSES.BEACON, "WETH", ADDRESSES.ACCOUNT_LENS,
+            ADDRESSES.VAULT_LENS, ADDRESSES.UTILS_LENS, ADDRESSES.EVC
+        );
         await eulerLensAdapter.waitForDeployment();
         await (await beacon.updateImplementation("EulerLensAdapter", await eulerLensAdapter.getAddress())).wait();
         await (await beacon.updateImplementation("EulerV2Plugin", await eulerPlugin.getAddress())).wait();
+        const FlashLoanService = await ethers.getContractFactory("FlashLoanService", owner);
+        const flashLoanService = await FlashLoanService.deploy(ADDRESSES.BEACON);
+        await flashLoanService.waitForDeployment();
+        await (await beacon.updateImplementation("FlashLoanService", await flashLoanService.getAddress())).wait();
+        await (await beacon.updateImplementation("LiquidityManager", await flashLoanService.getAddress())).wait();
+        await (await EulerRegistry.transferOwnership(await eulerPlugin.getAddress())).wait();
         console.log(`   ✅ EulerLensAdapter deployed: ${await eulerLensAdapter.getAddress()}`);
 
         // Authorize in ProxyGeneral
@@ -315,10 +336,20 @@ describe("EulerV2Plugin - FASE 3: Leverage Atomico", function () {
         before(async function () {
             // Deploy fresh plugin for leverage test
             const EulerV2Plugin = await ethers.getContractFactory("EulerV2Plugin", owner);
-            leveragePlugin = await EulerV2Plugin.deploy(ADDRESSES.BEACON);
+            leveragePlugin = await EulerV2Plugin.deploy(
+                ADDRESSES.BEACON, "WETH", ADDRESSES.EVC, ADDRESSES.ACCOUNT_LENS
+            );
             await leveragePlugin.waitForDeployment();
             
             const pluginAddress = await leveragePlugin.getAddress();
+            const FreshRegistry = await ethers.getContractFactory("EulerRegistry", owner);
+            EulerRegistry = await FreshRegistry.deploy();
+            await EulerRegistry.waitForDeployment();
+            await (await EulerRegistry.setVault("WETH", ADDRESSES.WETH_VAULT)).wait();
+            await (await EulerRegistry.setVault("USDC", ADDRESSES.USDC_VAULT)).wait();
+            await (await beacon.updateImplementation("EulerRegistry", await EulerRegistry.getAddress())).wait();
+            await (await beacon.updateImplementation("EulerV2Plugin", pluginAddress)).wait();
+            await (await EulerRegistry.transferOwnership(pluginAddress)).wait();
             console.log(`\n📦 Fresh plugin for leverage: ${pluginAddress}`);
             
             // Authorize
@@ -337,13 +368,14 @@ describe("EulerV2Plugin - FASE 3: Leverage Atomico", function () {
             const whale = await ethers.getSigner(WETH_WHALE);
             
             const wethAmount = ethers.parseEther("0.05"); // 0.05 WETH
-            await (await weth.connect(whale).transfer(pluginAddress, wethAmount)).wait();
+            await (await weth.connect(whale).transfer(ownerAddress, wethAmount)).wait();
+            await (await weth.approve(pluginAddress, wethAmount)).wait();
             console.log(`   ✅ Got ${ethers.formatEther(wethAmount)} WETH for leverage`);
         });
 
         it("Should open leverage position with openLeverageAtomic", async function () {
             const pluginAddress = await leveragePlugin.getAddress();
-            const pluginWeth = await weth.balanceOf(pluginAddress);
+            const pluginWeth = await weth.balanceOf(ownerAddress);
             
             console.log("\n" + "=".repeat(60));
             console.log("🔄 OPENING LEVERAGE POSITION (Atomic)");
@@ -425,5 +457,8 @@ describe("EulerV2Plugin - FASE 3: Leverage Atomico", function () {
         console.log("\n" + "=".repeat(70));
         console.log("✅ FASE 3 TESTS COMPLETED");
         console.log("=".repeat(70));
+        if (snapshotId !== undefined) {
+            await network.provider.send("evm_revert", [snapshotId]);
+        }
     });
 });

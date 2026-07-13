@@ -13,7 +13,7 @@ describe("E2E D.2 — Full System Multi-User", function () {
     this.timeout(180000);
 
     const WETH       = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
-    const WETH_WHALE = "0x489ee077994B6658eAfA855C308275EAd8097C4A";
+    const WETH_WHALE = "0xC3E5607Cd4ca0D5Fe51e09B60Ed97a0Ae6F874dd";
     const AAVE_POOL  = "0x794a61358D6845594F94dc1DB02A252b5b4814aD";
 
     let mockBeacon: any;
@@ -24,12 +24,15 @@ describe("E2E D.2 — Full System Multi-User", function () {
     let wethContract: any;
     let signers: any[];
     let owner: any;
+    let suiteSnapshotId: string;
 
     before(async function () {
         if (process.env.FORK_ENABLED !== "true") {
             this.skip();
             return;
         }
+
+        suiteSnapshotId = await ethers.provider.send("evm_snapshot", []);
 
         signers = await ethers.getSigners();
         owner = signers[0];
@@ -52,6 +55,17 @@ describe("E2E D.2 — Full System Multi-User", function () {
 
         await mockTokenManager.setTokenAddress("WETH", WETH);
         await mockTokenManager.setTokenPrice("WETH", ethers.parseUnits("3000", 8));
+
+        const dataProvider = await ethers.getContractAt([
+            "function getReserveAToken(address) view returns (address)",
+            "function getReserveVariableDebtToken(address) view returns (address)"
+        ], AAVE_POOL);
+        const aWETH = await dataProvider.getReserveAToken(WETH);
+        const debtWETH = await dataProvider.getReserveVariableDebtToken(WETH);
+        const RegistryFactory = await ethers.getContractFactory("AaveV3Registry");
+        const registry = await RegistryFactory.deploy();
+        await registry.configureToken("WETH", WETH, aWETH, debtWETH);
+        await mockBeacon.setImplementation("AaveV3Registry", await registry.getAddress());
 
         // Deploy AavePlugin
         const AaveFactory = await ethers.getContractFactory("AaveV3Plugin");
@@ -133,5 +147,9 @@ describe("E2E D.2 — Full System Multi-User", function () {
                 // Accettabile
             }
         });
+    });
+
+    after(async function () {
+        await ethers.provider.send("evm_revert", [suiteSnapshotId]);
     });
 });

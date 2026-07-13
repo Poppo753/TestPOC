@@ -110,11 +110,6 @@ describe("LF-004: Concurrent Operations Testing", function () {
     await proxyGeneral.authorizeModule(await liquidityManager.getAddress(), "LiquidityManager");
     console.log("   ✅ LiquidityManager authorized in ProxyGeneral");
 
-    // Initialize WETH with some liquidity
-    console.log("\n💰 INITIALIZING WETH LIQUIDITY:");
-    await mockWETH.mint(await proxyGeneral.getAddress(), ethers.parseEther("20"));
-    console.log("   ✅ Initial WETH liquidity provided to ProxyGeneral");
-
     console.log("\n🎯 ECOSYSTEM DEPLOYMENT COMPLETE - READY FOR CONCURRENT TESTING!");
   }
 
@@ -180,22 +175,21 @@ describe("LF-004: Concurrent Operations Testing", function () {
       console.log(`     🎫 User2 LP Balance: ${ethers.formatEther(lpBalance2)} LP`);
       console.log(`     🎫 User3 LP Balance: ${ethers.formatEther(lpBalance3)} LP`);
 
-      // Verify all users received LP tokens
-      expect(lpBalance1).to.be.greaterThan(ethers.parseEther("1.4"));
-      expect(lpBalance2).to.be.greaterThan(ethers.parseEther("0.1"));
-      expect(lpBalance3).to.be.greaterThan(ethers.parseEther("0.1"));
-      
-      // Verify first user got the most (being first in pool)
-      expect(lpBalance1).to.be.greaterThan(lpBalance2);
-      expect(lpBalance1).to.be.greaterThan(lpBalance3);
+      // A sound empty-pool bootstrap keeps the LP price at 1:1. Transaction
+      // ordering must not give one concurrent depositor a privileged price.
+      expect(lpBalance1).to.equal(depositAmount);
+      expect(lpBalance2).to.equal(depositAmount);
+      expect(lpBalance3).to.equal(depositAmount);
 
       // Check total supply
       const totalSupply = await proxyGeneral.totalSupply();
-      const expectedMinTotalSupply = ethers.parseEther("1.6"); // At least 1.6 LP total
+      const expectedTotalSupply = depositAmount * 3n;
       console.log(`     📊 Total LP Supply: ${ethers.formatEther(totalSupply)} LP`);
-      console.log(`     📊 Expected Min Total: ${ethers.formatEther(expectedMinTotalSupply)} LP`);
+      console.log(`     📊 Expected Total: ${ethers.formatEther(expectedTotalSupply)} LP`);
 
-      expect(totalSupply).to.be.greaterThan(expectedMinTotalSupply);
+      expect(totalSupply).to.equal(expectedTotalSupply);
+      expect(totalSupply).to.equal(lpBalance1 + lpBalance2 + lpBalance3);
+      expect(await mockWETH.balanceOf(await proxyGeneral.getAddress())).to.equal(depositAmount * 3n);
 
       console.log("\n🎯 RACE CONDITION ANALYSIS:");
       console.log("     🔍 No duplicate LP tokens detected");

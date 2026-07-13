@@ -808,8 +808,17 @@ contract EulerLensAdapter is IEulerLensAdapter, ILensAdapter, Ownable {
         
         // Query health factor from AccountLens
         IAccountLens lens = IAccountLens(accountLens);
-        IAccountLens.AccountLiquidityInfo memory liquidity = 
+        IAccountLens.AccountLiquidityInfo memory liquidity =
             lens.getAccountLiquidityInfo(subAccount, pos.borrowVault);
+
+        // Atomic leverage positions created before the sub-account execution path
+        // was completed are held by the plugin's main account even though the
+        // registry already allocated a sub-account ID. Keep risk monitoring
+        // correct for those positions, while preferring the sub-account whenever
+        // it contains the actual liability.
+        if (liquidity.queryFailure || liquidity.liabilityValueBorrowing == 0) {
+            liquidity = lens.getAccountLiquidityInfo(pluginAddr, pos.borrowVault);
+        }
         
         if (liquidity.queryFailure || liquidity.liabilityValueBorrowing == 0) {
             return type(uint256).max;

@@ -1,36 +1,22 @@
-// SPDX-License-Identifier: MIT
-/**
- * @title Phase 1 Core Operations - Integration Tests
- * @dev E2E testing for deposit, withdraw, and monitoring scripts
- * 
- * Tests:
- * - DepositETH.ts
- * - DepositBatch.ts  
- * - DepositScheduled.ts
- * - WithdrawETH.ts
- * - WithdrawPartial.ts
- * - WithdrawEmergency.ts
- * - SystemStatus.ts
- * - CheckBalance.ts
- */
-
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { 
-  deployScriptTestFixture, 
-  ScriptAssertions,
-  ScriptTestHelpers 
-} from "./fixtures";
-
-// Import scripts to test
+import { deployScriptTestFixture, ScriptAssertions, ScriptTestHelpers } from "./fixtures";
 import { DepositETHScript } from "../../../scripts/core/deposit/DepositETH";
 import { WithdrawETHScript } from "../../../scripts/core/withdraw/WithdrawETH";
-import { SystemStatusScript } from "../../../scripts/monitoring/status/SystemStatus";
-import { CheckBalanceScript } from "../../../scripts/core/portfolio/CheckBalance";
+import { SystemStatusScript } from "../../../scripts/core/monitoring/SystemStatus";
+import { CheckBalanceScript } from "../../../scripts/core/monitoring/CheckBalance";
 
-describe("Integration: Phase 1 - Core Operations Scripts", function () {
+describe("Integration: Phase 1 - current core operation scripts", function () {
+  this.timeout(120000);
   let fixture: any;
   let snapshotId: string;
+  const scriptOptions = { skipValidation: true, confirmations: 1, verbose: false };
+
+  async function depositFor(signer: any, amount: bigint) {
+    await fixture.mockWETH.connect(signer).deposit({ value: amount });
+    await fixture.mockWETH.connect(signer).approve(await fixture.liquidityManager.getAddress(), amount);
+    return fixture.liquidityManager.connect(signer).deposit(amount);
+  }
 
   before(async function () {
     fixture = await deployScriptTestFixture();
@@ -44,330 +30,143 @@ describe("Integration: Phase 1 - Core Operations Scripts", function () {
     await ScriptTestHelpers.restore(snapshotId);
   });
 
-  describe("📥 DepositETH.ts", function () {
-    it("should execute successful ETH deposit", async function () {
-      const { user1, proxyGeneral } = fixture;
-
-      // Get initial balances
-      const initialLPBalance = await proxyGeneral.balanceOf(user1.address);
-      const initialETHBalance = await ethers.provider.getBalance(user1.address);
-
-      // Create and execute deposit script
-      const depositScript = new DepositETHScript();
-      
-      // Mock process.argv for script
-      const originalArgv = process.argv;
-      process.argv = [
-        "node",
-        "DepositETH.ts",
-        "--amount=1.0",
-        `--network=localhost`
-      ];
-
-      const result = await depositScript.execute();
-      
-      process.argv = originalArgv;
-
-      // Validate result
+  describe("DepositETH", function () {
+    it("executes a successful WETH-backed deposit", async function () {
+      const before = await fixture.proxyGeneral.balanceOf(fixture.owner.address);
+      const result = await new DepositETHScript({ ...scriptOptions, amount: "1" }).execute();
       ScriptAssertions.validateScriptResult(result);
-      expect(result.success).to.be.true;
-      expect(result.data).to.have.property("lpReceived");
-      expect(result.data).to.have.property("txHash");
+      expect(result.success).to.equal(true);
+      expect(result.transactionHash).to.match(/^0x[0-9a-f]{64}$/i);
+      expect(BigInt(result.data!.lpReceived)).to.be.gt(0n);
+      expect(await fixture.proxyGeneral.balanceOf(fixture.owner.address)).to.be.gt(before);
+    });
 
-      // Validate balances changed
-      const finalLPBalance = await proxyGeneral.balanceOf(user1.address);
-      const finalETHBalance = await ethers.provider.getBalance(user1.address);
+    it("reports insufficient balance without mutating the pool", async function () {
+      const supplyBefore = await fixture.proxyGeneral.totalSupply();
+      const result = await new DepositETHScript({ ...scriptOptions, amount: "100000" }).execute();
+      expect(result.success).to.equal(false);
+      expect(result.error).to.include("Insufficient balance");
+      expect(await fixture.proxyGeneral.totalSupply()).to.equal(supplyBefore);
+    });
+  });
 
-      expect(finalLPBalance).to.be.gt(initialLPBalance);
-      expect(finalETHBalance).to.be.lt(initialETHBalance);
+  describe("WithdrawETH", function () {
+    it("executes a successful partial withdrawal", async function () {
+      const before = await fixture.proxyGeneral.balanceOf(fixture.owner.address);
+      const amount = before / 2n;
+      const result = await new WithdrawETHScript({
+        ...scriptOptions, amount: ethers.formatEther(amount)
+      }).execute();
+      expect(result.success).to.equal(true);
+      expect(await fixture.proxyGeneral.balanceOf(fixture.owner.address)).to.equal(before - amount);
+      expect(BigInt(result.data!.lpTokensBurned)).to.equal(amount);
+    });
 
-      // Validate transaction
-      if (result.data.txHash) {
-        await ScriptAssertions.validateTransaction(result.data.txHash);
+    it("rejects an amount above the caller LP balance", async function () {
+      const result = await new WithdrawETHScript({ ...scriptOptions, amount: "10000" }).execute();
+      expect(result.success).to.equal(false);
+      expect(result.error).to.include("Insufficient LP balance");
+    });
+  });
+
+  describe("SystemStatus", function () {
+    it("returns the complete current system status", async function () {
+      const result = await new SystemStatusScript(scriptOptions).execute();
+      expect(result.success).to.equal(true);
+      expect(result.data.liquidityPool.totalValue).to.be.a("string");
+      expect(result.data.emergencyStatus.isPaused).to.be.a("boolean");
+      expect(result.data.operationalStatus.depositsEnabled).to.equal(true);
+      expect(result.data.operationalStatus.withdrawsEnabled).to.equal(true);
+    });
+
+    it("resolves every registered core module", async function () {
+      const result = await new SystemStatusScript(scriptOptions).execute();
+      expect(result.success).to.equal(true);
+      expect(result.data.beacon.registeredModules.length).to.be.gte(7);
+      for (const address of Object.values(result.data.beacon.moduleAddresses)) {
+        expect(address).to.match(/^0x[0-9a-fA-F]{40}$/);
       }
     });
+  });
 
-    it("should handle insufficient balance gracefully", async function () {
-      const depositScript = new DepositETHScript();
-      
-      process.argv = [
-        "node",
-        "DepositETH.ts",
-        "--amount=100000",  // Unrealistic amount
-        `--network=localhost`
-      ];
+  describe("CheckBalance", function () {
+    it("reports a funded user's exact LP balance", async function () {
+      const result = await new CheckBalanceScript({
+        ...scriptOptions, userAddress: fixture.owner.address
+      }).execute();
+      expect(result.success).to.equal(true);
+      const actual = await fixture.proxyGeneral.balanceOf(fixture.owner.address);
+      expect(result.data.user.lpTokens.balance.wei).to.equal(actual.toString());
+    });
 
-      const result = await depositScript.execute();
-
-      // Should fail gracefully
-      expect(result.success).to.be.false;
-      expect(result.error).to.exist;
+    it("reports zero LP for a new address", async function () {
+      const address = ethers.Wallet.createRandom().address;
+      const result = await new CheckBalanceScript({ ...scriptOptions, userAddress: address }).execute();
+      expect(result.success).to.equal(true);
+      expect(result.data.user.lpTokens.balance.wei).to.equal("0");
     });
   });
 
-  describe("📤 WithdrawETH.ts", function () {
-    it("should execute successful ETH withdrawal", async function () {
-      const { user1, proxyGeneral, liquidityManager } = fixture;
-
-      // First deposit to have LP tokens
-      await liquidityManager.connect(user1).deposit({ value: ethers.parseEther("2") });
-
-      const initialLPBalance = await proxyGeneral.balanceOf(user1.address);
-      expect(initialLPBalance).to.be.gt(0);
-
-      // Create withdraw script
-      const withdrawScript = new WithdrawETHScript();
-      
-      process.argv = [
-        "node",
-        "WithdrawETH.ts",
-        `--amount=${ethers.formatEther(initialLPBalance / 2n)}`,  // Withdraw half
-        `--network=localhost`
-      ];
-
-      const result = await withdrawScript.execute();
-
-      // Validate result
-      ScriptAssertions.validateScriptResult(result);
-      expect(result.success).to.be.true;
-
-      // Validate LP balance decreased
-      const finalLPBalance = await proxyGeneral.balanceOf(user1.address);
-      expect(finalLPBalance).to.be.lt(initialLPBalance);
+  describe("cross-script consistency", function () {
+    it("keeps deposit, balance check and withdraw accounting consistent", async function () {
+      const deposit = await new DepositETHScript({ ...scriptOptions, amount: "1" }).execute();
+      expect(deposit.success).to.equal(true);
+      const afterDeposit = await fixture.proxyGeneral.balanceOf(fixture.owner.address);
+      const checked = await new CheckBalanceScript({
+        ...scriptOptions, userAddress: fixture.owner.address
+      }).execute();
+      expect(checked.data.user.lpTokens.balance.wei).to.equal(afterDeposit.toString());
+      const withdrawn = await new WithdrawETHScript({
+        ...scriptOptions, amount: ethers.formatEther(afterDeposit / 4n)
+      }).execute();
+      expect(withdrawn.success).to.equal(true);
     });
 
-    it("should respect withdraw limits", async function () {
-      const { user1 } = fixture;
-      
-      const withdrawScript = new WithdrawETHScript();
-      
-      process.argv = [
-        "node",
-        "WithdrawETH.ts",
-        "--amount=10000",  // Exceeds max limit
-        `--network=localhost`
-      ];
-
-      const result = await withdrawScript.execute();
-
-      // Should fail due to limits
-      expect(result.success).to.be.false;
-      expect(result.error).to.include("limit");
+    it("reflects direct deposits in subsequent system status", async function () {
+      const before = await new SystemStatusScript(scriptOptions).execute();
+      await depositFor(fixture.user3, ethers.parseEther("2"));
+      const after = await new SystemStatusScript(scriptOptions).execute();
+      expect(BigInt(after.data.liquidityPool.totalValue)).to.be.gt(
+        BigInt(before.data.liquidityPool.totalValue)
+      );
     });
   });
 
-  describe("📊 SystemStatus.ts", function () {
-    it("should retrieve comprehensive system status", async function () {
-      const statusScript = new SystemStatusScript();
-      
-      process.argv = [
-        "node",
-        "SystemStatus.ts",
-        `--network=localhost`
-      ];
-
-      const result = await statusScript.execute();
-
-      // Validate result
-      ScriptAssertions.validateScriptResult(result);
-      expect(result.success).to.be.true;
-      expect(result.data).to.have.property("totalValue");
-      expect(result.data).to.have.property("lpSupply");
-      expect(result.data).to.have.property("isPaused");
-      expect(result.data).to.have.property("moduleCount");
-
-      // Validate data types
-      expect(result.data.isPaused).to.be.a("boolean");
-      expect(result.data.totalValue).to.be.a("string");
-      expect(result.data.lpSupply).to.be.a("string");
+  describe("error handling", function () {
+    it("returns structured failures for invalid small deposits", async function () {
+      const result = await new DepositETHScript({ ...scriptOptions, amount: "0.001" }).execute();
+      expect(result.success).to.equal(false);
+      expect(result.error).to.include("Deposit too small");
     });
 
-    it("should include all registered modules", async function () {
-      const { beacon } = fixture;
-      
-      const statusScript = new SystemStatusScript();
-      
-      process.argv = [
-        "node",
-        "SystemStatus.ts",
-        `--network=localhost`
-      ];
+    it("validates required withdrawal parameters at construction", async function () {
+      expect(() => new WithdrawETHScript(scriptOptions)).to.throw(
+        "Must specify either 'amount' or 'percentage'"
+      );
+    });
 
-      const result = await statusScript.execute();
-
-      expect(result.success).to.be.true;
-      expect(result.data.moduleCount).to.be.gte(7); // At least 7 core modules
+    it("preserves the contract revert reason when withdrawals are disabled", async function () {
+      await fixture.liquidityManager.setWithdrawsEnabled(false);
+      const result = await new WithdrawETHScript({ ...scriptOptions, amount: "1" }).execute();
+      expect(result.success).to.equal(false);
+      expect(result.error).to.include("Withdrawals are disabled");
     });
   });
 
-  describe("💰 CheckBalance.ts", function () {
-    it("should display user portfolio correctly", async function () {
-      const { user1, proxyGeneral, liquidityManager } = fixture;
-
-      // Create some activity
-      await liquidityManager.connect(user1).deposit({ value: ethers.parseEther("3") });
-
-      const balanceScript = new CheckBalanceScript();
-      
-      process.argv = [
-        "node",
-        "CheckBalance.ts",
-        `--user=${user1.address}`,
-        `--network=localhost`
-      ];
-
-      const result = await balanceScript.execute();
-
-      // Validate result
-      ScriptAssertions.validateScriptResult(result);
-      expect(result.success).to.be.true;
-      expect(result.data).to.have.property("lpBalance");
-      expect(result.data).to.have.property("ethValue");
-      expect(result.data).to.have.property("sharePercentage");
-
-      // Validate LP balance matches
-      const actualLPBalance = await proxyGeneral.balanceOf(user1.address);
-      expect(result.data.lpBalance).to.equal(ethers.formatEther(actualLPBalance));
-    });
-
-    it("should handle zero balance users", async function () {
-      const newUser = ethers.Wallet.createRandom();
-      
-      const balanceScript = new CheckBalanceScript();
-      
-      process.argv = [
-        "node",
-        "CheckBalance.ts",
-        `--user=${newUser.address}`,
-        `--network=localhost`
-      ];
-
-      const result = await balanceScript.execute();
-
-      expect(result.success).to.be.true;
-      expect(result.data.lpBalance).to.equal("0.0");
-    });
-  });
-
-  describe("🔄 Cross-Script Integration", function () {
-    it("should maintain consistency across deposit → check → withdraw flow", async function () {
-      const { user2, proxyGeneral, liquidityManager } = fixture;
-
-      // Step 1: Deposit
-      await liquidityManager.connect(user2).deposit({ value: ethers.parseEther("5") });
-      const lpAfterDeposit = await proxyGeneral.balanceOf(user2.address);
-
-      // Step 2: Check balance (script)
-      const checkScript = new CheckBalanceScript();
-      process.argv = ["node", "CheckBalance.ts", `--user=${user2.address}`];
-      const checkResult = await checkScript.execute();
-
-      expect(checkResult.success).to.be.true;
-      expect(checkResult.data.lpBalance).to.equal(ethers.formatEther(lpAfterDeposit));
-
-      // Step 3: Partial withdraw
-      const withdrawAmount = lpAfterDeposit / 2n;
-      await liquidityManager.connect(user2).withdraw(withdrawAmount);
-      
-      // Step 4: Check balance again
-      const checkResult2 = await checkScript.execute();
-      const expectedLP = lpAfterDeposit - withdrawAmount;
-      
-      expect(checkResult2.success).to.be.true;
-      expect(checkResult2.data.lpBalance).to.equal(ethers.formatEther(expectedLP));
-    });
-
-    it("should reflect system status changes after operations", async function () {
-      const { user3, liquidityManager } = fixture;
-      
-      // Get initial system status
-      const statusScript1 = new SystemStatusScript();
-      process.argv = ["node", "SystemStatus.ts"];
-      const result1 = await statusScript1.execute();
-      
-      const initialTotalValue = result1.data.totalValue;
-      const initialLPSupply = result1.data.lpSupply;
-
-      // Perform deposit
-      await liquidityManager.connect(user3).deposit({ value: ethers.parseEther("10") });
-
-      // Get updated system status
-      const statusScript2 = new SystemStatusScript();
-      const result2 = await statusScript2.execute();
-
-      // Values should have increased
-      expect(parseFloat(result2.data.totalValue)).to.be.gt(parseFloat(initialTotalValue));
-      expect(parseFloat(result2.data.lpSupply)).to.be.gt(parseFloat(initialLPSupply));
-    });
-  });
-
-  describe("⚠️ Error Handling", function () {
-    it("should handle network connection errors", async function () {
-      // This test would require mocking network failures
-      // Placeholder for network error handling tests
-    });
-
-    it("should validate required parameters", async function () {
-      const depositScript = new DepositETHScript();
-      
-      // Missing amount parameter
-      process.argv = ["node", "DepositETH.ts"];
-      
-      const result = await depositScript.execute();
-      
-      expect(result.success).to.be.false;
-      expect(result.error).to.exist;
-    });
-
-    it("should handle contract revert reasons properly", async function () {
-      const { liquidityManager, owner } = fixture;
-      
-      // Try to withdraw when deposits are disabled
-      await liquidityManager.setWithdrawsEnabled(false);
-      
-      const withdrawScript = new WithdrawETHScript();
-      process.argv = ["node", "WithdrawETH.ts", "--amount=1"];
-      
-      const result = await withdrawScript.execute();
-      
-      expect(result.success).to.be.false;
-      expect(result.error).to.include("disabled");
-    });
-  });
-
-  describe("🎯 Performance", function () {
-    it("should execute SystemStatus script in reasonable time", async function () {
+  describe("performance", function () {
+    it("collects system status in under five seconds", async function () {
       const start = Date.now();
-      
-      const statusScript = new SystemStatusScript();
-      process.argv = ["node", "SystemStatus.ts"];
-      await statusScript.execute();
-      
-      const duration = Date.now() - start;
-      
-      // Should complete in under 5 seconds
-      expect(duration).to.be.lt(5000);
+      const result = await new SystemStatusScript(scriptOptions).execute();
+      expect(result.success).to.equal(true);
+      expect(Date.now() - start).to.be.lt(5000);
     });
 
-    it("should handle multiple concurrent balance checks", async function () {
-      const { user1, user2, user3 } = fixture;
-      
-      const checkScript1 = new CheckBalanceScript();
-      const checkScript2 = new CheckBalanceScript();
-      const checkScript3 = new CheckBalanceScript();
-      
-      const promises = [
-        checkScript1.execute(),
-        checkScript2.execute(),
-        checkScript3.execute()
-      ];
-      
-      const results = await Promise.all(promises);
-      
-      // All should succeed
-      results.forEach(result => {
-        expect(result.success).to.be.true;
-      });
+    it("handles concurrent balance checks deterministically", async function () {
+      const users = [fixture.owner, fixture.user1, fixture.user2];
+      const results = await Promise.all(users.map((user: any) =>
+        new CheckBalanceScript({ ...scriptOptions, userAddress: user.address }).execute()
+      ));
+      expect(results.every((result: any) => result.success)).to.equal(true);
     });
   });
 });

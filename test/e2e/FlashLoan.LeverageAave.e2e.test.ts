@@ -96,17 +96,17 @@ describe("E2E A.5 — Flash Loan Leverage Aave", function () {
             expect(await flashLoanService.getAddress()).to.not.equal(ethers.ZeroAddress);
         });
 
-        it("A.5.2 — owner = deployer", async function () {
-            expect(await flashLoanService.owner()).to.equal(owner.address);
+        it("A.5.2 — il servizio usa il beacon configurato (nessun owner locale)", async function () {
+            expect(await flashLoanService.beacon()).to.equal(await mockBeacon.getAddress());
         });
 
-        it("A.5.3 — circuitBreaker = false all'avvio", async function () {
-            try {
-                const tripped = await flashLoanService.circuitBreakerTripped();
-                expect(tripped).to.be.false;
-            } catch {
-                this.skip();
-            }
+        it("A.5.3 — callback rifiutata senza un flash loan attivo", async function () {
+            await ethers.provider.send("hardhat_impersonateAccount", [BALANCER_VAULT]);
+            await ethers.provider.send("hardhat_setBalance", [BALANCER_VAULT, ethers.toQuantity(ethers.parseEther("1"))]);
+            const balancer = await ethers.getSigner(BALANCER_VAULT);
+            await expect(flashLoanService.connect(balancer).receiveFlashLoan([], [], [], "0x"))
+                .to.be.revertedWithCustomError(flashLoanService, "NotInFlashLoan");
+            await ethers.provider.send("hardhat_stopImpersonatingAccount", [BALANCER_VAULT]);
         });
     });
 

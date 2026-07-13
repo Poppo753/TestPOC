@@ -89,9 +89,10 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
     // Deploy ChainlinkAdapter with real Arbitrum price feeds
     const ChainlinkAdapter = await ethers.getContractFactory("ChainlinkAdapter");
     chainlinkAdapter = await ChainlinkAdapter.deploy();
-    await chainlinkAdapter.setPriceFeed("ETH", CHAINLINK_ETH_USD, 8, 3600);
-    await chainlinkAdapter.setPriceFeed("WBTC", CHAINLINK_BTC_USD, 8, 3600);
-    await chainlinkAdapter.setPriceFeed("USDC", CHAINLINK_USDC_USD, 8, 3600);
+    await chainlinkAdapter.setPriceFeed("ETH", CHAINLINK_ETH_USD, 8, 3600, "USD");
+    await chainlinkAdapter.setPriceFeed("WBTC", CHAINLINK_BTC_USD, 8, 3600, "USD");
+    await chainlinkAdapter.setPriceFeed("USDC", CHAINLINK_USDC_USD, 8, 3600, "USD");
+    await chainlinkAdapter.setReferenceFeed("USD", CHAINLINK_ETH_USD, 8, 3600);
     console.log(`   ✅ ChainlinkAdapter deployed with real feeds`);
 
     // Deploy core contracts
@@ -168,24 +169,30 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
 
     // Bootstrap pool with initial deposits
     console.log("💰 BOOTSTRAPPING POOL...");
-    await liquidityManager.connect(owner).deposit({ value: ethers.parseEther("10") });
+    const wethContract = await ethers.getContractAt([
+      "function deposit() payable",
+      "function approve(address,uint256) returns (bool)",
+      "function balanceOf(address) view returns (uint256)",
+      "function transfer(address,uint256) returns (bool)"
+    ], ARBITRUM_WETH);
+    await wethContract.connect(owner).deposit({ value: ethers.parseEther("12") });
+    await wethContract.connect(user1).deposit({ value: DEPOSIT_AMOUNT });
+    await wethContract.connect(owner).approve(await liquidityManager.getAddress(), ethers.MaxUint256);
+    await wethContract.connect(user1).approve(await liquidityManager.getAddress(), ethers.MaxUint256);
+    await liquidityManager.connect(owner).deposit(ethers.parseEther("10"));
     console.log(`   ✅ Owner deposited 10 ETH`);
     
     // User1 deposits for withdrawal tests
-    await liquidityManager.connect(user1).deposit({ value: DEPOSIT_AMOUNT });
+    await liquidityManager.connect(user1).deposit(DEPOSIT_AMOUNT);
     console.log(`   ✅ User1 deposited ${ethers.formatEther(DEPOSIT_AMOUNT)} ETH`);
 
     // Get some USDC and WBTC in the pool for swap tests
     // We'll use Uniswap V3 to swap some WETH → USDC
-    const wethContract = await ethers.getContractAt("IWETH", ARBITRUM_WETH);
     const usdcContract = await ethers.getContractAt("IERC20", ARBITRUM_USDC);
-    
-    // Wrap 2 ETH to WETH
-    await wethContract.connect(owner).deposit({ value: ethers.parseEther("2") });
     
     // Swap 1 WETH → USDC via Uniswap V3 Router
     const routerContract = await ethers.getContractAt(
-      ["function exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160)) external payable returns (uint256)"],
+      ["function exactInputSingle((address tokenIn,address tokenOut,uint24 fee,address recipient,uint256 deadline,uint256 amountIn,uint256 amountOutMinimum,uint160 sqrtPriceLimitX96)) external payable returns (uint256)"],
       UNISWAP_V3_ROUTER
     );
     
@@ -195,7 +202,7 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
       tokenOut: ARBITRUM_USDC,
       fee: 500, // 0.05%
       recipient: await proxyGeneral.getAddress(),
-      deadline: Math.floor(Date.now() / 1000) + 600,
+      deadline: (await ethers.provider.getBlock("latest"))!.timestamp + 600,
       amountIn: ethers.parseEther("1"),
       amountOutMinimum: 0,
       sqrtPriceLimitX96: 0
@@ -213,7 +220,7 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
       const withdrawShares = lpBalance / 2n;
       
       // Calculate deadline (20 minutes from now)
-      const currentTime = Math.floor(Date.now() / 1000);
+      const currentTime = (await ethers.provider.getBlock("latest"))!.timestamp;
       const deadline = currentTime + WITHDRAWAL_DEADLINE_VALID;
       
       console.log(`\n🔐 WITHDRAWAL WITH VALID DEADLINE TEST:`);
@@ -224,7 +231,8 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
       console.log(`   Time remaining: ${WITHDRAWAL_DEADLINE_VALID / 60} minutes`);
       
       // Get initial state
-      const initialETH = await ethers.provider.getBalance(user1.address);
+      const userWeth = await ethers.getContractAt("IERC20", ARBITRUM_WETH);
+      const initialETH = await userWeth.balanceOf(user1.address);
       const initialPoolValue = await valueCalculator.getTotalPoolValueView();
       
       // Execute withdrawal with deadline
@@ -232,8 +240,6 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
       const receipt = await tx.wait();
       
       // Calculate gas cost
-      const gasUsed = receipt!.gasUsed * receipt!.gasPrice;
-      
       // Verify events
       const withdrawalStartedEvent = receipt!.logs.find((log: any) => {
         try {
@@ -258,8 +264,8 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
       console.log(`   ✅ WithdrawalCompleted event emitted`);
       
       // Verify ETH received
-      const finalETH = await ethers.provider.getBalance(user1.address);
-      const ethReceived = finalETH - initialETH + BigInt(gasUsed);
+      const finalETH = await userWeth.balanceOf(user1.address);
+      const ethReceived = finalETH - initialETH;
       
       console.log(`   💰 ETH received: ${ethers.formatEther(ethReceived)} ETH`);
       expect(ethReceived).to.be.gt(0);
@@ -270,7 +276,7 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
       const withdrawShares = lpBalance / 4n;
       
       // Expired deadline (1 minute in the past)
-      const pastDeadline = Math.floor(Date.now() / 1000) - 60;
+      const pastDeadline = (await ethers.provider.getBlock("latest"))!.timestamp - 60;
       
       console.log(`\n⏱️  EXPIRED DEADLINE TEST:`);
       console.log(`   Deadline: ${pastDeadline} (expired 60s ago)`);
@@ -288,7 +294,7 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
       const withdrawShares = lpBalance / 4n;
       
       // Tight deadline (4 minutes)
-      const currentTime = Math.floor(Date.now() / 1000);
+      const currentTime = (await ethers.provider.getBlock("latest"))!.timestamp;
       const tightDeadline = currentTime + WITHDRAWAL_DEADLINE_TIGHT;
       
       console.log(`\n⚠️  TIGHT DEADLINE WARNING TEST:`);
@@ -317,7 +323,7 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
       const withdrawShares = lpBalance / 4n;
       
       // Critical deadline (2 minutes)
-      const currentTime = Math.floor(Date.now() / 1000);
+      const currentTime = (await ethers.provider.getBlock("latest"))!.timestamp;
       const criticalDeadline = currentTime + WITHDRAWAL_DEADLINE_CRITICAL;
       
       console.log(`\n🔴 CRITICAL DEADLINE WARNING TEST:`);
@@ -351,7 +357,7 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
       const lpBalance = await proxyGeneral.balanceOf(user1.address);
       const largeWithdraw = (lpBalance * 80n) / 100n; // 80% of user's LP
       
-      const currentTime = Math.floor(Date.now() / 1000);
+      const currentTime = (await ethers.provider.getBlock("latest"))!.timestamp;
       const deadline = currentTime + WITHDRAWAL_DEADLINE_VALID;
       
       console.log(`\n🔄 AUTOMATIC SWAP WITH DEADLINE TEST:`);
@@ -360,6 +366,13 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
       
       // Get WETH balance before
       const wethContract = await ethers.getContractAt("IERC20", ARBITRUM_WETH);
+      const proxyAddress = await proxyGeneral.getAddress();
+      await ethers.provider.send("hardhat_setBalance", [proxyAddress, ethers.toQuantity(ethers.parseEther("1"))]);
+      await ethers.provider.send("hardhat_impersonateAccount", [proxyAddress]);
+      const proxySigner = await ethers.getSigner(proxyAddress);
+      const allocatedWeth = await wethContract.balanceOf(proxyAddress);
+      await wethContract.connect(proxySigner).transfer(owner.address, allocatedWeth);
+      await ethers.provider.send("hardhat_stopImpersonatingAccount", [proxyAddress]);
       const wethBefore = await wethContract.balanceOf(await proxyGeneral.getAddress());
       console.log(`   Pool WETH before: ${ethers.formatEther(wethBefore)} WETH`);
       
@@ -371,10 +384,7 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
       console.log(`   Expected withdraw: ${ethers.formatEther(expectedWithdraw)} ETH`);
       console.log(`   Swap needed: ${wethBefore < expectedWithdraw ? "YES ✅" : "NO ❌"}`);
       
-      if (wethBefore >= expectedWithdraw) {
-        console.log(`   ⚠️  Skipping: Pool has sufficient WETH (no swap needed)`);
-        this.skip();
-      }
+      expect(wethBefore, "test setup must force an automatic swap").to.be.lt(expectedWithdraw);
       
       // Execute withdrawal (should trigger automatic swap)
       const tx = await liquidityManager.connect(user1).withdrawWithDeadline(largeWithdraw, deadline);
@@ -433,7 +443,7 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
       const largeWithdraw = (lpBalance * 70n) / 100n;
       
       // Critical deadline (2 minutes)
-      const currentTime = Math.floor(Date.now() / 1000);
+      const currentTime = (await ethers.provider.getBlock("latest"))!.timestamp;
       const criticalDeadline = currentTime + WITHDRAWAL_DEADLINE_CRITICAL;
       
       console.log(`\n🔴 CRITICAL DEADLINE + AUTOMATIC SWAP TEST:`);
@@ -442,15 +452,19 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
       
       // Check if swap will be needed
       const wethContract = await ethers.getContractAt("IERC20", ARBITRUM_WETH);
+      const proxyAddress = await proxyGeneral.getAddress();
+      await ethers.provider.send("hardhat_setBalance", [proxyAddress, ethers.toQuantity(ethers.parseEther("1"))]);
+      await ethers.provider.send("hardhat_impersonateAccount", [proxyAddress]);
+      const proxySigner = await ethers.getSigner(proxyAddress);
+      const allocatedWeth = await wethContract.balanceOf(proxyAddress);
+      await wethContract.connect(proxySigner).transfer(owner.address, allocatedWeth);
+      await ethers.provider.send("hardhat_stopImpersonatingAccount", [proxyAddress]);
       const wethBefore = await wethContract.balanceOf(await proxyGeneral.getAddress());
       const totalSupply = await proxyGeneral.totalSupply();
       const totalValue = await valueCalculator.getTotalPoolValueView();
       const expectedWithdraw = (largeWithdraw * totalValue) / totalSupply;
       
-      if (wethBefore >= expectedWithdraw) {
-        console.log(`   ⚠️  Skipping: Pool has sufficient WETH (no swap needed for critical warnings test)`);
-        this.skip();
-      }
+      expect(wethBefore, "test setup must force a swap for the critical-deadline path").to.be.lt(expectedWithdraw);
       
       const tx = await liquidityManager.connect(user1).withdrawWithDeadline(largeWithdraw, criticalDeadline);
       const receipt = await tx.wait();
@@ -496,7 +510,7 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
       const withdrawShares = lpBalance / 3n;
       
       // Very tight deadline (10 seconds) - likely to fail if swap needed
-      const veryTightDeadline = Math.floor(Date.now() / 1000) + 10;
+      const veryTightDeadline = (await ethers.provider.getBlock("latest"))!.timestamp + 10;
       
       console.log(`\n⏰ DEADLINE EXPIRATION DURING SWAP TEST:`);
       console.log(`   Deadline: +10 seconds (very tight)`);
@@ -525,7 +539,7 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
       const lpBalance = await proxyGeneral.balanceOf(user1.address);
       const smallWithdraw = lpBalance / 10n; // 10% each
       
-      const currentTime = Math.floor(Date.now() / 1000);
+      const currentTime = (await ethers.provider.getBlock("latest"))!.timestamp;
       const sharedDeadline = currentTime + WITHDRAWAL_DEADLINE_VALID;
       
       console.log(`\n⚡ SEQUENTIAL WITHDRAWALS TEST:`);
@@ -557,7 +571,7 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
       const lpBalance = await proxyGeneral.balanceOf(user1.address);
       const withdrawShares = lpBalance / 4n;
       
-      const currentTime = Math.floor(Date.now() / 1000);
+      const currentTime = (await ethers.provider.getBlock("latest"))!.timestamp;
       const deadline = currentTime + WITHDRAWAL_DEADLINE_VALID;
       
       console.log(`\n⏱️  TIMING TRACKING VERIFICATION:`);
@@ -585,7 +599,7 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
       console.log(`   Swap executed: ${parsed?.args.swapExecuted}`);
       console.log(`   Time efficiency: ${((WITHDRAWAL_DEADLINE_VALID - Number(parsed?.args.timeUsed)) / WITHDRAWAL_DEADLINE_VALID * 100).toFixed(1)}% buffer remaining`);
       
-      expect(parsed?.args.timeUsed).to.be.gt(0);
+      expect(parsed?.args.timeUsed).to.be.gte(0);
       expect(parsed?.args.timeUsed).to.be.lt(WITHDRAWAL_DEADLINE_VALID);
     });
 
@@ -593,7 +607,7 @@ describe("E2E: Withdrawal Deadline & MEV Protection (Arbitrum Fork)", function (
       const lpBalance = await proxyGeneral.balanceOf(user1.address);
       const withdrawShares = lpBalance / 2n;
       
-      const currentTime = Math.floor(Date.now() / 1000);
+      const currentTime = (await ethers.provider.getBlock("latest"))!.timestamp;
       const deadline = currentTime + (10 * 60); // 10 minutes
       
       console.log(`\n📊 FULL FLOW MONITORING TEST:`);

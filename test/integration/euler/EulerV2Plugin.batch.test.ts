@@ -43,6 +43,7 @@ describe("EulerV2Plugin — EVC Batch Integration Tests", function () {
     const WETH_VAULT = "0x78E3E051D32157AACD550fBB78458762d8f7edFF";
     const USDC_VAULT = "0x0a1eCC5Fe8C9be3C809844fcBe615B46A869b899";
     const EVC_ADDRESS = "0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066";
+    const ACCOUNT_LENS = "0x90a52DDcb232e7bb003DD9258fA1235c553eC956";
     const WETH_WHALE = "0xC3E5607Cd4ca0D5Fe51e09B60Ed97a0Ae6F874dd";
     const USDC_WHALE = "0x489ee077994B6658eAfA855C308275EAd8097C4A";
     const ETH_USD_FEED = "0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612";
@@ -119,7 +120,12 @@ describe("EulerV2Plugin — EVC Batch Integration Tests", function () {
         // ==================== DEPLOY PLUGIN ====================
 
         const PluginFactory = await ethers.getContractFactory("EulerV2Plugin");
-        plugin = await PluginFactory.deploy(await beacon.getAddress(), "WETH");
+        plugin = await PluginFactory.deploy(
+            await beacon.getAddress(),
+            "WETH",
+            EVC_ADDRESS,
+            ACCOUNT_LENS
+        );
         await plugin.waitForDeployment();
 
         // Transfer registry ownership to plugin (needed for createPositionOnDemand)

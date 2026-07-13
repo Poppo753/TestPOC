@@ -18,6 +18,9 @@ import { ethers } from "hardhat";
  * non superi mai il pool disponibile.
  */
 describe("Invariant B.5 — No Fund Leakage", function () {
+    // Fork storage reads can be delayed by RPC backoff; functional assertions remain strict.
+    this.timeout(180_000);
+
     let beacon: any;
     let proxyGeneral: any;
     let liquidityManager: any;
@@ -132,7 +135,10 @@ describe("Invariant B.5 — No Fund Leakage", function () {
             ethers.toBeHex(ethers.parseEther("10000"))
         ]);
         for (const u of users) {
-            await owner.sendTransaction({ to: u.address, value: ethers.parseEther("100") });
+            await ethers.provider.send("hardhat_setBalance", [
+                u.address,
+                ethers.toQuantity(ethers.parseEther("100"))
+            ]);
         }
 
         return { beacon, proxyGeneral, liquidityManager, mockWETH, owner, feeRecipient, users };

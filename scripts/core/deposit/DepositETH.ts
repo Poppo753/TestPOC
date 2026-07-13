@@ -72,16 +72,29 @@ export class DepositETHScript extends BaseScript {
   protected async executeMain(): Promise<ScriptResult> {
     this.logScriptInfo("Executing deposit", `${this.formatETH(this.depositAmount)} ETH`);
 
-    // Execute the deposit (same logic from original script and tests)
-    const depositTx = this.contracts.liquidityManager.deposit({
-      value: this.depositAmount,
-      gasLimit: this.options.gasLimit
-    });
+    const lpBefore = await this.contracts.proxyGeneral.balanceOf(this.signer.address);
+    const baseAsset = await this.contracts.beacon.getImplementation("BASE_ASSET");
+    const weth = await ethers.getContractAt("IWETH", baseAsset, this.signer);
+    const baseToken = await ethers.getContractAt("IERC20", baseAsset, this.signer);
+    await (await weth.deposit({ value: this.depositAmount })).wait(this.options.confirmations);
+    await (await baseToken.approve(await this.contracts.liquidityManager.getAddress(), this.depositAmount))
+      .wait(this.options.confirmations);
 
-    return await this.executeTransaction(
-      depositTx,
+    const result = await this.executeTransaction(
+      this.contracts.liquidityManager.deposit(this.depositAmount, {
+        gasLimit: this.options.gasLimit
+      }),
       `Deposit ${this.formatETH(this.depositAmount)} ETH`
     );
+
+    if (result.success) {
+      const lpAfter = await this.contracts.proxyGeneral.balanceOf(this.signer.address);
+      result.data = {
+        lpReceived: (lpAfter - lpBefore).toString(),
+        txHash: result.transactionHash
+      };
+    }
+    return result;
   }
 
   protected async customPostExecutionVerification(): Promise<void> {

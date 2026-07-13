@@ -63,6 +63,20 @@ describe("E2E D.1 — Cross-Protocol Rebalance", function () {
         await mockTokenManager.setTokenPrice("WETH", ethers.parseUnits("3000", 8));
         await mockTokenManager.setTokenPrice("USDC", ethers.parseUnits("1", 8));
 
+        const dataProvider = await ethers.getContractAt([
+            "function getReserveAToken(address) view returns (address)",
+            "function getReserveVariableDebtToken(address) view returns (address)"
+        ], AAVE_POOL);
+        const aWETH = await dataProvider.getReserveAToken(WETH);
+        const aUSDC = await dataProvider.getReserveAToken(USDC);
+        const debtWETH = await dataProvider.getReserveVariableDebtToken(WETH);
+        const debtUSDC = await dataProvider.getReserveVariableDebtToken(USDC);
+        const AaveRegistryFactory = await ethers.getContractFactory("AaveV3Registry");
+        const aaveRegistry = await AaveRegistryFactory.deploy();
+        await aaveRegistry.configureToken("WETH", WETH, aWETH, debtWETH);
+        await aaveRegistry.configureToken("USDC", USDC, aUSDC, debtUSDC);
+        await mockBeacon.setImplementation("AaveV3Registry", await aaveRegistry.getAddress());
+
         // Deploy 3 plugin
         const AaveFactory  = await ethers.getContractFactory("AaveV3Plugin");
         aavePlugin = await AaveFactory.deploy(await mockBeacon.getAddress(), "WETH", AAVE_POOL);
@@ -82,11 +96,12 @@ describe("E2E D.1 — Cross-Protocol Rebalance", function () {
     // ==================== HELPER ====================
 
     async function fundPlugin(plugin: any, amount: bigint) {
-        await ethers.provider.send("hardhat_impersonateAccount", [WETH_WHALE]);
-        await ethers.provider.send("hardhat_setBalance", [WETH_WHALE, ethers.toQuantity(ethers.parseEther("10"))]);
-        const whale = await ethers.getSigner(WETH_WHALE);
-        await wethContract.connect(whale).transfer(await plugin.getAddress(), amount);
-        await ethers.provider.send("hardhat_stopImpersonatingAccount", [WETH_WHALE]);
+        const pluginAddress = await plugin.getAddress();
+        await ethers.provider.send("hardhat_setBalance", [pluginAddress, ethers.toQuantity(amount + ethers.parseEther("1"))]);
+        await ethers.provider.send("hardhat_impersonateAccount", [pluginAddress]);
+        const pluginSigner = await ethers.getSigner(pluginAddress);
+        await pluginSigner.sendTransaction({ to: WETH, value: amount, data: "0xd0e30db0" });
+        await ethers.provider.send("hardhat_stopImpersonatingAccount", [pluginAddress]);
     }
 
     // ==================== SCENARIO 1: Rebalance Aave→Euler ====================

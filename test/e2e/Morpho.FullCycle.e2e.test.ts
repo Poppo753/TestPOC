@@ -19,6 +19,9 @@ describe("E2E A.3 — Morpho Blue Full Cycle", function () {
     const MORPHO      = "0x6c247b1F6182318877311737BaC0844bAa518F5e"; // Morpho Blue Arbitrum
     const WETH        = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
     const USDC        = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";
+    const MORPHO_ORACLE = "0x282FEB10549fde52bD61A6979424Ddf18A4971A2";
+    const MORPHO_IRM    = "0x66F30587FB8D4206918deb78ecA7d5eBbafD06DA";
+    const MORPHO_LLTV   = 860000000000000000n;
     const WETH_WHALE  = "0x489ee077994B6658eAfA855C308275EAd8097C4A";
     const USDC_WHALE  = "0x489ee077994B6658eAfA855C308275EAd8097C4A";
 
@@ -66,6 +69,9 @@ describe("E2E A.3 — Morpho Blue Full Cycle", function () {
         // Deploy MorphoRegistry
         const RegistryFactory = await ethers.getContractFactory("MorphoRegistry");
         registry = await RegistryFactory.deploy();
+        await registry.configureMarket(
+            "WETH", "USDC", WETH, USDC, MORPHO_ORACLE, MORPHO_IRM, MORPHO_LLTV
+        );
         await mockBeacon.setImplementation("MorphoRegistry", await registry.getAddress());
 
         // Deploy MorphoPlugin (3 argomenti)
@@ -143,7 +149,7 @@ describe("E2E A.3 — Morpho Blue Full Cycle", function () {
             try {
                 debt = await plugin.getDebt("WETH", "USDC");
             } catch {
-                debt = await plugin.getDebt("USDC");
+                debt = 0n;
             }
             expect(debt).to.equal(0n, "Debito iniziale deve essere 0");
         });

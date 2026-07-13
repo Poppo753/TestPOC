@@ -115,14 +115,8 @@ describe("Security C.1 — Reentrancy Attack Tests", function () {
             // Usiamo un check indiretto: verifica che lo stesso shares non possa essere
             // withdraw-ato due volte (il saldo LP diventa 0 dopo la prima)
 
-            // Setup: simuliamo che owner abbia shares (via mockProxyGeneral.mint se disponibile)
-            try {
-                await mockProxyGeneral.connect(owner).mint(owner.address, ethers.parseEther("100"));
-            } catch {
-                // Se mint non esiste nel mock, skip il test
-                this.skip();
-                return;
-            }
+            // Setup deterministico delle shares nel mock di custody.
+            await mockProxyGeneral.setBalance(owner.address, ethers.parseEther("100"));
 
             const sharesBefore = await mockProxyGeneral.balanceOf(owner.address);
             expect(sharesBefore).to.be.gte(ethers.parseEther("100"));

@@ -37,21 +37,12 @@ describe("E.2 — High Load Concurrent Users", function () {
         users = signers.slice(1, NUM_USERS + 1);
 
         weth = await ethers.getContractAt("IERC20Metadata", WETH_ADDR);
+        const wethWrapper = await ethers.getContractAt(["function deposit() payable"], WETH_ADDR);
 
-        // Fund whale
-        await ethers.provider.send("hardhat_impersonateAccount", [WETH_WHALE]);
-        const whale = await ethers.getSigner(WETH_WHALE);
-        await ethers.provider.send("hardhat_setBalance", [
-            WETH_WHALE,
-            ethers.toBeHex(ethers.parseEther("20"))
-        ]);
-
-        // Distribiusci WETH a tutti gli utenti
         const amountPerUser = ethers.parseEther("0.5");
         for (const user of users) {
-            await weth.connect(whale).transfer(user.address, amountPerUser);
+            await wethWrapper.connect(user).deposit({ value: amountPerUser });
         }
-        await ethers.provider.send("hardhat_stopImpersonatingAccount", [WETH_WHALE]);
 
         // Deploy infra
         const BeaconFactory = await ethers.getContractFactory("Beacon");
@@ -68,15 +59,15 @@ describe("E.2 — High Load Concurrent Users", function () {
         const MockPGFactory = await ethers.getContractFactory("MockProxyGeneral");
         proxyGeneral = await MockPGFactory.deploy();
 
-        await beacon.setImplementation("BASE_ASSET",      await baseToken.getAddress());
-        await beacon.setImplementation("TokenManager",    await tokenManager.getAddress());
-        await beacon.setImplementation("ProxyGeneral",    await proxyGeneral.getAddress());
-        await beacon.setImplementation("ProtocolManager", owner.address);
+        await beacon.updateImplementation("BASE_ASSET",      await baseToken.getAddress());
+        await beacon.updateImplementation("TokenManager",    await tokenManager.getAddress());
+        await beacon.updateImplementation("ProxyGeneral",    await proxyGeneral.getAddress());
+        await beacon.updateImplementation("ProtocolManager", await tokenManager.getAddress());
 
         // AaveV3Plugin
         const AaveFactory = await ethers.getContractFactory("AaveV3Plugin");
         aavePlugin = await AaveFactory.deploy(await beacon.getAddress(), "WETH", AAVE_POOL);
-        await beacon.setImplementation("AavePlugin", await aavePlugin.getAddress());
+        await beacon.updateImplementation("AavePlugin", await aavePlugin.getAddress());
     });
 
     // ==================== SCENARIO 1: CONCURRENT APPROVALS ====================
@@ -172,21 +163,21 @@ describe("E.2 — High Load Concurrent Users", function () {
     describe("SCENARIO 5 — Freeze durante operazioni", function () {
         it("E.2.7 — activateGlobalFreeze blocca tutti gli utenti", async function () {
             await beacon.connect(owner).activateGlobalFreeze();
-            const frozen = await beacon.globalFreezeActive();
+            const frozen = await beacon.globalFreeze();
             expect(frozen).to.be.true;
         });
 
         it("E.2.8 — nessun utente può aggiornare implementazioni durante il freeze", async function () {
             for (const user of users.slice(0, 3)) {
                 await expect(
-                    beacon.connect(user).setImplementation("FakeModule", user.address)
+                    beacon.connect(user).updateImplementation("FakeModule", user.address)
                 ).to.be.reverted;
             }
         });
 
         it("E.2.9 — deactivateGlobalFreeze ripristina operatività", async function () {
             await beacon.connect(owner).deactivateGlobalFreeze();
-            const frozen = await beacon.globalFreezeActive();
+            const frozen = await beacon.globalFreeze();
             expect(frozen).to.be.false;
         });
     });

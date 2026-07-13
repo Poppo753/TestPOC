@@ -27,56 +27,88 @@ const WBTC = "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f";
 export async function deployFullProtocolFixture() {
     const [owner, user1, user2, user3, feeRecipient] = await ethers.getSigners();
 
-    // Deploy MockERC20 come base asset (WETH simulato)
+    // Real core contracts with deterministic local tokens/oracles.
     const MockERC20Factory = await ethers.getContractFactory("MockERC20");
-    const baseToken = await MockERC20Factory.deploy("MockWETH", "mWETH", 18);
     const usdcToken  = await MockERC20Factory.deploy("MockUSDC", "mUSDC", 6);
     const wbtcToken  = await MockERC20Factory.deploy("MockWBTC", "mWBTC", 8);
+    const baseToken = await (await ethers.getContractFactory("MockWETH")).deploy();
 
-    // Deploy MockBeacon + Mocks
-    const MockBeaconFactory       = await ethers.getContractFactory("MockBeacon");
-    const MockTokenManagerFactory = await ethers.getContractFactory("MockTokenManager");
-    const MockProxyGeneralFactory = await ethers.getContractFactory("MockProxyGeneral");
-    const MockOracleFactory       = await ethers.getContractFactory("MockOracleAdapter");
-
-    const beacon         = await MockBeaconFactory.deploy();
-    const tokenManager   = await MockTokenManagerFactory.deploy();
-    const proxyGeneral   = await MockProxyGeneralFactory.deploy();
-    const oracle         = await MockOracleFactory.deploy();
+    const beacon = await (await ethers.getContractFactory("Beacon")).deploy();
+    const oracle = await (await ethers.getContractFactory("MockOracleAdapter")).deploy();
+    const proxyGeneral = await (await ethers.getContractFactory("ProxyGeneral")).deploy(
+        await beacon.getAddress(),
+        "WETH"
+    );
+    const tokenManager = await (await ethers.getContractFactory("TokenManager")).deploy(
+        await beacon.getAddress(),
+        await oracle.getAddress()
+    );
+    const valueCalculator = await (await ethers.getContractFactory("ValueCalculator")).deploy(
+        await beacon.getAddress(),
+        "WETH"
+    );
+    const swapManager = await (await ethers.getContractFactory("SwapManager")).deploy(
+        await beacon.getAddress(),
+        "WETH"
+    );
+    const parameterManager = await (await ethers.getContractFactory("ParameterManager")).deploy(
+        await beacon.getAddress(),
+        18
+    );
+    const emergencyHandler = await (await ethers.getContractFactory("EmergencyHandler")).deploy(
+        await beacon.getAddress()
+    );
+    await beacon.updateImplementation("BASE_ASSET", await baseToken.getAddress());
+    await beacon.updateImplementation("WETH", await baseToken.getAddress());
 
     // Configure oracle prices
-    await oracle.setPrice("WETH", ethers.parseUnits("3000", 8));
-    await oracle.setPrice("USDC", ethers.parseUnits("1", 8));
-    await oracle.setPrice("WBTC", ethers.parseUnits("60000", 8));
+    await oracle.setupToken("WETH", ethers.parseEther("1"), 18, true);
+    await oracle.setupToken("USDC", 333333333333333n, 18, true);
+    await oracle.setupToken("WBTC", ethers.parseEther("20"), 18, true);
+    await oracle.setUsdPrice("WETH", ethers.parseEther("3000"));
+    await oracle.setUsdPrice("USDC", ethers.parseEther("1"));
+    await oracle.setUsdPrice("WBTC", ethers.parseEther("60000"));
 
     // Configure tokenManager
-    await tokenManager.setTokenAddress("WETH", await baseToken.getAddress());
-    await tokenManager.setTokenAddress("USDC", await usdcToken.getAddress());
-    await tokenManager.setTokenAddress("WBTC", await wbtcToken.getAddress());
-    await tokenManager.setTokenPrice("WETH", ethers.parseUnits("3000", 8));
-    await tokenManager.setTokenPrice("USDC", ethers.parseUnits("1", 8));
-    await tokenManager.setTokenPrice("WBTC", ethers.parseUnits("60000", 8));
+    await tokenManager.setBaseAssetCode("WETH");
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"](
+        "USDC", await usdcToken.getAddress(), 6, 3600
+    );
+    await tokenManager["manageTokenData(string,address,uint8,uint256)"](
+        "WBTC", await wbtcToken.getAddress(), 8, 3600
+    );
 
     // Configure beacon
-    await beacon.setImplementation("TokenManager",     await tokenManager.getAddress());
-    await beacon.setImplementation("ProxyGeneral",     await proxyGeneral.getAddress());
-    await beacon.setImplementation("ProtocolManager",  owner.address);
-    await beacon.setImplementation("BASE_ASSET",       await baseToken.getAddress());
-    await beacon.setImplementation("WETH",             await baseToken.getAddress());
+    await beacon.updateImplementation("TokenManager", await tokenManager.getAddress());
+    await beacon.updateImplementation("ProxyGeneral", await proxyGeneral.getAddress());
+    await beacon.updateImplementation("ValueCalculator", await valueCalculator.getAddress());
+    await beacon.updateImplementation("SwapManager", await swapManager.getAddress());
+    await beacon.updateImplementation("ParameterManager", await parameterManager.getAddress());
+    await beacon.updateImplementation("EmergencyHandler", await emergencyHandler.getAddress());
 
     // Deploy LiquidityManager
     const LMFactory = await ethers.getContractFactory("LiquidityManager");
     const liquidityManager = await LMFactory.deploy(await beacon.getAddress(), "WETH");
-    await beacon.setImplementation("LiquidityManager", await liquidityManager.getAddress());
+    await beacon.updateImplementation("LiquidityManager", await liquidityManager.getAddress());
 
-    // Set fee recipient
+    await proxyGeneral.authorizeModule(await liquidityManager.getAddress(), "LiquidityManager");
+    await proxyGeneral.authorizeModule(await swapManager.getAddress(), "SwapManager");
+    await proxyGeneral.authorizeModule(await emergencyHandler.getAddress(), "EmergencyHandler");
+    await liquidityManager.setDepositsEnabled(true);
+    await liquidityManager.setWithdrawsEnabled(true);
     await liquidityManager.setFeeRecipient(feeRecipient.address);
+    await proxyGeneral.setRateLimit("deposit", ethers.parseEther("1000"), ethers.parseEther("5000"));
+    await proxyGeneral.setRateLimit("withdraw", ethers.parseEther("1000"), ethers.parseEther("5000"));
 
     return {
         beacon,
         tokenManager,
         proxyGeneral,
         oracle,
+        valueCalculator,
+        swapManager,
+        parameterManager,
+        emergencyHandler,
         liquidityManager,
         baseToken,
         usdcToken,
@@ -104,8 +136,8 @@ export async function deployWithAaveFixture() {
     const code = await ethers.provider.getCode(AAVE_WETH);
     if (code.length > 2) {
         // Fork disponibile
-        await base.beacon.setImplementation("BASE_ASSET", AAVE_WETH);
-        await base.beacon.setImplementation("WETH",       AAVE_WETH);
+        await base.beacon.updateImplementation("BASE_ASSET", AAVE_WETH);
+        await base.beacon.updateImplementation("WETH",       AAVE_WETH);
     }
 
     const AaveFactory = await ethers.getContractFactory("AaveV3Plugin");
@@ -114,7 +146,7 @@ export async function deployWithAaveFixture() {
         "WETH",
         AAVE_POOL
     );
-    await base.beacon.setImplementation("AaveV3Plugin", await aavePlugin.getAddress());
+    await base.beacon.updateImplementation("AaveV3Plugin", await aavePlugin.getAddress());
 
     return { ...base, aavePlugin, AAVE_POOL };
 }
@@ -137,7 +169,7 @@ export async function deployWithEulerFixture() {
         EVC,
         ACCOUNT_LENS
     );
-    await base.beacon.setImplementation("EulerV2Plugin", await eulerPlugin.getAddress());
+    await base.beacon.updateImplementation("EulerV2Plugin", await eulerPlugin.getAddress());
 
     return { ...base, eulerPlugin, EVC, ACCOUNT_LENS };
 }

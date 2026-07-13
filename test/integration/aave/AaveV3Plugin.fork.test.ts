@@ -144,7 +144,7 @@ describe("AaveV3 Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", function
         // ==================== DEPLOY AAVE V3 PLUGIN ====================
 
         const PluginFactory = await ethers.getContractFactory("AaveV3Plugin");
-        plugin = await PluginFactory.deploy(await mockBeacon.getAddress(), "WETH");
+        plugin = await PluginFactory.deploy(await mockBeacon.getAddress(), "WETH", AAVE_POOL);
         await plugin.waitForDeployment();
         await mockBeacon.setImplementation("AaveV3Plugin", await plugin.getAddress());
 
@@ -156,7 +156,7 @@ describe("AaveV3 Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", function
         // ==================== DEPLOY AAVE V3 LENS ADAPTER ====================
 
         const LensFactory = await ethers.getContractFactory("AaveV3LensAdapter");
-        lensAdapter = await LensFactory.deploy(await mockBeacon.getAddress(), "WETH");
+        lensAdapter = await LensFactory.deploy(await mockBeacon.getAddress(), "WETH", AAVE_POOL);
         await lensAdapter.waitForDeployment();
         await mockBeacon.setImplementation("AaveV3LensAdapter", await lensAdapter.getAddress());
 
@@ -337,7 +337,7 @@ describe("AaveV3 Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", function
         });
 
         it("Should have correct Aave Pool address", async function () {
-            expect(await plugin.AAVE_POOL_ADDRESS()).to.equal(AAVE_POOL);
+            expect(await plugin.aavePool()).to.equal(AAVE_POOL);
         });
 
         it("Should have circuit breaker OFF", async function () {

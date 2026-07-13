@@ -908,6 +908,24 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
             0,  // Sarà settato dal contesto
             collateralReturned
         );
+
+        // Keep the centralized position registry synchronized when callers use
+        // the pair-based atomic close entry point directly. The registry allows
+        // at most one active position for a vault pair.
+        address registry = _getVaultRegistry();
+        (
+            IEulerRegistry.LeveragePositionStorage[] memory activePositions,
+            uint256[] memory activePositionIds
+        ) = IEulerRegistry(registry).getActivePositions();
+        for (uint256 i = 0; i < activePositions.length; i++) {
+            if (
+                activePositions[i].collateralVault == collateralVault &&
+                activePositions[i].borrowVault == borrowVault
+            ) {
+                IEulerRegistry(registry).closePositionRecord(activePositionIds[i]);
+                break;
+            }
+        }
         
         // Pulisci contesto
         delete _flashLoanContext;
@@ -1121,20 +1139,28 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         if (!pos.isActive) revert PositionNotActive(positionId);
         
         address collateralToken = IEVault(pos.collateralVault).asset();
-        address subAccount = _deriveSubAccount(pos.subAccountId);
+        address positionAccount = _getPositionAccount(pos);
         
         // Verifica balance disponibile nel contratto
         uint256 balance = IERC20(collateralToken).balanceOf(address(this));
         if (balance < amount) revert InsufficientBalance(balance, amount);
         
         // Trasferisci collaterale al sub-account
-        IERC20(collateralToken).safeTransfer(subAccount, amount);
+        if (positionAccount == address(this)) {
+            IERC20(collateralToken).safeIncreaseAllowance(pos.collateralVault, amount);
+        } else {
+            IERC20(collateralToken).safeTransfer(positionAccount, amount);
+            evc.call(collateralToken, positionAccount, 0, abi.encodeCall(
+                IERC20.approve,
+                (pos.collateralVault, amount)
+            ));
+        }
         
         // Deposita nel vault per conto del sub-account (aumenta collaterale → migliora HF)
-        evc.call(pos.collateralVault, subAccount, 0, abi.encodeWithSelector(
+        evc.call(pos.collateralVault, positionAccount, 0, abi.encodeWithSelector(
             IEVault.deposit.selector,
             amount,
-            subAccount
+            positionAccount
         ));
         
         emit CollateralAdded(positionId, amount);
@@ -1156,10 +1182,13 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         if (!pos.isActive) revert PositionNotActive(positionId);
         
         address collateralToken = IEVault(pos.collateralVault).asset();
-        address subAccount = _deriveSubAccount(pos.subAccountId);
+        address positionAccount = _getPositionAccount(pos);
         
         // Preleva dal vault (EVC verificherà automaticamente health factor)
-        IEVault(pos.collateralVault).withdraw(amount, address(this), subAccount);
+        evc.call(pos.collateralVault, positionAccount, 0, abi.encodeCall(
+            IEVault.withdraw,
+            (amount, address(this), positionAccount)
+        ));
         
         // Trasferisci a ProxyGeneral
         address proxyGeneral = _getProxyGeneral();
@@ -1259,6 +1288,21 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     function _deriveSubAccount(uint8 subAccountId) internal view returns (address) {
         return address(uint160(address(this)) ^ uint160(subAccountId));
     }
+
+    function _getPositionAccount(IEulerRegistry.LeveragePositionStorage memory pos)
+        internal
+        view
+        returns (address account)
+    {
+        address subAccount = _deriveSubAccount(pos.subAccountId);
+        if (
+            IEVault(pos.borrowVault).debtOf(subAccount) > 0 ||
+            IEVault(pos.collateralVault).balanceOf(subAccount) > 0
+        ) {
+            return subAccount;
+        }
+        return address(this);
+    }
     
     // ==================== FLASH LOAN HELPERS ====================
     
@@ -1346,7 +1390,11 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         
         baseAssetReturned = this.closeLeverageAtomic(params);
         
-        IEulerRegistry(registry).closePositionRecord(positionId);
+        // closeLeverageAtomic synchronizes the pair record. Keep this guard for
+        // compatibility with registries created before that behavior existed.
+        if (IEulerRegistry(registry).isPositionActive(positionId)) {
+            IEulerRegistry(registry).closePositionRecord(positionId);
+        }
         
         return baseAssetReturned;
     }
@@ -1385,16 +1433,20 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
                 })
             ) {
                 positionsClosed++;
-                IEulerRegistry(registry).closePositionRecord(positionId);
+                if (IEulerRegistry(registry).isPositionActive(positionId)) {
+                    IEulerRegistry(registry).closePositionRecord(positionId);
+                }
             } catch {
                 // Continue on failure
             }
             
-            obtained = IERC20(baseAsset).balanceOf(address(this)) - balBefore;
+            uint256 currentBalance = IERC20(baseAsset).balanceOf(address(this));
+            obtained = currentBalance > balBefore ? currentBalance - balBefore : 0;
             if (obtained >= targetAmount) break;
         }
         
-        obtained = IERC20(baseAsset).balanceOf(address(this)) - balBefore;
+        uint256 finalBalance = IERC20(baseAsset).balanceOf(address(this));
+        obtained = finalBalance > balBefore ? finalBalance - balBefore : 0;
         if (obtained > 0) {
             IERC20(baseAsset).safeTransfer(_getProxyGeneral(), obtained);
         }

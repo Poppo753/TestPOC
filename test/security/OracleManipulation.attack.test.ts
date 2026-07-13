@@ -60,6 +60,8 @@ describe("Security C.2 — Oracle Manipulation Attacks", function () {
         // Imposta prezzi nel MockOracle
         await mockOracle.setPrice("WETH", INITIAL_WETH_PRICE);
         await mockOracle.setPrice("USDC", ethers.parseUnits("1", 8));
+        await mockOracle.setDecimals("WETH", 8);
+        await mockOracle.setDecimals("USDC", 8);
 
         // Deploy LiquidityManager
         const LMFactory = await ethers.getContractFactory("LiquidityManager");
@@ -180,13 +182,7 @@ describe("Security C.2 — Oracle Manipulation Attacks", function () {
 
     describe("SCENARIO 4 — Price decimals e precision", function () {
         it("C.2.11 — getPriceDecimals ritorna 8 per WETH (USD feed standard)", async function () {
-            try {
-                const dec = await mockOracle.getPriceDecimals("WETH");
-                // dec è un numero, confronta con >=0
-                expect(Number(dec)).to.be.gte(0);
-            } catch {
-                this.skip();
-            }
+            expect(await mockOracle.getPriceDecimals("WETH")).to.equal(8n);
         });
 
         it("C.2.12 — prezzo WETH è in range ragionevole (100 - 100000 USD)", async function () {

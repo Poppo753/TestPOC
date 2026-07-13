@@ -194,7 +194,7 @@ describe("EulerV2Plugin - Fork Tests (Arbitrum Mainnet)", function () {
 
     describe("3. EVC Integration Check", function () {
         it("Should have correct EVC address", async function () {
-            const evcFromPlugin = await plugin.EVC_ADDRESS();
+            const evcFromPlugin = await plugin.evc();
             expect(evcFromPlugin).to.equal(EVC_ADDRESS);
             console.log(`   ✅ EVC address correct: ${evcFromPlugin}`);
         });
@@ -459,7 +459,7 @@ describe("EulerV2Plugin - Fork Tests (Arbitrum Mainnet)", function () {
         });
 
         it("Should have correct EVC address constant", async function () {
-            const evcAddr = await plugin.EVC_ADDRESS();
+            const evcAddr = await plugin.evc();
             expect(evcAddr).to.equal(EVC_ADDRESS);
             console.log(`   ✅ EVC address matches`);
         });

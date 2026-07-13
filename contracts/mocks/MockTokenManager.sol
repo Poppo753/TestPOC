@@ -48,6 +48,10 @@ contract MockTokenManager {
         return tokenPrices[tokenCode];
     }
 
+    function getBaseAssetPrice() external view returns (uint256) {
+        return tokenPrices["WETH"];
+    }
+
     function getActiveTokens() external view returns (string[] memory) {
         return _activeTokens;
     }

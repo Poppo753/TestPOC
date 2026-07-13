@@ -53,8 +53,10 @@ const FORK_ENABLED = process.env.FORK_ENABLED === "true";
     let user1: any;
     let user2: any;
     let feeRecipient: any;
+    let suiteSnapshotId: string;
 
     before(async function () {
+        suiteSnapshotId = await ethers.provider.send("evm_snapshot", []);
         [owner, user1, user2, feeRecipient] = await ethers.getSigners();
 
         console.log("\n🔧 Deploying full protocol with USDT base asset...\n");
@@ -420,5 +422,9 @@ const FORK_ENABLED = process.env.FORK_ENABLED === "true";
             console.log(`   Remaining pool USDT: ${ethers.formatUnits(poolBalance, 6)}`);
             // Some USDT will remain from fees and the initial seed
         });
+    });
+
+    after(async function () {
+        await ethers.provider.send("evm_revert", [suiteSnapshotId]);
     });
 });
