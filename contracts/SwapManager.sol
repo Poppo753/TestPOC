@@ -16,6 +16,15 @@ import "./interfaces/ISimpleSwap.sol";
  * @custom:security-contact security@yourdomain.com
  */
 contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
+
+    // Custom errors keep the deployed runtime below EIP-170 without removing
+    // validation or operational functionality. Constructor strings are paid
+    // in every deployed bytecode even though they are used only once.
+    error InvalidBeaconAddress();
+    error InvalidBaseAssetCode();
+    error InvalidSwapLimits();
+    error SlippageTooHigh();
+    error InvalidRouter();
     
     // ==================== STORAGE ====================
     
@@ -245,8 +254,8 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
     // ==================== CONSTRUCTOR ====================
 
     constructor(address _beacon, string memory _baseAssetCode) Ownable() {
-        require(_beacon != address(0), "Invalid beacon address");
-        require(bytes(_baseAssetCode).length > 0, "Invalid base asset code");
+        if (_beacon == address(0)) revert InvalidBeaconAddress();
+        if (bytes(_baseAssetCode).length == 0) revert InvalidBaseAssetCode();
         beacon = _beacon;
         baseAssetCode = _baseAssetCode;
     }
@@ -1196,7 +1205,7 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         uint256 minAmount,
         uint256 maxAmount
     ) external onlyOwner {
-        require(minAmount <= maxAmount, "Invalid limits");
+        if (minAmount > maxAmount) revert InvalidSwapLimits();
         
         minSwapAmounts[tokenCode] = minAmount;
         maxSwapAmounts[tokenCode] = maxAmount;
@@ -1209,7 +1218,7 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
      * @param newSlippage Nuovo slippage in basis points
      */
     function setMaxSlippage(uint256 newSlippage) external onlyOwner {
-        require(newSlippage <= 2000, "Slippage too high"); // Max 20%
+        if (newSlippage > 2000) revert SlippageTooHigh(); // Max 20%
         
         uint256 oldSlippage = maxSlippage;
         maxSlippage = newSlippage;
@@ -1229,7 +1238,7 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             "DEPRECATED: Use setActiveSwapPlugin() instead. This function maintained for backward compatibility only."
         );
         
-        require(newRouter != address(0), "Invalid router address");
+        if (newRouter == address(0)) revert InvalidRouter();
         require(newRouter.code.length > 0, "Router must be a contract");
         
         address oldRouter = simpleSwapRouter;

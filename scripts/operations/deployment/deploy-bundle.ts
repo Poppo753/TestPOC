@@ -18,6 +18,10 @@ export interface BundleDeploymentInput {
 const BEACON_ABI = ["function owner() view returns(address)", "function checkModuleExists(string) view returns(bool)", "function getImplementation(string) view returns(address)", "function updateImplementation(string,address)"] as const;
 const PROXY_ABI = ["function owner() view returns(address)", "function isAuthorizedModule(address) view returns(bool)", "function authorizeModule(address,string)"] as const;
 const PM_ABI = ["function owner() view returns(address)", "function getProtocolInfo(string) view returns(address plugin,address lensAdapter,address registry,bool isActive,uint256 registeredAt)", "function registerProtocol(string,address,address,address)"] as const;
+const EULER_REGISTRY_ABI = [
+  "function positionManagers(address) view returns(bool)",
+  "function setPositionManager(address,bool)",
+] as const;
 
 async function registerBeacon(d: CheckpointDeployer, moduleName: string, address: Address): Promise<void> {
   const beacon = d.contract(d.manifest.contracts.beacon, BEACON_ABI);
@@ -93,6 +97,14 @@ export async function deployBundle(hre: HardhatRuntimeEnvironment, input: Bundle
     const lens = await d.deploy("eulerLensAdapter", "EulerLensAdapter", [beacon, baseCode, accountLens, vaultLens, utilsLens, evc]);
     await registerBeacon(d, "EulerRegistry", registry); await registerBeacon(d, "EulerV2Plugin", plugin); await registerBeacon(d, "EulerLensAdapter", lens);
     await authorizeProxy(d, "EulerV2Plugin", plugin);
+    // Keep vault administration with the registry owner (eventually a Safe).
+    // The plugin receives only the runtime permission required to maintain its
+    // leverage-position records; transferring ownership to it would make later
+    // vault additions and corrections impossible.
+    const registryContract = d.contract(registry, EULER_REGISTRY_ABI);
+    if (!Boolean(await registryContract.getFunction("positionManagers").staticCall(plugin))) {
+      await d.send("eulerRegistry:authorizePositionManager", registryContract, "setPositionManager", [plugin, true]);
+    }
     name = "EulerV2"; protocol = { plugin, lensAdapter: lens, registry, active: true, kind: "euler" };
   } else if (input.kind === "morpho") {
     const registry = await d.deploy("morphoRegistry", "MorphoRegistry");
@@ -110,6 +122,12 @@ export async function deployBundle(hre: HardhatRuntimeEnvironment, input: Bundle
     await authorizeProxy(d, "MorphoVaultPlugin", plugin);
     name = "MorphoVault"; protocol = { plugin, lensAdapter: lens, registry, active: true, kind: "morpho-vault" };
   }
+  // ProtocolManager's standard deposit/withdraw/borrow/repay path resolves the
+  // plugin from Beacon using the public protocol name (AaveV3, EulerV2, ...),
+  // while direct module lookups use the implementation name ending in Plugin.
+  // Both aliases must point to the same address or a deployment looks healthy
+  // in ProtocolManager but every capital-moving call reverts at runtime.
+  await registerBeacon(d, name, protocol.plugin);
   await registerProtocol(d, name, protocol);
   return d.manifest;
 }

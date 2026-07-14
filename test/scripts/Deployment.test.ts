@@ -49,5 +49,12 @@ describe("Operational scripts: deployment", function () {
     await deployBundle(require("hardhat"), { kind: "morpho-vault", manifest, manifestPath, execute: true, addresses: {} });
     expect(Object.keys(manifest.protocols)).to.have.members(["AaveV3", "EulerV2", "Morpho", "MorphoVault"]);
     expect(manifest.contracts.uniswapV3PluginDirect).to.match(/^0x[0-9a-fA-F]{40}$/);
+    const beacon = await ethers.getContractAt("Beacon", manifest.contracts.beacon);
+    for (const name of ["AaveV3", "EulerV2", "Morpho", "MorphoVault"] as const) {
+      expect(await beacon.getImplementation(name)).to.equal(manifest.protocols[name].plugin);
+    }
+    const eulerRegistry = await ethers.getContractAt("EulerRegistry", manifest.contracts.eulerRegistry);
+    expect(await eulerRegistry.positionManagers(manifest.contracts.eulerV2Plugin)).to.equal(true);
+    expect(await eulerRegistry.owner()).to.not.equal(manifest.contracts.eulerV2Plugin);
   });
 });

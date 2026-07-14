@@ -42,8 +42,21 @@ export async function executeProtocolAction(runtime: ScriptRuntime, input: Proto
 export async function readProtocolPosition(runtime: ScriptRuntime, protocolName: string, tokenCode: string) {
   const manager = contractAddress(runtime.manifest, "protocolManager");
   const balance = (await readContract(runtime, manager, PROTOCOL_MANAGER_ABI, "getBalance", [protocolName, tokenCode]))[0] as bigint;
+  // Yield-only ERC-4626 adapters intentionally do not implement the lending
+  // getDebt/getHealthFactor surface. Calling those selectors through
+  // ProtocolManager reverts even though the vault position is healthy. Model
+  // the protocol semantics explicitly instead of presenting a monitoring
+  // failure after a successful deposit.
+  if (runtime.manifest.protocols[protocolName]?.kind === "morpho-vault") {
+    return {
+      protocolName,
+      tokenCode,
+      balance: balance.toString(),
+      debt: "0",
+      healthFactor: ((1n << 256n) - 1n).toString(),
+    };
+  }
   const debt = (await readContract(runtime, manager, PROTOCOL_MANAGER_ABI, "getDebt", [protocolName, tokenCode]))[0] as bigint;
   const healthFactor = (await readContract(runtime, manager, PROTOCOL_MANAGER_ABI, "getHealthFactor", [protocolName]))[0] as bigint;
   return { protocolName, tokenCode, balance: balance.toString(), debt: debt.toString(), healthFactor: healthFactor.toString() };
 }
-

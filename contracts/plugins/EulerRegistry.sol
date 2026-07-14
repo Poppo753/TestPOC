@@ -44,6 +44,11 @@ contract EulerRegistry is Ownable {
     
     /// @notice Prossimo position ID da assegnare
     uint256 public nextPositionId;
+
+    /// @notice Contratti autorizzati a mantenere i record delle posizioni.
+    /// @dev L'owner conserva l'amministrazione dei vault; il plugin non deve
+    ///      ricevere l'intera ownership soltanto per aggiornare lo stato runtime.
+    mapping(address => bool) public positionManagers;
     
     /// @notice Mapping positionId → LeveragePosition
     mapping(uint256 => LeveragePositionStorage) private _positions;
@@ -127,6 +132,9 @@ contract EulerRegistry is Ownable {
      * @param positionId ID della posizione
      */
     event PositionClosed(uint256 indexed positionId);
+
+    /// @notice Emesso quando l'owner abilita o revoca un gestore di posizioni.
+    event PositionManagerSet(address indexed manager, bool allowed);
     
     // ========== ERRORS - VAULT REGISTRY ==========
     
@@ -146,6 +154,30 @@ contract EulerRegistry is Ownable {
     // ========== CONSTRUCTOR ==========
     
     constructor() Ownable() {}
+
+    /**
+     * @dev Separa il piano amministrativo dal piano operativo. L'owner (in
+     *      produzione una Safe) può sempre intervenire; i manager autorizzati
+     *      possono soltanto usare le funzioni di position accounting.
+     *      Manteniamo il revert Ownable storico per compatibilità con tooling e test.
+     */
+    modifier onlyPositionManagerOrOwner() {
+        require(
+            owner() == _msgSender() || positionManagers[_msgSender()],
+            "Ownable: caller is not the owner"
+        );
+        _;
+    }
+
+    /**
+     * @notice Autorizza o revoca un plugin come gestore dei record runtime.
+     * @dev Non concede alcun permesso su setVault, batch o removeVault.
+     */
+    function setPositionManager(address manager, bool allowed) external onlyOwner {
+        require(manager != address(0), "EulerRegistry: zero position manager");
+        positionManagers[manager] = allowed;
+        emit PositionManagerSet(manager, allowed);
+    }
     
     // ========== POSITION MANAGER - WRITE FUNCTIONS ==========
     
@@ -170,7 +202,7 @@ contract EulerRegistry is Ownable {
         address borrowVault,
         uint256 initialCollateral,
         uint256 borrowedAmount
-    ) external onlyOwner returns (uint256 positionId) {
+    ) external onlyPositionManagerOrOwner returns (uint256 positionId) {
         if (collateralVault == address(0) || borrowVault == address(0)) {
             revert InvalidVault();
         }
@@ -210,7 +242,7 @@ contract EulerRegistry is Ownable {
     function updatePosition(
         uint256 positionId,
         uint256 newBorrowedAmount
-    ) external onlyOwner {
+    ) external onlyPositionManagerOrOwner {
         LeveragePositionStorage storage pos = _positions[positionId];
         
         if (pos.createdAt == 0) revert PositionNotFound(positionId);
@@ -230,7 +262,7 @@ contract EulerRegistry is Ownable {
      * - positionId deve esistere
      * - posizione deve essere attiva
      */
-    function closePositionRecord(uint256 positionId) external onlyOwner {
+    function closePositionRecord(uint256 positionId) external onlyPositionManagerOrOwner {
         LeveragePositionStorage storage pos = _positions[positionId];
         
         if (pos.createdAt == 0) revert PositionNotFound(positionId);
@@ -285,7 +317,7 @@ contract EulerRegistry is Ownable {
         address borrowVault,
         uint256 initialCollateral,
         uint256 borrowedAmount
-    ) external onlyOwner returns (uint256 positionId, uint8 subAccountId) {
+    ) external onlyPositionManagerOrOwner returns (uint256 positionId, uint8 subAccountId) {
         // Validation
         if (collateralVault == address(0) || borrowVault == address(0)) {
             revert InvalidVault();

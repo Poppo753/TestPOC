@@ -7,7 +7,7 @@ import { setEmergencyState } from "../../scripts/operations/administration/emerg
 import { configureCorePolicy } from "../../scripts/operations/administration/core-policy";
 import { registerProtocol, setProtocolActive, setSelectorWhitelist } from "../../scripts/operations/administration/protocols";
 import { configureAaveToken, configureEulerVault, configureMorphoMarket, configureMorphoVault, transferRegistryOwnership } from "../../scripts/operations/administration/registries";
-import { configureToken } from "../../scripts/operations/administration/tokens";
+import { configureOracleFeed, configureToken } from "../../scripts/operations/administration/tokens";
 import { getProtocolHealth } from "../../scripts/operations/monitoring/protocol-health";
 import { getSystemStatus } from "../../scripts/operations/monitoring/system-status";
 import { executeProtocolAction, readProtocolPosition } from "../../scripts/operations/protocols/positions";
@@ -106,6 +106,15 @@ describe("Operational scripts: local integration", function () {
     expect((await configureMorphoVault(runtime, "USDC", usdc, true)).success).to.equal(true);
   });
 
+  it("configures a non-base asset oracle feed independently from token metadata", async function () {
+    const adapter = await (await ethers.getContractFactory("ChainlinkAdapter")).deploy();
+    const feed = await (await ethers.getContractFactory("MockChainlinkAggregator")).deploy(8, 2500n * 10n ** 8n);
+    setContract(runtime.manifest, "chainlinkAdapter", await adapter.getAddress());
+    const result = await configureOracleFeed(runtime, { code: "WETH", feed: await feed.getAddress(), feedDecimals: 8, heartbeat: 3600n });
+    expect(result.success, JSON.stringify(result.error)).to.equal(true);
+    expect(await adapter.supportsToken("WETH")).to.equal(true);
+  });
+
   it("simulates emergency before sending and can execute pause", async function () {
     const simulated = await setEmergencyState({ ...runtime, options: { ...runtime.options, dryRun: true } }, true, "test");
     expect(simulated.success).to.equal(true);
@@ -151,6 +160,22 @@ describe("Operational scripts: local integration", function () {
     const closed = await executeProtocolAction(runtime, { operation: "close", protocolName: "OperationalMock", debtTokenCode: "USDC", collateralTokenCode: "USDC" });
     expect(closed.success, JSON.stringify(closed.error)).to.equal(true);
     expect((await readProtocolPosition(runtime, "OperationalMock", "USDC")).debt).to.equal("0");
+  });
+
+  it("reads yield-only Morpho Vault positions without calling lending selectors", async function () {
+    const plugin = await (await ethers.getContractFactory("MockOperationalProtocol")).deploy(await fixture.proxyGeneral.getAddress(), await fixture.mockUSDC.getAddress());
+    const registered = await registerProtocol(runtime, { name: "YieldOnly", plugin: await plugin.getAddress(), lensAdapter: await plugin.getAddress() });
+    expect(registered.success, JSON.stringify(registered.error)).to.equal(true);
+    runtime.manifest.protocols.YieldOnly = {
+      plugin: await plugin.getAddress() as Address,
+      lensAdapter: await plugin.getAddress() as Address,
+      active: true,
+      kind: "morpho-vault",
+    };
+    const position = await readProtocolPosition(runtime, "YieldOnly", "USDC");
+    expect(position.balance).to.equal("0");
+    expect(position.debt).to.equal("0");
+    expect(position.healthFactor).to.equal(((1n << 256n) - 1n).toString());
   });
 
   it("configures explicit fees, limits, rates and operation flags as one ordered policy", async function () {

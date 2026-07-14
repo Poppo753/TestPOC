@@ -20,7 +20,7 @@ import { configureCorePolicy } from "./operations/administration/core-policy";
 import { setEmergencyState, setPluginCircuitBreaker } from "./operations/administration/emergency";
 import { registerProtocol, setProtocolActive, setSelectorWhitelist, updateProtocol } from "./operations/administration/protocols";
 import { configureAaveToken, configureEulerVault, configureMorphoMarket, configureMorphoVault, transferRegistryOwnership } from "./operations/administration/registries";
-import { configureToken, removeToken } from "./operations/administration/tokens";
+import { configureOracleFeed, configureToken, removeToken } from "./operations/administration/tokens";
 import { deployBundle, type SupportedBundle } from "./operations/deployment/deploy-bundle";
 import { deployCore } from "./operations/deployment/deploy-core";
 import { getPositionsByRisk, getProtocolHealth } from "./operations/monitoring/protocol-health";
@@ -111,6 +111,7 @@ async function run(): Promise<unknown> {
     case "protocol-status": return setProtocolActive(runtime, required(args, "protocol"), cliBoolean(args, "active"));
     case "protocol-selectors": return setSelectorWhitelist(runtime, required(args, "protocol"), required(args, "signatures").split(",").map(item => item.trim()), cliBoolean(args, "allowed", true));
     case "token-config": return configureToken(runtime, { code: required(args, "token"), address: address(args, "address"), decimals: integer(args, "decimals"), heartbeat: bigintArg(args, "heartbeat") as bigint });
+    case "oracle-feed": return configureOracleFeed(runtime, { code: required(args, "token"), feed: address(args, "feed"), feedDecimals: integer(args, "feed-decimals"), heartbeat: bigintArg(args, "heartbeat") as bigint, quoteCurrency: cliString(args, "quote", false) });
     case "token-remove": return removeToken(runtime, required(args, "token"));
     case "registry-aave": return configureAaveToken(runtime, required(args, "token"), address(args, "underlying"), address(args, "a-token"), address(args, "debt-token"));
     case "registry-euler": return configureEulerVault(runtime, required(args, "token"), address(args, "vault"));
@@ -125,6 +126,12 @@ async function run(): Promise<unknown> {
 
 run().then(result => {
   process.stdout.write(`${stringifyForOutput(result)}\n`);
+  // Operations return structured failures so callers can inspect the plan and
+  // error. They must still fail the process: otherwise CI/deployment runners
+  // would continue after a reverted simulation or transaction.
+  if (typeof result === "object" && result !== null && "success" in result && (result as { success?: boolean }).success === false) {
+    process.exitCode = 1;
+  }
 }).catch(error => {
   const result: OperationResult<never> = { success: false, operation: process.argv[2] ?? "unknown", transactions: [], error: serializeError(error) };
   process.stderr.write(`${stringifyForOutput(result)}\n`);

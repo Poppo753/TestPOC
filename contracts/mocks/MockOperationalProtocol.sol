@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
+import {ILensAdapter} from "../interfaces/ILensAdapter.sol";
+import {IProtocolAdapter} from "../interfaces/IProtocolAdapter.sol";
+
 interface IMockOperationalToken {
     function transfer(address to, uint256 amount) external returns (bool);
     function mint(address to, uint256 amount) external;
@@ -59,5 +62,23 @@ contract MockOperationalProtocol {
     function getDebt(string calldata) external view returns (uint256) { return debt; }
     function getHealthFactor() external view returns (uint256) { return debt == 0 ? type(uint256).max : supplied * 1e18 / debt; }
     function getTotalValue() external view returns (uint256) { return supplied > debt ? supplied - debt : 0; }
-}
+    function isCircuitBreakerActive() external pure returns (bool) { return false; }
+    function circuitBreakerTripped() external pure returns (bool) { return false; }
+    function getNetAPY() external pure returns (int256) { return 0; }
 
+    // Lens-compatible summary lets ProtocolManager monitoring exercise the
+    // same ABI as production adapters while remaining strictly test-only.
+    function getProtocolSummary() external view returns (ILensAdapter.ProtocolSummary memory summary) {
+        uint256 health = debt == 0 ? type(uint256).max : supplied * 1e18 / debt;
+        return ILensAdapter.ProtocolSummary({
+            name: "OperationalMock",
+            protocolType: IProtocolAdapter.ProtocolType.LENDING,
+            totalCollateral: supplied,
+            totalDebt: debt,
+            netValue: supplied > debt ? supplied - debt : 0,
+            activePositionCount: supplied == 0 && debt == 0 ? 0 : 1,
+            lowestHealthFactor: health,
+            isHealthy: debt == 0 || health >= 1e18
+        });
+    }
+}

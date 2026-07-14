@@ -17,6 +17,8 @@
     "scripts:typecheck": "tsc -p tsconfig.scripts.json",
     "scripts:test": "hardhat test test/scripts/Framework.test.ts test/scripts/Operations.test.ts test/scripts/Deployment.test.ts test/integration/scripts/Phase1.Core.test.ts",
     "scripts:cli": "ts-node scripts/cli.ts",
+    "automation:cli": "ts-node scripts/automation/cli.ts",
+    "automation:test": "hardhat test test/automation/VaultAutomationController.test.ts",
     "deploy:setup": "hardhat run scripts/deploy/setupGMXv2Plugin.ts --network arbitrum",
     "deploy:testnet": "hardhat run scripts/deploy/setupGMXv2Plugin.ts --network arbitrumSepolia",
     "test:flow": "hardhat run scripts/test/testGMXv2Flow.ts --network arbitrum"
@@ -50,8 +52,14 @@
   "dependencies": {
     "@chainlink/contracts": "^0.8.0",
     "@openzeppelin/contracts": "^4.9.2",
+    "@safe-global/api-kit": "4.2.0",
+    "@safe-global/protocol-kit": "7.2.0",
+    "@safe-global/types-kit": "3.1.0",
     "@uniswap/v3-periphery": "^1.4.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
+  },
+  "overrides": {
+    "@safe-global/safe-deployments": "1.37.56"
   }
 }

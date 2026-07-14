@@ -265,7 +265,16 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
         }
 
         // 3. Se amount = 0, withdraw all
-        uint256 withdrawAmount = (amount == 0) ? type(uint256).max : amount;
+        // Aave stores scaled balances and converts them through the liquidity
+        // index. Especially for micro-deposits, rounding can make balanceOf()
+        // one or two asset units lower than the amount originally supplied.
+        // Asking the Pool for the nominal amount would then revert with
+        // NotEnoughAvailableUserBalance even though this plugin intends to
+        // close its whole position. Clamp to the currently redeemable aToken
+        // balance; amount == 0 retains Aave's canonical withdraw-all path.
+        uint256 withdrawAmount = (amount == 0)
+            ? type(uint256).max
+            : (amount > aTokenBalance ? aTokenBalance : amount);
 
         // 4. Withdraw da Aave direttamente a ProxyGeneral
         //    Aave V3 withdraw(asset, amount, to) → invia direttamente al recipient!

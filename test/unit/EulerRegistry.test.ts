@@ -50,6 +50,31 @@ describe("EulerRegistry", function () {
         it("Should start with 0 active positions", async function () {
             expect(await registry.getActivePositionCount()).to.equal(0);
         });
+
+        it("Should separate vault administration from position management", async function () {
+            await expect(registry.setPositionManager(nonOwner.address, true))
+                .to.emit(registry, "PositionManagerSet")
+                .withArgs(nonOwner.address, true);
+
+            await registry.connect(nonOwner).createPosition(
+                1, WETH_VAULT, USDC_VAULT, ethers.parseEther("1"), 1000
+            );
+            expect(await registry.isPositionActive(0)).to.be.true;
+
+            await expect(registry.connect(nonOwner).setVault("WETH", WETH_VAULT))
+                .to.be.revertedWith("Ownable: caller is not the owner");
+            await registry.setVault("WETH", WETH_VAULT);
+
+            await registry.setPositionManager(nonOwner.address, false);
+            await expect(registry.connect(nonOwner).closePositionRecord(0))
+                .to.be.revertedWith("Ownable: caller is not the owner");
+            await registry.closePositionRecord(0);
+        });
+
+        it("Should reject a zero position manager", async function () {
+            await expect(registry.setPositionManager(ethers.ZeroAddress, true))
+                .to.be.revertedWith("EulerRegistry: zero position manager");
+        });
     });
 
     // ================================================================

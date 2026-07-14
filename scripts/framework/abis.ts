@@ -42,7 +42,7 @@ export const PROTOCOL_MANAGER_ABI = [
   "function getActiveProtocolCount() view returns (uint256)",
   "function getAllProtocolsValue() view returns (uint256)",
   "function getGlobalHealthFactor() view returns (uint256)",
-  "function getAllProtocolSummaries() view returns (tuple(string protocolName,uint8 protocolType,address plugin,uint256 totalValue,uint256 collateral,uint256 debt,uint256 healthFactor,uint256 activePositions,bool circuitBreakerActive,int256 netAPY)[])",
+  "function getAllProtocolSummaries() view returns (tuple(string name,uint8 protocolType,uint256 totalCollateral,uint256 totalDebt,uint256 netValue,uint256 activePositionCount,uint256 lowestHealthFactor,bool isHealthy)[])",
   "function getAllPositionsSortedByRisk() view returns (tuple(uint256 positionId,string protocolName,address protocol,uint256 collateral,uint256 debt,uint256 healthFactor,uint256 liquidationThreshold,bool isActive,uint256 lastUpdate)[])",
   "function deposit(string,string,uint256)",
   "function withdraw(string,string,uint256)",

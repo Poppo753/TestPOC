@@ -402,6 +402,15 @@ contract MorphoVaultPlugin is IProtocolAdapter, Ownable, ReentrancyGuard {
 
         uint256 sharesBurned = v.withdraw(withdrawAmount, proxyGeneral, address(this));
 
+        // ERC-4626 rounding may leave a minimal share balance whose asset value
+        // is exactly zero. Keeping it would make monitoring report a permanent
+        // active position after a complete nominal withdrawal. Burn only this
+        // economically empty dust; valuable remaining shares are untouched.
+        uint256 remainingShares = v.balanceOf(address(this));
+        if (remainingShares > 0 && v.convertToAssets(remainingShares) == 0) {
+            v.redeem(remainingShares, proxyGeneral, address(this));
+        }
+
         if (v.balanceOf(address(this)) == 0) {
             _removeActiveVault(vault);
         }
@@ -412,11 +421,18 @@ contract MorphoVaultPlugin is IProtocolAdapter, Ownable, ReentrancyGuard {
     }
 
     function _redeemAllVaults(address receiver) internal {
-        for (uint256 i = 0; i < activeVaults.length; i++) {
-            IERC4626 v = IERC4626(activeVaults[i]);
+        // Iterate over a snapshot because successful redemptions remove items
+        // from activeVaults. Failed redemptions remain visible for monitoring
+        // and incident handling instead of being silently forgotten.
+        address[] memory vaults = activeVaults;
+        for (uint256 i = 0; i < vaults.length; i++) {
+            IERC4626 v = IERC4626(vaults[i]);
             uint256 shares = v.balanceOf(address(this));
             if (shares > 0) {
                 try v.redeem(shares, receiver, address(this)) {} catch {}
+            }
+            if (v.balanceOf(address(this)) == 0) {
+                _removeActiveVault(vaults[i]);
             }
         }
     }

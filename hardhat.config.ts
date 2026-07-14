@@ -42,7 +42,10 @@ const config: HardhatUserConfig = {
         blockNumber: process.env.FORK_BLOCK_NUMBER ? parseInt(process.env.FORK_BLOCK_NUMBER) : undefined,
       },
       chainId: 42161, // Arbitrum mainnet chain ID
-      allowUnlimitedContractSize: true, // Allow large contracts in tests (EulerV2Plugin ~30KB)
+      // Keep the production EIP-170 limit active on forks. Disabling it hid an
+      // oversized SwapManager during rehearsal and allowed a false-positive
+      // deployment certification.
+      allowUnlimitedContractSize: false,
       // Increase stack trace limit to suppress "Failed to generate N stack traces" warning from DolomitePlugin
       throwOnCallFailures: true,
       throwOnTransactionFailures: true,

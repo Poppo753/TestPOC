@@ -75,18 +75,20 @@ describe("AaveV3 Plugin - Leverage via FlashLoanService (Fork)", function () {
 
         // ==================== DISCOVER AAVE TOKENS ====================
         console.log("\n📡 Querying Aave V3 Pool...");
-        const poolDataProvider = await ethers.getContractAt(
-            [
-                "function getReserveAToken(address) view returns (address)",
-                "function getReserveVariableDebtToken(address) view returns (address)",
-            ],
+        // AAVE_POOL is the Pool itself, not AaveProtocolDataProvider. Query the
+        // canonical Pool reserve tuple so this test cannot silently depend on
+        // methods that do not exist at the configured address.
+        const pool = await ethers.getContractAt(
+            ["function getReserveData(address) view returns (tuple(uint256 configuration,uint128 liquidityIndex,uint128 currentLiquidityRate,uint128 variableBorrowIndex,uint128 currentVariableBorrowRate,uint128 currentStableBorrowRate,uint40 lastUpdateTimestamp,uint16 id,address aTokenAddress,address stableDebtTokenAddress,address variableDebtTokenAddress,address interestRateStrategyAddress,uint128 accruedToTreasury,uint128 unbacked,uint128 isolationModeTotalDebt))"],
             AAVE_POOL
         );
 
-        aWETH = await poolDataProvider.getReserveAToken(WETH);
-        aUSDC = await poolDataProvider.getReserveAToken(USDC);
-        variableDebtWETH = await poolDataProvider.getReserveVariableDebtToken(WETH);
-        variableDebtUSDC = await poolDataProvider.getReserveVariableDebtToken(USDC);
+        const wethReserve = await pool.getReserveData(WETH);
+        const usdcReserve = await pool.getReserveData(USDC);
+        aWETH = wethReserve.aTokenAddress;
+        aUSDC = usdcReserve.aTokenAddress;
+        variableDebtWETH = wethReserve.variableDebtTokenAddress;
+        variableDebtUSDC = usdcReserve.variableDebtTokenAddress;
 
         console.log(`   aWETH: ${aWETH}`);
         console.log(`   aUSDC: ${aUSDC}`);
