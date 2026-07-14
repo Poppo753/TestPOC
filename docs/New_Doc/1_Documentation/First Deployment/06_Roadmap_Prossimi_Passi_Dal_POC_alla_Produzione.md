@@ -119,6 +119,14 @@ Fase completa. Preflight RPC 22/22 PASS e pubblicazione sorgenti 22/22 VERIFIED 
 
 ## 6. Fase 2 — Eseguire observe supervisionato per 24–72 ore
 
+### Stato esecuzione — 15 luglio 2026
+
+VPS Hetzner CX23 creata con Ubuntu 24.04, chiave SSH dedicata e firewall
+SSH-only. È in corso la migrazione dal loop Windows temporaneo al servizio
+`systemd` non privilegiato. La finestra ufficiale non è ancora iniziata: parte
+solo dopo bootstrap, test, preflight e cicli VPS riusciti registrati in
+`08_Phase_2_Observe_VPS/`.
+
 ### Obiettivo
 
 Dimostrare che RPC, observer, store, lock, heartbeat e retry restano stabili nel tempo senza capacità di esecuzione.
