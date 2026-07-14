@@ -68,5 +68,5 @@ install --owner=root --group=root --mode=0644 "${REPOSITORY_DIR}/ops/systemd/${S
 systemctl daemon-reload
 
 echo "Bootstrap completato."
-echo "Commit installato: $(git -C "${REPOSITORY_DIR}" rev-parse HEAD)"
+echo "Commit installato: $(runuser --user "${SERVICE_USER}" -- git -C "${REPOSITORY_DIR}" rev-parse HEAD)"
 echo "Il servizio NON è stato avviato: prima installare il file RPC, eseguire test e preflight."

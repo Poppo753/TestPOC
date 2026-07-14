@@ -1,6 +1,5 @@
 [Unit]
 Description=Vault Automation Controller - Arbitrum USDC POC observe
-Documentation=file:/opt/vault-automation/TestSmartContract/docs/New_Doc/1_Documentation/First Deployment/08_Phase_2_Observe_VPS/02_Runbook_Installazione_e_Gestione.md
 Wants=network-online.target
 After=network-online.target
 StartLimitIntervalSec=900
