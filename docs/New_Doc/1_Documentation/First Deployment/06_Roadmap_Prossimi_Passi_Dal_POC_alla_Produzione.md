@@ -121,11 +121,15 @@ Fase completa. Preflight RPC 22/22 PASS e pubblicazione sorgenti 22/22 VERIFIED 
 
 ### Stato esecuzione — 15 luglio 2026
 
-VPS Hetzner CX23 creata con Ubuntu 24.04, chiave SSH dedicata e firewall
-SSH-only. È in corso la migrazione dal loop Windows temporaneo al servizio
-`systemd` non privilegiato. La finestra ufficiale non è ancora iniziata: parte
-solo dopo bootstrap, test, preflight e cicli VPS riusciti registrati in
-`08_Phase_2_Observe_VPS/`.
+VPS Hetzner CX23 operativa con Ubuntu 24.04, chiave SSH dedicata e firewall
+SSH-only. Bootstrap, aggiornamento, reboot, compile, typecheck, 39 test script,
+14 test automation e preflight Arbitrum sono passati. Il servizio `systemd`
+gira come `vaultops`, senza signer e con execution disabilitata. Dopo due cicli
+VPS riusciti è stato fermato il loop Windows; un terzo ciclo è poi riuscito con
+la sola VPS attiva. La finestra shadow ufficiale è iniziata il 15 luglio 2026
+alle 01:40:26 CEST e non può essere certificata prima del 16 luglio 2026 alle
+01:40:26 CEST. Fase in osservazione, non ancora completa. Evidenze e problemi
+corretti sono registrati in `08_Phase_2_Observe_VPS/`.
 
 ### Obiettivo
 
