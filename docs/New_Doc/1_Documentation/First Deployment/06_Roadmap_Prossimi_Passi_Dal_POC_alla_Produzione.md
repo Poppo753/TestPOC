@@ -82,6 +82,10 @@ Rendere identificabile la versione esatta che ha prodotto il deployment.
 
 Senza una baseline non è possibile sapere quale codice verificare sull'explorer, auditare o confrontare durante un incidente.
 
+### Stato esecuzione — 14 luglio 2026
+
+Build pulita, compile, typecheck, suite script/automation, confronto dell'albero Solidity e preflight on-chain sono passati. Sono stati inoltre rimossi quattro literal della credenziale OneInch e l'utente ha confermato la revoca della key storica. GitHub CLI è ora disponibile e autenticata; tag/archive/push sono nella chiusura del workflow. Evidenze: `07_Phase_0_1_Baseline_e_Verifica/`.
+
 ## 5. Fase 1 — Verificare i sorgenti sull'explorer
 
 ### Obiettivo
@@ -108,6 +112,10 @@ Associare agli indirizzi reali codice sorgente, compiler, optimizer e constructo
 ### Gate di uscita
 
 Tutti i componenti proprietari del nuovo manifest risultano verified oppure ogni eccezione è spiegata e bloccante per il passaggio a capitale maggiore.
+
+### Stato esecuzione — 14 luglio 2026
+
+Preflight RPC completato 22/22 senza failure. La pubblicazione dei sorgenti su Explorer è pending perché espone codice del repository privato e richiede consenso esplicito dopo l'informativa. La fase non è marcata completa.
 
 ## 6. Fase 2 — Eseguire observe supervisionato per 24–72 ore
 

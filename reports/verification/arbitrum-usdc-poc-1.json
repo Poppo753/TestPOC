@@ -1,0 +1,361 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-14T18:27:55.585Z",
+  "manifest": "scripts/manifests/arbitrum-usdc-poc-1.json",
+  "network": "arbitrum",
+  "chainId": 42161,
+  "mode": "preflight-only",
+  "summary": {
+    "total": 22,
+    "preflightPassed": 22,
+    "verified": 0,
+    "alreadyVerified": 0,
+    "skipped": 22,
+    "failed": 0
+  },
+  "results": [
+    {
+      "key": "beacon",
+      "label": "Beacon",
+      "address": "0x145833173cc47Fde624Be8cc4f391eeA07b82a16",
+      "deploymentTransaction": "0xf2c6a787c146f551a41cd5caac182a4a84088f72abc1651e031d71a16cb598ca",
+      "explorerUrl": "https://arbiscan.io/address/0x145833173cc47Fde624Be8cc4f391eeA07b82a16#code",
+      "contract": "contracts/Beacon.sol:Beacon",
+      "constructorArguments": [],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 7111,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "proxyGeneral",
+      "label": "ProxyGeneral",
+      "address": "0xb070303C3634eA404593A87725aaCb18E1d5d9BF",
+      "deploymentTransaction": "0x9a93d8eb4e0db862dc6e9e522efcae8331c4d07b6db8aeb656690280701ea919",
+      "explorerUrl": "https://arbiscan.io/address/0xb070303C3634eA404593A87725aaCb18E1d5d9BF#code",
+      "contract": "contracts/ProxyGeneral.sol:ProxyGeneral",
+      "constructorArguments": [
+        "0x145833173cc47Fde624Be8cc4f391eeA07b82a16",
+        "USDC"
+      ],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 13098,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "chainlinkAdapter",
+      "label": "ChainlinkAdapter",
+      "address": "0xaD262cbf08ac5D5e9Ca55B652Dc455752dE37c5D",
+      "deploymentTransaction": "0x996ee8d72da3857b740ac2e38fadf61ab63232ac0b9de7496f34e99ca4fb068d",
+      "explorerUrl": "https://arbiscan.io/address/0xaD262cbf08ac5D5e9Ca55B652Dc455752dE37c5D#code",
+      "contract": "contracts/adapters/ChainlinkAdapter.sol:ChainlinkAdapter",
+      "constructorArguments": [],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 8011,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "tokenManager",
+      "label": "TokenManager",
+      "address": "0xD448DD636B0c6be24ffFbf56b5B480b7d38bE820",
+      "deploymentTransaction": "0x13a1a2553f8eae55c44bef31d03ad7f89e53cf33556de4b799874eb561b5350c",
+      "explorerUrl": "https://arbiscan.io/address/0xD448DD636B0c6be24ffFbf56b5B480b7d38bE820#code",
+      "contract": "contracts/TokenManager.sol:TokenManager",
+      "constructorArguments": [
+        "0x145833173cc47Fde624Be8cc4f391eeA07b82a16",
+        "0xaD262cbf08ac5D5e9Ca55B652Dc455752dE37c5D"
+      ],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 10447,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "valueCalculator",
+      "label": "ValueCalculator",
+      "address": "0x1850e1E37a7a46E74bBDAE5704Afe0C79BCb7c1A",
+      "deploymentTransaction": "0x2aa3ad5fbfc74d08200cf69a43134608e5e2a51b2d5c68175ffb4645f0a4fd6b",
+      "explorerUrl": "https://arbiscan.io/address/0x1850e1E37a7a46E74bBDAE5704Afe0C79BCb7c1A#code",
+      "contract": "contracts/ValueCalculator.sol:ValueCalculator",
+      "constructorArguments": [
+        "0x145833173cc47Fde624Be8cc4f391eeA07b82a16",
+        "USDC"
+      ],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 13935,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "swapManager",
+      "label": "SwapManager",
+      "address": "0xF187F8AE7F2B099d71453a29a1Ceb24a7A942188",
+      "deploymentTransaction": "0x63512e7623cf49e87dc5c42637c3d1424b704bc86337bf633b2964496d3c07eb",
+      "explorerUrl": "https://arbiscan.io/address/0xF187F8AE7F2B099d71453a29a1Ceb24a7A942188#code",
+      "contract": "contracts/SwapManager.sol:SwapManager",
+      "constructorArguments": [
+        "0x145833173cc47Fde624Be8cc4f391eeA07b82a16",
+        "USDC"
+      ],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 24473,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "parameterManager",
+      "label": "ParameterManager",
+      "address": "0x3972e959A3fB28ce38543Dc42A249fc0dDC229b5",
+      "deploymentTransaction": "0x282332b9ff99c019731cad7c8597878e4e6d8348f2df2ebfb1d06dec8a2ea272",
+      "explorerUrl": "https://arbiscan.io/address/0x3972e959A3fB28ce38543Dc42A249fc0dDC229b5#code",
+      "contract": "contracts/ParameterManager.sol:ParameterManager",
+      "constructorArguments": [
+        "0x145833173cc47Fde624Be8cc4f391eeA07b82a16",
+        6
+      ],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 13375,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "emergencyHandler",
+      "label": "EmergencyHandler",
+      "address": "0xcEcabED130B96B8F496c3B6D1Fe5A7556C0AB563",
+      "deploymentTransaction": "0x608187e5c100b2382bb6259696186a6b7a723f4e590bf59cb2306973abd711e4",
+      "explorerUrl": "https://arbiscan.io/address/0xcEcabED130B96B8F496c3B6D1Fe5A7556C0AB563#code",
+      "contract": "contracts/EmergencyHandler.sol:EmergencyHandler",
+      "constructorArguments": [
+        "0x145833173cc47Fde624Be8cc4f391eeA07b82a16"
+      ],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 22407,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "liquidityManager",
+      "label": "LiquidityManager",
+      "address": "0x80fB731B78D2C7180cd22eCF18Dc4243546ce192",
+      "deploymentTransaction": "0x9cf541736e06f98f7fc723b7206d941811d64b0a1550b07037644d7c4ba10879",
+      "explorerUrl": "https://arbiscan.io/address/0x80fB731B78D2C7180cd22eCF18Dc4243546ce192#code",
+      "contract": "contracts/Liquiditymanager.sol:LiquidityManager",
+      "constructorArguments": [
+        "0x145833173cc47Fde624Be8cc4f391eeA07b82a16",
+        "USDC"
+      ],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 21937,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "protocolManager",
+      "label": "ProtocolManager",
+      "address": "0x91fEc8f3161504Dd20c2Ed58B8E6003854AC5A8D",
+      "deploymentTransaction": "0x0e75b900ceebb47fdfa9f8e147346dbd6e690be6d9b2ccd5075eb4fe1505e3a1",
+      "explorerUrl": "https://arbiscan.io/address/0x91fEc8f3161504Dd20c2Ed58B8E6003854AC5A8D#code",
+      "contract": "contracts/ProtocolManager.sol:ProtocolManager",
+      "constructorArguments": [
+        "0x145833173cc47Fde624Be8cc4f391eeA07b82a16"
+      ],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 14164,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "flashLoanService",
+      "label": "FlashLoanService",
+      "address": "0x3fadC547a502F5B5593f79CAe691bCDBE6332782",
+      "deploymentTransaction": "0x378a6d44e7f3026cea72cdbcb815396be971adf7c392a2cebe315357eb0f9337",
+      "explorerUrl": "https://arbiscan.io/address/0x3fadC547a502F5B5593f79CAe691bCDBE6332782#code",
+      "contract": "contracts/services/FlashLoanService.sol:FlashLoanService",
+      "constructorArguments": [
+        "0x145833173cc47Fde624Be8cc4f391eeA07b82a16"
+      ],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 6930,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "aaveV3Registry",
+      "label": "AaveV3Registry",
+      "address": "0x92141Fc608C240BF08c36700E968681536374b61",
+      "deploymentTransaction": "0xf4a7ad898a0f760112a527ffb1a2b275a2ee8f8954fbe1a63573722dc64d7175",
+      "explorerUrl": "https://arbiscan.io/address/0x92141Fc608C240BF08c36700E968681536374b61#code",
+      "contract": "contracts/plugins/AaveV3Registry.sol:AaveV3Registry",
+      "constructorArguments": [],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 5789,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "aaveV3Plugin",
+      "label": "AaveV3Plugin",
+      "address": "0x9b2230464540dd1B269156c685A191fd48291447",
+      "deploymentTransaction": "0xc6eca0e0d55a1be3e2db690be88a8e0daee505b3007802ab7426d52ddc0e329c",
+      "explorerUrl": "https://arbiscan.io/address/0x9b2230464540dd1B269156c685A191fd48291447#code",
+      "contract": "contracts/plugins/AaveV3Plugin.sol:AaveV3Plugin",
+      "constructorArguments": [
+        "0x145833173cc47Fde624Be8cc4f391eeA07b82a16",
+        "USDC",
+        "0x794a61358D6845594F94dc1DB02A252b5b4814aD"
+      ],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 17536,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "aaveV3LensAdapter",
+      "label": "AaveV3LensAdapter",
+      "address": "0x575C361090A2CFebEFFc21A4e5b6b541042103e5",
+      "deploymentTransaction": "0x2fb20aa13f77e6af4d62802f9ba4ced0d492bb323bf505907f4d14611bbbaa9d",
+      "explorerUrl": "https://arbiscan.io/address/0x575C361090A2CFebEFFc21A4e5b6b541042103e5#code",
+      "contract": "contracts/adapters/AaveV3LensAdapter.sol:AaveV3LensAdapter",
+      "constructorArguments": [
+        "0x145833173cc47Fde624Be8cc4f391eeA07b82a16",
+        "USDC",
+        "0x794a61358D6845594F94dc1DB02A252b5b4814aD"
+      ],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 7504,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "eulerRegistry",
+      "label": "EulerRegistry",
+      "address": "0x3bd278e926d29e6629e5792D25e76F96F0B5307b",
+      "deploymentTransaction": "0x99a0ec4685c4152a76fef81dca1c0c7f31d5024abf37c07b5cd592d1a6a8b5e6",
+      "explorerUrl": "https://arbiscan.io/address/0x3bd278e926d29e6629e5792D25e76F96F0B5307b#code",
+      "contract": "contracts/plugins/EulerRegistry.sol:EulerRegistry",
+      "constructorArguments": [],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 9344,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "eulerV2Plugin",
+      "label": "EulerV2Plugin",
+      "address": "0x31814FB423fA5578CB54a21f0e1f8561CC850A43",
+      "deploymentTransaction": "0x5927f907bf2998907acc1beae5e3f47ab7955cdbb0e4f9f0655f169774b2c421",
+      "explorerUrl": "https://arbiscan.io/address/0x31814FB423fA5578CB54a21f0e1f8561CC850A43#code",
+      "contract": "contracts/plugins/EulerV2Plugin.sol:EulerV2Plugin",
+      "constructorArguments": [
+        "0x145833173cc47Fde624Be8cc4f391eeA07b82a16",
+        "USDC",
+        "0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066",
+        "0x90a52DDcb232e7bb003DD9258fA1235c553eC956"
+      ],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 24214,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "eulerLensAdapter",
+      "label": "EulerLensAdapter",
+      "address": "0x4157890A87198A47a350D25220AD092423B1602E",
+      "deploymentTransaction": "0x1a0caca6b6655261bac4cccaea75176d80422ab364325680715b3e5605613b22",
+      "explorerUrl": "https://arbiscan.io/address/0x4157890A87198A47a350D25220AD092423B1602E#code",
+      "contract": "contracts/adapters/EulerLensAdapter.sol:EulerLensAdapter",
+      "constructorArguments": [
+        "0x145833173cc47Fde624Be8cc4f391eeA07b82a16",
+        "USDC",
+        "0x90a52DDcb232e7bb003DD9258fA1235c553eC956",
+        "0xc99FCEE6174Bc92eBe9C78690fFD5067018a8380",
+        "0xDAf44060DCe217Fd603908A49fcaa1FA900304BE",
+        "0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066"
+      ],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 18844,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "morphoRegistry",
+      "label": "MorphoRegistry",
+      "address": "0x7EFce6D2501A2C17c3fE214D2B902744Ad64fE6e",
+      "deploymentTransaction": "0x045fa1b3904211aa1c324a84d197981ae5b8bde579c488d65ab51b15e810a66c",
+      "explorerUrl": "https://arbiscan.io/address/0x7EFce6D2501A2C17c3fE214D2B902744Ad64fE6e#code",
+      "contract": "contracts/plugins/MorphoRegistry.sol:MorphoRegistry",
+      "constructorArguments": [],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 5865,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "morphoPlugin",
+      "label": "MorphoPlugin",
+      "address": "0x13984c992CE512901F8eCe91aDa4c3A2F7EEEe05",
+      "deploymentTransaction": "0x3315a77d89e52acd03878b817651f4e42029781f698fc514892936966c9d2bb9",
+      "explorerUrl": "https://arbiscan.io/address/0x13984c992CE512901F8eCe91aDa4c3A2F7EEEe05#code",
+      "contract": "contracts/plugins/MorphoPlugin.sol:MorphoPlugin",
+      "constructorArguments": [
+        "0x145833173cc47Fde624Be8cc4f391eeA07b82a16",
+        "USDC",
+        "0x6c247b1F6182318877311737BaC0844bAa518F5e"
+      ],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 22364,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "morphoLensAdapter",
+      "label": "MorphoLensAdapter",
+      "address": "0xdd5A283fafc621313358a5B923EC7d25fd113606",
+      "deploymentTransaction": "0x039065d84c525f44b871de19ec3a3a55848c85821b0df73868394892109bb49c",
+      "explorerUrl": "https://arbiscan.io/address/0xdd5A283fafc621313358a5B923EC7d25fd113606#code",
+      "contract": "contracts/adapters/MorphoLensAdapter.sol:MorphoLensAdapter",
+      "constructorArguments": [
+        "0x145833173cc47Fde624Be8cc4f391eeA07b82a16",
+        "USDC",
+        "0x6c247b1F6182318877311737BaC0844bAa518F5e"
+      ],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 12473,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "morphoVaultPlugin",
+      "label": "MorphoVaultPlugin",
+      "address": "0x2040a3128d6dBF5E0C19ED69411f63d11BDF13D5",
+      "deploymentTransaction": "0x68df96d09d759d35b466d72726ba99b2674fba3d61e0ec07d2f25eebfee623a0",
+      "explorerUrl": "https://arbiscan.io/address/0x2040a3128d6dBF5E0C19ED69411f63d11BDF13D5#code",
+      "contract": "contracts/plugins/MorphoVaultPlugin.sol:MorphoVaultPlugin",
+      "constructorArguments": [
+        "0x145833173cc47Fde624Be8cc4f391eeA07b82a16"
+      ],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 10888,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    },
+    {
+      "key": "morphoVaultLensAdapter",
+      "label": "MorphoVaultLensAdapter",
+      "address": "0x02D091DCde102CeC7bb8E4A45208D2DD7f81516C",
+      "deploymentTransaction": "0xc7c6e0f082d5d8ffa2a5e8dfd298f820850ffa0f26f2f5742514fb0d17f96a63",
+      "explorerUrl": "https://arbiscan.io/address/0x02D091DCde102CeC7bb8E4A45208D2DD7f81516C#code",
+      "contract": "contracts/adapters/MorphoVaultLensAdapter.sol:MorphoVaultLensAdapter",
+      "constructorArguments": [
+        "0x145833173cc47Fde624Be8cc4f391eeA07b82a16",
+        "USDC"
+      ],
+      "deploymentInputMatches": true,
+      "runtimeBytes": 6675,
+      "preflight": "PASS",
+      "explorer": "SKIPPED"
+    }
+  ]
+}

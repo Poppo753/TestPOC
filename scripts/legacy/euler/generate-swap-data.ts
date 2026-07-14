@@ -30,7 +30,7 @@ import * as path from "path";
 
 // ==================== CONFIGURATION ====================
 
-const ONEINCH_API_KEY = "j69cJtNJglZIf06DVK8qT6XvCAr5G5Ux";
+const ONEINCH_API_KEY = process.env.ONEINCH_API_KEY ?? "";
 const ONEINCH_API_URL = "https://api.1inch.dev/swap/v6.0/42161";
 const ONEINCH_ROUTER = "0x111111125421ca6dc452d289314280a0f8842a65";
 

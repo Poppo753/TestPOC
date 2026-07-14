@@ -39,7 +39,7 @@ const ADDRESSES = {
 };
 
 // 1inch API
-const ONE_INCH_API_KEY = "j69cJtNJglZIf06DVK8qT6XvCAr5G5Ux";
+const ONE_INCH_API_KEY = process.env.ONEINCH_API_KEY ?? "";
 
 // WETH whale with plenty of funds
 const WETH_WHALE = "0xC3E5607Cd4ca0D5Fe51e09B60Ed97a0Ae6F874dd";

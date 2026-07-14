@@ -37,7 +37,7 @@ const ADDRESSES = {
 };
 
 // 1inch API key
-const ONE_INCH_API_KEY = "j69cJtNJglZIf06DVK8qT6XvCAr5G5Ux";
+const ONE_INCH_API_KEY = process.env.ONEINCH_API_KEY ?? "";
 
 // Swapper constants (from Euler docs)
 const HANDLER_GENERIC = ethers.zeroPadValue(ethers.toUtf8Bytes("Generic"), 32);

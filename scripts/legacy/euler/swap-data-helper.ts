@@ -22,7 +22,7 @@ import * as path from "path";
 
 // ==================== CONFIGURATION ====================
 
-const ONEINCH_API_KEY = "j69cJtNJglZIf06DVK8qT6XvCAr5G5Ux";
+const ONEINCH_API_KEY = process.env.ONEINCH_API_KEY ?? "";
 const ONEINCH_API_URL = "https://api.1inch.dev/swap/v6.0/42161";
 
 // Rate limiting: 1inch free tier = 1 request/second

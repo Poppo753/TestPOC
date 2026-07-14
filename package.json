@@ -19,6 +19,7 @@
     "scripts:cli": "ts-node scripts/cli.ts",
     "automation:cli": "ts-node scripts/automation/cli.ts",
     "automation:test": "hardhat test test/automation/VaultAutomationController.test.ts",
+    "verify:poc": "hardhat run scripts/verification/verify-poc.ts --network arbitrum",
     "deploy:setup": "hardhat run scripts/deploy/setupGMXv2Plugin.ts --network arbitrum",
     "deploy:testnet": "hardhat run scripts/deploy/setupGMXv2Plugin.ts --network arbitrumSepolia",
     "test:flow": "hardhat run scripts/test/testGMXv2Flow.ts --network arbitrum"

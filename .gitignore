@@ -1,6 +1,7 @@
 node_modules
 .env
 .automation-state/
+baseline-archives/
 
 # Hardhat files
 /cache
