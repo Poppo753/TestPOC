@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "network": "arbitrum",
+  "chainId": 42161,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "baseAsset": {
+    "code": "WETH",
+    "address": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+    "decimals": 18
+  },
+  "contracts": {},
+  "protocols": {},
+  "transactions": {},
+  "metadata": {}
+}
+

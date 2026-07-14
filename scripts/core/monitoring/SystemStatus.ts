@@ -258,7 +258,7 @@ export class SystemStatusScript extends BaseScript {
       
       // Get LP token information
       try {
-        const totalSupply = await this.contracts.proxyGeneral.totalSupply();
+        const totalSupply = BigInt((await this.contracts.proxyGeneral.totalSupply()).toString());
         statusData.liquidityPool.totalSupply = totalSupply.toString();
         
         if (totalSupply > 0n && poolValue > 0n) {
@@ -301,8 +301,8 @@ export class SystemStatusScript extends BaseScript {
       // Calculate LP value in ETH
       if (userLPBalance > 0n) {
         try {
-          const poolValue = await this.contracts.valueCalculator.getTotalPoolValueView();
-          const totalSupply = await this.contracts.proxyGeneral.totalSupply();
+          const poolValue = BigInt((await this.contracts.valueCalculator.getTotalPoolValueView()).toString());
+          const totalSupply = BigInt((await this.contracts.proxyGeneral.totalSupply()).toString());
           
           if (totalSupply > 0n) {
             const userPoolShare = (userLPBalance * poolValue) / totalSupply;

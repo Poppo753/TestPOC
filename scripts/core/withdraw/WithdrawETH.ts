@@ -146,10 +146,10 @@ export class WithdrawETHScript extends BaseScript {
     if (result.success) {
       try {
         const ethBalanceAfter = await this.signer.provider.getBalance(this.signer.address);
-        const lpBalanceAfter = await this.contracts.proxyGeneral.balanceOf(this.signer.address);
+        const lpBalanceAfter = BigInt((await this.contracts.proxyGeneral.balanceOf(this.signer.address)).toString());
         
         const ethReceived = ethBalanceAfter - ethBalanceBefore;
-        const lpTokensBurned = lpBalanceBefore - lpBalanceAfter;
+        const lpTokensBurned = BigInt(lpBalanceBefore.toString()) - lpBalanceAfter;
         
         result.data = {
           ...result.data,
@@ -177,10 +177,10 @@ export class WithdrawETHScript extends BaseScript {
       
       // Verify pool state changes
       try {
-        const newPoolValue = await this.contracts.valueCalculator.getTotalPoolValueView();
+        const newPoolValue = BigInt((await this.contracts.valueCalculator.getTotalPoolValueView()).toString());
         this.logScriptInfo("New Pool Value", `${this.formatETH(newPoolValue)} ETH`);
         
-        const totalLPSupply = await this.contracts.proxyGeneral.totalSupply();
+        const totalLPSupply = BigInt((await this.contracts.proxyGeneral.totalSupply()).toString());
         this.logScriptInfo("Total LP Supply", `${this.formatETH(totalLPSupply)} LP`);
         
         // Calculate LP token price (test pattern)

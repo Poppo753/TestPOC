@@ -14,6 +14,9 @@
     "test:e2e": "powershell -ExecutionPolicy Bypass -File ./test-e2e.ps1",
     "test:gmx": "FORK_ENABLED=true hardhat test test/integration/GMXv2Plugin.e2e.test.ts --network hardhat",
     "compile": "hardhat compile",
+    "scripts:typecheck": "tsc -p tsconfig.scripts.json",
+    "scripts:test": "hardhat test test/scripts/Framework.test.ts test/scripts/Operations.test.ts test/scripts/Deployment.test.ts test/integration/scripts/Phase1.Core.test.ts",
+    "scripts:cli": "ts-node scripts/cli.ts",
     "deploy:setup": "hardhat run scripts/deploy/setupGMXv2Plugin.ts --network arbitrum",
     "deploy:testnet": "hardhat run scripts/deploy/setupGMXv2Plugin.ts --network arbitrumSepolia",
     "test:flow": "hardhat run scripts/test/testGMXv2Flow.ts --network arbitrum"
