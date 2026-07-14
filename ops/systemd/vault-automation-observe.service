@@ -11,6 +11,8 @@ User=vaultops
 Group=vaultops
 WorkingDirectory=/opt/vault-automation/TestSmartContract
 Environment=HARDHAT_NETWORK=arbitrum
+Environment=XDG_CONFIG_HOME=/opt/vault-automation/TestSmartContract/.automation-state/runtime-config
+Environment=NPM_CONFIG_CACHE=/opt/vault-automation/TestSmartContract/.automation-state/npm-cache
 EnvironmentFile=/etc/vault-automation/arbitrum-usdc-poc-1.env
 ExecStart=/usr/local/bin/npm run automation:cli -- loop --config=scripts/automation/config.arbitrum-usdc-poc-1.json
 Restart=on-failure
