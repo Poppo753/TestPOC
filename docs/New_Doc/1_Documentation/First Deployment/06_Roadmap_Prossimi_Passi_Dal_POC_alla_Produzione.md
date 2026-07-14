@@ -113,9 +113,9 @@ Associare agli indirizzi reali codice sorgente, compiler, optimizer e constructo
 
 Tutti i componenti proprietari del nuovo manifest risultano verified oppure ogni eccezione è spiegata e bloccante per il passaggio a capitale maggiore.
 
-### Stato esecuzione — 14 luglio 2026
+### Stato esecuzione — 15 luglio 2026
 
-Preflight RPC completato 22/22 senza failure. La pubblicazione dei sorgenti su Explorer è pending perché espone codice del repository privato e richiede consenso esplicito dopo l'informativa. La fase non è marcata completa.
+Fase completa. Preflight RPC 22/22 PASS e pubblicazione sorgenti 22/22 VERIFIED su Arbiscan. Il secondo passaggio idempotente ha riconosciuto tutti gli indirizzi come già verificati. Nessuna transazione è stata inviata. La toolchain è stata migrata dalla API V1 deprecata alla Etherscan API V2, selezionando Arbitrum One tramite chain ID `42161`; questo nome tecnico non cambia l'explorer pubblico, che resta Arbiscan.
 
 ## 6. Fase 2 — Eseguire observe supervisionato per 24–72 ore
 

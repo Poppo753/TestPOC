@@ -10,8 +10,9 @@ Ordine di lettura:
 4. `03_Registro_Esecuzione.md`;
 5. `04_Matrice_Verifica_22_Contratti.md`;
 6. `05_Guida_Riesecuzione.md`;
-7. `06_Sicurezza_Dipendenze_e_Segreti.md`.
+7. `06_Sicurezza_Dipendenze_e_Segreti.md`;
+8. `07_Arbiscan_API_V2_e_Risultato.md`.
 
 Il commit `8f53e98` identifica l'esecuzione storica del deployment. Il tag identifica la baseline certificata e riproducibile, con albero Solidity invariato rispetto a quel commit.
 
-Pubblicazione: branch `dev-26`, tag `arbitrum-usdc-poc-1` e draft PR [#5](https://github.com/Poppo753/TestPOC/pull/5). La fase 1 resta aperta esclusivamente per la pubblicazione dei sorgenti su Explorer.
+Pubblicazione: branch `dev-26`, tag `arbitrum-usdc-poc-1` e draft PR [#5](https://github.com/Poppo753/TestPOC/pull/5). La fase 1 è completa: preflight 22/22 e sorgenti 22/22 pubblicati su Arbiscan il 15 luglio 2026.

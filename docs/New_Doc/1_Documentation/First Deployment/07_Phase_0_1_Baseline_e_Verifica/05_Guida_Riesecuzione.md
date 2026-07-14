@@ -16,6 +16,8 @@ npm run automation:test
 
 La `.npmrc` applica automaticamente `legacy-peer-deps=true`, necessario per riprodurre il lockfile attuale.
 
+La verifica Arbiscan richiede Hardhat `2.28.6` e `@nomicfoundation/hardhat-verify` `2.1.3` come registrati nel lockfile. Queste versioni usano Etherscan API V2; `ARBITRUM_ETHERSCAN_API_KEY` resta il nome storico della variabile ma la rete selezionata è Arbitrum One e gli URL finali sono Arbiscan.
+
 ## Preflight read-only dei 22 contratti
 
 ```powershell

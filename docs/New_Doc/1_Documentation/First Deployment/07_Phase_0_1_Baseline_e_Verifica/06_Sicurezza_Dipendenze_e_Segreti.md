@@ -25,14 +25,14 @@ Risultato più recente:
 | Scope | Low | Moderate | High | Critical | Totale |
 |---|---:|---:|---:|---:|---:|
 | Production (`--omit=dev`) | 10 | 3 | 4 | 0 | 17 |
-| Completo | 28 | 23 | 16 | 6 | 73 |
+| Completo | 22 | 16 | 15 | 4 | 57 |
 
 Dipendenze dirette segnalate nello scope production:
 
 - `@chainlink/contracts`: high, fix disponibile secondo npm;
 - `@uniswap/v3-periphery`: moderate, nessun fix automatico indicato.
 
-Questi numeri descrivono l'albero npm, non dimostrano da soli che i 22 runtime deployati siano sfruttabili. Molti pacchetti servono a compilazione, test o integrazioni non incluse nel POC. La remediation corretta è una fase dedicata:
+Lo scope production è rimasto a 17 advisory. Il totale della toolchain è sceso da 73 a 57 dopo l'upgrade mirato del verificatore Arbiscan; non è stato applicato alcun fix forzato. Questi numeri descrivono l'albero npm, non dimostrano da soli che i 22 runtime deployati siano sfruttabili. Molti pacchetti servono a compilazione, test o integrazioni non incluse nel POC. La remediation corretta è una fase dedicata:
 
 1. mappare ogni advisory al path di dipendenza;
 2. verificare se il codice vulnerabile è importato/compilato/usato dal POC;

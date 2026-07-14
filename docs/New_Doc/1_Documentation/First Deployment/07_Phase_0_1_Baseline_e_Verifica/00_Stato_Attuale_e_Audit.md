@@ -134,11 +134,10 @@ MorphoRegistry non viene contato due volte perché è condiviso intenzionalmente
 - `.env` e `.automation-state` non risultano tracciati.
 - È stata trovata una credenziale OneInch hardcoded in quattro file, già presente su `origin/dev-26` dal commit `5fea9a2`. I quattro literal sono stati rimossi dal worktree e sostituiti da `ONEINCH_API_KEY` di ambiente. La credenziale storica deve essere revocata/ruotata prima di considerarla utilizzabile.
 - Audit npm production: 17 advisory transitivi (10 low, 3 moderate, 4 high, 0 critical); diretti: `@chainlink/contracts` high e `@uniswap/v3-periphery` moderate. Non equivalgono automaticamente a vulnerabilità del bytecode deployato e richiedono un assessment separato prima della produzione.
-- Audit npm complessivo, inclusi tool di sviluppo: 73 advisory (28 low, 23 moderate, 16 high, 6 critical). Non è stato eseguito `npm audit fix --force`, perché cambierebbe la baseline senza analisi.
+- Audit npm complessivo dopo l'upgrade mirato del verificatore: 57 advisory (22 low, 16 moderate, 15 high, 4 critical). Non è stato eseguito `npm audit fix --force`.
 
 ## Blocchi esterni ancora aperti
 
-1. L'upload dei sorgenti a Explorer rende pubblico codice di un repository privato: la piattaforma richiede approvazione esplicita dell'utente dopo questa informativa.
-2. L'archivio finale può essere prodotto solo dopo la creazione del commit/tag definitivo.
+I precedenti blocchi di pubblicazione sono risolti: repository pubblico, branch/tag/PR pubblicati, archivio prodotto e autorizzazione Arbiscan ricevuta. La verifica pubblica è completata 22/22. Resta soltanto la copia fisica degli archivi su storage separato, che non può essere certificata dal repository locale.
 
 Il 15 luglio 2026 `gh 2.96.0` è stato installato e autenticato come `Poppo753`. Il remoto risolto è `Poppo753/TestPOC`, repository pubblico con default branch `master`; il precedente blocco GitHub è quindi risolto.

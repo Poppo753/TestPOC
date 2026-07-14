@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-14T18:27:55.585Z",
+  "generatedAt": "2026-07-14T22:24:46.710Z",
   "manifest": "scripts/manifests/arbitrum-usdc-poc-1.json",
   "network": "arbitrum",
   "chainId": 42161,
-  "mode": "preflight-only",
+  "mode": "explorer-verification",
   "summary": {
     "total": 22,
     "preflightPassed": 22,
-    "verified": 0,
+    "verified": 22,
     "alreadyVerified": 0,
-    "skipped": 22,
+    "skipped": 0,
     "failed": 0
   },
   "results": [
@@ -25,7 +25,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 7111,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "proxyGeneral",
@@ -41,7 +41,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 13098,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "chainlinkAdapter",
@@ -54,7 +54,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 8011,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "tokenManager",
@@ -70,7 +70,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 10447,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "valueCalculator",
@@ -86,7 +86,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 13935,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "swapManager",
@@ -102,7 +102,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 24473,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "parameterManager",
@@ -118,7 +118,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 13375,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "emergencyHandler",
@@ -133,7 +133,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 22407,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "liquidityManager",
@@ -149,7 +149,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 21937,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "protocolManager",
@@ -164,7 +164,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 14164,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "flashLoanService",
@@ -179,7 +179,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 6930,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "aaveV3Registry",
@@ -192,7 +192,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 5789,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "aaveV3Plugin",
@@ -209,7 +209,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 17536,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "aaveV3LensAdapter",
@@ -226,7 +226,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 7504,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "eulerRegistry",
@@ -239,7 +239,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 9344,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "eulerV2Plugin",
@@ -257,7 +257,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 24214,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "eulerLensAdapter",
@@ -277,7 +277,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 18844,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "morphoRegistry",
@@ -290,7 +290,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 5865,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "morphoPlugin",
@@ -307,7 +307,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 22364,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "morphoLensAdapter",
@@ -324,7 +324,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 12473,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "morphoVaultPlugin",
@@ -339,7 +339,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 10888,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     },
     {
       "key": "morphoVaultLensAdapter",
@@ -355,7 +355,7 @@
       "deploymentInputMatches": true,
       "runtimeBytes": 6675,
       "preflight": "PASS",
-      "explorer": "SKIPPED"
+      "explorer": "VERIFIED"
     }
   ]
 }

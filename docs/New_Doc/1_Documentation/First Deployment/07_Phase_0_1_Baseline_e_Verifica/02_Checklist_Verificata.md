@@ -40,7 +40,7 @@ Legenda: `[x]` completato; `[ ]` da eseguire; `[!]` fallito/bloccato; `[~]` in c
 - [x] Registrare l'evidenza già conclusa delle suite unit/integration/E2E/fork rilevanti, escluse GMX/Dolomite.
 - [x] Verificare runtime SwapManager sotto EIP-170: 24.473 byte.
 - [!] Classificare audit npm: completata la discovery; remediation da pianificare senza alterare alla cieca la baseline.
-- [ ] Registrare hash commit e checksum file critici.
+- [x] Registrare hash commit e checksum file critici.
 
 ## D. Archivio baseline
 
@@ -49,7 +49,7 @@ Legenda: `[x]` completato; `[ ]` da eseguire; `[!]` fallito/bloccato; `[~]` in c
 - [x] Generare SHA-256 degli archivi e del manifest.
 - [x] Creare istruzioni di restore.
 - [x] Registrare percorso locale del pacchetto: `baseline-archives/`.
-- [ ] Segnalare che la copia offline fisica resta responsabilità dell'utente.
+- [x] Segnalare che la copia offline fisica resta responsabilità dell'utente.
 
 ## E. Tooling verifica explorer
 
@@ -75,16 +75,18 @@ Legenda: `[x]` completato; `[ ]` da eseguire; `[!]` fallito/bloccato; `[~]` in c
 
 ## G. Source verification
 
-Blocco comune: la verifica pubblica espone i sorgenti del repository privato. Serve approvazione esplicita dell'utente dopo l'informativa; il preflight tecnico è 22/22 PASS.
+L'utente ha autorizzato esplicitamente la pubblicazione su Arbiscan. Il backend tecnico è Etherscan API V2 con `chainId = 42161`; l'explorer pubblico e tutti gli URL sono Arbiscan.
 
-- [ ] Verificare 11 core.
-- [ ] Verificare 3 Aave.
-- [ ] Verificare 3 Euler.
-- [ ] Verificare 3 Morpho.
-- [ ] Verificare 2 Morpho Vault.
-- [ ] Registrare risultato per ogni contratto.
-- [ ] Registrare URL explorer.
-- [ ] Rieseguire in modo idempotente per confermare `already verified`.
+- [x] Verificare 11 core.
+- [x] Verificare 3 Aave.
+- [x] Verificare 3 Euler.
+- [x] Verificare 3 Morpho.
+- [x] Verificare 2 Morpho Vault.
+- [x] Registrare risultato per ogni contratto.
+- [x] Registrare URL explorer.
+- [x] Rieseguire in modo idempotente e confermare che tutti e 22 risultino già verificati.
+- [x] Migrare il tooling locale dalla API V1 deprecata alla API V2 supportata da Arbiscan.
+- [x] Ripetere compile, typecheck e suite operative dopo l'upgrade del tooling.
 
 ## H. Git e GitHub
 

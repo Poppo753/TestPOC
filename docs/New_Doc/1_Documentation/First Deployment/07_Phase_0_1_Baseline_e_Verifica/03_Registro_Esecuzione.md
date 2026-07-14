@@ -20,8 +20,11 @@ Data: 14 luglio 2026. Rete: Arbitrum One, chain ID 42161.
 | Typecheck script | PASS |
 | Suite script | PASS, 39 |
 | Suite automation | PASS, 14 |
+| `npm ci` dopo upgrade verificatore | PASS, 757 package installati dal lockfile |
 
 La `.npmrc` aggiunta rende `legacy-peer-deps=true` una policy esplicita e riproducibile. Non aggiorna né risolve diversamente il lockfile.
+
+Dopo la migrazione del verificatore Arbiscan il clean-room è stato ripetuto sul nuovo lockfile: installazione, compile, typecheck, 39 test script e 14 test automation sono passati nuovamente.
 
 ## Evidenza test preesistente sulla stessa baseline Solidity
 
@@ -42,9 +45,24 @@ Eseguito alle `2026-07-14T18:21:12.229Z` tramite `scripts/verification/verify-po
 
 Report machine-readable: `reports/verification/arbitrum-usdc-poc-1.json`.
 
-## Source verification pubblica
+## Source verification pubblica — 15 luglio 2026
 
-Non eseguita. La piattaforma ha respinto il primo tentativo perché avrebbe caricato sorgenti privati e constructor arguments su un Explorer pubblico. Serve consenso esplicito dell'utente dopo questa informativa. Nessuna transazione blockchain è necessaria e la private key non viene letta dal verificatore.
+L'utente ha autorizzato esplicitamente la pubblicazione. Il primo tentativo tecnico, eseguito con la vecchia integrazione locale, ha restituito errore su tutti i contratti perché Etherscan API V1 è stata dismessa. Non era un errore del bytecode, dei constructor arguments o della rete e quel tentativo non ha pubblicato nulla.
+
+Il solo tooling di sviluppo è stato aggiornato a Hardhat `2.28.6` e `@nomicfoundation/hardhat-verify` `2.1.3`, compatibili con Etherscan API V2. Arbitrum One è stata selezionata con chain ID `42161`; la destinazione pubblica è Arbiscan.
+
+Risultato finale:
+
+- preflight: 22/22 PASS;
+- sorgenti verificati su Arbiscan: 22/22;
+- failure residue: 0;
+- input di creazione uguale ad artifact più constructor arguments: 22/22;
+- URL Arbiscan unici registrati: 22;
+- secondo passaggio idempotente: 22/22 già verificati;
+- transazioni inviate: 0;
+- private key letta dal verificatore: no.
+
+Il report machine-readable aggiornato è `reports/verification/arbitrum-usdc-poc-1.json`; la matrice completa è in `04_Matrice_Verifica_22_Contratti.md`.
 
 ## Sicurezza e dipendenze
 
@@ -52,15 +70,15 @@ Non eseguita. La piattaforma ha respinto il primo tentativo perché avrebbe cari
 - `.automation-state`: non tracciata.
 - Credenziale OneInch hardcoded: rimossa da quattro file correnti; già presente nella storia/remoto, quindi da revocare e ruotare.
 - Audit production: 17 advisory, nessun critical.
-- Audit completo toolchain: 73 advisory, 6 critical.
+- Audit completo toolchain dopo l'upgrade del verificatore: 57 advisory, 4 critical.
 - Nessun `audit fix --force` applicato.
 
 ## Gate
 
 - Fase 0 tecnica: COMPLETA. Branch, tag e draft PR sono pubblicati; archive e checksum sono prodotti localmente.
 - Gate copia fisicamente offline: ancora a carico dell'utente; il pacchetto locale non equivale a storage separato.
-- Fase 1 tecnica: preflight PASS 22/22; verifica pubblica Explorer aperta.
-- Passaggio alla fase 2: non ancora autorizzato da questo registro.
+- Fase 1 tecnica: COMPLETA, preflight PASS 22/22 e Arbiscan VERIFIED 22/22.
+- Il gate tecnico per il passaggio alla fase 2 è superato; la fase 2 resta un'attività operativa separata.
 
 ## Pubblicazione e archivio — 15 luglio 2026
 
