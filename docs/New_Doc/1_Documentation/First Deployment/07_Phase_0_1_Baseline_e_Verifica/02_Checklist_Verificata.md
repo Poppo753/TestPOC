@@ -44,11 +44,11 @@ Legenda: `[x]` completato; `[ ]` da eseguire; `[!]` fallito/bloccato; `[~]` in c
 
 ## D. Archivio baseline
 
-- [ ] Creare source archive dal commit baseline certificato.
-- [ ] Preparare bundle artifact/build-info senza segreti.
-- [ ] Generare SHA-256 degli archivi e del manifest.
-- [ ] Creare istruzioni di restore.
-- [ ] Registrare percorso locale del pacchetto.
+- [x] Creare source archive dal commit baseline certificato.
+- [x] Preparare bundle artifact/build-info senza segreti.
+- [x] Generare SHA-256 degli archivi e del manifest.
+- [x] Creare istruzioni di restore.
+- [x] Registrare percorso locale del pacchetto: `baseline-archives/`.
 - [ ] Segnalare che la copia offline fisica resta responsabilità dell'utente.
 
 ## E. Tooling verifica explorer
@@ -91,21 +91,21 @@ Blocco comune: la verifica pubblica espone i sorgenti del repository privato. Se
 - [x] GitHub CLI disponibile: `gh 2.96.0`.
 - [x] GitHub CLI autenticata come `Poppo753`.
 - [x] Confermare repository remoto `Poppo753/TestPOC`, pubblico, default branch `master`.
-- [ ] Commit separato dello spostamento Prompt.
-- [ ] Commit documenti/tooling/evidenze fasi 0–1.
-- [ ] Verificare che l'albero `contracts/` finale sia identico a `8f53e98`.
-- [ ] Creare tag annotato `arbitrum-usdc-poc-1` sul commit baseline certificato.
-- [ ] Verificare target del tag.
-- [ ] Push `dev-26`.
-- [ ] Push tag.
-- [ ] Aprire o aggiornare draft PR verso default branch.
-- [ ] Registrare URL PR e commit remoti.
+- [x] Commit separato dello spostamento Prompt: `e9cc57f`.
+- [x] Commit documenti/tooling/evidenze fasi 0–1: `fc30b25`.
+- [x] Verificare che l'albero `contracts/` finale sia identico a `8f53e98`.
+- [x] Creare tag annotato `arbitrum-usdc-poc-1` sul commit baseline certificato.
+- [x] Verificare target del tag: `fc30b25`.
+- [x] Push `dev-26`.
+- [x] Push tag.
+- [x] Aprire draft PR verso `master`: `Poppo753/TestPOC#5`.
+- [x] Registrare URL PR e commit remoti.
 
 ## I. Documentazione finale
 
 - [x] Creare registro esecuzione con timestamp e risultati.
 - [x] Creare matrice verification completa per il preflight e colonne Explorer predisposte.
 - [x] Creare guida per rerun.
-- [ ] Aggiornare roadmap/checklist principale.
-- [ ] Riesaminare checklist contro strategia.
-- [ ] Dichiarare con precisione gate completi e blocchi residui.
+- [x] Aggiornare roadmap/checklist principale.
+- [x] Riesaminare checklist contro strategia.
+- [x] Dichiarare con precisione gate completi e blocchi residui.

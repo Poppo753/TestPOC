@@ -13,3 +13,5 @@ Ordine di lettura:
 7. `06_Sicurezza_Dipendenze_e_Segreti.md`.
 
 Il commit `8f53e98` identifica l'esecuzione storica del deployment. Il tag identifica la baseline certificata e riproducibile, con albero Solidity invariato rispetto a quel commit.
+
+Pubblicazione: branch `dev-26`, tag `arbitrum-usdc-poc-1` e draft PR [#5](https://github.com/Poppo753/TestPOC/pull/5). La fase 1 resta aperta esclusivamente per la pubblicazione dei sorgenti su Explorer.

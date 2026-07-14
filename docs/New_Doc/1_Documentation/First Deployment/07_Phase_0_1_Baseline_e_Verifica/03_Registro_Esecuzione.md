@@ -57,6 +57,21 @@ Non eseguita. La piattaforma ha respinto il primo tentativo perché avrebbe cari
 
 ## Gate
 
-- Fase 0 tecnica: build/test/preflight PASS; tag, archive finale e pubblicazione GitHub vengono completati nella chiusura del workflow.
+- Fase 0 tecnica: COMPLETA. Branch, tag e draft PR sono pubblicati; archive e checksum sono prodotti localmente.
+- Gate copia fisicamente offline: ancora a carico dell'utente; il pacchetto locale non equivale a storage separato.
 - Fase 1 tecnica: preflight PASS 22/22; verifica pubblica Explorer aperta.
 - Passaggio alla fase 2: non ancora autorizzato da questo registro.
+
+## Pubblicazione e archivio — 15 luglio 2026
+
+- Repository: `https://github.com/Poppo753/TestPOC` (pubblico).
+- Branch: `dev-26`.
+- Commit Prompt: `e9cc57f`.
+- Commit baseline certificata: `fc30b25`.
+- Tag annotato: `arbitrum-usdc-poc-1` → `fc30b25`.
+- Draft PR: `https://github.com/Poppo753/TestPOC/pull/5` verso `master`.
+- Source archive: `baseline-archives/arbitrum-usdc-poc-1-source.zip`.
+- Build-info archive: `baseline-archives/arbitrum-usdc-poc-1-build-info.zip`.
+- SHA-256 source: `af97096cfae4e34172b379ae6c4b44222d15f04f9454fd633c0e32ee382d4cb0`.
+- SHA-256 build-info: `5291b986d0398b4a703e5c3b0b35218e34024825860bc4834705df593294eabf`.
+- Controllo archive: `.env` assente; `.automation-state` assente.
