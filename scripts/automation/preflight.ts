@@ -17,6 +17,11 @@ export interface AutomationPreflightReport {
 
 const OWNER_ABI = new Interface(["function owner() view returns (address)"]);
 const PROTOCOL_ABI = new Interface(["function getProtocolInfo(string) view returns (tuple(address plugin,address lensAdapter,address registry,bool isActive,uint256 registeredAt))"]);
+const INTER_VAULT_REGISTRY_ABI = new Interface([
+  "function getPositionHolder() view returns (address)",
+  "function getChildCount() view returns (uint256)",
+]);
+const INTER_VAULT_LENS_ABI = new Interface(["function getTotalValue() view returns (uint256)"]);
 const SUPPORTED_KINDS = new Set(["aave", "euler", "morpho-vault"]);
 
 /**
@@ -67,6 +72,23 @@ export async function runAutomationPreflight(runtime: ScriptRuntime, config: Aut
     await codeCheck(`PROTOCOL_${policy.name}_LENS`, `${policy.name} lens`, protocol.lensAdapter);
     if (protocol.registry) await codeCheck(`PROTOCOL_${policy.name}_REGISTRY`, `${policy.name} registry`, protocol.registry);
     else warning(`PROTOCOL_${policy.name}_REGISTRY`, `${policy.name} has no registry address in manifest`);
+    if (protocol.kind === "inter-vault" && protocol.registry) {
+      try {
+        const holderRaw = await runtime.provider.call({ to: protocol.registry, data: INTER_VAULT_REGISTRY_ABI.encodeFunctionData("getPositionHolder") });
+        const holder = getAddress(String(INTER_VAULT_REGISTRY_ABI.decodeFunctionResult("getPositionHolder", holderRaw)[0]));
+        if (holder !== getAddress(protocol.plugin)) fail(`PROTOCOL_${policy.name}_HOLDER`, "InterVault Registry position holder differs from Plugin", { holder, plugin: protocol.plugin });
+        else pass(`PROTOCOL_${policy.name}_HOLDER`, "InterVault Registry position holder matches Plugin");
+        const countRaw = await runtime.provider.call({ to: protocol.registry, data: INTER_VAULT_REGISTRY_ABI.encodeFunctionData("getChildCount") });
+        const count = BigInt(INTER_VAULT_REGISTRY_ABI.decodeFunctionResult("getChildCount", countRaw)[0]);
+        if (count === 0n) warning(`PROTOCOL_${policy.name}_CHILDREN`, "InterVault has no canonical child registered");
+        else pass(`PROTOCOL_${policy.name}_CHILDREN`, "InterVault canonical children are registered", { count: count.toString() });
+        const valueRaw = await runtime.provider.call({ to: protocol.lensAdapter, data: INTER_VAULT_LENS_ABI.encodeFunctionData("getTotalValue") });
+        const value = BigInt(INTER_VAULT_LENS_ABI.decodeFunctionResult("getTotalValue", valueRaw)[0]);
+        pass(`PROTOCOL_${policy.name}_VALUATION`, "InterVault Lens valuation completed without fallback", { value: value.toString() });
+      } catch (error) {
+        fail(`PROTOCOL_${policy.name}_INTEGRITY`, "InterVault Registry/Lens integrity check failed", { error: error instanceof Error ? error.message : String(error) });
+      }
+    }
   }
 
   const manager = runtime.manifest.contracts.protocolManager;

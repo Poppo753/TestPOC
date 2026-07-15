@@ -47,12 +47,16 @@ describe("Operational scripts: deployment", function () {
     await deployBundle(require("hardhat"), { kind: "euler", manifest, manifestPath, execute: true, addresses: { evc: external, accountLens: external, vaultLens: external, utilsLens: external } });
     await deployBundle(require("hardhat"), { kind: "morpho", manifest, manifestPath, execute: true, addresses: { morpho: external } });
     await deployBundle(require("hardhat"), { kind: "morpho-vault", manifest, manifestPath, execute: true, addresses: {} });
-    expect(Object.keys(manifest.protocols)).to.have.members(["AaveV3", "EulerV2", "Morpho", "MorphoVault"]);
+    await deployBundle(require("hardhat"), { kind: "inter-vault", manifest, manifestPath, execute: true, addresses: {} });
+    expect(manifest.metadata.vaultId).to.match(/^0x[0-9a-fA-F]{64}$/);
+    expect(Object.keys(manifest.protocols)).to.have.members(["AaveV3", "EulerV2", "Morpho", "MorphoVault", "InterVault"]);
     expect(manifest.contracts.uniswapV3PluginDirect).to.match(/^0x[0-9a-fA-F]{40}$/);
     const beacon = await ethers.getContractAt("Beacon", manifest.contracts.beacon);
-    for (const name of ["AaveV3", "EulerV2", "Morpho", "MorphoVault"] as const) {
+    for (const name of ["AaveV3", "EulerV2", "Morpho", "MorphoVault", "InterVault"] as const) {
       expect(await beacon.getImplementation(name)).to.equal(manifest.protocols[name].plugin);
     }
+    expect(await beacon.getImplementation("InterVaultRegistry")).to.equal(manifest.contracts.interVaultRegistry);
+    expect(await beacon.getImplementation("InterVaultLensAdapter")).to.equal(manifest.contracts.interVaultLensAdapter);
     const eulerRegistry = await ethers.getContractAt("EulerRegistry", manifest.contracts.eulerRegistry);
     expect(await eulerRegistry.positionManagers(manifest.contracts.eulerV2Plugin)).to.equal(true);
     expect(await eulerRegistry.owner()).to.not.equal(manifest.contracts.eulerV2Plugin);

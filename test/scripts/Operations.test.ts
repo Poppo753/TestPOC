@@ -14,6 +14,7 @@ import { executeProtocolAction, readProtocolPosition } from "../../scripts/opera
 import { depositToVault } from "../../scripts/operations/vault/deposit";
 import { withdrawFromVault } from "../../scripts/operations/vault/withdraw";
 import { swapVaultAssets } from "../../scripts/operations/vault/swap";
+import { getInterVaultPositions, preflightInterVault, registerInterVaultChild, updateInterVaultPolicy, updateInterVaultStatus } from "../../scripts/operations/metavault/inter-vault";
 import { deployScriptTestFixture, ScriptTestHelpers } from "../integration/scripts/fixtures";
 
 describe("Operational scripts: local integration", function () {
@@ -198,5 +199,54 @@ describe("Operational scripts: local integration", function () {
     const result = await transferRegistryOwnership(runtime, "aaveV3Registry", await nextOwner.getAddress());
     expect(result.success, JSON.stringify(result.error)).to.equal(true);
     expect(await registry.owner()).to.equal(await nextOwner.getAddress());
+  });
+
+  it("registers and operates a canonical InterVault child through neutral script plans", async function () {
+    const parentId = ethers.id("script-parent");
+    const childId = ethers.id("script-child-weth");
+    const registry = await (await ethers.getContractFactory("InterVaultRegistry")).deploy(await fixture.beacon.getAddress(), parentId);
+    const plugin = await (await ethers.getContractFactory("InterVaultPlugin")).deploy(
+      await fixture.beacon.getAddress(), await registry.getAddress(), "WETH"
+    );
+    const lens = await (await ethers.getContractFactory("InterVaultLensAdapter")).deploy(
+      await fixture.beacon.getAddress(), await registry.getAddress(), await plugin.getAddress(), "WETH"
+    );
+    await registry.setPositionHolder(await plugin.getAddress());
+    setContract(runtime.manifest, "interVaultRegistry", await registry.getAddress());
+    setContract(runtime.manifest, "interVaultPlugin", await plugin.getAddress());
+    setContract(runtime.manifest, "interVaultLensAdapter", await lens.getAddress());
+    runtime.manifest.protocols.InterVault = {
+      plugin: await plugin.getAddress() as Address,
+      lensAdapter: await lens.getAddress() as Address,
+      registry: await registry.getAddress() as Address,
+      active: true,
+      kind: "inter-vault",
+    };
+
+    const registered = await registerInterVaultChild(runtime, {
+      childId,
+      tokenCode: "WETH",
+      assetId: ethers.id("WETH"),
+      childBeacon: await fixture.beacon.getAddress() as Address,
+      liquidityManager: await fixture.liquidityManager.getAddress() as Address,
+      shareToken: await fixture.proxyGeneral.getAddress() as Address,
+      valueCalculator: await fixture.valueCalculator.getAddress() as Address,
+      baseAsset: await fixture.mockWETH.getAddress() as Address,
+      manifestHash: ethers.id("script-child-manifest"),
+      assetDecimals: 18,
+      maxExposureBps: 2_500,
+      maxShareDeviationBps: 100,
+      exitPriority: 10,
+      maxDepositAssets: ethers.parseEther("10"),
+    });
+    expect(registered.success, JSON.stringify(registered.error)).to.equal(true);
+    expect((await updateInterVaultPolicy(runtime, { childId, maxExposureBps: 3_000, maxDepositAssets: ethers.parseEther("20"), maxShareDeviationBps: 50, exitPriority: 5 })).success).to.equal(true);
+    expect((await updateInterVaultStatus(runtime, { childId, active: false, depositsEnabled: false, withdrawalsEnabled: true, emergencyOnly: false })).success).to.equal(true);
+
+    const preflight = await preflightInterVault(runtime);
+    expect(preflight).to.deep.equal({ valid: true, findings: [] });
+    const positions = await getInterVaultPositions(runtime);
+    expect(positions.totalValue).to.equal("0");
+    expect(positions.positions).to.have.length(1);
   });
 });

@@ -1,10 +1,10 @@
 import type { HardhatRuntimeEnvironment } from "hardhat/types";
-import { getAddress, isAddress } from "ethers";
+import { getAddress, id, isAddress } from "ethers";
 import { ConfigurationError } from "../../framework/errors";
 import type { Address, DeploymentManifest, ProtocolManifest } from "../../framework/types";
 import { CheckpointDeployer } from "./deployer";
 
-export type SupportedBundle = "uniswap-v3" | "aave" | "euler" | "morpho" | "morpho-vault";
+export type SupportedBundle = "uniswap-v3" | "aave" | "euler" | "morpho" | "morpho-vault" | "inter-vault";
 
 export interface BundleDeploymentInput {
   kind: SupportedBundle | "dolomite" | "gmx";
@@ -21,6 +21,9 @@ const PM_ABI = ["function owner() view returns(address)", "function getProtocolI
 const EULER_REGISTRY_ABI = [
   "function positionManagers(address) view returns(bool)",
   "function setPositionManager(address,bool)",
+] as const;
+const INTER_VAULT_REGISTRY_ABI = [
+  "function setPositionHolder(address)",
 ] as const;
 
 async function registerBeacon(d: CheckpointDeployer, moduleName: string, address: Address): Promise<void> {
@@ -52,7 +55,7 @@ async function registerProtocol(d: CheckpointDeployer, name: string, protocol: P
 /** Deploys only supported, current protocol bundles. Registry data is configured separately before ownership transfer. */
 export async function deployBundle(hre: HardhatRuntimeEnvironment, input: BundleDeploymentInput): Promise<DeploymentManifest> {
   if (input.kind === "dolomite" || input.kind === "gmx") throw new ConfigurationError(`${input.kind} is intentionally unsupported: the plugin is unfinished`);
-  if (!["uniswap-v3", "aave", "euler", "morpho", "morpho-vault"].includes(input.kind)) throw new ConfigurationError(`Unknown bundle kind: ${String(input.kind)}`);
+  if (!["uniswap-v3", "aave", "euler", "morpho", "morpho-vault", "inter-vault"].includes(input.kind)) throw new ConfigurationError(`Unknown bundle kind: ${String(input.kind)}`);
   if (!input.execute) throw new ConfigurationError("Bundle deployment requires EXECUTE=true");
   const network = await hre.ethers.provider.getNetwork();
   if (input.manifest.chainId !== Number(network.chainId)) throw new ConfigurationError("Manifest and provider chain IDs differ");
@@ -77,6 +80,29 @@ export async function deployBundle(hre: HardhatRuntimeEnvironment, input: Bundle
     const plugin = await d.deploy("uniswapV3PluginDirect", "UniswapV3PluginDirect", [await external("router"), await external("quoterV2"), input.manifest.contracts.proxyGeneral]);
     await registerBeacon(d, "UniswapV3PluginDirect", plugin);
     await authorizeProxy(d, "UniswapV3PluginDirect", plugin);
+    return d.manifest;
+  }
+
+  if (input.kind === "inter-vault") {
+    // The vault ID is metadata, not a token symbol.  A deployment may provide
+    // a stable manifest metadata.vaultId; otherwise a deterministic local ID
+    // is derived from chain and base asset without changing any core ABI.
+    const configuredId = input.manifest.metadata.vaultId;
+    const parentVaultId = typeof configuredId === "string" && /^0x[0-9a-fA-F]{64}$/.test(configuredId)
+      ? configuredId
+      : id(`metavault:${input.manifest.chainId}:${baseCode}`);
+    d.manifest.metadata.vaultId = parentVaultId;
+    const registry = await d.deploy("interVaultRegistry", "InterVaultRegistry", [beacon, parentVaultId]);
+    const plugin = await d.deploy("interVaultPlugin", "InterVaultPlugin", [beacon, registry, baseCode]);
+    const lens = await d.deploy("interVaultLensAdapter", "InterVaultLensAdapter", [beacon, registry, plugin, baseCode]);
+    const registryContract = d.contract(registry, INTER_VAULT_REGISTRY_ABI);
+    await d.send("interVaultRegistry:setPositionHolder", registryContract, "setPositionHolder", [plugin]);
+    await registerBeacon(d, "InterVaultRegistry", registry);
+    await registerBeacon(d, "InterVaultPlugin", plugin);
+    await registerBeacon(d, "InterVaultLensAdapter", lens);
+    await registerBeacon(d, "InterVault", plugin);
+    const protocol: ProtocolManifest = { plugin, lensAdapter: lens, registry, active: true, kind: "inter-vault" };
+    await registerProtocol(d, "InterVault", protocol);
     return d.manifest;
   }
 

@@ -30,4 +30,8 @@ contract MockBeacon {
     function getRegisteredModules() external view returns (string[] memory) {
         return moduleNames;
     }
+
+    function checkModuleExists(string memory moduleName) external view returns (bool) {
+        return moduleExists[moduleName];
+    }
 }

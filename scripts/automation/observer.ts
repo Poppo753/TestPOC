@@ -70,6 +70,21 @@ export async function observeVault(runtime: ScriptRuntime, config: AutomationCon
       // trusted normalized oracle. A non-zero position is rejected above.
       position = { protocolName: policy.name, tokenCode: policy.collateralTokenCode, balance: "0", debt: "0",
         healthFactor: ((1n << 256n) - 1n).toString() };
+    } else if (manifestProtocol.kind === "inter-vault") {
+      // InterVault can hold several child tokens. Reading getBalance() with
+      // only the parent base code would omit every non-base child and corrupt
+      // managedAssets. The Lens is the single normalized valuation boundary.
+      // InterVault remains monitor-only until the skip-on-Lens-error gate is
+      // closed, but all of its value must still be visible to the observer.
+      const balance = (await readContract(runtime, manifestProtocol.lensAdapter,
+        ["function getTotalValue() view returns (uint256)"], "getTotalValue"))[0] as bigint;
+      position = {
+        protocolName: policy.name,
+        tokenCode: config.baseAssetCode,
+        balance: balance.toString(),
+        debt: "0",
+        healthFactor: ((1n << 256n) - 1n).toString(),
+      };
     } else {
       position = await readProtocolPosition(runtime, policy.name, config.baseAssetCode);
     }

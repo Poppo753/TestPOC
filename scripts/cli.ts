@@ -29,6 +29,7 @@ import { executeProtocolAction, readProtocolPosition } from "./operations/protoc
 import { depositToVault } from "./operations/vault/deposit";
 import { swapVaultAssets } from "./operations/vault/swap";
 import { withdrawFromVault } from "./operations/vault/withdraw";
+import { getInterVaultPositions, preflightInterVault, registerInterVaultChild, updateInterVaultPolicy, updateInterVaultStatus } from "./operations/metavault/inter-vault";
 
 function required(args: ReturnType<typeof parseCliArguments>, key: string): string {
   return cliString(args, key, true) as string;
@@ -76,7 +77,7 @@ async function run(): Promise<unknown> {
 
   const manifest = loadManifest(manifestPath);
   const caller = cliString(args, "caller", false);
-  const readOnly = new Set(["status", "health", "positions", "position"]).has(command);
+  const readOnly = new Set(["status", "health", "positions", "position", "metavault-positions", "metavault-preflight"]).has(command);
   const runtime = await createRuntime(hre, {
     manifest,
     signerAddress: caller,
@@ -92,6 +93,8 @@ async function run(): Promise<unknown> {
     case "health": return getProtocolHealth(runtime);
     case "positions": return getPositionsByRisk(runtime);
     case "position": return readProtocolPosition(runtime, required(args, "protocol"), required(args, "token"));
+    case "metavault-positions": return getInterVaultPositions(runtime);
+    case "metavault-preflight": return preflightInterVault(runtime);
     case "deposit": return depositToVault(runtime, { amount: bigintArg(args, "amount") as bigint, wrapNative: cliBoolean(args, "wrap-native"), caller });
     case "withdraw": return withdrawFromVault(runtime, { shares: bigintArg(args, "shares", false), percentageBps: integer(args, "percentage-bps", 10_000), deadlineSeconds: integer(args, "deadline-seconds", 1_200), caller });
     case "swap": return swapVaultAssets(runtime, { tokenIn: required(args, "token-in"), tokenOut: required(args, "token-out"), amountIn: bigintArg(args, "amount") as bigint, maxSlippageBps: integer(args, "slippage-bps"), deadlineSeconds: integer(args, "deadline-seconds", 1_200) });
@@ -117,6 +120,25 @@ async function run(): Promise<unknown> {
     case "registry-euler": return configureEulerVault(runtime, required(args, "token"), address(args, "vault"));
     case "registry-morpho-market": return configureMorphoMarket(runtime, { collateralCode: required(args, "collateral"), loanCode: required(args, "loan"), collateralToken: address(args, "collateral-token"), loanToken: address(args, "loan-token"), oracle: address(args, "oracle"), irm: address(args, "irm"), lltv: bigintArg(args, "lltv") as bigint });
     case "registry-morpho-vault": return configureMorphoVault(runtime, required(args, "token"), address(args, "vault"), cliBoolean(args, "default"));
+    case "registry-inter-vault-child": return registerInterVaultChild(runtime, {
+      childId: required(args, "child-id"), tokenCode: required(args, "token"), assetId: required(args, "asset-id"),
+      childBeacon: address(args, "child-beacon"), liquidityManager: address(args, "child-liquidity-manager"),
+      shareToken: address(args, "child-share-token"), valueCalculator: address(args, "child-value-calculator"),
+      baseAsset: address(args, "child-base-asset"), manifestHash: required(args, "child-manifest-hash"),
+      assetDecimals: integer(args, "child-asset-decimals"), maxExposureBps: integer(args, "max-exposure-bps"),
+      maxShareDeviationBps: integer(args, "max-share-deviation-bps"), exitPriority: integer(args, "exit-priority"),
+      maxDepositAssets: bigintArg(args, "max-deposit-assets") as bigint,
+    });
+    case "registry-inter-vault-policy": return updateInterVaultPolicy(runtime, {
+      childId: required(args, "child-id"), maxExposureBps: integer(args, "max-exposure-bps"),
+      maxDepositAssets: bigintArg(args, "max-deposit-assets") as bigint,
+      maxShareDeviationBps: integer(args, "max-share-deviation-bps"), exitPriority: integer(args, "exit-priority"),
+    });
+    case "registry-inter-vault-status": return updateInterVaultStatus(runtime, {
+      childId: required(args, "child-id"), active: cliBoolean(args, "active"),
+      depositsEnabled: cliBoolean(args, "deposits-enabled"), withdrawalsEnabled: cliBoolean(args, "withdrawals-enabled"),
+      emergencyOnly: cliBoolean(args, "emergency-only"),
+    });
     case "registry-transfer-ownership": return transferRegistryOwnership(runtime, required(args, "registry"), address(args, "new-owner"));
     case "emergency": return setEmergencyState(runtime, cliBoolean(args, "active"), cliString(args, "reason", false));
     case "circuit-breaker": return setPluginCircuitBreaker(runtime, required(args, "plugin"), cliBoolean(args, "active"));

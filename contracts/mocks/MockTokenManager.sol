@@ -11,6 +11,7 @@ contract MockTokenManager {
     mapping(address => string) private tokenCodes;
     mapping(string => uint256) private tokenPrices;
     string[] private _activeTokens;
+    string private _baseAssetCode = "WETH";
     
     function setTokenAddress(string memory tokenCode, address tokenAddress) external {
         tokenAddresses[tokenCode] = tokenAddress;
@@ -44,12 +45,16 @@ contract MockTokenManager {
         tokenPrices[tokenCode] = price;
     }
 
+    function setBaseAssetCode(string memory tokenCode) external {
+        _baseAssetCode = tokenCode;
+    }
+
     function getTokenPriceForModule(string memory tokenCode) external view returns (uint256) {
         return tokenPrices[tokenCode];
     }
 
     function getBaseAssetPrice() external view returns (uint256) {
-        return tokenPrices["WETH"];
+        return tokenPrices[_baseAssetCode];
     }
 
     function getActiveTokens() external view returns (string[] memory) {

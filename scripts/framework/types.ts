@@ -14,7 +14,7 @@ export interface ProtocolManifest {
   lensAdapter: Address;
   registry?: Address;
   active: boolean;
-  kind: "aave" | "euler" | "morpho" | "morpho-vault" | "uniswap-v3";
+  kind: "aave" | "euler" | "morpho" | "morpho-vault" | "uniswap-v3" | "inter-vault";
 }
 
 export interface DeploymentManifest {

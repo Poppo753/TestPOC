@@ -115,7 +115,7 @@ export function validateManifest(value: DeploymentManifest): DeploymentManifest 
     if (previous && previous !== name) throw new ConfigurationError("Duplicate contract address in manifest", { address, names: [previous, name] });
     seen.set(normalized, name);
   }
-  const validKinds = new Set<ProtocolManifest["kind"]>(["aave", "euler", "morpho", "morpho-vault", "uniswap-v3"]);
+  const validKinds = new Set<ProtocolManifest["kind"]>(["aave", "euler", "morpho", "morpho-vault", "uniswap-v3", "inter-vault"]);
   for (const [name, protocol] of Object.entries(value.protocols)) {
     if (!name) throw new ConfigurationError("Protocol name cannot be empty");
     if (!isAddress(protocol.plugin) || !isAddress(protocol.lensAdapter) || (protocol.registry !== undefined && !isAddress(protocol.registry))) {
