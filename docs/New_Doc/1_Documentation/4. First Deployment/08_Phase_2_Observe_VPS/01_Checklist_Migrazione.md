@@ -45,3 +45,10 @@ Legenda: `[x]` completato; `[ ]` da completare; `[~]` in corso; `[!]` fallito.
 - [~] Osservare almeno 24 ore, preferibilmente 72.
 - [~] Censire cicli, failure, restart, heartbeat ed errori RPC.
 - [x] Non completare il gate prima della durata minima.
+
+## F. Handoff
+
+- [x] Creare runbook autosufficiente per un nuovo operatore o assistente.
+- [x] Censire host, servizio, commit, state root, heartbeat e manifest senza segreti.
+- [x] Definire raccolta read-only e criteri PASS/FAIL numerici.
+- [x] Chiarire che la documentazione non sostituisce l'accesso SSH.

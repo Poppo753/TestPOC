@@ -82,3 +82,21 @@ residuo è accettato soltanto per questa fase POC read-only, senza signer e senz
 endpoint applicativo pubblico; resta un gate esplicito prima della produzione.
 
 RPC e chiavi non devono comparire in questo documento.
+
+## Nota di handoff successiva
+
+È stato aggiunto `04_Handoff_Autosufficiente_Per_Operatore_o_Assistente.md`, con
+comandi read-only e criteri di accettazione. Le modifiche InterVault e i nuovi
+test sono per ora nel workspace locale: non sono stati automaticamente eseguiti
+come pull/deploy sulla VPS, che resta correttamente agganciata al commit
+registrato sopra e al POC privo di InterVault. Ogni aggiornamento del server
+richiederà un ciclo esplicito pull di commit revisionato, `npm ci`, compile,
+typecheck, test, preflight e restart controllato.
+
+Il 15 luglio 2026 è stata provata la raccolta SSH read-only da un nuovo contesto.
+La connessione si è fermata correttamente prima dell'autenticazione perché la
+host key non era ancora nel `known_hosts` locale. Non è stato usato
+`StrictHostKeyChecking=no`. `ssh-keyscan` ha raggiunto OpenSSH sulla porta 22 ma
+il client locale non ha negoziato il KEX necessario per estrarre la chiave.
+Pertanto la verifica indipendente della fingerprint resta aperta e nessun nuovo
+dato live è stato dichiarato senza evidenza.

@@ -679,3 +679,31 @@ Dopo i fix, la priorità di espansione è:
 2. Test di liquidazione su Morpho
 3. Cross-protocol rebalance
 4. Revisione architetturale per GMX V2 (keeper pattern)
+
+---
+
+## Addendum autorevole — InterVault, 15 luglio 2026
+
+Le sezioni precedenti descrivono l'audit storico della suite originaria e non
+censiscono la successiva implementazione InterVault. Per questo nuovo bundle la
+fonte autorevole è:
+
+`docs/New_Doc/1_Documentation/5. InterVault/08_Matrice_Copertura_Test_Aggiornata.md`.
+
+Stato verificato:
+
+- unit/componente InterVault: 16 PASS;
+- integration full-core: 2 PASS;
+- E2E automatic withdrawal locale: 1 PASS;
+- fork Arbitrum fissato al blocco `483832997`: 1 PASS;
+- suite script complessiva: 40 PASS;
+- Vault Automation Controller complessivo: 16 PASS;
+- typecheck e compilazione: PASS;
+- Dolomite e GMX restano esclusi secondo il perimetro già stabilito;
+- nessuna transazione Arbitrum reale è stata inviata durante questi test.
+
+Il fork crea un parent nuovo soltanto nello stato Hardhat e usa il POC USDC
+realmente deployato come leaf. Whale, snapshot e revert impediscono
+contaminazioni. La nuova integrazione automation è monitor-only e fallisce
+chiusa se una policy tenta di finanziare InterVault prima della chiusura del
+gate di valuation.
