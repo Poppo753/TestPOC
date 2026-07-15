@@ -25,6 +25,7 @@ I documenti in questa cartella sono organizzati come segue:
 | 08 | [08-cross-contract-consistency.md](08-cross-contract-consistency.md) | Findings di drift signature/event/error tra interfacce e impl |
 | 09 | [09-verification-report.md](09-verification-report.md) | **Verification pass rev. 2** — 21 confirmed / 1 FP / 3 partial su 25 HIGH campionati |
 | 10 | [10-additional-findings.md](10-additional-findings.md) | **Second pass rev. 2** — 32 nuovi finding non trovati nel primo pass |
+| 11 | [11-security-testing-suite/00_Stato_e_Strategia_Suite_Sicurezza.md](11-security-testing-suite/00_Stato_e_Strategia_Suite_Sicurezza.md) | Strategia revisionata e checklist per static analysis, fuzz, invariant, symbolic testing e CI |
 | 99 | [ISSUES.md](ISSUES.md) | **Issue register consolidato — 320 findings (rev. 2)** |
 
 ---
