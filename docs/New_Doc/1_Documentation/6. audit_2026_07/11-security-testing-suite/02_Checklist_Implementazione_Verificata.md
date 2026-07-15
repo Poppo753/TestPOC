@@ -13,6 +13,149 @@ Un task può essere marcato `[x]` soltanto se il deliverable indicato esiste e i
 comando di verifica è riproducibile. Questa checklist descrive l'implementazione
 futura: non autorizza deploy, transazioni, modifica ruoli o uso di chiavi.
 
+### 1.1 Protocollo obbligatorio per un chatbot/agente esecutore
+
+Prima di iniziare ogni fase, l'agente deve:
+
+- [ ] Leggere integralmente `00_Stato_e_Strategia_Suite_Sicurezza.md`.
+- [ ] Leggere integralmente `01_Strategia_Espansa_e_Riesaminata.md`.
+- [ ] Leggere integralmente questa checklist e l'eventuale registro della fase.
+- [ ] Verificare branch, HEAD e `git status` senza alterare modifiche preesistenti.
+- [ ] Identificare `AGENTS.md`, policy repository e istruzioni CI applicabili.
+- [ ] Creare/aggiornare un piano con un solo step `in_progress`.
+- [ ] Eseguire i task nell'ordine delle dipendenze, salvo motivazione registrata.
+- [ ] Non marcare task completati sulla base della sola creazione del file.
+- [ ] Registrare comando, versione, commit, risultato e artifact per ogni gate.
+- [ ] Non ridurre test, detector, run o scope per ottenere un PASS senza review.
+- [ ] Non modificare una baseline per assorbire un nuovo finding della stessa PR.
+- [ ] Non interpretare timeout, skip o tool error come test superato.
+- [ ] Non effettuare deploy, canary, proposta Safe o transazione senza autorizzazione esplicita.
+- [ ] Non usare o stampare private key, mnemonic, token RPC o secret CI.
+- [ ] Fermarsi ai gate umani elencati in §1.4.
+
+### 1.2 Path canonici dei deliverable
+
+Per evitare che agenti diversi inventino strutture incompatibili, utilizzare:
+
+```text
+security/
+├── README.md
+├── DECISIONS.md
+├── scope/
+│   ├── audit-snapshot.md
+│   ├── production-paths.txt
+│   └── exclusions.md
+├── findings/
+│   ├── schema.json
+│   ├── register.json
+│   └── accepted-risk.md
+├── properties/
+│   ├── PROPERTY_CATALOG.md
+│   └── TRACEABILITY.md
+├── slither/
+│   ├── slither.config.json
+│   ├── baseline.json
+│   └── suppressions.md
+├── echidna/
+│   ├── echidna.yaml
+│   └── README.md
+├── halmos/
+│   └── README.md
+└── reports/                 # output generato; definire cosa versionare
+
+test/foundry/
+├── unit/
+├── fuzz/
+├── invariant/
+├── handlers/
+└── mocks/
+
+.github/workflows/
+├── tests.yml                # suite Hardhat consolidata
+├── security-pr.yml
+├── security-nightly.yml
+└── security-release.yml
+```
+
+Una deviazione richiede una voce in `security/DECISIONS.md` con motivazione,
+alternative considerate e impatto sui comandi/documentazione.
+
+### 1.3 Evidenza minima per chiudere un task
+
+Ogni task tecnico completato deve riportare, nel registro di esecuzione della
+fase o nel finding associato:
+
+- ID del task;
+- commit/HEAD testato;
+- file creati o modificati;
+- comando esatto;
+- versione del tool;
+- exit code;
+- conteggio PASS/FAIL/SKIP quando applicabile;
+- path del report/counterexample;
+- eventuali warning o limiti;
+- reviewer richiesto;
+- prossimo task sbloccato.
+
+Per i task documentali serve anche un controllo incrociato con strategia e
+checklist. Per i fix serve sempre almeno una regressione che falliva prima del
+fix o una motivazione verificabile quando ciò è tecnicamente impossibile.
+
+### 1.4 Gate che richiedono decisione o autorizzazione umana
+
+Un chatbot può preparare analisi, alternative, patch e test, ma deve fermarsi
+prima di:
+
+- [ ] approvare un accepted risk o cambiarne la severity finale;
+- [ ] nominare owner/reviewer reali o modificare regole CODEOWNERS/protezione branch;
+- [ ] scegliere una semantica economica controversa tra alternative non equivalenti;
+- [ ] applicare una modifica core che cambia NAV, share, fee, prelievo o recovery senza decisione registrata;
+- [ ] installare tool con privilegi elevati o modificare infrastruttura globale;
+- [ ] aggiungere/modificare secret GitHub, RPC o credenziali VPS;
+- [ ] pubblicare report potenzialmente sensibili su GitHub code scanning;
+- [ ] proporre o eseguire una transazione Safe;
+- [ ] effettuare deploy, verifica explorer o canary Arbitrum;
+- [ ] ingaggiare/dichiarare completato un audit esterno;
+- [ ] aumentare cap o capitale;
+- [ ] dichiarare production-ready.
+
+Se il gate umano non è risolto, il task viene marcato `[!]` con blocker preciso;
+non viene sostituito da un'assunzione dell'agente.
+
+### 1.5 Decisioni tecniche che l'agente può prendere
+
+Entro il perimetro autorizzato, l'agente può:
+
+- scegliere la più recente versione stabile supportata di un tool dopo verifica
+  sulle fonti ufficiali, fissandola in `security/DECISIONS.md`;
+- creare configurazioni, harness, mock e workflow non distruttivi;
+- correggere problemi puramente meccanici o di compatibilità senza cambiare la
+  semantica economica;
+- scrivere test/PoC e classificare un finding come `candidate`;
+- proporre severity e remediation, lasciando la decisione finale al reviewer;
+- eseguire test locali e fork senza transazioni reali usando secret già
+  disponibili e senza esporli;
+- aggiornare checklist e registri con evidenze effettivamente ottenute.
+
+### 1.6 Handover minimo tra agenti o sessioni
+
+Al termine di ogni fase creare o aggiornare un registro contenente:
+
+```text
+branch e HEAD
+scope attivo
+task completati/in corso/bloccati
+file modificati
+comandi PASS/FAIL
+finding nuovi o cambiati
+decisioni ancora richieste
+artifact/corpus/counterexample
+prossimo task esatto
+```
+
+Un nuovo agente non deve ricominciare dall'inizio né fidarsi soltanto delle
+checkbox: deve confrontare evidenze, file e stato Git.
+
 Dipendenze principali:
 
 ```text
@@ -614,6 +757,7 @@ La checklist è stata riletta contro `01_Strategia_Espansa_e_Riesaminata.md`.
 | Off-chain/VAC/Safe/VPS | S10.2 | sì |
 | Documentazione | S13 | sì |
 | Accepted risk e metriche | S1, S4, S10 | sì |
+| Esecuzione da parte di agenti e handover | §1.1–1.6 | sì |
 
 Correzioni aggiunte durante il controllo finale:
 
@@ -627,6 +771,9 @@ Correzioni aggiunte durante il controllo finale:
 - sicurezza dei secret negli artifact;
 - runbook per counterexample e RPC failure;
 - ingresso futuro di Dolomite/GMX subordinato alla rimozione delle esclusioni.
+- protocollo operativo per chatbot, evidenze minime e handover;
+- path canonici per evitare strutture divergenti;
+- gate umani per semantica economica, accepted risk, Safe, deploy e canary.
 
 ## 15. Definition of Done
 
