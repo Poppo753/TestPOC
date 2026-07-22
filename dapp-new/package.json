@@ -1,0 +1,12 @@
+{
+  "name": "jethos-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "validate": "node scripts/validate-site.mjs",
+    "check:content": "node scripts/check-content.mjs",
+    "check:deployment": "node scripts/check-deployment.mjs",
+    "inspect:protocols": "node scripts/inspect-protocols.mjs",
+    "ready": "node scripts/release-readiness.mjs"
+  }
+}

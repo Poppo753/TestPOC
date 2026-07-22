@@ -1,278 +1,145 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-root=".">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
-  <meta name="googlebot" content="noindex, nofollow">
-  <title>Jethos Protocol - DeFi Strategy</title>
-  
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- Custom Tailwind Config -->
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            purple: {
-              50: '#faf5ff',
-              100: '#f3e8ff',
-              200: '#e9d5ff',
-              300: '#d8b4fe',
-              400: '#c084fc',
-              500: '#a855f7',
-              600: '#9333ea',
-              700: '#7e22ce',
-              800: '#6b21a8',
-              900: '#581c87',
-            },
-          },
-          animation: {
-            'spin': 'spin 1s linear infinite',
-            'slide-in': 'slideIn 0.3s ease-out',
-            'slide-out': 'slideOut 0.3s ease-in',
-          },
-          keyframes: {
-            slideIn: {
-              '0%': { transform: 'translateX(100%)', opacity: '0' },
-              '100%': { transform: 'translateX(0)', opacity: '1' },
-            },
-            slideOut: {
-              '0%': { transform: 'translateX(0)', opacity: '1' },
-              '100%': { transform: 'translateX(100%)', opacity: '0' },
-            },
-          },
-        },
-      },
-    }
-  </script>
-  
-  <!-- Custom Styles -->
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-        sans-serif;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
-
-    /* Custom scrollbar */
-    ::-webkit-scrollbar {
-      width: 10px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: rgba(255, 255, 255, 0.1);
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: rgba(147, 51, 234, 0.5);
-      border-radius: 5px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: rgba(147, 51, 234, 0.8);
-    }
-
-    /* Loading animation */
-    @keyframes pulse {
-      0%, 100% {
-        opacity: 1;
-      }
-      50% {
-        opacity: 0.5;
-      }
-    }
-
-    .animate-pulse {
-      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-    }
-
-    /* Gradient text */
-    .gradient-text {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    /* Glass effect */
-    .glass {
-      background: rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-    }
-
-    /* Hover glow effect */
-    .hover-glow {
-      transition: all 0.3s ease;
-    }
-
-    .hover-glow:hover {
-      box-shadow: 0 0 30px rgba(147, 51, 234, 0.5);
-    }
-
-    /* Hide number input arrows */
-    input[type=number]::-webkit-inner-spin-button,
-    input[type=number]::-webkit-outer-spin-button {
-      -webkit-appearance: none;
-      margin: 0;
-    }
-
-    input[type=number] {
-      -moz-appearance: textfield;
-    }
-
-    /* Custom animations for alerts */
-    .animate-slide-in {
-      animation: slideIn 0.3s ease-out forwards;
-    }
-
-    .animate-slide-out {
-      animation: slideOut 0.3s ease-in forwards;
-    }
-
-    /* Link styles */
-    a {
-      color: inherit;
-      text-decoration: none;
-      transition: opacity 0.2s ease;
-    }
-
-    a:hover {
-      opacity: 0.8;
-    }
-
-    /* Focus styles for accessibility */
-    *:focus {
-      outline: 2px solid rgba(147, 51, 234, 0.5);
-      outline-offset: 2px;
-    }
-
-    button:focus {
-      outline: 2px solid rgba(147, 51, 234, 0.8);
-    }
-
-    /* Skeleton Loading Styles */
-    .skeleton {
-      display: block !important;
-      position: relative;
-      overflow: hidden;
-      background: rgba(255, 255, 255, 0.15) !important;
-      border: 2px solid rgba(147, 51, 234, 0.5) !important; /* Debug border */
-      border-radius: 8px;
-      min-width: 20px;
-      min-height: 20px;
-    }
-
-    .skeleton.rectangular {
-      border-radius: 8px;
-    }
-
-    .skeleton.circular {
-      border-radius: 50%;
-    }
-
-    .skeleton.text {
-      border-radius: 4px;
-      height: 1em;
-      margin-bottom: 0.5em;
-    }
-
-    .skeleton-shimmer {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(
-        90deg,
-        rgba(244, 114, 182, 0) 0%,
-        rgba(244, 114, 182, 0.6) 50%,
-        rgba(244, 114, 182, 0) 100%
-      );
-      animation: shimmer 2s ease-in-out infinite;
-      transform: translateX(-100%);
-    }
-
-    @keyframes shimmer {
-      0% {
-        transform: translateX(-100%);
-      }
-      100% {
-        transform: translateX(200%);
-      }
-    }
-
-    .skeleton-container {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    /* Video Background */
-    #video-background {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      z-index: -1;
-      opacity: 0.95;
-    }
-
-    /* Ensure content is above video */
-    #app {
-      position: relative;
-      z-index: 1;
-      padding-top: 64px; /* Space for fixed navbar */
-    }
-  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Jethos — Home banking, rebuilt around ownership</title>
+  <meta name="description" content="A self-custodial financial home where you choose what enters a vault and can inspect the route behind invested capital.">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/layouts.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/pages.css">
+  <script type="module" src="assets/js/core/site-shell.js"></script>
+  <script type="module" src="assets/js/features/site-features.js"></script>
 </head>
-<body>
-  <!-- NavBar -->
-  <div id="navbar-root"></div>
-
-  <!-- Video Background -->
-  <video id="video-background" autoplay loop muted playsinline>
-    <source src="./20s slowed compolex backgound.mp4" type="video/mp4">
-  </video>
-
-  <!-- App Container -->
-  <div id="app"></div>
-
-  <!-- Loading Indicator (optional, shown while app initializes) -->
-  <div id="loader" style="display: none;">
-    <div class="fixed inset-0 bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 flex items-center justify-center">
-      <div class="text-center">
-        <div class="text-6xl mb-4 animate-pulse">🌊</div>
-        <h2 class="text-2xl font-bold text-white mb-2">Loading Jethos Protocol</h2>
-        <p class="text-purple-200">Connecting to Arbitrum...</p>
+<body data-page="home">
+  <div class="page-grid" aria-hidden="true"></div>
+  <div data-site-header></div>
+  <main id="main-content">
+    <section class="hero">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <span class="badge badge--poc">Private PoC · USDC Conservative · Arbitrum</span>
+          <h1>Home banking, <span class="text-gradient">rebuilt around ownership.</span></h1>
+          <p class="lede"><strong>Jethos cannot move assets you have not deposited or separately approved.</strong> When you invest, the route remains visible—from authorization to allocation and exit.</p>
+          <div class="cluster"><a class="button button--primary" href="#capital-path">See how ownership works</a><a class="button button--secondary" href="app.html">Inspect the PoC</a></div>
+          <p class="hero-text-link"><a href="pages/docs.html">Or start with the documentation →</a></p>
+          <p class="muted" style="margin-top:1rem;font-size:.8rem">Jethos is software, not a bank or a guarantee of returns. The complete financial-home experience is a product vision; the current deployment is a private proof of concept.</p>
+        </div>
+        <div class="finance-panel ownership-ledger" aria-label="Illustrative Jethos ownership ledger">
+          <div class="cluster" style="justify-content:space-between"><span class="eyebrow">Ownership ledger</span><span class="badge badge--illustrative">Illustrative</span></div>
+          <p class="muted" style="margin:.8rem 0 0">Assets visible through Jethos</p><div class="balance-total">$12,480.00</div>
+          <div class="balance-split">
+            <div class="balance-card balance-card--wallet"><span class="badge badge--live">Wallet</span><span class="metric__label" style="margin-top:.7rem">Not deposited</span><div class="metric__value">$9,200</div><small class="muted">Outside Jethos vault rules</small></div>
+            <div class="balance-card balance-card--vault"><span class="badge badge--vision">Vault</span><span class="metric__label" style="margin-top:.7rem">Explicitly invested</span><div class="metric__value">$3,280</div><small class="muted">Route and rules visible</small></div>
+          </div>
+          <div class="finance-panel__boundary"><span>Explicit authorization</span><i class="boundary-node" aria-hidden="true"></i><span>Vault deposit</span></div>
+          <div class="route-strip"><span>Wallet · 74%</span><i class="route-line" aria-hidden="true"></i><span>Vault · 26% ✓</span></div>
+          <div class="ledger-lines" aria-hidden="true"><i></i><i></i><i></i></div>
+          <p class="source-label" style="margin-top:1rem">Example interface—not live account data</p>
+        </div>
       </div>
-    </div>
-  </div>
+    </section>
 
-  <!-- NavBar Script -->
-  <script type="module">
-    import { NavBar } from './src/organisms/NavBar.js';
-    const navbar = new NavBar({ activePage: 'app', transparent: false });
-    document.getElementById('navbar-root').appendChild(navbar.render());
-  </script>
+    <section class="section section--compact" id="capital-path">
+      <div class="container">
+        <header class="section-heading reveal"><p class="eyebrow">The capital path</p><h2>Control is not a slogan. It is a sequence.</h2><p class="lede">Jethos separates what you hold, what you authorize and what the vault can do afterward.</p></header>
+        <div class="capital-path reveal" aria-label="Capital path from wallet to protocols">
+          <article class="capital-stage capital-stage--wallet"><span class="capital-stage__number">01</span><span class="badge badge--live">Your wallet</span><h3>You hold</h3><p>Keys and existing approvals define control. Jethos does not automatically invest this balance.</p></article>
+          <div class="capital-gate"><span>Explicit signature</span><i aria-hidden="true"></i></div>
+          <article class="capital-stage capital-stage--vault"><span class="capital-stage__number">02</span><span class="badge badge--vision">Vault rules</span><h3>You choose</h3><p>A known amount crosses into a contract governed by visible logic and administrative powers.</p></article>
+          <article class="capital-stage capital-stage--proof"><span class="capital-stage__number">03</span><span class="badge badge--implemented">Evidence</span><h3>You verify</h3><p>Route, allocation, costs, liquidity and transactions turn a balance into an explainable position.</p></article>
+        </div>
+      </div>
+    </section>
 
-  <!-- Import Scripts -->
-  <script type="module" src="./main.js"></script>
+    <section class="section" id="financial-home">
+      <div class="container">
+        <header class="section-heading section-heading--center reveal"><p class="eyebrow">A familiar surface, different foundations</p><h2>Hold, choose and understand from one financial home.</h2><p class="lede">Every capability belongs to one of three states: under your control, explicitly authorized or independently inspectable.</p></header>
+        <div class="bento">
+          <article class="card reveal"><div class="card-icon" data-icon="wallet"></div><span class="badge badge--implemented">Wallet principle</span><h3 style="margin-top:1rem">Hold under your control</h3><p>Assets stay in your self-custodial wallet until you choose to authorize a transaction.</p></article>
+          <article class="card reveal"><div class="card-icon" data-icon="vault"></div><span class="badge badge--poc">PoC capability</span><h3 style="margin-top:1rem">Invest only what you choose</h3><p>Select an asset and risk profile, then cross the wallet–vault boundary with an explicit deposit.</p></article>
+          <article class="card reveal"><div class="card-icon" data-icon="send"></div><span class="badge badge--planned">Product direction</span><h3 style="margin-top:1rem">Send</h3><p>A richer everyday transfer experience belongs to the Jethos App direction, not the current PoC.</p></article>
+          <article class="card reveal"><div class="card-icon" data-icon="ledger"></div><span class="badge badge--implemented">Design principle</span><h3 style="margin-top:1rem">Understand</h3><p>See the route, rules, costs, transactions and risks behind invested capital.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="ownership">
+      <div class="container">
+        <header class="section-heading reveal"><p class="eyebrow">Control by default</p><h2>Invest only what you choose.</h2><p class="lede">Your wallet and your vault position are not the same thing. Jethos only manages capital you deliberately deposit.</p></header>
+        <div class="ownership-map reveal">
+          <article class="ownership-zone ownership-zone--wallet"><span class="badge badge--live">Your control</span><h3 style="margin-top:1rem">In your wallet</h3><p>Jethos cannot automatically invest or move these assets. Transactions require your wallet authorization.</p><p class="muted">You remain responsible for keys, wallet security and approvals previously granted to smart contracts.</p></article>
+          <div class="ownership-arrow" aria-hidden="true">→</div>
+          <article class="ownership-zone ownership-zone--vault"><span class="badge badge--poc">Explicit deposit</span><h3 style="margin-top:1rem">In a Jethos vault</h3><p>Capital follows public contract rules, approved integrations and documented administrative powers.</p><p class="muted">Allocations and transactions are verifiable, but smart-contract, protocol, liquidity and admin risks remain.</p></article>
+        </div>
+        <div class="callout" style="margin-top:1rem"><strong>Transparency over opacity.</strong> Jethos is designed to expose the evidence available onchain while documenting what still depends on administrators, oracles and underlying protocols.</div>
+      </div>
+    </section>
+
+    <section class="section section-band" id="comparison">
+      <div class="container">
+        <header class="section-heading reveal"><p class="eyebrow">Different by design, not by slogan</p><h2>Three models. Three different control boundaries.</h2><p class="lede">Jethos does not need an anti-bank claim. The structural difference is enough: who authorizes movement, how capital is used and what can be independently verified.</p></header>
+        <div class="comparison-grid reveal" role="table" aria-label="Comparison of financial control models">
+          <div class="comparison-cell comparison-cell--head" role="columnheader">Question</div><div class="comparison-cell comparison-cell--head" role="columnheader">Intermediated account</div><div class="comparison-cell comparison-cell--head" role="columnheader">Self-custodial wallet</div><div class="comparison-cell comparison-cell--head" role="columnheader">Jethos vault</div>
+          <div class="comparison-cell comparison-cell--head" role="rowheader">Who authorizes movement?</div><div class="comparison-cell">The provider under its account terms.</div><div class="comparison-cell">Whoever controls keys and valid approvals.</div><div class="comparison-cell">The user deposits; then public vault rules apply.</div>
+          <div class="comparison-cell comparison-cell--head" role="rowheader">Is capital invested?</div><div class="comparison-cell">According to the provider's product and balance-sheet model.</div><div class="comparison-cell">Not automatically by Jethos.</div><div class="comparison-cell">Only after an explicit on-chain deposit.</div>
+          <div class="comparison-cell comparison-cell--head" role="rowheader">What is visible?</div><div class="comparison-cell">Provider statements and disclosures.</div><div class="comparison-cell">Wallet balances, approvals and transactions.</div><div class="comparison-cell">Contracts, allocations, fees, movements and exit state.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container"><header class="section-heading section-heading--center reveal"><p class="eyebrow">Simple for you</p><h2>Structured underneath.</h2></header>
+        <div class="flow">
+          <article class="card flow-step reveal"><span class="flow-step__number">01 · ASSET</span><h3>Choose what you own</h3><p>Start with a stablecoin, ETH or BTC-denominated product family.</p></article>
+          <article class="card flow-step reveal"><span class="flow-step__number">02 · RISK</span><h3>Choose your profile</h3><p>Conservative, Balanced or Advanced describes limits and strategy complexity—not a promise.</p></article>
+          <article class="card flow-step reveal"><span class="flow-step__number">03 · VAULT</span><h3>Deposit explicitly</h3><p>Approve a known contract, deposit and receive transferable shares representing the position.</p></article>
+          <article class="card flow-step reveal"><span class="flow-step__number">04 · CONTROL</span><h3>Monitor or withdraw</h3><p>Review allocations, risk and liquidity, then request withdrawal under the vault's rules.</p></article>
+        </div>
+        <p style="text-align:center;margin-top:2rem"><a href="pages/how-it-works.html">Follow the complete capital journey →</a></p>
+      </div>
+    </section>
+
+    <section class="section" id="vaults">
+      <div class="container">
+        <header class="section-heading reveal"><p class="eyebrow">Vaults built around goals</p><h2>Choose how you want your assets to work.</h2><p class="lede">The base asset defines what the vault seeks to preserve and grow. The profile defines the allowed complexity and limits.</p></header>
+        <div class="grid grid--3">
+          <article class="card matrix-cell reveal"><div><span class="badge badge--poc">USDC Conservative PoC</span><h3 style="margin-top:1rem">Stablecoins</h3><p>Prioritize capital stability, liquidity and approved supply strategies.</p></div><a href="pages/vaults.html">Explore stablecoin vaults →</a></article>
+          <article class="card matrix-cell reveal"><div><span class="badge badge--planned">Planned family</span><h3 style="margin-top:1rem">ETH</h3><p>Seek to grow ETH-denominated value without hiding non-ETH exposure.</p></div><a href="pages/vaults.html">Explore ETH direction →</a></article>
+          <article class="card matrix-cell reveal"><div><span class="badge badge--planned">Planned family</span><h3 style="margin-top:1rem">BTC</h3><p>Keep BTC as the unit of success while disclosing wrapper and liquidity risk.</p></div><a href="pages/vaults.html">Explore BTC direction →</a></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container split">
+        <div class="reveal"><p class="eyebrow">Risk-adjusted, not headline-driven</p><h2>The highest displayed APY is not automatically the best result.</h2><p class="lede">Jethos is intended to evaluate expected return together with costs, liquidity, concentration and risk limits.</p><a class="button button--secondary" href="pages/risk-transparency.html">Understand the framework</a></div>
+        <div class="card equation reveal" aria-label="Illustrative net return equation"><span class="badge badge--illustrative">Conceptual model</span><div class="equation-row"><span>Advertised strategy APY</span><strong>Starting point</strong></div><div class="equation-row"><span>Gas, slippage and fees</span><strong>− Costs</strong></div><div class="equation-row"><span>Liquidity and capacity</span><strong>− Constraints</strong></div><div class="equation-row"><span>Protocol and strategy risk</span><strong>− Risk limits</strong></div><div class="equation-row"><span>Expected net result</span><strong>Decision input</strong></div></div>
+      </div>
+    </section>
+
+    <section class="section" id="transparency">
+      <div class="container split">
+        <div class="card reveal"><div class="cluster" style="justify-content:space-between"><h3 style="margin:0">USDC Conservative</h3><span class="badge badge--illustrative">Illustrative allocation</span></div><div class="allocation" style="margin-top:1.5rem"><div class="allocation-row"><span>Liquid reserve</span><div class="allocation-track"><div class="allocation-fill" style="--allocation:35%"></div></div><strong>35%</strong></div><div class="allocation-row"><span>Aave V3</span><div class="allocation-track"><div class="allocation-fill" style="--allocation:25%"></div></div><strong>25%</strong></div><div class="allocation-row"><span>Euler V2</span><div class="allocation-track"><div class="allocation-fill" style="--allocation:20%"></div></div><strong>20%</strong></div><div class="allocation-row"><span>Morpho</span><div class="allocation-track"><div class="allocation-fill" style="--allocation:20%"></div></div><strong>20%</strong></div></div><p class="source-label" style="margin-top:1.3rem">Example only; the PoC console reads current state where exposed</p></div>
+        <div class="reveal"><p class="eyebrow">See the route, not just the result</p><h2>Invested capital should not disappear behind a balance.</h2><p>Jethos should turn on-chain evidence into answers an ordinary user can understand.</p><div class="proof-receipt" style="margin-top:1.5rem"><div class="cluster" style="justify-content:space-between"><strong>Vault transparency receipt</strong><span class="badge badge--illustrative">Example</span></div><div class="proof-row"><span>Where is it?</span><strong>Reserve · Aave · Euler · Morpho</strong></div><div class="proof-row"><span>Why is it there?</span><strong>Risk and expected net return</strong></div><div class="proof-row"><span>What did it cost?</span><strong>Fees · gas · slippage</strong></div><div class="proof-row"><span>Can I exit now?</span><strong>Immediate / unwinding / pending</strong></div><div class="proof-row"><span>What proves it?</span><strong>On-chain transaction ↗</strong></div></div></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container split"><div class="reveal"><p class="eyebrow">The engine beneath the experience · <span data-protocol-record-count>4</span> recorded integrations</p><h2>Powered by modular DeFi infrastructure.</h2><p class="lede">The consumer experience sits above vault accounting, risk-aware automation and approved protocol modules.</p><a class="button button--secondary" href="pages/protocol.html">Explore the protocol</a></div><div class="architecture-layers reveal"><div class="architecture-layer">Jethos App · control, choice and visibility</div><div class="architecture-layer">Asset and risk-profile vaults</div><div class="architecture-layer">Strategy, monitoring and limits</div><div class="architecture-layer">Approved Aave · Euler · Morpho modules</div></div></div>
+    </section>
+
+    <section class="section">
+      <div class="container"><header class="section-heading reveal"><p class="eyebrow">One direction, three layers</p><h2>Protocol first. App progressively. Services through the right partners.</h2></header><div class="grid grid--3"><article class="card reveal"><span class="badge badge--validation">Priority now</span><h3 style="margin-top:1rem">Jethos Protocol</h3><p>On-chain vaults, plugin integrations, accounting, controls and automation.</p></article><article class="card reveal"><span class="badge badge--planned">Progressive product</span><h3 style="margin-top:1rem">Jethos App</h3><p>A familiar self-custodial interface for managing and understanding digital assets.</p></article><article class="card reveal"><span class="badge badge--vision">Long-term vision</span><h3 style="margin-top:1rem">Financial services</h3><p>Payments, cards, credit and tokenized assets may be integrated through specialized partners and appropriate compliance.</p></article></div></div>
+    </section>
+
+    <section class="section">
+      <div class="container split"><div class="reveal"><p class="eyebrow">Roadmap by evidence</p><h2>Validate before expanding.</h2><p class="lede">The roadmap follows capabilities and exit criteria rather than speculative dates.</p><p class="source-label" data-roadmap-updated>Roadmap source updated 2026-07-23</p><a href="pages/roadmap.html" class="button button--secondary">View the complete roadmap</a></div><div class="timeline"><article class="card timeline-item reveal"><span class="badge badge--validation">Today</span><h3 style="margin-top:.8rem">Validate the USDC foundation</h3></article><article class="card timeline-item reveal"><span class="badge badge--planned">Next</span><h3 style="margin-top:.8rem">Expand vault families and the app</h3></article><article class="card timeline-item reveal"><span class="badge badge--vision">Vision</span><h3 style="margin-top:.8rem">Build the complete financial home</h3></article></div></div>
+    </section>
+
+    <section class="section section--compact"><div class="container card card--accent split"><div><img src="assets/brand/jethos-mark.svg" alt="" style="width:3.5rem;margin-bottom:1rem"><p class="eyebrow">Ownership with visibility</p><h2>Finance can be simple without becoming opaque.</h2><p class="lede">Follow the private PoC, inspect the architecture or explore the long-term Jethos vision.</p></div><div class="cluster"><a class="button button--primary" href="app.html">Open PoC</a><a class="button button--secondary" href="pages/vision.html">Explore the vision</a><a class="button button--ghost" href="pages/faq.html">Read FAQ</a></div></div></section>
+  </main>
+  <div data-site-footer></div>
 </body>
 </html>

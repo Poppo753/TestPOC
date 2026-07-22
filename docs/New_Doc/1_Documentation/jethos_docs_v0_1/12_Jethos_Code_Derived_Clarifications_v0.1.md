@@ -598,3 +598,25 @@ Sulla base del codice corrente è possibile produrre con buona affidabilità:
 10. Registro delle discrepanze tra visione e implementazione.
 
 Per ottenere documentazione completa occorre prima decidere se documentare fedelmente il comportamento corrente oppure modificare il codice affinché rispetti la v0.1. Per i punti critici sopra elencati, scrivere soltanto nuova documentazione senza questa decisione consoliderebbe ambiguità invece di eliminarle.
+
+
+Ho completato l’analisi e creato il documento:
+
+[12_Jethos_Code_Derived_Clarifications_v0.1.md](<E:/Documents/Crypto/Defi/Arbitrum/Coding/Project4/TestSmartContract/docs/New_Doc/1_Documentation/jethos_docs_v0_1/12_Jethos_Code_Derived_Clarifications_v0.1.md>)
+
+Conclusione:
+
+- Il codice chiarisce circa il **70% delle specifiche tecniche del PoC**, più un 15–20% parzialmente.
+- Per l’intera visione futura di Jethos, chiarisce direttamente circa il **30–35%**.
+- Le domande aggiuntive non bastano: alcune richiedono decisioni economiche, di governance, sicurezza e prodotto.
+
+Sono emerse anche discrepanze importanti:
+
+- Il vault Jethos non è attualmente ERC-4626.
+- Accounting delle share senza decimal offset o protezione anti-inflation.
+- Possibile sottostima del NAV in caso di errori.
+- Incompatibilità tra `EmergencyHandler` e `ProxyGeneral`.
+- Poteri amministrativi più ampi di quanto dichiarato.
+- Risk scoring, withdrawal queue, fee policy e governance definitiva non sono implementati.
+
+Verifica eseguita: compilazione riuscita e **344 test mirati passanti**. Non è stata eseguita l’intera suite fork/e2e.

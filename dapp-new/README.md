@@ -1,231 +1,98 @@
-# 🌊 Jethos Protocol - Modular DApp
+# Jethos website and PoC console
 
-cd "e:\Documents\Crypto\Defi\Arbitrum\Coding\Project4\TestSmartContract\dapp-new"; python -m http.server 8000
+This directory contains the public multi-page Jethos website and a separate,
+`noindex` console for the private Arbitrum USDC proof of concept.
 
-## 📁 Project Structure (Atomic Design Pattern)
+## Run locally
 
-```
-dapp-new/
-├── index.html              # Main HTML entry point
-├── main.js                 # Application bootstrapper
-├── style.css              # Custom styles (optional, using Tailwind)
-│
-└── src/
-    ├── atoms/             # Basic building blocks
-    │   ├── Button.js      # Reusable button component
-    │   ├── Input.js       # Form input with validation
-    │   ├── Badge.js       # Status badges
-    │   └── Icon.js        # SVG icon library
-    │
-    ├── molecules/         # Combinations of atoms
-    │   ├── Card.js        # Card container with variants
-    │   ├── FormGroup.js   # Form with inputs & buttons
-    │   ├── StatDisplay.js # Stat card with icon & trend
-    │   └── Alert.js       # Toast notifications
-    │
-    ├── organisms/         # Complex UI sections
-    │   ├── WalletConnect.js   # Wallet connection flow
-    │   ├── StatsGrid.js       # Dashboard stats display
-    │   ├── DepositForm.js     # Deposit functionality
-    │   └── WithdrawForm.js    # Withdraw functionality
-    │
-    ├── templates/         # Page layouts
-    │   ├── DashboardTemplate.js  # Main dashboard layout
-    │   └── GridLayout.js         # Flexible grid system
-    │
-    ├── utils/             # Helper functions
-    │   ├── web3.js        # Web3/Ethers.js integration
-    │   └── formatting.js  # Number & address formatting
-    │
-    └── config/            # Configuration
-        ├── contracts.js   # Contract addresses & ABIs
-        └── constants.js   # UI constants & messages
+From this directory:
+
+```powershell
+python -m http.server 8000
 ```
 
-## 🎨 Design System
+Open `http://localhost:8000/`. Do not open pages directly with `file://` because
+ES modules, JSON and remote dependencies require an HTTP origin.
 
-### Atomic Design Hierarchy
+## Structure
 
-1. **Atoms** - Individual UI elements
-   - Button, Input, Badge, Icon
-   - Cannot be broken down further
-   - Highly reusable
+The local `package.json` declares ES-module semantics and exposes read-only
+maintenance commands. It introduces no site-specific dependency installation.
 
-2. **Molecules** - Groups of atoms
-   - Card, FormGroup, StatDisplay, Alert
-   - Single responsibility
-   - Still generic and reusable
-
-3. **Organisms** - Complete UI sections
-   - WalletConnect, StatsGrid, Forms
-   - Business logic starts here
-   - Feature-specific
-
-4. **Templates** - Page layouts
-   - DashboardTemplate, GridLayout
-   - Composition of organisms
-   - Layout structure
-
-## 🚀 Key Features
-
-### ✅ Modular Architecture
-- Each component is self-contained
-- Easy to add/remove/modify features
-- Components can be reused across pages
-
-### ✅ Grid System
-The `Card` component supports flexible grid positioning:
-
-```javascript
-new Card({
-  colSpan: 2,  // spans 2 columns
-  rowSpan: 3,  // spans 3 rows
-  // ... other config
-});
+```text
+index.html                 public landing
+app.html                   private PoC console
+pages/                     informational pages
+assets/css/                local design system
+assets/js/core/            shared shell and utilities
+assets/js/config/          cross-page navigation and status taxonomy
+assets/js/components/      reusable UI behavior
+assets/js/features/        editorial enhancements
+assets/js/app/             PoC console orchestration, forms and renderers
+assets/js/web3/            deployment, readers and transaction workflows
+data/                      structured editorial/deployment records
+scripts/                   validation and read-only operational diagnostics
 ```
 
-Grid layouts use CSS Grid with 12-column system:
-- Mobile: 1 column
-- Tablet: 2-6 columns
-- Desktop: 12 columns
+## Validate and inspect
 
-### ✅ Component Configuration
-All components accept config objects:
+No dependency installation is required for these commands. Node.js 20 or newer
+is recommended.
 
-```javascript
-new Button({
-  label: 'Connect',
-  variant: 'primary',    // primary, secondary, outline, ghost, danger
-  size: 'lg',            // sm, md, lg
-  fullWidth: true,
-  loading: false,
-  icon: '🦊',
-  onClick: () => {...}
-});
+```powershell
+npm run validate
+npm run check:content
+npm run check:deployment
+npm run inspect:protocols
+npm run ready
 ```
 
-### ✅ State Management
-- Web3Manager singleton for blockchain state
-- Component-level state for UI
-- Subscribe pattern for reactive updates
+The two diagnostic commands only perform RPC reads against the configured
+Arbitrum deployment. Machine-readable output is available with:
 
-### ✅ Styling
-- **Tailwind CSS** for utility-first styling
-- **Dark mode** ready
-- **Responsive** mobile-first design
-- **Custom animations** for smooth UX
-
-## 📦 How to Use
-
-### Basic Setup
-
-1. **Open `index.html`** in a browser (or use a local server)
-2. The app auto-initializes on page load
-3. Connect MetaMask to start using
-
-### Adding a New Page/View
-
-1. Create a new template in `src/templates/`
-2. Import and mount it in `main.js`
-3. Use existing organisms or create new ones
-
-Example:
-```javascript
-// src/templates/SwapView.js
-import { Card } from '../molecules/Card.js';
-
-export class SwapView {
-  render() {
-    // Your swap UI here
-  }
-  
-  mount(target) {
-    target.appendChild(this.render());
-  }
-}
+```powershell
+npm run check:deployment -- --json
+npm run inspect:protocols -- --json
 ```
 
-### Creating Custom Card Layouts
+They never request a signer, private key or token approval. Consumer write
+operations remain limited to the browser console and pass through the Jethos
+core contracts; plugins are inspected but are not exposed as arbitrary write
+targets.
 
-Using the GridLayout system:
+`npm run ready` executes static validation, the editorial contract and both
+live diagnostics as one release gate. Passing it is useful operational
+evidence, but is not an audit or authorization to publish a financial product.
 
-```javascript
-import { GridLayout } from './templates/GridLayout.js';
-import { Card } from './molecules/Card.js';
+Legacy URLs (`landing.html`, `documentation.html`, `config.html` and
+`portfolio.html`) are compatibility redirects.
 
-const layout = new GridLayout({ columns: 12, gap: 6 });
+Legacy files such as the former `src/`, root `main.js`, API-reference JSON,
+old plugin/roadmap JSON and the background video are retained for historical
+comparison but are not referenced by the new entry points.
 
-// Big card (2 wide, 3 tall)
-layout.addItem(
-  new Card({ title: 'Big', content: '...' }),
-  { colSpan: 2, rowSpan: 3 }
-);
+## Safety model
 
-// Small cards
-layout.addItem(
-  new Card({ title: 'Small 1', content: '...' }),
-  { colSpan: 1, rowSpan: 2 }
-);
+- Public pages work without a wallet.
+- Wallet connection occurs only after a user click.
+- The app targets one explicit deployment in
+  `assets/js/web3/deployment-config.js`.
+- Users interact through LiquidityManager, not directly with plugins.
+- Approvals use the exact requested USDC amount and can be revoked.
+- Estimates are clearly identified and do not guarantee execution.
+- No private key or secret belongs in this directory.
 
-layout.addItem(
-  new Card({ title: 'Small 2', content: '...' }),
-  { colSpan: 1, rowSpan: 1 }
-);
+## Updating the deployment
 
-document.body.appendChild(layout.render());
-```
+Do not replace addresses individually from memory. Start from a verified
+deployment manifest, update `data/deployments.json` and
+`assets/js/web3/deployment-config.js`, then validate bytecode, ABI reads and the
+complete deposit/withdraw flow on a safe fork before enabling writes.
 
-## 🎯 Future Enhancements
+Full implementation and script guides are stored in:
 
-### Easy to Add:
-- ✅ Swap interface (new organism)
-- ✅ Portfolio view (new template)
-- ✅ Transaction history (new organism)
-- ✅ Charts & analytics (new molecules)
-- ✅ Multi-token support (extend config)
-- ✅ Governance voting (new page)
-- ✅ Notifications system (extend toast)
+`docs/New_Doc/1_Documentation/8. Web Site/1. First_23.07.26/`
 
-### Example: Adding Swap Feature
+Second-iteration audit and guides are stored in:
 
-1. Create `src/organisms/SwapForm.js`
-2. Import in `DashboardTemplate.js`
-3. Add to grid layout
-4. Done! No changes to existing code
-
-## 🛠️ Technologies
-
-- **Vanilla JavaScript** - No framework overhead
-- **ES6 Modules** - Clean imports/exports
-- **Tailwind CSS** - Rapid styling
-- **Ethers.js v6** - Web3 integration
-- **CSS Grid** - Flexible layouts
-
-## 📝 Notes
-
-- All components return HTMLElements
-- Use `.render()` to create DOM elements
-- Use `.update()` to re-render (if implemented)
-- Components are stateful but independent
-- Grid system auto-handles responsive breakpoints
-
-## 🎨 Color Palette
-
-- Primary: Purple (`#9333ea`)
-- Secondary: Indigo (`#4f46e5`)
-- Accent: Blue (`#3b82f6`)
-- Success: Green (`#10b981`)
-- Warning: Yellow (`#f59e0b`)
-- Error: Red (`#ef4444`)
-
-## 📱 Responsive Breakpoints
-
-- `sm`: 640px
-- `md`: 768px
-- `lg`: 1024px
-- `xl`: 1280px
-- `2xl`: 1536px
-
----
-
-**Made with ❤️ for modular, scalable DeFi interfaces**
+`docs/New_Doc/1_Documentation/8. Web Site/2. Second_23.07.26/`
