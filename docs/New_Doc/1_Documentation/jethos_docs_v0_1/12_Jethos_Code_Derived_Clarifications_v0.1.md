@@ -619,4 +619,4 @@ Sono emerse anche discrepanze importanti:
 - Poteri amministrativi più ampi di quanto dichiarato.
 - Risk scoring, withdrawal queue, fee policy e governance definitiva non sono implementati.
 
-Verifica eseguita: compilazione riuscita e **344 test mirati passanti**. Non è stata eseguita l’intera suite fork/e2e.
+Verifica eseguita: compilazione riuscita e **344 test mirati passanti**. Non è stata eseguita l’intera suite fork/e2e
