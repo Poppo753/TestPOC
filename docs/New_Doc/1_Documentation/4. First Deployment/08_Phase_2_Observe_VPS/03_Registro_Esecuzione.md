@@ -19,7 +19,7 @@ Data avvio preparazione: 15 luglio 2026.
 - piano: CX23 x86, 2 vCPU, 4 GB RAM, 40 GB SSD, Ubuntu 24.04;
 - IPv4: `46.225.133.37`;
 - host key Ed25519 registrata: `SHA256:Rv4aL01OZGbyQ2heFUUh/qT2gS4lquogNfDHGyKs8bA`;
-- verifica indipendente della host key contro un secondo canale Hetzner: ancora da completare;
+- verifica indipendente della host key contro un secondo canale Hetzner: **completata il 16 luglio 2026** tramite console web Hetzner; fingerprint confermata `SHA256:Rv4aL01OZGbyQ2heFUUh/qT2gS4lquogNfDHGyKs8bA`;
 - provisioning, firewall SSH-only e accesso con chiave dedicata: completati;
 - Ubuntu aggiornato e riavviato; nessun reboot pendente;
 - Node: `v22.23.1`, archivio ufficiale verificato tramite `SHASUMS256.txt`;
@@ -43,7 +43,85 @@ Data avvio preparazione: 15 luglio 2026.
 - processo systemd: stesso PID, `NRestarts=0` dopo il fix;
 - inizio finestra shadow ufficiale: `2026-07-14T23:40:26Z`, cioè 15 luglio 2026 ore 01:40:26 CEST;
 - prima scadenza certificabile di 24 ore: 16 luglio 2026 ore 01:40:26 CEST;
-- stato Fase 2: in osservazione; non completa prima della scadenza minima.
+- stato Fase 2: **PASS — chiusa il 16 luglio 2026 alle 15:14 UTC**; tutti i 12 criteri soddisfatti (vedi sezione raccolta live).
+
+## Raccolta live — 16 luglio 2026 ore 15:02–15:14 UTC
+
+Raccolta eseguita via SSH read-only dopo verifica fingerprint. Nessun segreto stampato.
+
+### Sistema e servizio
+
+- `hostnamectl`: `vault-observer-arbitrum-01`, Ubuntu 24.04.4 LTS, kernel 6.8.0-134-generic;
+- data raccolta: `2026-07-16T15:02:53+00:00`;
+- uptime al momento della raccolta: 9 minuti (reboot automatico kernel alle 14:53 UTC, vedi sezione eventi);
+- servizio: **enabled**, **active**;
+- `MainPID=898`, `NRestarts=0`, `ExecMainStatus=0`;
+- `ActiveEnterTimestamp`: Thu 2026-07-16 14:53:25 UTC (primo avvio post-reboot).
+
+### Heartbeat
+
+```json
+{
+  "schemaVersion": 1,
+  "vaultId": "arbitrum-usdc-poc-1",
+  "pid": 898,
+  "state": "waiting",
+  "startedAt": "2026-07-16T14:53:42.203Z",
+  "updatedAt": "2026-07-16T15:13:50.830Z",
+  "lastRunId": "arbitrum-usdc-poc-1-1784214829273-42738966",
+  "lastRunState": "NO_ACTION",
+  "consecutiveFailures": 0
+}
+```
+
+Età heartbeat al momento della lettura: circa 14 secondi. Ampiamente entro i 600 secondi.
+
+### Commit e working tree
+
+- commit: `9ba9dc872879a907427bd12408c9958f71b26375` — **corrisponde al commit atteso**;
+- `git status --short`: nessun output — working tree pulito.
+
+### Secret file
+
+- `stat`: `root:vaultops 640 /etc/vault-automation/arbitrum-usdc-poc-1.env` — **corretto**;
+- `grep PRIVATE_KEY|mnemonic|MNEMONIC`: output `0 0` — **assente**.
+
+### Run persistiti
+
+- totale file `.json` nella cartella `runs/`: **476**;
+- primo run: ID `1784071821072` → `2026-07-14T23:17:01Z` (cicli di test pre-shadow);
+- ultimo run al momento della raccolta: `1784214829273` → `2026-07-16T15:13:49Z`;
+- run con stato `FAILED`, `SIMULATION_FAILED`, `VERIFICATION_FAILED`: **0**.
+
+### Preflight aggiornato
+
+- `checkedAt`: `2026-07-16T15:14:11.168Z`;
+- `ready: true`;
+- blocco Arbitrum: `484496131`;
+- tutti i check PASS: `PROVIDER_REACHABLE`, `CHAIN_MATCH`, `BASE_ASSET_MATCH`, `BASE_ASSET_CODE`,
+  4 contratti core, 4 protocolli con plugin/lens/registry, `PROTOCOL_MANAGER_OWNER_READ`,
+  4 check on-chain, `EXECUTION_DISABLED`, `STATE_DIRECTORY_WRITABLE`, `HEARTBEAT_DIRECTORY_WRITABLE`;
+- totale check: **34/34 PASS**.
+
+### Journal sintetico (periodo shadow)
+
+Cicli ogni 5 minuti da `2026-07-14T23:30Z` a `2026-07-16T15:14Z`, esito uniforme `NO_ACTION`.
+Nessun ciclo con errore RPC, fallback o failure. Journal completo disponibile su VPS con il
+comando `journalctl` indicato nell'handoff.
+
+## Evento: reboot automatico kernel — 16 luglio 2026
+
+- orario: `2026-07-16T14:53:00Z`;
+- causa: unattended-upgrades Ubuntu, upgrade kernel `6.8.0-117` → `6.8.0-134`;
+- sequenza: systemd ha fermato il servizio in modo pulito (`success: true, stopped: true`)
+  prima del reboot; il servizio ha completato il ciclo in corso prima dello stop;
+- post-reboot: servizio riavviato automaticamente alle `14:53:25Z`, `NRestarts=0`;
+- primo ciclo post-reboot: `2026-07-16T14:53:43Z`, esito `NO_ACTION`;
+- stato del working tree dopo il reboot: pulito (confermato da `git status --short`);
+- valutazione: evento spiegato, atteso e non influente sul gate; nessuna perdita di stato.
+
+Nota: `last reboot` mostra tre entry: test del 14 luglio ore 23:08 e 23:22 (bootstrap),
+e il reboot automatico del 16 luglio.
 
 ## Problemi scoperti durante il bootstrap
 
