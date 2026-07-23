@@ -5,6 +5,13 @@
   "scripts": {
     "validate": "node scripts/validate-site.mjs",
     "check:content": "node scripts/check-content.mjs",
+    "check:auth:browser": "node scripts/browser-auth-smoke.mjs",
+    "check:webgl": "node scripts/validate-webgl.mjs",
+    "check:webgl:browser": "node scripts/browser-webgl-smoke.mjs",
+    "capture:webgl": "node scripts/capture-webgl-review.mjs",
+    "sync:docs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync-documentation.ps1",
+    "check:docs": "node scripts/validate-documentation.mjs",
+    "check:docs:browser": "node scripts/browser-documentation-smoke.mjs",
     "check:deployment": "node scripts/check-deployment.mjs",
     "inspect:protocols": "node scripts/inspect-protocols.mjs",
     "ready": "node scripts/release-readiness.mjs"

@@ -12,7 +12,7 @@
   <script type="module" src="assets/js/core/site-shell.js"></script>
   <script type="module" src="assets/js/features/site-features.js"></script>
 </head>
-<body data-page="home">
+<body data-page="home" data-webgl-scene="ownership">
   <div class="page-grid" aria-hidden="true"></div>
   <div data-site-header></div>
   <main id="main-content">
@@ -38,6 +38,14 @@
           <div class="ledger-lines" aria-hidden="true"><i></i><i></i><i></i></div>
           <p class="source-label" style="margin-top:1rem">Example interface—not live account data</p>
         </div>
+      </div>
+    </section>
+
+    <section class="immersive-section" id="ownership-core" aria-labelledby="ownership-core-title">
+      <div class="container immersive-shell">
+        <header class="immersive-head"><div><span class="eyebrow">Ownership Core · interactive model</span><h2 id="ownership-core-title">Your capital crosses a boundary only when you authorize it.</h2></div><p class="muted">A conceptual model—not account data. Mint remains in the wallet; amber marks explicit authorization; violet represents capital governed by transparent vault rules.</p></header>
+        <div class="immersive-viewport" data-webgl-host><div class="immersive-fallback" aria-hidden="true"><div class="fallback-object fallback--ownership"><i></i><i></i><i></i></div></div><span class="immersive-status" data-webgl-status>Loading visual</span></div>
+        <div class="immersive-controls"><button class="immersive-control" type="button" data-scene-replay>Replay capital path</button><div class="immersive-legend" aria-label="Visual legend"><span class="immersive-key immersive-key--wallet">Your wallet</span><span class="immersive-key immersive-key--gate">Authorization</span><span class="immersive-key immersive-key--vault">Transparent vault</span></div></div>
       </div>
     </section>
 

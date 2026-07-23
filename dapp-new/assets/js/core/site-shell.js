@@ -1,6 +1,9 @@
 import { SITE } from '../config/site-config.js';
 import { initNavigation } from './navigation.js';
 import { initReveal } from './reveal.js';
+import { requireAuthentication } from './auth-gate.js';
+
+await requireAuthentication();
 
 const root = document.documentElement.dataset.root || '.';
 const page = document.body.dataset.page || '';
@@ -60,4 +63,3 @@ renderHeader();
 renderFooter();
 initNavigation();
 initReveal();
-

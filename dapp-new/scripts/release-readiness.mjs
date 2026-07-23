@@ -10,6 +10,8 @@ const scripts = dirname(fileURLToPath(import.meta.url));
 const checks = [
   ['Static site', 'validate-site.mjs'],
   ['Editorial contract', 'check-content.mjs'],
+  ['Contained WebGL2', 'validate-webgl.mjs'],
+  ['Documentation reader', 'validate-documentation.mjs'],
   ['Deployment state', 'check-deployment.mjs'],
   ['Protocol registry', 'inspect-protocols.mjs'],
 ];
@@ -22,4 +24,3 @@ for (const [label, script] of checks) {
 }
 if (failed) process.exitCode = 1;
 else console.log('\nRelease readiness passed. This is not an audit or production authorization.');
-

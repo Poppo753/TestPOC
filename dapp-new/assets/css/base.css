@@ -1,4 +1,5 @@
 @import url('./tokens.css');
+@import url('./webgl.css');
 
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -39,6 +40,35 @@ code { color: var(--violet-300); background: rgba(139,92,246,.1); border: 1px so
 .muted { color: var(--text-400); }
 .text-gradient { color: transparent; background: linear-gradient(100deg, var(--violet-300), var(--cyan-300)); background-clip: text; -webkit-background-clip: text; }
 .page-grid { position: fixed; inset: 0; pointer-events: none; opacity: .15; background-image: linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px); background-size: 72px 72px; mask-image: linear-gradient(to bottom, black, transparent 80%); }
+.auth-locked { overflow: hidden; }
+.auth-locked > :not(.auth-gate) { visibility: hidden !important; }
+.auth-gate {
+  position: fixed; z-index: 10000; inset: 0; display: grid; place-items: center;
+  padding: 1.25rem; overflow: auto; visibility: visible !important;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(139, 92, 246, .2), transparent 28rem),
+    radial-gradient(circle at 85% 80%, rgba(34, 211, 238, .1), transparent 24rem),
+    #07101f;
+}
+.auth-gate__panel {
+  width: min(100%, 28rem); padding: clamp(1.75rem, 5vw, 3rem);
+  border: 1px solid rgba(148, 163, 184, .24); border-radius: 1.5rem;
+  background: rgba(14, 25, 45, .92); box-shadow: 0 2rem 6rem rgba(0, 0, 0, .42);
+  backdrop-filter: blur(18px);
+}
+.auth-gate__mark { width: 3rem; height: 3rem; margin-bottom: 1.5rem; }
+.auth-gate__panel h1 { font-size: clamp(2.2rem, 9vw, 3.4rem); margin-bottom: .35rem; }
+.auth-gate__intro { color: var(--text-400); margin-bottom: 1.75rem; }
+.auth-gate__form { display: grid; gap: 1rem; }
+.auth-gate__field { display: grid; gap: .4rem; color: var(--text-300); font-size: .88rem; font-weight: 700; }
+.auth-gate__field input {
+  width: 100%; color: var(--text-100); background: rgba(4, 12, 26, .8);
+  border: 1px solid rgba(148, 163, 184, .28); border-radius: .75rem;
+  padding: .85rem 1rem; outline: none;
+}
+.auth-gate__field input:focus { border-color: var(--cyan-400); box-shadow: 0 0 0 3px rgba(34, 211, 238, .14); }
+.auth-gate__error { color: #fca5a5; margin: 0; font-size: .9rem; }
+.auth-gate__submit { width: 100%; justify-content: center; margin-top: .35rem; }
 .reveal { opacity: 0; transform: translateY(18px); transition: opacity .65s ease, transform .65s ease; }
 .reveal.is-visible { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) {

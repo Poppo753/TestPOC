@@ -1,0 +1,124 @@
+{
+    "version":  "0.1",
+    "generatedAt":  "2026-07-23T03:18:01.1623170+02:00",
+    "source":  "docs/New_Doc/1_Documentation/jethos_docs_v0_1",
+    "documents":  [
+                      {
+                          "id":  "00",
+                          "title":  "Mappa della documentazione",
+                          "subtitle":  "Struttura, ordine di lettura e stato dei documenti",
+                          "category":  "Map",
+                          "file":  "00_Jethos_Document_Map_v0.1.md",
+                          "source":  "00_Jethos_Document_Map_v0.1.docx",
+                          "sourceType":  "DOCX synchronized"
+                      },
+                      {
+                          "id":  "01",
+                          "title":  "Master Vision Document",
+                          "subtitle":  "Visione generale, identità e principi fondamentali",
+                          "category":  "Vision",
+                          "file":  "01_Jethos_Master_Vision_v0.1.md",
+                          "source":  "01_Jethos_Master_Vision_v0.1.docx",
+                          "sourceType":  "DOCX synchronized"
+                      },
+                      {
+                          "id":  "02",
+                          "title":  "Product \u0026 Vault Taxonomy",
+                          "subtitle":  "Famiglie di prodotto, profili di rischio e piramide dei vault",
+                          "category":  "Product",
+                          "file":  "02_Jethos_Product_Vault_Taxonomy_v0.1.md",
+                          "source":  "02_Jethos_Product_Vault_Taxonomy_v0.1.docx",
+                          "sourceType":  "DOCX synchronized"
+                      },
+                      {
+                          "id":  "03",
+                          "title":  "Protocol Architecture",
+                          "subtitle":  "Core, plugin, automazione e confini di fiducia",
+                          "category":  "Architecture",
+                          "file":  "03_Jethos_Protocol_Architecture_v0.1.md",
+                          "source":  "03_Jethos_Protocol_Architecture_v0.1.docx",
+                          "sourceType":  "DOCX synchronized"
+                      },
+                      {
+                          "id":  "04",
+                          "title":  "Accounting, Shares \u0026 ERC-4626",
+                          "subtitle":  "NAV, share, donazioni, reward e standard asincroni futuri",
+                          "category":  "Accounting",
+                          "file":  "04_Jethos_Accounting_Shares_ERC4626_v0.1.md",
+                          "source":  "04_Jethos_Accounting_Shares_ERC4626_v0.1.docx",
+                          "sourceType":  "DOCX synchronized"
+                      },
+                      {
+                          "id":  "05",
+                          "title":  "Risk Framework",
+                          "subtitle":  "Profili, metriche quantitative, cap e protezione del capitale",
+                          "category":  "Risk",
+                          "file":  "05_Jethos_Risk_Framework_v0.1.md",
+                          "source":  "05_Jethos_Risk_Framework_v0.1.docx",
+                          "sourceType":  "DOCX synchronized"
+                      },
+                      {
+                          "id":  "06",
+                          "title":  "Strategy \u0026 Automation Framework",
+                          "subtitle":  "Strategy Engine, keeper, monitoraggio e ribilanciamenti",
+                          "category":  "Automation",
+                          "file":  "06_Jethos_Strategy_Automation_v0.1.md",
+                          "source":  "06_Jethos_Strategy_Automation_v0.1.docx",
+                          "sourceType":  "DOCX synchronized"
+                      },
+                      {
+                          "id":  "07",
+                          "title":  "Liquidity \u0026 Withdrawal Framework",
+                          "subtitle":  "Riserve dinamiche, prelievi sincroni e queue future",
+                          "category":  "Liquidity",
+                          "file":  "07_Jethos_Liquidity_Withdrawals_v0.1.md",
+                          "source":  "07_Jethos_Liquidity_Withdrawals_v0.1.docx",
+                          "sourceType":  "DOCX synchronized"
+                      },
+                      {
+                          "id":  "08",
+                          "title":  "Governance, Security \u0026 Administration",
+                          "subtitle":  "Community approval, multisig, upgrade ed emergenze",
+                          "category":  "Governance",
+                          "file":  "08_Jethos_Governance_Security_v0.1.md",
+                          "source":  "08_Jethos_Governance_Security_v0.1.docx",
+                          "sourceType":  "DOCX synchronized"
+                      },
+                      {
+                          "id":  "09",
+                          "title":  "Multi-chain \u0026 Vault Composability",
+                          "subtitle":  "Deployment separati, share cross-chain e piramide",
+                          "category":  "Multichain",
+                          "file":  "09_Jethos_Multichain_Composability_v0.1.md",
+                          "source":  "09_Jethos_Multichain_Composability_v0.1.docx",
+                          "sourceType":  "DOCX synchronized"
+                      },
+                      {
+                          "id":  "10",
+                          "title":  "PoC \u0026 Implementation Roadmap",
+                          "subtitle":  "Primo vault USDC Conservativo e fasi successive",
+                          "category":  "Roadmap",
+                          "file":  "10_Jethos_PoC_Roadmap_v0.1.md",
+                          "source":  "10_Jethos_PoC_Roadmap_v0.1.docx",
+                          "sourceType":  "DOCX synchronized"
+                      },
+                      {
+                          "id":  "11",
+                          "title":  "Open Questions \u0026 Decision Backlog",
+                          "subtitle":  "Domande future organizzate per milestone",
+                          "category":  "Decisions",
+                          "file":  "11_Jethos_Open_Questions_Decision_Backlog_v0.1.md",
+                          "source":  "11_Jethos_Open_Questions_Decision_Backlog_v0.1.docx",
+                          "sourceType":  "DOCX synchronized"
+                      },
+                      {
+                          "id":  "12",
+                          "title":  "Jethos — chiarimenti derivati dal codice",
+                          "subtitle":  "Repository-derived findings and remaining decisions",
+                          "category":  "Evidence",
+                          "file":  "12_Jethos_Code_Derived_Clarifications_v0.1.md",
+                          "source":  "12_Jethos_Code_Derived_Clarifications_v0.1.md",
+                          "sourceType":  "Markdown source"
+                      }
+                  ]
+}
