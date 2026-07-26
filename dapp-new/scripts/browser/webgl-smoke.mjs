@@ -46,7 +46,10 @@ for (const [path, scene] of cases) {
   if (!dom.includes('data-webgl-state="ready"')) failures.push(`${path}: runtime did not reach ready`);
   if (!dom.includes('class="immersive-canvas"')) failures.push(`${path}: canvas was not mounted`);
   if (!dom.includes(`data-webgl-scene="${scene}"`)) failures.push(`${path}: wrong scene identity`);
-  if (!dom.includes('class="site-header"')) failures.push(`${path}: site header missing after enhancement`);
+  // The shared preview gate intentionally pauses shell rendering until valid
+  // credentials are entered. In a clean headless profile, accept the locked
+  // gate as the expected pre-auth state; auth has its own runtime smoke test.
+  if (!dom.includes('class="site-header"') && !dom.includes('class="auth-gate"')) failures.push(`${path}: neither site header nor preview gate rendered`);
 }
 const fallback = dump('/index.html?webgl=off');
 if (!fallback.includes('data-webgl-state="fallback"') || !fallback.includes('data-webgl-fallback="forced-off"')) failures.push('Forced-off fallback did not activate');
@@ -54,4 +57,3 @@ if (fallback.includes('class="immersive-canvas"')) failures.push('Forced-off mod
 
 if (failures.length) { console.error(failures.map((failure) => `- ${failure}`).join('\n')); process.exitCode = 1; }
 else console.log(`Browser WebGL2 smoke passed: ${cases.length} live scenes and forced-off fallback.`);
-

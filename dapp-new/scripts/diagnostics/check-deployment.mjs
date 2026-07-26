@@ -1,9 +1,9 @@
 /**
  * Read-only deployment diagnostic. No signer or private key is accepted.
- * Usage: node scripts/check-deployment.mjs [--json]
+ * Usage: node scripts/diagnostics/check-deployment.mjs [--json]
  */
 import { createReadOnlyProvider, DEPLOYMENT, ethers, isJsonMode, jsonStringify } from './lib/diagnostics.mjs';
-import { ERC20_ABI, SHARE_ABI, LIQUIDITY_MANAGER_ABI, VALUE_CALCULATOR_ABI } from '../assets/js/web3/abis.js';
+import { ERC20_ABI, SHARE_ABI, LIQUIDITY_MANAGER_ABI, VALUE_CALCULATOR_ABI } from '../../assets/js/web3/abis.js';
 
 const jsonMode = isJsonMode();
 const provider = createReadOnlyProvider();

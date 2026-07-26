@@ -26,6 +26,11 @@ class PocAppController {
     byId('connect-wallet')?.addEventListener('click', () => walletSession.connect().catch((error) => showToast(explainTransactionError(error))));
     byId('switch-network')?.addEventListener('click', () => walletSession.switchToDeploymentChain().catch((error) => showToast(explainTransactionError(error))));
     byId('refresh-data')?.addEventListener('click', () => this.refreshAll());
+    document.querySelectorAll('[data-app-mode]').forEach((button) => button.addEventListener('click', () => {
+      const mode = button.dataset.appMode;
+      document.querySelectorAll('[data-app-mode]').forEach((candidate) => candidate.setAttribute('aria-selected', String(candidate === button)));
+      document.querySelectorAll('[data-app-mode-panel]').forEach((panel) => { panel.hidden = mode !== 'advanced'; });
+    }));
     walletSession.addEventListener('change', ({ detail }) => {
       this.userRefreshToken += 1;
       this.view.renderWallet(detail);
@@ -44,7 +49,7 @@ class PocAppController {
       this.vault = vault; this.protocols = protocols;
       this.view.renderVault(vault); this.view.renderProtocols(protocols);
     } catch (error) {
-      if (token === this.publicRefreshToken) setText('data-status', `Live reads unavailable · ${error.message}`);
+      if (token === this.publicRefreshToken) this.view.renderVaultError(error);
     } finally { if (token === this.publicRefreshToken) this.view.renderRefresh(false); }
   }
   async refreshUser() {

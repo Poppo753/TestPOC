@@ -1,9 +1,9 @@
 /**
  * Read-only inspection of ProtocolManager and every registered integration.
- * Usage: node scripts/inspect-protocols.mjs [--json]
+ * Usage: node scripts/diagnostics/inspect-protocols.mjs [--json]
  */
 import { createReadOnlyProvider, DEPLOYMENT, errorMessage, ethers, isJsonMode, jsonStringify } from './lib/diagnostics.mjs';
-import { PROTOCOL_MANAGER_ABI } from '../assets/js/web3/abis.js';
+import { PROTOCOL_MANAGER_ABI } from '../../assets/js/web3/abis.js';
 
 const provider = createReadOnlyProvider();
 const manager = new ethers.Contract(DEPLOYMENT.contracts.protocolManager, PROTOCOL_MANAGER_ABI, provider);

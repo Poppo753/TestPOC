@@ -15,9 +15,9 @@ export const SITE = Object.freeze({
     ['docs', 'pages/docs.html', 'Docs'],
   ],
   footer: [
-    ['Product', [['How it works', 'pages/how-it-works.html'], ['Vaults', 'pages/vaults.html'], ['Risk & transparency', 'pages/risk-transparency.html'], ['PoC console', 'app.html']]],
+    ['Product', [['Interactive demo', 'demo/index.html'], ['How it works', 'pages/how-it-works.html'], ['Vaults', 'pages/vaults.html'], ['Risk & transparency', 'pages/risk-transparency.html'], ['PoC console', 'app.html']]],
     ['Evidence', [['Trust Center', 'pages/trust-center.html'], ['Security', 'pages/security.html'], ['Protocol', 'pages/protocol.html'], ['Developers', 'pages/developers.html']]],
-    ['Direction', [['Vision', 'pages/vision.html'], ['Roadmap', 'pages/roadmap.html'], ['FAQ', 'pages/faq.html'], ['Documentation', 'pages/docs.html']]],
+    ['Direction', [['Vision', 'pages/vision.html'], ['Roadmap', 'pages/roadmap.html'], ['FAQ', 'pages/faq.html'], ['Documentation', 'pages/docs.html'], ['Team disclosure', 'pages/team.html'], ['Changelog', 'pages/changelog.html']]],
   ],
   disclaimer: 'Private proof of concept. Jethos is not a bank, is not audited as a complete system, and does not guarantee returns, principal or immediate liquidity.',
 });
@@ -27,8 +27,9 @@ export const STATUS_TAXONOMY = Object.freeze({
   recorded: 'Taken from a versioned deployment or content record',
   implemented: 'Present in the repository; not necessarily a public product',
   poc: 'Private deployment used for controlled validation',
+  validation: 'Implemented evidence or policy currently being validated',
   planned: 'Intended direction; not yet implemented',
   vision: 'Long-term possibility',
   illustrative: 'Explanatory example; not live account data',
+  unavailable: 'Not available or not evidenced by the current source pack',
 });
-

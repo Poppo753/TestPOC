@@ -37,7 +37,9 @@ function renderHeader() {
     if (page === id) link.setAttribute('aria-current', 'page');
     links.append(link);
   });
-  links.append(node('a', { className: 'button button--primary', text: 'Open PoC', attributes: { href: resolve('app.html') } }));
+  const demoLink = node('a', { className: 'button button--primary', text: 'Try demo', attributes: { href: resolve('demo/index.html') } });
+  if (page === 'demo') demoLink.setAttribute('aria-current', 'page');
+  links.append(demoLink);
   nav.append(brandLink(), toggle, links); header.append(nav); target.replaceChildren(skip, header);
 }
 

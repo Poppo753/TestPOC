@@ -8,12 +8,15 @@ import { fileURLToPath } from 'node:url';
 
 const scripts = dirname(fileURLToPath(import.meta.url));
 const checks = [
-  ['Static site', 'validate-site.mjs'],
-  ['Editorial contract', 'check-content.mjs'],
-  ['Contained WebGL2', 'validate-webgl.mjs'],
-  ['Documentation reader', 'validate-documentation.mjs'],
-  ['Deployment state', 'check-deployment.mjs'],
-  ['Protocol registry', 'inspect-protocols.mjs'],
+  ['Static site', 'validation/validate-site.mjs'],
+  ['Editorial contract', 'validation/check-content.mjs'],
+  ['Product narrative', 'validation/validate-product-content.mjs'],
+  ['Interactive Demo structure', 'validation/validate-demo.mjs'],
+  ['Interactive Demo engine', 'validation/test-demo-engine.mjs'],
+  ['Contained WebGL2', 'validation/validate-webgl.mjs'],
+  ['Documentation reader', 'validation/validate-documentation.mjs'],
+  ['Deployment state', 'diagnostics/check-deployment.mjs'],
+  ['Protocol registry', 'diagnostics/inspect-protocols.mjs'],
 ];
 
 let failed = false;

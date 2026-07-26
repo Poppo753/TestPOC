@@ -4,6 +4,7 @@
 .docs-count { color: var(--text-400); font-size: .78rem; }
 .doc-catalog { display: grid; gap: .75rem; }
 .doc-entry { width: 100%; display: grid; grid-template-columns: minmax(105px,auto) 1fr auto; align-items: center; gap: 1rem; padding: 1rem; color: inherit; text-align: left; border: 1px solid var(--border); border-radius: .9rem; background: rgba(255,255,255,.025); cursor: pointer; transition: border-color .2s ease, background .2s ease, transform .2s ease; }
+.doc-catalog a.doc-entry { text-decoration: none; }
 .doc-entry:hover, .doc-entry:focus-visible { transform: translateY(-1px); border-color: rgba(103,232,249,.35); background: rgba(34,211,238,.045); }
 .doc-entry__copy { min-width: 0; display: grid; gap: .2rem; }
 .doc-entry__copy strong { color: white; font-size: 1.05rem; }
@@ -53,4 +54,3 @@
   .document-viewer__actions .button { min-height: 40px; padding: .55rem .7rem; font-size: .74rem; }
   .document-viewer__title p { display: none; }
 }
-

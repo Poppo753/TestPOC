@@ -7,7 +7,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 async function walk(directory) {
   const result = [];
   for (const item of await readdir(directory, { withFileTypes: true })) {

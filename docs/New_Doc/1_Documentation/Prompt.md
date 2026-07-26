@@ -9,7 +9,7 @@ successivamente, al documento di spiegazione espanso, stando super puntuale su o
 
 successivamente prendi il documento checklist e il documento spiegazione espansa e controlla che nella checklist ci sia tutto quanto e fixa quanto necessario sulla checklist
 
-infine, vai a eseguire ogni singolo task della checklist appena controllata, in modo da creare una suite di script che possano permettere la completa interazione con i protocolli e i plugin in maniera organizzata, ordinata e aggiornata, segnando sul doc checklist ogni task che concludi volta per volta (sii molto ampio nei commenti all'interno del codice che spiegano logiche, come usare, ecc ecc
+infine, vai a eseguire ogni singolo task della checklist appena controllata, in maniera organizzata, ordinata e aggiornata, segnando sul doc checklist ogni task che concludi volta per volta (sii molto ampio nei commenti all'interno del codice che spiegano logiche, come usare, ecc ecc
 infine, crea dei documenti (anche piu di uno, con specifiche/argometni diversi) in cui spieghi qual'è la situazione, cosa hai fatto, cosa hai fixato, cosa hai implementato, come, perche, ecc ecc
 infine crea un documento per ogni cartella o documento generale per tutti o che ne so come vuoi, in cui spieghi come utilizzare ogni singolo script (sapendo che comuqnue hanno dentro tutti i commenti gli script)
 tutti i file di documento che creerai, inseriscili al path indicato

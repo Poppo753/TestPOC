@@ -1,0 +1,27 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-07-23",
+  "horizons": [
+    {
+      "id": "today",
+      "label": "Today",
+      "title": "Private USDC PoC",
+      "status": "poc",
+      "description": "Supply-only validation on Arbitrum with recorded Aave, Euler and Morpho integrations."
+    },
+    {
+      "id": "next",
+      "label": "Next",
+      "title": "Consumer app and additional vaults",
+      "status": "planned",
+      "description": "A clearer consumer experience and new vault families only after acceptance criteria are met."
+    },
+    {
+      "id": "vision",
+      "label": "Vision",
+      "title": "Complete self-custodial financial home",
+      "status": "vision",
+      "description": "Hold, invest, understand and eventually use digital assets through suitable partners."
+    }
+  ]
+}

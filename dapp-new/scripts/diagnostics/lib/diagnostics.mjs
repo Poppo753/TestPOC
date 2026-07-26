@@ -6,7 +6,7 @@
  * it incapable of broadcasting a transaction by construction.
  */
 import { ethers } from 'ethers';
-import { DEPLOYMENT, validateDeployment } from '../../assets/js/web3/deployment-config.js';
+import { DEPLOYMENT, validateDeployment } from '../../../assets/js/web3/deployment-config.js';
 
 export function createReadOnlyProvider() {
   validateDeployment(ethers);
@@ -26,4 +26,3 @@ export function isJsonMode(argv = process.argv) {
 }
 
 export { ethers, DEPLOYMENT };
-

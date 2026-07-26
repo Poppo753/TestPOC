@@ -1,0 +1,43 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-07-23",
+  "entries": [
+    {
+      "date": "2026-07-23",
+      "title": "Product narrative and evidence pass",
+      "type": "website",
+      "changes": [
+        "Reordered the homepage around product state, capital boundary and transparency receipt.",
+        "Expanded Vaults, Risk, Trust Center, Roadmap, Vision and FAQ.",
+        "Added Simple and Advanced views to the private PoC console."
+      ]
+    },
+    {
+      "date": "2026-07-23",
+      "title": "Dynamic documentation reader",
+      "type": "documentation",
+      "changes": [
+        "Synchronized the canonical DOCX and Markdown pack.",
+        "Added catalog search, section navigation, deep links and Markdown downloads."
+      ]
+    },
+    {
+      "date": "2026-07-23",
+      "title": "Contained WebGL2 revision",
+      "type": "experience",
+      "changes": [
+        "Separated four page-specific scenes.",
+        "Kept controls as accessible HTML and preserved non-WebGL fallbacks."
+      ]
+    },
+    {
+      "date": "2026-07-14",
+      "title": "Arbitrum USDC PoC record",
+      "type": "deployment",
+      "changes": [
+        "Recorded the explicit Arbitrum One deployment configuration and native USDC base asset.",
+        "Recorded four protocol integration modules without claiming current allocation."
+      ]
+    }
+  ]
+}

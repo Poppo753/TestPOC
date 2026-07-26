@@ -2,7 +2,7 @@
  * Dependency-free structural validation for the static site.
  *
  * Usage from dapp-new:
- *   node scripts/validate-site.mjs
+ *   node scripts/validation/validate-site.mjs
  *
  * This is intentionally not a browser test. It catches broken local assets,
  * duplicate IDs, invalid JSON, missing page metadata, obsolete deployment
@@ -12,11 +12,11 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEPLOYMENT } from '../assets/js/web3/deployment-config.js';
-import { SITE, STATUS_TAXONOMY } from '../assets/js/config/site-config.js';
+import { DEPLOYMENT } from '../../assets/js/web3/deployment-config.js';
+import { SITE, STATUS_TAXONOMY } from '../../assets/js/config/site-config.js';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
-const root = resolve(scriptDir, '..');
+const root = resolve(scriptDir, '../..');
 const failures = [];
 
 async function walk(directory) {
@@ -30,11 +30,15 @@ async function walk(directory) {
 }
 
 const files = await walk(root);
-const htmlFiles = files.filter((path) => extname(path) === '.html');
-const jsonFiles = files.filter((path) => extname(path) === '.json' && path.includes(`${normalize('data')}`));
+const operationalFiles = files.filter((path) => !path.startsWith(join(root, 'legacy')) && !path.startsWith(join(root, 'artifacts')));
+const htmlFiles = operationalFiles.filter((path) => extname(path) === '.html');
+const jsonFiles = operationalFiles.filter((path) => extname(path) === '.json' && path.startsWith(join(root, 'data')));
 
 for (const [, path] of SITE.navigation) {
   try { await stat(join(root, path)); } catch { failures.push(`Shell navigation target missing: ${path}`); }
+}
+for (const [, entries] of SITE.footer) for (const [, path] of entries) {
+  try { await stat(join(root, path)); } catch { failures.push(`Shell footer target missing: ${path}`); }
 }
 for (const requiredStatus of ['live', 'implemented', 'poc', 'planned', 'vision', 'illustrative']) {
   if (!STATUS_TAXONOMY[requiredStatus]) failures.push(`Shell status taxonomy missing: ${requiredStatus}`);
@@ -58,14 +62,14 @@ for (const path of htmlFiles) {
   }
 
   for (const match of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
-    const reference = match[1].split('#')[0];
+    const reference = match[1].split(/[?#]/)[0];
     if (!reference || /^(https?:|mailto:|data:)/.test(reference)) continue;
     const target = resolve(dirname(path), reference);
     try { await stat(target); } catch { failures.push(`Broken local reference ${reference} in ${path}`); }
   }
 }
 
-const activeFiles = files.filter((path) => /[\\/](assets|data|pages)[\\/]/.test(path) || /[\\/](index|app)\.html$/.test(path));
+const activeFiles = operationalFiles.filter((path) => /[\\/](assets|data|pages)[\\/]/.test(path) || /[\\/](index|app)\.html$/.test(path));
 const activeText = (await Promise.all(activeFiles.map((path) => readFile(path, 'utf8').catch(() => '')))).join('\n');
 for (const phrase of ['Maximum Yield', 'Every Protocol', 'No-Risk', 'fully audited']) {
   if (activeText.includes(phrase)) failures.push(`Disallowed claim found: ${phrase}`);
@@ -80,9 +84,9 @@ for (const oldAddress of [
 // The browser config is executable JavaScript while deployments.json is the
 // public record. Compare the active entry so they cannot silently diverge.
 try {
-  const deploymentData = JSON.parse(await readFile(join(root, 'data', 'deployments.json'), 'utf8'));
+  const deploymentData = JSON.parse(await readFile(join(root, 'data', 'protocol', 'deployments.json'), 'utf8'));
   const record = deploymentData.deployments.find((entry) => entry.id === DEPLOYMENT.id);
-  if (!record) failures.push(`Deployment ${DEPLOYMENT.id} missing from data/deployments.json`);
+  if (!record) failures.push(`Deployment ${DEPLOYMENT.id} missing from data/protocol/deployments.json`);
   else {
     if (record.chainId !== DEPLOYMENT.chain.id) failures.push('Deployment chainId mismatch between JSON and JS config');
     if (record.baseAsset.address.toLowerCase() !== DEPLOYMENT.baseAsset.address.toLowerCase()) failures.push('Base asset address mismatch between JSON and JS config');

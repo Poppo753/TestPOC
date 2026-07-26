@@ -111,3 +111,91 @@
   .status-legend > div { border-right: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .boundary-node::after, .route-line::after { animation: none; } }
+
+/* Product narrative v1.2 */
+.cluster--between { justify-content: space-between; }
+.hero-disclaimer { margin-top: 1rem; max-width: 68ch; font-size: .8rem; }
+.panel-kicker { margin: .8rem 0 0; }
+.panel-source { margin-top: 1rem; }
+.final-mark { width: 3.5rem; margin-bottom: 1rem; }
+.product-horizons { position: relative; z-index: 2; border-block: 1px solid var(--border); background: rgba(7,16,31,.8); }
+.horizon-strip { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; gap: 1rem; padding-block: 1rem; }
+.horizon-strip article { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: .2rem .7rem; min-width: 0; }
+.horizon-strip article .badge { grid-row: span 2; }
+.horizon-strip article strong { line-height: 1.25; }
+.horizon-strip article small { color: var(--text-400); }
+.horizon-arrow { color: var(--cyan-400); }
+.boundary-steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: .6rem; margin-top: 1rem; }
+.boundary-steps article { min-width: 0; padding: .85rem; border: 1px solid var(--border); border-radius: .8rem; background: rgba(255,255,255,.025); }
+.boundary-steps article > span { display: block; color: var(--violet-300); font: 750 .7rem ui-monospace, monospace; }
+.boundary-steps strong, .boundary-steps small { display: block; }
+.boundary-steps strong { margin: .35rem 0; }
+.boundary-steps small { color: var(--text-400); line-height: 1.45; }
+.receipt-layout { display: grid; grid-template-columns: minmax(0,.72fr) minmax(440px,1.28fr); gap: clamp(2rem,5vw,5rem); align-items: center; }
+.receipt-dashboard h3 { margin: .25rem 0 0; }
+.receipt-total { display: flex; align-items: end; justify-content: space-between; gap: 1rem; padding: 1.5rem 0; border-bottom: 1px solid var(--border); }
+.receipt-total span, .receipt-grid span, .receipt-decision span { color: var(--text-400); font-size: .78rem; }
+.receipt-total strong { font-size: clamp(1.7rem,4vw,2.5rem); }
+.receipt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; padding: 1rem 0; }
+.receipt-grid > div { display: grid; padding: .8rem; border: 1px solid var(--border); border-radius: .7rem; background: rgba(255,255,255,.025); }
+.receipt-allocation { padding-block: .5rem 1rem; }
+.receipt-decision { display: grid; gap: .3rem; padding: 1rem; margin-bottom: .4rem; border-left: 3px solid var(--violet-400); background: rgba(139,92,246,.08); }
+.product-showcase { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(320px,.8fr); gap: 1rem; padding: clamp(1.4rem,4vw,2.5rem); border: 1px solid rgba(139,92,246,.35); border-radius: var(--radius-xl); background: linear-gradient(140deg,rgba(25,37,65,.97),rgba(7,16,31,.95)); box-shadow: var(--shadow); }
+.product-showcase__main { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; }
+.product-showcase__main h3 { margin-top: 1rem; font-size: clamp(2rem,5vw,3.5rem); }
+.product-showcase__facts { display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.product-showcase__facts > div { display: grid; gap: .3rem; padding: 1rem; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.product-showcase__facts > div:nth-child(2n) { border-right: 0; }
+.product-showcase__facts span { color: var(--text-400); font-size: .72rem; }
+.future-vaults { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; opacity: .72; }
+.why-jethos { display: grid; grid-template-columns: repeat(3,1fr); gap: 1px; margin-top: 2rem; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--border); }
+.why-jethos article { padding: 1.4rem; background: var(--ink-900); }
+.why-jethos span { color: var(--text-400); font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; }
+.why-jethos strong { display: block; margin: .5rem 0; font-size: 1.1rem; }
+.why-jethos p { margin: 0; color: var(--text-400); }
+.why-jethos__answer { background: linear-gradient(145deg,rgba(139,92,246,.15),rgba(34,211,238,.07)) !important; }
+.policy-ledger, .evidence-register, .roadmap-evidence { display: grid; gap: .7rem; }
+.policy-row, .evidence-row { display: grid; grid-template-columns: minmax(160px,.7fr) minmax(0,1.3fr) auto; align-items: center; gap: 1rem; padding: .9rem 1rem; border: 1px solid var(--border); border-radius: .75rem; background: rgba(255,255,255,.025); }
+.policy-row > span:first-child, .evidence-row > span:first-child { color: var(--text-400); }
+.policy-pending { color: var(--text-300); border-style: dashed; }
+.architecture-route { display: grid; grid-template-columns: repeat(5,1fr); gap: 1rem; align-items: stretch; }
+.architecture-route > div { position: relative; padding: 1rem; text-align: center; border: 1px solid var(--border); border-radius: .8rem; background: rgba(255,255,255,.025); }
+.architecture-route > div:not(:last-child)::after { content: '→'; position: absolute; right: -.75rem; top: 50%; z-index: 2; color: var(--cyan-400); transform: translateY(-50%); }
+.roadmap-meta { display: grid; grid-template-columns: repeat(3,1fr); gap: .6rem; margin-top: 1rem; }
+.roadmap-meta > div { padding: .75rem; border: 1px solid var(--border); border-radius: .65rem; }
+.roadmap-meta span { display: block; color: var(--text-400); font-size: .68rem; text-transform: uppercase; }
+.roadmap-meta strong { display: block; margin-top: .25rem; font-size: .85rem; }
+.vision-dashboard { display: grid; grid-template-columns: 1.1fr .9fr; gap: 1rem; padding: 1rem; border: 1px solid rgba(139,92,246,.3); border-radius: var(--radius-xl); background: linear-gradient(145deg,rgba(20,33,57,.96),rgba(7,16,31,.97)); }
+.vision-dashboard__balance { padding: 1.5rem; border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.vision-dashboard__balance > strong { display: block; font-size: clamp(2.2rem,5vw,4rem); }
+.vision-dashboard__modules { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
+.vision-dashboard__modules > div { padding: 1rem; border: 1px solid var(--border); border-radius: .8rem; background: rgba(255,255,255,.025); }
+.mode-switch { display: inline-flex; gap: .3rem; padding: .3rem; border: 1px solid var(--border); border-radius: .8rem; background: rgba(0,0,0,.18); }
+.mode-switch button { border: 0; border-radius: .55rem; padding: .6rem 1rem; color: var(--text-400); background: transparent; font-weight: 750; cursor: pointer; }
+.mode-switch button[aria-selected="true"] { color: white; background: var(--ink-700); }
+[data-app-mode-panel][hidden] { display: none !important; }
+.transaction-summary { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin-top: 1rem; }
+.transaction-summary > div { display: grid; gap: .2rem; padding: .7rem; border: 1px solid var(--border); border-radius: .65rem; }
+.transaction-summary span { color: var(--text-400); font-size: .7rem; }
+.audience-paths { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; }
+.audience-paths .card { min-height: 100%; }
+.changelog { display: grid; gap: 1rem; }
+.changelog-entry { display: grid; grid-template-columns: 130px 1fr; gap: 1.5rem; padding: 1.5rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: rgba(255,255,255,.025); }
+.changelog-entry time { color: var(--violet-300); font: 750 .78rem ui-monospace, monospace; }
+
+@media (max-width: 1000px) {
+  .boundary-steps, .architecture-route { grid-template-columns: 1fr 1fr; }
+  .architecture-route > div::after { display: none; }
+  .receipt-layout, .product-showcase, .vision-dashboard { grid-template-columns: 1fr; }
+  .receipt-layout { align-items: start; }
+}
+@media (max-width: 700px) {
+  .horizon-strip { grid-template-columns: 1fr; }
+  .horizon-arrow { transform: rotate(90deg); justify-self: center; }
+  .boundary-steps, .future-vaults, .why-jethos, .audience-paths, .architecture-route { grid-template-columns: 1fr; }
+  .product-showcase__facts, .receipt-grid, .roadmap-meta, .vision-dashboard__modules, .transaction-summary { grid-template-columns: 1fr; }
+  .product-showcase__facts > div { border-right: 0; }
+  .policy-row, .evidence-row { grid-template-columns: 1fr; gap: .35rem; }
+  .receipt-total { align-items: flex-start; flex-direction: column; }
+  .changelog-entry { grid-template-columns: 1fr; }
+}

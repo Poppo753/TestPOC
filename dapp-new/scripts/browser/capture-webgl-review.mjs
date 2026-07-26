@@ -8,7 +8,7 @@ import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const base=(process.argv[2]||'http://127.0.0.1:4173').replace(/\/$/,'');
-const output=resolve(process.argv[3]||'webgl-review'); mkdirSync(output,{recursive:true});
+const output=resolve(process.argv[3]||'artifacts/webgl-review'); mkdirSync(output,{recursive:true});
 const candidates=process.platform==='win32'?['C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe','C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe','C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe']:['/usr/bin/google-chrome','/usr/bin/chromium','/usr/bin/microsoft-edge'];
 const browser=process.env.JETHOS_BROWSER||candidates.find(existsSync);
 if(!browser){console.error('No Chromium browser found. Set JETHOS_BROWSER.');process.exit(1);}

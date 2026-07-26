@@ -1,7 +1,8 @@
 # Jethos website and PoC console
 
-This directory contains the public multi-page Jethos website and a separate,
-`noindex` console for the private Arbitrum USDC proof of concept.
+This directory contains the public multi-page Jethos website, a browser-only
+Interactive Demo and a separate `noindex` console for the private Arbitrum USDC
+proof of concept.
 
 ## Run locally
 
@@ -27,6 +28,7 @@ maintenance commands. It introduces no site-specific dependency installation.
 
 ```text
 index.html                 public landing
+demo/                      simulated product journey; no wallet or real funds
 app.html                   private PoC console
 pages/                     informational pages
 assets/css/                local design system
@@ -37,10 +39,18 @@ assets/js/features/        editorial enhancements
 assets/js/docs/            safe Markdown renderer and documentation viewer
 assets/js/webgl/           optional 3D engine, scenes and accessible bridges
 assets/js/app/             PoC console orchestration, forms and renderers
+assets/js/demo/            illustrative catalog, storage, engine and UI
 assets/js/web3/            deployment, readers and transaction workflows
-data/                      structured editorial/deployment records
+data/editorial/            cross-page editorial records
+data/product/              product state, vaults, roadmap, risk and changelog
+data/protocol/             deployment, integrations and trust evidence
 content/docs/              synchronized, web-readable documentation pack
-scripts/                   validation and read-only operational diagnostics
+scripts/browser/           runtime smoke tests and review captures
+scripts/diagnostics/       read-only deployment and protocol diagnostics
+scripts/documentation/     DOCX/Markdown synchronization
+scripts/validation/        static release gates
+legacy/                    retained prototypes, references, data and media
+artifacts/                 ignored local review output
 ```
 
 ## Validate and inspect
@@ -51,6 +61,8 @@ is recommended.
 ```powershell
 npm run validate
 npm run check:content
+npm run check:product
+npm run check:demo
 npm run check:webgl
 npm run check:docs
 npm run check:deployment
@@ -71,9 +83,39 @@ operations remain limited to the browser console and pass through the Jethos
 core contracts; plugins are inspected but are not exposed as arbitrary write
 targets.
 
+## Interactive Demo
+
+Open `demo/index.html` through the local HTTP server to experience the complete
+browser-only journey: explore illustrative vaults, deposit demo USDC, advance
+simulated time, inspect the capital route and withdraw. State is stored under a
+versioned `localStorage` key and can be reset from the demo rail.
+
+The demo never imports `assets/js/web3/`, never opens a wallet and never
+generates fake transaction hashes. Run `npm run check:demo` after changing its
+catalog, engine, UI or copy. With a local server on port 4175, execute the real
+browser smoke test with:
+
+```powershell
+npm run check:demo:browser -- http://127.0.0.1:4175
+```
+
 `npm run ready` executes static validation, the editorial contract, the WebGL
 manifest, the documentation reader and both live diagnostics as one release gate. Passing it is useful operational
 evidence, but is not an audit or authorization to publish a financial product.
+
+## Product-state and evidence sources
+
+The consumer narrative keeps current capability, open policy and long-term
+direction separate through four reviewed sources:
+
+- `data/product/product-state.json`
+- `data/product/risk-policy.json`
+- `data/protocol/trust-evidence.json`
+- `data/product/changelog.json`
+
+`npm run check:product` verifies the homepage hierarchy, illustrative labels,
+pending risk decisions, Trust Center unknowns, Docs fallback and PoC
+Simple/Advanced modes.
 
 ## Dynamic documentation
 
@@ -116,15 +158,15 @@ capture review frames with:
 
 ```bash
 npm run check:webgl:browser -- http://127.0.0.1:4173
-npm run capture:webgl -- http://127.0.0.1:4173 ./webgl-review
+npm run capture:webgl -- http://127.0.0.1:4173 ./artifacts/webgl-review
 ```
 
 Legacy URLs (`landing.html`, `documentation.html`, `config.html` and
 `portfolio.html`) are compatibility redirects.
 
-Legacy files such as the former `src/`, root `main.js`, API-reference JSON,
-old plugin/roadmap JSON and the background video are retained for historical
-comparison but are not referenced by the new entry points.
+Historical prototypes, API references, unused JSON and the old background video
+are retained under `legacy/`. Nothing in that directory is referenced by the
+active entry points.
 
 ## Safety model
 
@@ -140,7 +182,7 @@ comparison but are not referenced by the new entry points.
 ## Updating the deployment
 
 Do not replace addresses individually from memory. Start from a verified
-deployment manifest, update `data/deployments.json` and
+deployment manifest, update `data/protocol/deployments.json` and
 `assets/js/web3/deployment-config.js`, then validate bytecode, ABI reads and the
 complete deposit/withdraw flow on a safe fork before enabling writes.
 
@@ -164,3 +206,13 @@ The corrected contained-WebGL2 implementation, critical review, consolidated
 checklist, Blender pipeline and verification evidence are stored in:
 
 `docs/New_Doc/1_Documentation/8. Web Site/5. WebGL2_23.07.26/`
+
+The product-narrative revision, checked implementation checklist and final
+maintenance/verification guides are stored in:
+
+`docs/New_Doc/1_Documentation/8. Web Site/6. Six_23.07.26/`
+
+Interactive Demo strategy, checked implementation checklist, delivery report
+and user/maintenance guides are stored in:
+
+`docs/New_Doc/1_Documentation/8. Web Site/7. Seven_Demo_23.07.26/`

@@ -10,8 +10,8 @@
 param()
 
 $ErrorActionPreference = 'Stop'
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$dappRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+$dappRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $sourceRoot = Join-Path $repoRoot 'docs\New_Doc\1_Documentation\jethos_docs_v0_1'
 $outputRoot = Join-Path $dappRoot 'content\docs'
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null

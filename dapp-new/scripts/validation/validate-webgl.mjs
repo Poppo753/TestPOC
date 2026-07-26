@@ -7,9 +7,9 @@ import { readFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SCENE_MANIFEST, THREE_VERSION } from '../assets/js/webgl/scene-manifest.js';
+import { SCENE_MANIFEST, THREE_VERSION } from '../../assets/js/webgl/scene-manifest.js';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const expected = new Map([
   ['index.html', 'ownership'],
   ['pages/how-it-works.html', 'journey'],

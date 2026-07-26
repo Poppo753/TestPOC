@@ -15,6 +15,8 @@ export class AppView {
 
   initializeStaticLinks() {
     setLink('contract-liquidity', explorerAddress(DEPLOYMENT.contracts.liquidityManager), formatAddress(DEPLOYMENT.contracts.liquidityManager));
+    setText('summary-chain', `${DEPLOYMENT.chain.name} · ${DEPLOYMENT.chain.id}`);
+    setText('summary-contract', `LiquidityManager · ${formatAddress(DEPLOYMENT.contracts.liquidityManager)}`);
   }
 
   renderRefresh(busy) {
@@ -49,9 +51,21 @@ export class AppView {
     setText('withdraw-fee', vault.withdrawFee.ok ? `${(Number(vault.withdrawFee.value) / 100).toFixed(2)}%` : 'Unavailable');
     setText('deposit-state', vault.depositsEnabled.ok ? (vault.depositsEnabled.value ? 'Enabled' : 'Disabled') : 'Unavailable');
     setText('withdraw-state', vault.withdrawsEnabled.ok ? (vault.withdrawsEnabled.value ? 'Enabled' : 'Disabled') : 'Unavailable');
+    const depositFee = vault.depositFee.ok ? `${(Number(vault.depositFee.value) / 100).toFixed(2)}%` : 'Unavailable';
+    const withdrawFee = vault.withdrawFee.ok ? `${(Number(vault.withdrawFee.value) / 100).toFixed(2)}%` : 'Unavailable';
+    setText('summary-fees', `Deposit ${depositFee} · withdraw ${withdrawFee}`);
+    setText('summary-withdrawal', vault.withdrawsEnabled.ok ? (vault.withdrawsEnabled.value ? 'Currently enabled' : 'Currently disabled') : 'Read unavailable');
     const paused = (vault.proxyPaused.ok && vault.proxyPaused.value) || (vault.liquidityPaused.ok && vault.liquidityPaused.value);
     setText('pause-state', paused ? 'Paused' : 'No pause reported');
     setText('data-status', `Live reads · ${formatDate(vault.timestamp)}`);
+  }
+
+  renderVaultError(error) {
+    ['pool-value', 'pool-reserve', 'deposit-state', 'withdraw-state', 'pause-state', 'deposit-fee', 'withdraw-fee', 'share-supply-raw']
+      .forEach((id) => setText(id, 'Read unavailable'));
+    setText('summary-fees', 'RPC read unavailable');
+    setText('summary-withdrawal', 'RPC read unavailable');
+    setText('data-status', `Public contract reads failed · ${error.message}`);
   }
 
   renderUser(user) {

@@ -25,10 +25,15 @@
 .card-icon svg { width: 1.45rem; height: 1.45rem; }
 .badge { display: inline-flex; align-items: center; gap: .42rem; width: fit-content; padding: .35rem .65rem; border-radius: 999px; font-size: .72rem; font-weight: 800; letter-spacing: .025em; border: 1px solid var(--border); color: var(--text-300); background: rgba(255,255,255,.04); }
 .badge::before { content: ''; width: .42rem; height: .42rem; border-radius: 50%; background: currentColor; }
-.badge--poc, .badge--validation { color: var(--amber-400); border-color: rgba(251,191,36,.28); background: rgba(251,191,36,.07); }
-.badge--live, .badge--implemented { color: var(--green-400); border-color: rgba(52,211,153,.28); background: rgba(52,211,153,.07); }
-.badge--planned { color: var(--blue-400); border-color: rgba(96,165,250,.28); background: rgba(96,165,250,.07); }
-.badge--vision, .badge--illustrative { color: var(--violet-300); border-color: rgba(196,181,253,.28); background: rgba(139,92,246,.08); }
+.badge--live { color: var(--green-400); border-color: rgba(52,211,153,.32); background: rgba(52,211,153,.08); }
+.badge--implemented { color: var(--cyan-300); border-color: rgba(34,211,238,.3); background: rgba(34,211,238,.07); }
+.badge--poc { color: var(--violet-300); border-color: rgba(196,181,253,.34); background: rgba(139,92,246,.11); }
+.badge--validation { color: var(--amber-400); border-color: rgba(251,191,36,.3); background: rgba(251,191,36,.07); }
+.badge--planned { color: var(--blue-400); border-style: dashed; border-color: rgba(96,165,250,.3); background: rgba(96,165,250,.045); }
+.badge--vision { color: var(--violet-300); border-color: rgba(196,181,253,.24); background: transparent; }
+.badge--illustrative { color: var(--amber-400); border-color: rgba(251,191,36,.3); background: rgba(251,191,36,.07); }
+.badge--recorded { color: var(--text-300); border-color: var(--border-strong); background: rgba(255,255,255,.035); }
+.badge--unavailable { color: var(--text-400); border-style: dashed; border-color: var(--border-strong); background: transparent; }
 .callout { border-left: 3px solid var(--violet-400); border-radius: 0 var(--radius-md) var(--radius-md) 0; background: rgba(139,92,246,.08); padding: 1rem 1.2rem; }
 .callout--warning { border-color: var(--amber-400); background: rgba(251,191,36,.07); }
 .metric { display: flex; flex-direction: column; gap: .2rem; }
