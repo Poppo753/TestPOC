@@ -12,10 +12,11 @@
 10. `10_Verifica_Finale.md` — test ed evidenze finali.
 11. `11_Indice.md` — questo documento.
 
+12. `12_Allineamento_Homepage_Demo_26.07.26.md` — mappa aggiornata delle schermate, dei click e del modello condiviso con la homepage.
+
 ## Punto di ingresso rapido
 
 - Per provare la demo: documento 07.
 - Per modificarla: documento 08.
 - Per comprenderne le decisioni: documenti 01–03.
 - Per verificare la consegna: documenti 04 e 10.
-

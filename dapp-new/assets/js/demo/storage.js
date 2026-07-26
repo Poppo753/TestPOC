@@ -1,17 +1,12 @@
-/**
- * Browser-only persistence boundary for the demo.
- *
- * The key contains "demo" intentionally: this state must never be interpreted
- * as an account record. Schema mismatches or malformed JSON reset to a known,
- * safe scenario rather than attempting speculative migrations.
- */
-export const DEMO_SCHEMA_VERSION = 1;
-export const DEMO_STORAGE_KEY = 'jethos-interactive-demo-v1';
+import { DEMO_ASSETS } from './data.js';
+
+export const DEMO_SCHEMA_VERSION = 2;
+export const DEMO_STORAGE_KEY = 'jethos-interactive-demo-v2';
 
 export function createInitialState() {
   return {
     schemaVersion: DEMO_SCHEMA_VERSION,
-    walletBalance: 10000,
+    walletAssets: Object.fromEntries(DEMO_ASSETS.map((asset) => [asset.id, asset.value])),
     positions: {},
     activity: [],
     simulatedDays: 0,
@@ -19,16 +14,15 @@ export function createInitialState() {
   };
 }
 
-function validNumber(value) {
-  return Number.isFinite(value) && value >= 0;
-}
+const validNumber = (value) => Number.isFinite(value) && value >= 0;
 
 function isValidState(value) {
   if (!value || value.schemaVersion !== DEMO_SCHEMA_VERSION) return false;
-  if (!validNumber(value.walletBalance) || !validNumber(value.simulatedDays)) return false;
+  if (!value.walletAssets || !validNumber(value.simulatedDays)) return false;
   if (!value.positions || typeof value.positions !== 'object' || !Array.isArray(value.activity)) return false;
-  return Object.values(value.positions).every((position) =>
-    position && validNumber(position.principal) && validNumber(position.daysAccrued));
+  if (!Object.values(value.walletAssets).every(validNumber)) return false;
+  return Object.entries(value.positions).every(([id, position]) =>
+    id.split(':').length === 3 && position && validNumber(position.principal) && validNumber(position.daysAccrued));
 }
 
 export function loadDemoState(storage = window.localStorage) {
@@ -50,4 +44,3 @@ export function clearDemoState(storage = window.localStorage) {
   storage.removeItem(DEMO_STORAGE_KEY);
   return createInitialState();
 }
-

@@ -13,28 +13,28 @@ import { vaultById } from '../../assets/js/demo/data.js';
 const state = createInitialState();
 assert.equal(summarize(state).total, 10000);
 
-deposit(state, 'reserve', 2500, new Date('2026-07-23T10:00:00Z'));
-assert.equal(state.walletBalance, 7500);
-assert.equal(state.positions.reserve.principal, 2500);
+const vaultId = 'conservative:plasma:usdc';
+deposit(state, vaultId, 2500, new Date('2026-07-23T10:00:00Z'));
+assert.equal(state.walletAssets.usdc, 2500);
+assert.equal(state.positions[vaultId].principal, 2500);
 assert.equal(state.activity[0].type, 'Deposit');
 
 advanceDays(state, 30, new Date('2026-08-22T10:00:00Z'));
-const grown = positionValue(state.positions.reserve, vaultById('reserve'));
+const grown = positionValue(state.positions[vaultId], vaultById(vaultId));
 assert.ok(grown > 2500, 'Illustrative value should grow after advancing time.');
 assert.equal(state.simulatedDays, 30);
 
-withdraw(state, 'reserve', 1000, new Date('2026-08-22T10:01:00Z'));
-assert.equal(state.walletBalance, 8500);
-assert.ok(positionValue(state.positions.reserve, vaultById('reserve')) > 1500);
+withdraw(state, vaultId, 1000, new Date('2026-08-22T10:01:00Z'));
+assert.equal(state.walletAssets.usdc, 3500);
+assert.ok(positionValue(state.positions[vaultId], vaultById(vaultId)) > 1500);
 
-const remainder = positionValue(state.positions.reserve, vaultById('reserve'));
-withdraw(state, 'reserve', remainder, new Date('2026-08-22T10:02:00Z'));
-assert.equal(state.positions.reserve, undefined);
+const remainder = positionValue(state.positions[vaultId], vaultById(vaultId));
+withdraw(state, vaultId, remainder, new Date('2026-08-22T10:02:00Z'));
+assert.equal(state.positions[vaultId], undefined);
 assert.equal(summarize(state).positionCount, 0);
 
-assert.throws(() => deposit(state, 'reserve', 999999), /enough USDC/);
+assert.throws(() => deposit(state, vaultId, 999999), /enough USDC/);
 assert.throws(() => deposit(state, 'missing', 1), /does not exist/);
 assert.throws(() => advanceDays(state, 30), /Deposit/);
 
 console.log('Demo engine test passed: deposit, deterministic growth, partial/full withdrawal and error boundaries.');
-

@@ -32,14 +32,14 @@ const shell = await readFile(join(root, 'assets/js/core/site-shell.js'), 'utf8')
 const home = await readFile(join(root, 'index.html'), 'utf8');
 const demoSource = [html, controller, await readFile(join(root, 'assets/js/demo/engine.js'), 'utf8')].join('\n');
 
-for (const route of ['overview', 'vaults', 'portfolio', 'activity', 'transparency']) {
+for (const route of ['overview', 'wallet', 'vaults', 'portfolio', 'activity', 'transparency']) {
   if (!html.includes(`data-demo-route="${route}"`)) failures.push(`Missing demo route: ${route}`);
 }
 for (const token of ['noindex,nofollow', 'No wallet, blockchain or real funds', 'data-demo-reset']) {
   if (!html.includes(token)) failures.push(`Missing demo boundary token: ${token}`);
 }
 if (/from ['"][^'"]*web3\//.test(demoSource)) failures.push('Demo code must not import Web3 modules.');
-if (DEMO_SCHEMA_VERSION !== 1) failures.push('Unexpected demo schema version.');
+if (DEMO_SCHEMA_VERSION !== 2) failures.push('Unexpected demo schema version.');
 if (!shell.includes('demo/index.html') || !home.includes('demo/index.html')) failures.push('Demo must be linked from the shared shell and landing page.');
 
 const ids = new Set();
@@ -58,4 +58,3 @@ if (failures.length) {
 } else {
   console.log('Interactive Demo validation passed: files, routes, disclaimers, allocations and Web3 separation.');
 }
-

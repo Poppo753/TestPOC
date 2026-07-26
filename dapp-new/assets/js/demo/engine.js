@@ -1,28 +1,28 @@
 import { vaultById } from './data.js';
 
-const EPSILON = 0.000001;
+const EPSILON = .000001;
 const roundMoney = (value) => Math.round((value + Number.EPSILON) * 1e6) / 1e6;
 
-/**
- * Derive value instead of storing it. This makes the simulation deterministic:
- * the same principal and number of simulated days always produce the same
- * result, with no market feed or hidden random component.
- */
 export function positionValue(position, vault) {
   if (!position || !vault) return 0;
   return roundMoney(position.principal * ((1 + vault.apy) ** (position.daysAccrued / 365)));
+}
+
+export function walletTotal(state) {
+  return roundMoney(Object.values(state.walletAssets).reduce((sum, value) => sum + value, 0));
 }
 
 export function summarize(state) {
   const vaultValue = Object.entries(state.positions).reduce((sum, [id, position]) =>
     sum + positionValue(position, vaultById(id)), 0);
   const principal = Object.values(state.positions).reduce((sum, position) => sum + position.principal, 0);
+  const wallet = walletTotal(state);
   return {
-    wallet: roundMoney(state.walletBalance),
+    wallet,
     vaultValue: roundMoney(vaultValue),
     principal: roundMoney(principal),
     earnings: roundMoney(vaultValue - principal),
-    total: roundMoney(state.walletBalance + vaultValue),
+    total: roundMoney(wallet + vaultValue),
     positionCount: Object.values(state.positions).filter((position) => position.principal > EPSILON).length,
   };
 }
@@ -40,26 +40,24 @@ function activity(type, vault, amount, now = new Date()) {
     type,
     vaultId: vault?.id || null,
     vaultName: vault?.name || 'Demo account',
+    asset: vault?.asset?.symbol || null,
+    chain: vault?.chain?.name || null,
     amount: roundMoney(amount),
     status: 'Simulated',
   };
 }
 
-export function deposit(state, vaultId, rawAmount, now) {
-  const vault = vaultById(vaultId);
+export function deposit(state, id, rawAmount, now) {
+  const vault = vaultById(id);
   if (!vault) throw new Error('The selected illustrative vault does not exist.');
   const amount = numericAmount(rawAmount);
-  if (amount - state.walletBalance > EPSILON) throw new Error('The demo wallet does not contain enough USDC.');
+  const available = state.walletAssets[vault.asset.id] || 0;
+  if (amount - available > EPSILON) throw new Error(`The demo wallet does not contain enough ${vault.asset.symbol}.`);
 
-  const current = state.positions[vaultId];
-  // Existing illustrative earnings remain visible. New capital starts accruing
-  // from the current simulated day, so weighted days preserve the prior value.
+  const current = state.positions[id];
   const currentValue = positionValue(current, vault);
-  state.positions[vaultId] = {
-    principal: roundMoney(currentValue + amount),
-    daysAccrued: 0,
-  };
-  state.walletBalance = roundMoney(state.walletBalance - amount);
+  state.positions[id] = { principal: roundMoney(currentValue + amount), daysAccrued: 0 };
+  state.walletAssets[vault.asset.id] = roundMoney(available - amount);
   state.activity.unshift(activity('Deposit', vault, amount, now));
   return state;
 }
@@ -73,24 +71,19 @@ export function advanceDays(state, days = 30, now) {
   return state;
 }
 
-export function withdraw(state, vaultId, rawAmount, now) {
-  const vault = vaultById(vaultId);
-  const position = state.positions[vaultId];
+export function withdraw(state, id, rawAmount, now) {
+  const vault = vaultById(id);
+  const position = state.positions[id];
   if (!vault || !position) throw new Error('No position exists for this illustrative vault.');
   const amount = numericAmount(rawAmount);
   const available = positionValue(position, vault);
   if (amount - available > EPSILON) throw new Error('The requested amount is greater than the simulated position value.');
 
-  const isFullWithdrawal = available - amount <= 0.01;
-  const paid = isFullWithdrawal ? available : amount;
-  if (isFullWithdrawal) {
-    delete state.positions[vaultId];
-  } else {
-    const remainingValue = available - paid;
-    state.positions[vaultId] = { principal: roundMoney(remainingValue), daysAccrued: 0 };
-  }
-  state.walletBalance = roundMoney(state.walletBalance + paid);
+  const full = available - amount <= .01;
+  const paid = full ? available : amount;
+  if (full) delete state.positions[id];
+  else state.positions[id] = { principal: roundMoney(available - paid), daysAccrued: 0 };
+  state.walletAssets[vault.asset.id] = roundMoney((state.walletAssets[vault.asset.id] || 0) + paid);
   state.activity.unshift(activity('Withdrawal', vault, paid, now));
   return state;
 }
-

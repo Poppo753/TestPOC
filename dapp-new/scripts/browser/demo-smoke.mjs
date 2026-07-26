@@ -28,7 +28,7 @@ try {
   const dom = result.stdout;
   const required = [
     'class="auth-gate"',
-    'Your simulated financial home',
+    'Everything visible. Every action explicit.',
     'Total simulated value',
     'data-demo-route="transparency"',
     'No wallet, blockchain or real funds',
@@ -43,4 +43,3 @@ try {
 } finally {
   rmSync(profile, { recursive: true, force: true });
 }
-
