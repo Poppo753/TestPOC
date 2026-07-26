@@ -27,7 +27,17 @@ if (!trust.evidence?.some(({ status }) => status === 'unavailable')) failures.pu
 if (!trust.assuranceGates?.every(({ status }) => status && status !== 'Complete')) failures.push('No assurance gate may be silently marked complete.');
 if (!changelog.entries?.length || changelog.entries.some((entry) => !entry.date || !entry.title || !entry.changes?.length)) failures.push('Changelog entries require date, title and changes.');
 
-const homeOrder = ['class="hero"', 'class="product-horizons"', 'id="capital-boundary"', 'id="transparency"', 'id="current-product"', 'id="risk-intelligence"', 'id="financial-home"'];
+const homeOrder = [
+  'class="hero"',
+  'class="product-horizons"',
+  'id="capital-boundary"',
+  'id="transparency"',
+  'id="risk-intelligence"',
+  'id="financial-home"',
+  'id="strategy-inspector"',
+  'id="architecture"',
+  'id="current-product"',
+];
 let previous = -1;
 for (const marker of homeOrder) {
   const index = home.indexOf(marker);

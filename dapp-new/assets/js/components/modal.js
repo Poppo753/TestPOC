@@ -5,6 +5,8 @@ export class Modal {
     this.dialog = element?.querySelector('[role="dialog"]');
     this.lastFocus = null;
     this.onKeydown = this.onKeydown.bind(this);
+    this.onBackdropClick = this.onBackdropClick.bind(this);
+    this.element?.addEventListener('click', this.onBackdropClick);
   }
   open() {
     if (!this.element) return;
@@ -29,5 +31,7 @@ export class Modal {
     if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
     if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   }
+  onBackdropClick(event) {
+    if (event.target === this.element) this.close();
+  }
 }
-

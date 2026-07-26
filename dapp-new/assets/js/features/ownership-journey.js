@@ -451,6 +451,12 @@ if (journey) {
     });
   });
   journey.querySelector('[data-vault-popover-close]')?.addEventListener('click', closePopover);
+  document.addEventListener('click', (event) => {
+    if (!popover || popover.hidden) return;
+    if (popover.contains(event.target)) return;
+    if (event.target.closest('[data-vault-option], [data-vault-mode], [data-chain], [data-token]')) return;
+    closePopover();
+  });
   window.addEventListener('resize', positionVaultPopover, { passive: true });
   window.addEventListener('scroll', positionVaultPopover, { passive: true });
   document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closePopover(); });

@@ -118,7 +118,7 @@ if (section) {
     if (event.key === 'Escape' && !popover.hidden) closePopover({ restoreFocus: true });
   });
   document.addEventListener('click', (event) => {
-    if (popover.hidden || section.contains(event.target)) return;
+    if (popover.hidden || popover.contains(event.target) || event.target.closest('[data-horizon-step]')) return;
     closePopover();
   });
 }

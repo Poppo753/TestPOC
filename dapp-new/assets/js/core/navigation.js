@@ -15,6 +15,11 @@ export function initNavigation() {
   links.addEventListener('click', (event) => {
     if (event.target.closest('a')) close();
   });
+  document.addEventListener('click', (event) => {
+    if (links.dataset.open !== 'true') return;
+    if (links.contains(event.target) || toggle.contains(event.target)) return;
+    close();
+  });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
       close();
@@ -25,4 +30,3 @@ export function initNavigation() {
     if (innerWidth > 1060) close();
   });
 }
-
