@@ -28,7 +28,9 @@ if (journey) {
   const vaultTarget = dashboard?.querySelector('.balance-card--vault');
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const compactLayout = window.matchMedia('(max-width: 1150px)');
+  const compactMotion = window.matchMedia('(max-width: 1150px)');
   let animationFrame = 0;
+  let compactObserver = null;
 
   const clamp = (value, minimum = 0, maximum = 1) => Math.min(maximum, Math.max(minimum, value));
   const ease = (value) => 1 - ((1 - value) ** 3);
@@ -81,6 +83,35 @@ if (journey) {
 
   bindLinkedFocus(walletSide, walletTarget);
   bindLinkedFocus(vaultSide, vaultTarget);
+
+  /**
+   * The desktop card travels through a long 3D scroll path. On compact
+   * layouts that trajectory would be cramped and disorienting, so the same
+   * story assembles vertically: dashboard first, then wallet and vault.
+   */
+  function syncCompactAssembly() {
+    compactObserver?.disconnect();
+    compactObserver = null;
+    if (!stage) return;
+    const enabled = compactMotion.matches && !reduceMotion.matches;
+    stage.classList.toggle('is-compact-motion', enabled);
+    if (!enabled) {
+      stage.classList.remove('is-compact-assembled');
+      return;
+    }
+    if (!('IntersectionObserver' in window)) {
+      stage.classList.add('is-compact-assembled');
+      return;
+    }
+    stage.classList.remove('is-compact-assembled');
+    compactObserver = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      stage.classList.add('is-compact-assembled');
+      compactObserver?.disconnect();
+      compactObserver = null;
+    }, { threshold: .08 });
+    compactObserver.observe(stage);
+  }
 
   const boundarySteps = journey.querySelector('.boundary-steps');
   let boundaryReplayTimer = 0;
@@ -207,7 +238,10 @@ if (journey) {
   window.addEventListener('resize', requestMotionUpdate, { passive: true });
   reduceMotion.addEventListener('change', requestMotionUpdate);
   compactLayout.addEventListener('change', requestMotionUpdate);
+  reduceMotion.addEventListener('change', syncCompactAssembly);
+  compactMotion.addEventListener('change', syncCompactAssembly);
   document.fonts?.ready.then(requestMotionUpdate);
+  syncCompactAssembly();
   requestMotionUpdate();
 
   const modeCopy = {

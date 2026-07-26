@@ -473,6 +473,7 @@
 .ownership-boundary-explainer > header > p:last-child { grid-column: 2; grid-row: 1 / span 2; color: var(--text-300); margin: 0; }
 .ownership-boundary-explainer .immersive-controls { margin-top: 1rem; }
 .receipt-layout { display: grid; grid-template-columns: minmax(0,.72fr) minmax(440px,1.28fr); gap: clamp(2rem,5vw,5rem); align-items: center; }
+.receipt-layout > * { min-width: 0; }
 .receipt-dashboard h3 { margin: .25rem 0 0; }
 .receipt-total { display: flex; align-items: end; justify-content: space-between; gap: 1rem; padding: 1.5rem 0; border-bottom: 1px solid var(--border); }
 .receipt-total span, .receipt-grid span, .receipt-decision span { color: var(--text-400); font-size: .78rem; }
@@ -1109,6 +1110,28 @@
   .ownership-vault-popover::after { top: auto; right: 1.4rem; bottom: -.42rem; border-top: 0; border-right: 1px solid rgba(196,181,253,.42); border-bottom: 1px solid rgba(196,181,253,.42); }
 }
 
+@media (max-width: 1150px) and (prefers-reduced-motion: no-preference) {
+  /*
+   * The desktop ownership story follows a long 3D scroll trajectory. Compact
+   * screens use a short, legible assembly instead: the financial home arrives
+   * first and its wallet / vault views follow as the same composition.
+   */
+  .ownership-stage.is-compact-motion > [data-ownership-dashboard],
+  .ownership-stage.is-compact-motion > [data-ownership-side] {
+    opacity: 0;
+    transform: translateY(24px) scale(.985);
+    transition: opacity .5s ease, transform .65s var(--ease-out);
+  }
+  .ownership-stage.is-compact-motion.is-compact-assembled > [data-ownership-dashboard],
+  .ownership-stage.is-compact-motion.is-compact-assembled > [data-ownership-side] {
+    opacity: 1;
+    transform: none;
+  }
+  .ownership-stage.is-compact-motion > [data-ownership-dashboard] { transition-delay: .04s; }
+  .ownership-stage.is-compact-motion > [data-ownership-side="wallet"] { transition-delay: .2s; }
+  .ownership-stage.is-compact-motion > [data-ownership-side="vaults"] { transition-delay: .36s; }
+}
+
 @media (max-width: 760px) {
   .ownership-journey { padding-top: 3.5rem; }
   .ownership-journey__head, .ownership-boundary-explainer > header { grid-template-columns: 1fr; }
@@ -1122,9 +1145,46 @@
   .ownership-ledger--center { grid-row: 1; }
   .ownership-side--wallet { grid-row: 2; }
   .ownership-side--vaults { grid-row: 3; }
+  .ownership-stage { gap: .85rem; }
+  .ownership-side { padding: 1rem; }
+  .ownership-side--wallet::before,
+  .ownership-side--vaults::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    top: -.86rem;
+    left: 50%;
+    width: 1px;
+    height: .86rem;
+    background: linear-gradient(180deg,rgba(103,232,249,.15),rgba(103,232,249,.9));
+    box-shadow: 0 0 12px rgba(34,211,238,.24);
+  }
+  .ownership-side--vaults::before {
+    background: linear-gradient(180deg,rgba(196,181,253,.18),rgba(167,139,250,.92));
+    box-shadow: 0 0 12px rgba(139,92,246,.28);
+  }
+  .ownership-side--wallet::after,
+  .ownership-side--vaults::after {
+    content: '';
+    position: absolute;
+    z-index: 2;
+    top: -.78rem;
+    left: calc(50% - .18rem);
+    width: .36rem;
+    height: .36rem;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 0 12px var(--cyan-300);
+    animation: ownershipCompactPulse 2.4s ease-in-out infinite;
+  }
+  .ownership-side--vaults::after {
+    box-shadow: 0 0 12px var(--violet-300);
+    animation-delay: .55s;
+  }
   .ownership-mode-copy p { min-height: 0; }
   .ownership-allocation-layout { grid-template-columns: minmax(0,1fr) 104px; }
   .ownership-allocation-chart { width: 100px; }
+  .ownership-boundary-explainer { padding-top: 3rem; }
 }
 
 @media (max-width: 460px) {
@@ -1132,9 +1192,103 @@
   .ownership-allocation-chart { width: 108px; margin-inline: auto; grid-row: 1; }
 }
 
+@media (max-width: 700px) {
+  /*
+   * Desktop popovers are anchored beside their trigger. On a phone that can
+   * clip them or make them cover unrelated content, so every rich explanation
+   * becomes a predictable bottom sheet inside the visual viewport.
+   */
+  .horizon-popover,
+  .ownership-vault-popover.is-portal,
+  .architecture-asset-popover,
+  .strategy-view-detail {
+    position: fixed;
+    z-index: 1200;
+    inset: auto .625rem .625rem !important;
+    width: auto;
+    max-width: none;
+    max-height: min(72dvh, 620px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    transform: none;
+    pointer-events: auto;
+    box-shadow: 0 24px 70px rgba(0,0,0,.68),0 0 28px rgba(103,232,249,.08);
+  }
+  .horizon-popover::after,
+  .ownership-vault-popover.is-portal::after,
+  .architecture-asset-popover::after { display: none; }
+  .strategy-view-detail {
+    border-radius: 1rem;
+    animation: mobileSheetIn .22s var(--ease-out) both;
+  }
+  /* `translate` creates a containing block and would trap a fixed sheet
+     thousands of pixels down the page on mobile browsers. */
+  .strategy-view,
+  .strategy-view:hover,
+  .strategy-view:focus-within { translate: none; }
+  /* The generic reveal transform would also become a fixed-position
+     containing block, so compact inspectors reveal through their children. */
+  .strategy-inspector.reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .strategy-view > header > button { min-width: 2.8rem; min-height: 2.35rem; }
+
+  /*
+   * The desktop architecture has a horizontal cross-chain bus. Once chains
+   * stack, a vertical spine and travelling proof point preserve that topology.
+   */
+  .architecture-chains { position: relative; isolation: isolate; gap: 1rem; }
+  .architecture-chains::before {
+    content: '';
+    position: absolute;
+    z-index: 0;
+    top: -.75rem;
+    bottom: -.75rem;
+    left: 50%;
+    width: 1px;
+    background: linear-gradient(180deg,rgba(103,232,249,.75),rgba(167,139,250,.72),rgba(251,191,36,.68));
+    box-shadow: 0 0 14px rgba(103,232,249,.13);
+  }
+  .architecture-chains::after {
+    content: '';
+    position: absolute;
+    z-index: 2;
+    top: -.25rem;
+    left: calc(50% - .19rem);
+    width: .38rem;
+    height: .38rem;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 0 13px var(--cyan-300);
+    animation: architectureMobileTravel 4.2s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .architecture-chain { z-index: 1; background: linear-gradient(150deg,#101d32,#050e1d); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   [data-ownership-source], [data-ownership-dashboard], [data-ownership-side] { transform: none !important; opacity: 1 !important; filter: none !important; }
   .ownership-vault-list > article { transition: none; }
   .horizon-item::before, .horizon-link i { animation: none; }
+  .ownership-side--wallet::after,
+  .ownership-side--vaults::after,
+  .architecture-chains::after { animation: none !important; }
   .boundary-steps.is-replaying article { animation: none; }
+}
+
+@keyframes ownershipCompactPulse {
+  0%,100% { opacity: .2; transform: translateY(-2px) scale(.75); }
+  45% { opacity: 1; transform: translateY(8px) scale(1); }
+  70% { opacity: .35; transform: translateY(12px) scale(.8); }
+}
+@keyframes architectureMobileTravel {
+  0%,8% { top: -.25rem; opacity: 0; }
+  14% { opacity: 1; }
+  84% { top: calc(100% - .15rem); opacity: 1; }
+  92%,100% { top: calc(100% - .15rem); opacity: 0; }
+}
+@keyframes mobileSheetIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
 }

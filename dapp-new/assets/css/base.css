@@ -30,7 +30,7 @@ h3 { font-size: clamp(1.15rem, 2vw, 1.4rem); }
 p { margin: 0 0 1rem; }
 strong { color: var(--text-100); }
 ul, ol { padding-left: 1.2rem; }
-code { color: var(--violet-300); background: rgba(139,92,246,.1); border: 1px solid rgba(139,92,246,.16); border-radius: .35rem; padding: .08rem .3rem; }
+code { color: var(--violet-300); background: rgba(139,92,246,.1); border: 1px solid rgba(139,92,246,.16); border-radius: .35rem; padding: .08rem .3rem; overflow-wrap: anywhere; word-break: break-word; }
 :focus-visible { outline: 3px solid var(--cyan-400); outline-offset: 3px; }
 .skip-link { position: fixed; z-index: 1000; top: .75rem; left: .75rem; transform: translateY(-180%); background: white; color: #07101f; padding: .7rem 1rem; border-radius: .5rem; }
 .skip-link:focus { transform: none; }

@@ -58,7 +58,7 @@
 .data-row:last-child { border: 0; padding-bottom: 0; }
 .data-row span:first-child { color: var(--text-400); }
 .data-row span:last-child { color: white; text-align: right; font-weight: 650; overflow-wrap: anywhere; }
-.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.table-wrap { width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; border: 1px solid var(--border); border-radius: var(--radius-md); }
 table { width: 100%; border-collapse: collapse; min-width: 650px; }
 th, td { text-align: left; padding: .9rem 1rem; border-bottom: 1px solid var(--border); }
 th { color: var(--text-300); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; }
@@ -110,6 +110,7 @@ td { color: var(--text-200); }
   .comparison-cell:nth-child(2n) { border-right: 0; }
 }
 @media (max-width: 600px) {
+  .nav-links { max-height: calc(100dvh - var(--header-height) - 1.5rem); overflow-y: auto; overscroll-behavior: contain; }
   .flow, .footer-grid { grid-template-columns: 1fr; }
   .data-row { align-items: flex-start; flex-direction: column; gap: .2rem; }
   .data-row span:last-child { text-align: left; }

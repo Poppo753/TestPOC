@@ -9,6 +9,7 @@
 .grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .split { display: grid; grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr); gap: clamp(2rem, 6vw, 5rem); align-items: center; }
+.split > * { min-width: 0; }
 .stack { display: flex; flex-direction: column; gap: 1rem; }
 .cluster { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
 .page-hero { position: relative; overflow: hidden; padding: calc(var(--header-height) + 5rem) 0 4rem; border-bottom: 1px solid var(--border); }
@@ -20,4 +21,6 @@
 @media (max-width: 650px) {
   .grid--4, .grid--3, .grid--2 { grid-template-columns: 1fr; }
   .container, .container--narrow { width: min(calc(100% - 1.25rem), var(--content)); }
+  .section { padding: 3.75rem 0; }
+  .section--compact { padding: 3rem 0; }
 }

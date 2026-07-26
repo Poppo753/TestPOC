@@ -214,6 +214,7 @@ document.querySelectorAll('[data-strategy-inspector]').forEach((inspector) => {
   const panels = Object.fromEntries(levels.map((level) => [level, inspector.querySelector(`[data-view-detail-panel="${level}"]`)]));
   const triggers = Object.fromEntries(levels.map((level) => [level, inspector.querySelector(`[data-view-detail="${level}"]`)]));
   const contexts = { base: null, pro: null, advanced: null };
+  const compactInspector = window.matchMedia('(max-width: 700px)');
   let selectedStrategy = 'balanced';
 
   const setText = (selector, value) => {
@@ -437,6 +438,9 @@ document.querySelectorAll('[data-strategy-inspector]').forEach((inspector) => {
 
   function openPanel(level, context = 'strategy') {
     if (!panels[level]) return;
+    if (compactInspector.matches) {
+      levels.filter((candidate) => candidate !== level).forEach(closePanel);
+    }
     contexts[level] = context;
     panels[level].hidden = false;
     triggers[level]?.setAttribute('aria-expanded', 'true');
