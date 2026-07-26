@@ -21,7 +21,7 @@ const app = await read('app.html');
 const docs = await read('pages/docs.html');
 const team = await read('pages/team.html');
 
-if (product.horizons?.map(({ id }) => id).join(',') !== 'today,next,vision') failures.push('Product horizons must remain Today, Next, Vision.');
+if (product.horizons?.map(({ id }) => id).join(',') !== 'today,multi-asset,multi-chain,consumer,vision') failures.push('Product horizons must preserve the reviewed five-stage path.');
 if (!risk.pendingDecisions?.length || !risk.illustrativeScenario?.notice) failures.push('Risk policy must preserve pending decisions and an illustrative notice.');
 if (!trust.evidence?.some(({ status }) => status === 'unavailable')) failures.push('Trust evidence must expose unresolved fields.');
 if (!trust.assuranceGates?.every(({ status }) => status && status !== 'Complete')) failures.push('No assurance gate may be silently marked complete.');
@@ -35,7 +35,22 @@ for (const marker of homeOrder) {
   else if (index <= previous) failures.push(`Homepage narrative order is invalid at ${marker}`);
   previous = index;
 }
-for (const token of ['badge--illustrative', 'USDC Conservative', 'Not independently audited']) if (!home.includes(token)) failures.push(`Homepage evidence token missing: ${token}`);
+for (const token of [
+  'badge--illustrative',
+  'USDC Conservative',
+  'Not independently audited',
+  'Multi-asset vaults',
+  'Multi-chain vaults',
+  'data-horizon-popover',
+  'data-horizon-step="vision"',
+  'data-ownership-dashboard',
+  'data-vault-mode="base"',
+  'data-vault-mode="pro"',
+  'data-vault-mode="advanced"',
+  'data-chain-filter',
+  'data-token-filter',
+  '24-word recovery phrase',
+]) if (!home.includes(token)) failures.push(`Homepage evidence token missing: ${token}`);
 for (const token of ['data-app-mode="simple"', 'data-app-mode="advanced"', 'transaction-summary', 'Major risks']) if (!app.includes(token)) failures.push(`PoC mode token missing: ${token}`);
 for (const forbidden of ['docs/New_Doc/', 'npm run sync:docs', 'Loading documentation catalog']) if (docs.includes(forbidden)) failures.push(`Consumer Docs exposes internal implementation copy: ${forbidden}`);
 if (!docs.includes('data-doc-count>13<') || (docs.match(/class="doc-entry"/g) || []).length !== 13) failures.push('Docs fallback must contain 13 selectable records.');
