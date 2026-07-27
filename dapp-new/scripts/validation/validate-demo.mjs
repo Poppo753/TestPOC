@@ -39,7 +39,7 @@ for (const token of ['noindex,nofollow', 'No wallet, blockchain or real funds', 
   if (!html.includes(token)) failures.push(`Missing demo boundary token: ${token}`);
 }
 if (/from ['"][^'"]*web3\//.test(demoSource)) failures.push('Demo code must not import Web3 modules.');
-if (DEMO_SCHEMA_VERSION !== 2) failures.push('Unexpected demo schema version.');
+if (DEMO_SCHEMA_VERSION !== 3) failures.push('Unexpected demo schema version.');
 if (!shell.includes('demo/index.html') || !home.includes('demo/index.html')) failures.push('Demo must be linked from the shared shell and landing page.');
 
 const ids = new Set();

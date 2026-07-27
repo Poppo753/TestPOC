@@ -1,16 +1,18 @@
 import { DEMO_ASSETS } from './data.js';
 
-export const DEMO_SCHEMA_VERSION = 2;
-export const DEMO_STORAGE_KEY = 'jethos-interactive-demo-v2';
+export const DEMO_SCHEMA_VERSION = 3;
+export const DEMO_STORAGE_KEY = 'jethos-interactive-demo-v3';
 
 export function createInitialState() {
   return {
     schemaVersion: DEMO_SCHEMA_VERSION,
     walletAssets: Object.fromEntries(DEMO_ASSETS.map((asset) => [asset.id, asset.value])),
-    positions: {},
+    positions: {
+      'conservative:plasma:usdc': { principal: 3280, daysAccrued: 0 },
+    },
     activity: [],
     simulatedDays: 0,
-    onboardingComplete: false,
+    onboardingComplete: true,
   };
 }
 

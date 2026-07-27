@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="assets/css/layouts.css">
   <link rel="stylesheet" href="assets/css/components.css">
   <link rel="stylesheet" href="assets/css/pages.css">
+  <link rel="stylesheet" href="assets/css/home-refresh.css">
   <script type="module" src="assets/js/core/site-shell.js"></script>
   <script type="module" src="assets/js/features/site-features.js"></script>
   <script type="module" src="assets/js/features/ownership-journey.js"></script>
@@ -23,7 +24,7 @@
   <div class="page-grid" aria-hidden="true"></div>
   <div data-site-header></div>
   <main id="main-content">
-    <section class="hero">
+    <section class="hero" data-boundary-scene-state="closed">
       <div class="container hero-grid">
         <div class="hero-copy">
           <span class="badge badge--poc">Private PoC · USDC Conservative · Arbitrum</span>
@@ -67,7 +68,7 @@
       </aside>
     </section>
 
-    <section class="immersive-section ownership-journey" id="capital-boundary" data-ownership-journey aria-labelledby="capital-boundary-title">
+    <section class="immersive-section ownership-journey" id="capital-boundary" data-ownership-journey data-boundary-scene-state="boundary" aria-labelledby="capital-boundary-title">
       <div class="immersive-shell">
         <header class="container ownership-journey__head">
           <div><span class="eyebrow">The center of Jethos</span><h2 id="capital-boundary-title">One home where you stay in control.</h2></div>
@@ -193,7 +194,7 @@
       </div>
     </section>
 
-    <section class="section" id="transparency">
+    <section class="section" id="transparency" data-boundary-scene-state="transparent">
       <div class="container receipt-layout">
         <div class="reveal"><p class="eyebrow">Jethos Transparency Receipt</p><h2>A vault position should explain itself.</h2><p class="lede">The goal is not merely to show where capital sits, but why a route was selected, what it costs, whether it can exit and which evidence supports it.</p><p class="callout"><strong>Explainability is part of the product.</strong> A balance without route, policy and proof is incomplete.</p></div>
         <article class="proof-receipt receipt-dashboard reveal" aria-label="Illustrative transparency receipt">
@@ -250,7 +251,7 @@
       </div>
     </section>
 
-    <section class="section decision-section" id="risk-intelligence">
+    <section class="section decision-section" id="risk-intelligence" data-boundary-scene-state="route">
       <div class="container decision-layout">
         <div class="decision-copy reveal">
           <p class="eyebrow">Risk-adjusted intelligence</p>
@@ -356,7 +357,7 @@
       </div>
     </section>
 
-    <section class="section section-band strategy-inspector-section" id="strategy-inspector">
+    <section class="section section-band strategy-inspector-section" id="strategy-inspector" data-boundary-scene-state="inspect">
       <div class="container">
         <header class="section-heading section-heading--center reveal">
           <p class="eyebrow">Clarity, at your depth</p>
@@ -441,7 +442,7 @@
       </div>
     </section>
 
-    <section class="section architecture-section" id="architecture" data-architecture-map>
+    <section class="section architecture-section" id="architecture" data-architecture-map data-boundary-scene-state="network">
       <div class="container">
         <header class="architecture-heading reveal">
           <div>
@@ -561,7 +562,7 @@
       </div>
     </section>
 
-    <section class="section section--compact"><div class="container card card--accent split"><div><img src="assets/brand/jethos-mark.svg" alt="" class="final-mark"><p class="eyebrow">Experience the model</p><h2>Do not just read about Jethos. Try the complete journey.</h2><p class="lede">Deposit, inspect a transparent route, simulate a position and withdraw—all with browser-only demo funds.</p></div><div class="cluster"><a class="button button--primary" href="demo/index.html">Try interactive demo</a><a class="button button--secondary" href="pages/docs.html">Documentation</a><a class="button button--ghost" href="pages/trust-center.html">Trust Center</a></div></div></section>
+    <section class="section section--compact" data-boundary-scene-state="settled"><div class="container card card--accent split"><div><img src="assets/brand/jethos-mark.svg" alt="" class="final-mark"><p class="eyebrow">Experience the model</p><h2>Do not just read about Jethos. Try the complete journey.</h2><p class="lede">Deposit, inspect a transparent route, simulate a position and withdraw—all with browser-only demo funds.</p></div><div class="cluster"><a class="button button--primary" href="demo/index.html">Try interactive demo</a><a class="button button--secondary" href="pages/docs.html">Documentation</a><a class="button button--ghost" href="pages/trust-center.html">Trust Center</a></div></div></section>
   </main>
   <div data-site-footer></div>
 </body>

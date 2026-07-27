@@ -161,6 +161,64 @@ endpoint applicativo pubblico; resta un gate esplicito prima della produzione.
 
 RPC e chiavi non devono comparire in questo documento.
 
+## Raccolta live — 26 luglio 2026 ore 20:18–20:32 UTC
+
+### Sistema e servizio
+
+- uptime: **10 giorni 5 ore** dall'ultimo reboot (16 luglio 2026 14:53 UTC);
+- servizio: **enabled**, **active**, `MainPID=898`, `NRestarts=0`, `ExecMainStatus=0`;
+- nessun nuovo reboot nel periodo.
+
+### Heartbeat
+
+```json
+{
+  "state": "waiting",
+  "startedAt": "2026-07-16T14:53:42.203Z",
+  "updatedAt": "2026-07-26T20:14:40.351Z",
+  "lastRunId": "arbitrum-usdc-poc-1-1785096878764-1d0dacc0",
+  "lastRunState": "OBSERVED_ONLY",
+  "consecutiveFailures": 0
+}
+```
+
+### Run totali al 26 luglio
+
+- totale run: **3399**;
+- run `NO_ACTION`: 2287 (dal 14 luglio al 22 luglio 23:37 UTC — vault vuoto);
+- run `OBSERVED_ONLY`: **1101** (dal 22 luglio 23:37 UTC — vault finanziato);
+- run `FAILED`: **11** (causa uniforme: `Observation crossed N blocks; maximum is 10`);
+- run con `SIMULATION_FAILED` o `VERIFICATION_FAILED`: **0**.
+
+Tasso di failure: 11/3399 = **0.32%**. Tutti i fallimenti sono transitori (RPC lento in quel ciclo), con recupero automatico immediato nel ciclo successivo. In nessun momento `consecutiveFailures > 0`.
+
+Distribuzione fallimenti:
+- 18 luglio 2026: 3 (ore 11:03, 16:34, 21:41);
+- 20 luglio 2026: 2 (ore 15:57, 18:18);
+- 22 luglio 2026: 1 (ore 09:27);
+- 23 luglio 2026: 1 (ore 17:33);
+- 24 luglio 2026: 1 (ore 13:30);
+- 26 luglio 2026: 3 (ore 06:59, 12:51, 16:48).
+
+### Evento: primo deposito nel vault — 22 luglio 2026
+
+- timestamp prima osservazione con fondi: `2026-07-22T23:37:15Z`;
+- `custodyBalance`: `3100000` (3.1 USDC, decimali 6);
+- `managedAssets`: `3100000`; tutti i fondi in custody, nessuna allocazione attiva;
+- `reserveBps`: `10000` (100% in custody);
+- decisione osservata: `REBALANCE`, drift `8000 bps`;
+- azione proposta (non eseguita): `deposit AaveV3 310000 USDC`;
+- allocazione target proposta: custody 620000, AaveV3 1085000, EulerV2 775000, MorphoVault 620000;
+- esecuzione: **non avviata** — `execution.kind=disabled`, `autonomous.enabled=false`;
+- tutti i cicli successivi: `OBSERVED_ONLY`, drift stabile, nessuna transazione.
+
+### Preflight — 26 luglio 2026
+
+- `checkedAt`: `2026-07-26T20:31:53Z`;
+- `ready: true`;
+- blocco Arbitrum: `488025484`;
+- **34/34 check PASS**, incluso `EXECUTION_DISABLED`.
+
 ## Nota di handoff successiva
 
 È stato aggiunto `04_Handoff_Autosufficiente_Per_Operatore_o_Assistente.md`, con

@@ -28,8 +28,9 @@ try {
   const dom = result.stdout;
   const required = [
     'class="auth-gate"',
-    'Everything visible. Every action explicit.',
-    'Total simulated value',
+    'One balance. Two clear sides.',
+    'Assets visible through Jethos',
+    'In transparent vaults',
     'data-demo-route="transparency"',
     'No wallet, blockchain or real funds',
   ];

@@ -90,6 +90,20 @@ browser-only journey: explore illustrative vaults, deposit demo USDC, advance
 simulated time, inspect the capital route and withdraw. State is stored under a
 versioned `localStorage` key and can be reset from the demo rail.
 
+The initial snapshot deliberately matches the landing-page preview: `$12,480`
+visible, split between `$9,200` in liquid wallet assets and a `$3,280`
+illustrative Conservative position. The screens preserve the same product
+model used on Home:
+
+- Overview reproduces the central financial-home dashboard.
+- Wallet links each asset row to an interactive allocation chart.
+- Vaults exposes the same Base, Pro and Advanced views and opens progressively
+  deeper strategy explanations.
+- Positions contains deposit growth, receipt and withdrawal actions.
+- Understand shows allocation APYs, estimated costs, rationale and illustrative
+  verification fields.
+- Activity records browser-only actions without inventing blockchain evidence.
+
 The demo never imports `assets/js/web3/`, never opens a wallet and never
 generates fake transaction hashes. Run `npm run check:demo` after changing its
 catalog, engine, UI or copy. With a local server on port 4175, execute the real

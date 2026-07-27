@@ -11,22 +11,24 @@ import { advanceDays, deposit, positionValue, summarize, withdraw } from '../../
 import { vaultById } from '../../assets/js/demo/data.js';
 
 const state = createInitialState();
-assert.equal(summarize(state).total, 10000);
+assert.equal(summarize(state).total, 12480);
+assert.equal(summarize(state).wallet, 9200);
+assert.equal(summarize(state).vaultValue, 3280);
 
 const vaultId = 'conservative:plasma:usdc';
 deposit(state, vaultId, 2500, new Date('2026-07-23T10:00:00Z'));
-assert.equal(state.walletAssets.usdc, 2500);
-assert.equal(state.positions[vaultId].principal, 2500);
+assert.equal(state.walletAssets.usdc, 1400);
+assert.equal(state.positions[vaultId].principal, 5780);
 assert.equal(state.activity[0].type, 'Deposit');
 
 advanceDays(state, 30, new Date('2026-08-22T10:00:00Z'));
 const grown = positionValue(state.positions[vaultId], vaultById(vaultId));
-assert.ok(grown > 2500, 'Illustrative value should grow after advancing time.');
+assert.ok(grown > 5780, 'Illustrative value should grow after advancing time.');
 assert.equal(state.simulatedDays, 30);
 
 withdraw(state, vaultId, 1000, new Date('2026-08-22T10:01:00Z'));
-assert.equal(state.walletAssets.usdc, 3500);
-assert.ok(positionValue(state.positions[vaultId], vaultById(vaultId)) > 1500);
+assert.equal(state.walletAssets.usdc, 2400);
+assert.ok(positionValue(state.positions[vaultId], vaultById(vaultId)) > 4780);
 
 const remainder = positionValue(state.positions[vaultId], vaultById(vaultId));
 withdraw(state, vaultId, remainder, new Date('2026-08-22T10:02:00Z'));

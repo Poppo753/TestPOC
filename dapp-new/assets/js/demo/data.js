@@ -9,9 +9,9 @@
  * None of these values are live products, quotes or deployment records.
  */
 export const DEMO_ASSETS = Object.freeze([
-  Object.freeze({ id: 'usdc', symbol: 'USDC', name: 'USD Coin', units: '5,000 USDC', value: 5000, color: '#38bdf8' }),
+  Object.freeze({ id: 'usdc', symbol: 'USDC', name: 'USD Coin', units: '3,900 USDC', value: 3900, color: '#38bdf8' }),
   Object.freeze({ id: 'usdt', symbol: 'USDT', name: 'Tether', units: '1,800 USDT', value: 1800, color: '#2dd4bf' }),
-  Object.freeze({ id: 'btc', symbol: 'BTC', name: 'Bitcoin', units: '0.021 BTC', value: 1800, color: '#fb9b23' }),
+  Object.freeze({ id: 'btc', symbol: 'BTC', name: 'Bitcoin', units: '0.031 BTC', value: 2100, color: '#fb9b23' }),
   Object.freeze({ id: 'eth', symbol: 'ETH', name: 'Ether', units: '0.48 ETH', value: 1400, color: '#a78bfa' }),
 ]);
 
@@ -49,6 +49,14 @@ export const DEMO_VAULTS = Object.freeze([
     baseExplanation: 'A part stays immediately available. The rest is supplied to lending markets, where borrowers pay interest. This strategy does not borrow assets or use leverage.',
     proExplanation: 'Supply-only positions are divided across approved lending protocols. Yield and withdrawal timing depend on utilization, protocol state and available liquidity.',
     advancedExplanation: 'Borrowing: disabled. Leverage: 1.00x. Minimum reserve: 45%. Maximum route: 30%. Rebalance trigger: utilization above 82% or a route failing policy.',
+    policy: {
+      borrowing: 'Disabled',
+      leverage: '1.00x',
+      minimumReserve: '45%',
+      maximumRoute: '30%',
+      minimumHealth: 'Not applicable',
+      rebalance: 'Utilization > 82% or policy failure',
+    },
     risks: ['Smart-contract risk', 'Asset issuer or wrapper risk', 'Lending-market liquidity', 'Protocol governance risk'],
   }),
   profile({
@@ -70,6 +78,14 @@ export const DEMO_VAULTS = Object.freeze([
     baseExplanation: 'More of the balance is invested across different types of routes, while a reserve remains available for ordinary withdrawals.',
     proExplanation: 'The strategy combines lending with approved liquid-staking routes. Jethos compares net yield, liquidity, costs and concentration before allocating.',
     advancedExplanation: 'Borrowing may be enabled only for an approved bounded strategy. Illustrative maximum leverage: 1.25x. Minimum health factor: 1.80. Maximum route: 35%.',
+    policy: {
+      borrowing: 'Bounded routes only',
+      leverage: 'Up to 1.25x',
+      minimumReserve: '20%',
+      maximumRoute: '35%',
+      minimumHealth: '1.80',
+      rebalance: 'Health, concentration or liquidity threshold',
+    },
     risks: ['Smart-contract risk', 'Lending and staking dependencies', 'Wrapper or depeg risk', 'Liquidity delay', 'Cross-protocol concentration'],
   }),
   profile({
@@ -91,6 +107,14 @@ export const DEMO_VAULTS = Object.freeze([
     baseExplanation: 'More capital can enter variable routes. Potential return is higher, but value and withdrawal timing can change more.',
     proExplanation: 'Eligible routes can include lending, tokenized yield and liquidity markets. Headline APY never wins automatically: costs, depth and risk limits remain gates.',
     advancedExplanation: 'Borrowing and loops require explicit policy. Illustrative maximum leverage: 1.60x. Minimum health factor: 1.55. Maximum route: 40%. Automatic deleveraging begins before the hard limit.',
+    policy: {
+      borrowing: 'Policy-gated',
+      leverage: 'Up to 1.60x',
+      minimumReserve: '10%',
+      maximumRoute: '40%',
+      minimumHealth: '1.55',
+      rebalance: 'Pre-limit deleveraging and route risk change',
+    },
     risks: ['Smart-contract and composability risk', 'Variable or delayed liquidity', 'Market and oracle risk', 'Leverage or liquidation risk', 'Higher operational complexity'],
   }),
 ]);
