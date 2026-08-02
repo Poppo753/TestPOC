@@ -1016,8 +1016,8 @@ contract MorphoPlugin is IMorphoPlugin, IFlashLoanCallback, Ownable, ReentrancyG
         uint256 collateralValue = (uint256(pos.collateral) * oraclePrice) / ORACLE_PRICE_SCALE;
 
         // Health Factor = collateralValue * lltv / debtAssets
-        // (lltv is already in WAD scale, so result is in WAD scale)
-        return (collateralValue * params.lltv) / (debtAssets * WAD);
+        // (lltv is already in WAD scale, so result is in WAD scale). C1-05: rimosso `* WAD` errato.
+        return (collateralValue * params.lltv) / debtAssets;
     }
 
     // ==================== INTERNAL: RESOLVERS ====================

@@ -671,7 +671,7 @@ describe("Morpho Blue Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", fun
                 borrowToken: "USDC",
                 collateralAmount: COLLATERAL_AMOUNT,
                 targetLeverageX100: 200, // 2x
-                minHealthFactor: 1,      // raw multiplier (not WAD)
+                minHealthFactor: ethers.parseEther("1.05"), // WAD scale (C1-05 fix); 2x @ ~86% LLTV → HF ~1.7
                 deadline: deadline,
             });
             const receipt = await tx.wait();
@@ -693,7 +693,8 @@ describe("Morpho Blue Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", fun
 
         it("Should have healthy HF after leverage", async function () {
             const hf = await plugin.getHealthFactor("WETH", "USDC");
-            expect(hf).to.be.gte(1);
+            // C1-05: HF ora in scala WAD (1e18 = 1.0). Pre-fix era ~1 raw → questa gte(1e18) avrebbe fallito.
+            expect(hf).to.be.gte(ethers.parseEther("1"));
             expect(hf).to.not.equal(ethers.MaxUint256);
             console.log(`   Health Factor: ${hf.toString()}x`);
         });
@@ -706,7 +707,7 @@ describe("Morpho Blue Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", fun
                     borrowToken: "USDC",
                     collateralAmount: ethers.parseEther("0.1"),
                     targetLeverageX100: 100, // 1x = invalid, must be >= 110
-                    minHealthFactor: 1,
+                    minHealthFactor: ethers.parseEther("1.05"),
                     deadline: deadline,
                 })
             ).to.be.revertedWithCustomError(plugin, "InvalidLeverage");
@@ -719,7 +720,7 @@ describe("Morpho Blue Plugin - Comprehensive Fork Tests (Arbitrum Mainnet)", fun
                     borrowToken: "USDC",
                     collateralAmount: ethers.parseEther("0.1"),
                     targetLeverageX100: 200,
-                    minHealthFactor: 1,
+                    minHealthFactor: ethers.parseEther("1.05"),
                     deadline: 1, // expired
                 })
             ).to.be.revertedWithCustomError(plugin, "DeadlineExpired");

@@ -3,6 +3,8 @@
 **Sezione:** `12-remediation-waves`
 **Scopo:** documentare, in modo tracciabile e ripetibile, ogni fix applicato ai contratti a seguito dell'audit 2026-07. Ogni "ondata" (wave) raggruppa i fix di uno Sprint; ogni fix ha la propria sottocartella.
 
+📌 **Rimandati/skippati:** l'elenco unico di ciò che abbiamo consapevolmente saltato o rimandato (con motivo e dove si riprende) è in [`DEFERRED_e_SKIPPED.md`](DEFERRED_e_SKIPPED.md).
+
 Questa sezione è il complemento **implementativo** di:
 - `security/findings/SPRINT0-DECISIONS.md` — le decisioni approvate.
 - `security/DECISIONS.md` — il registro autorevole (DEC-001..008).
@@ -43,7 +45,7 @@ Ordine di esecuzione approvato da @Poppo753: **C1-09 → C1-08 + C1-04 (insieme)
 |-----|--------|-----------|-------|----------|
 | **C1-09** | encode-packed-collision in SwapManager | ✅ helper `_pairHash` (abi.encode) | ✅ approvato (attesa commit) | `Sprint0/C1-09_encode-packed-collision/` |
 | **C1-08 + C1-04** | Interfaccia universale pair-based + Emergency No-drain | DEC-006/007/008/009 | 🟢 codice DONE + verificato (build verde, Foundry unit 7/7, register aggiornato); manca test Hardhat E2E + storage-layout + Slither (per il merge) | `Sprint0/C1-08+C1-04_interfaccia-universale-emergency/` |
-| C1-05 | Morpho HF scale bug | proposta | ⚪ non iniziato | — |
+| C1-05 | Morpho HF scale bug | ✅ rimosso `* WAD` errato | 🟢 code done, build verde (test fork da eseguire) | `Sprint0/C1-05_morpho-hf-scale/` |
 | C1-06 | minOut end-to-end nei flash-loan callback | proposta | ⚪ non iniziato | — |
 | C1-02 | Withdrawal clamp silenzioso | da decidere (A/B) | ⚪ non iniziato | — |
 | C1-03 | First-depositor + donation attack | da decidere (A/B) | ⚪ non iniziato | — |

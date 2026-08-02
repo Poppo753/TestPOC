@@ -1775,7 +1775,7 @@
     "category": "math",
     "severity": "critical",
     "confidence": "high",
-    "state": "confirmed",
+    "state": "fixed-pending-verification",
     "commit": "786a5b92d3bb7e60ef0bdfb37a7f07a3f60d7c89",
     "sub_findings": [
       "NEW-007"
@@ -1787,6 +1787,13 @@
         "commit": "786a5b92d3bb7e60ef0bdfb37a7f07a3f60d7c89",
         "actor": "agent-S1.2-normalize",
         "note": "Migrated from docs/audit_2026_07/ISSUES.md rev.2 during S1.2 normalization. State/severity aligned with verification report. Verified in docs/audit_2026_07/09-verification-report.md."
+      },
+      {
+        "date": "2026-08-03",
+        "state": "fixed-pending-verification",
+        "commit": "786a5b92d3bb7e60ef0bdfb37a7f07a3f60d7c89",
+        "actor": "agent-C1-05",
+        "note": "C1-05 fix: rimosso il * WAD errato dal denominatore in MorphoPlugin._computeHealthFactor (riga ~1020) e MorphoLensAdapter._computeMarketHF (riga ~178). HF ora in scala WAD corretta (1e18=1.0) => openLeverageAtomic su Morpho non reverta piu per MIN_HEALTH_FACTOR mai raggiunto; monitoring corretto. Test masking corretto in MorphoPlugin.fork.test.ts (minHealthFactor 1 raw -> parseEther 1.05; assert HF gte(1e18)). Verifica: forge build verde; formula gia dimostrata da test/foundry/unit/HFScaleMath.t.sol. Nota: prova a livello contratto + esecuzione test fork richiede ARBITRUM_RPC_URL."
       }
     ],
     "last_verified": "2026-07-15"
@@ -5083,6 +5090,13 @@
         "commit": "786a5b92d3bb7e60ef0bdfb37a7f07a3f60d7c89",
         "actor": "agent-S1.2-normalize",
         "note": "Migrated from docs/audit_2026_07/ISSUES.md rev.2 during S1.2 normalization. State/severity aligned with verification report. Verified in docs/audit_2026_07/09-verification-report.md."
+      },
+      {
+        "date": "2026-08-03",
+        "state": "confirmed",
+        "commit": "786a5b92d3bb7e60ef0bdfb37a7f07a3f60d7c89",
+        "actor": "agent-C1-05",
+        "note": "Non incluso in C1-05 (che fixa solo il * WAD, il blocker). Il raffinamento toAssetsUp con VIRTUAL_ASSETS=1/VIRTUAL_SHARES=1e6 (import SharesMathLib) resta rimandato: differenza trascurabile per mercati non vuoti, aggiunge bytecode."
       }
     ],
     "last_verified": "2026-07-15"
@@ -6264,7 +6278,7 @@
     "category": "precision",
     "severity": "high",
     "confidence": "high",
-    "state": "confirmed",
+    "state": "fixed-pending-verification",
     "commit": "786a5b92d3bb7e60ef0bdfb37a7f07a3f60d7c89",
     "history": [
       {
@@ -6280,6 +6294,13 @@
         "commit": "786a5b92d3bb7e60ef0bdfb37a7f07a3f60d7c89",
         "actor": "agent-S1.4-verify-remaining",
         "note": "S1.4 verification pass: confirmed against source at commit 786a5b92 (contracts unchanged since 7f0dc690). See docs/audit_2026_07/11-verification-remaining.md."
+      },
+      {
+        "date": "2026-08-03",
+        "state": "fixed-pending-verification",
+        "commit": "786a5b92d3bb7e60ef0bdfb37a7f07a3f60d7c89",
+        "actor": "agent-C1-05",
+        "note": "C1-05 fix: rimosso il * WAD errato dal denominatore in MorphoPlugin._computeHealthFactor (riga ~1020) e MorphoLensAdapter._computeMarketHF (riga ~178). HF ora in scala WAD corretta (1e18=1.0) => openLeverageAtomic su Morpho non reverta piu per MIN_HEALTH_FACTOR mai raggiunto; monitoring corretto. Test masking corretto in MorphoPlugin.fork.test.ts (minHealthFactor 1 raw -> parseEther 1.05; assert HF gte(1e18)). Verifica: forge build verde; formula gia dimostrata da test/foundry/unit/HFScaleMath.t.sol. Nota: prova a livello contratto + esecuzione test fork richiede ARBITRUM_RPC_URL."
       }
     ],
     "last_verified": "2026-07-15"

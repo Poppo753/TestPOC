@@ -320,7 +320,16 @@ Nuovi bug che si autochiudono con Sprint 0 già pianificato:
 - **COUPLING C1-06:** unwind sort-by-risk "a base asset" per collaterale non-base richiede swap→C1-06; CORE-081 resta fix-in-progress; leverage struct unification pure C1-06.
 - **Prossimo task:** Sub-fase F (verificare lens adapter getHealthFactor: build verde, probabilmente minimale) + Sub-fase G (riscrivere test Hardhat user-journey — quelli attuali usano vecchie firme e `plugin.connect(owner)`; scrivere UniversalLendingJourney.t.sol; aggiornare register.json IFC-004/PLG-084/CORE-001/015/010/NEW-010/018 → fixed-pending-verification; storage-layout before/after). Poi C1-05/C1-06/etc.
 
-## Handover di sessione (aggiornato 2026-08-02)
+## Entry 019 — C1-05 Morpho HF scale (2026-08-03)
+
+- **Fix:** rimosso il `* WAD` errato dal denominatore in `MorphoPlugin._computeHealthFactor` (~L1020) e `MorphoLensAdapter._computeMarketHF` (~L178). HF ora in scala WAD (1e18=1.0) → `openLeverageAtomic` su Morpho non reverta più per MIN_HEALTH_FACTOR (1.05e18) mai raggiunto; monitoring corretto.
+- **Test masking:** `test/integration/morpho/MorphoPlugin.fork.test.ts` — `minHealthFactor: 1` → `ethers.parseEther("1.05")`; assert `hf.gte(1)` → `gte(parseEther("1"))`. Non eseguibile senza fork.
+- **Verifica:** `forge build` verde; formula già provata da `test/foundry/unit/HFScaleMath.t.sol`.
+- **Register:** PLG-005, NEW-007 → fixed-pending-verification. ADP-039 (virtual shares in toAssetsUp) rimandato (nota). 380 finding.
+- **Doc:** `12-remediation-waves/Sprint0/C1-05_morpho-hf-scale/01_Idea_e_Checklist.md`.
+- **Non committato** (in working tree, oltre ai 2 commit dell'ondata C1-08/C1-04).
+
+## Handover di sessione (aggiornato 2026-08-03)
 
 Se un nuovo agente riprende da qui:
 

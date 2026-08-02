@@ -174,8 +174,8 @@ contract MorphoLensAdapter is ILensAdapter, Ownable {
         uint256 oraclePrice = IMorphoOracle(params.oracle).price();
         uint256 collateralValue = (uint256(pos.collateral) * oraclePrice) / ORACLE_PRICE_SCALE;
 
-        // HF = collateralValue * lltv / (debtAssets * WAD)
-        return (collateralValue * params.lltv) / (debtAssets * WAD);
+        // HF = collateralValue * lltv / debtAssets  (lltv già in WAD → HF in WAD). C1-05: rimosso `* WAD` errato.
+        return (collateralValue * params.lltv) / debtAssets;
     }
 
     // ==================== ILensAdapter: IDENTIFICATION ====================
