@@ -64,6 +64,14 @@ contract ProtocolManager is Ownable {
     /// @dev mapping(pluginAddress => mapping(functionSelector => allowed))
     /// @dev Configurabile runtime via setAllowedSelectors()
     mapping(address => mapping(bytes4 => bool)) public allowedSelectors;
+
+    /// @notice Operatori autorizzati (DEC-008 A2): owner (sempre) + indirizzi VAC autorizzati.
+    /// @dev Gestito solo dall'owner via addOperator/removeOperator. La VAC può fare tutte le
+    ///      operazioni di ribilanciamento ma NON può prendere custody (No-drain, DEC-007).
+    mapping(address => bool) public authorizedOperators;
+
+    /// @notice Emesso quando un operatore viene autorizzato o revocato.
+    event OperatorAuthorized(address indexed operator, bool authorized);
     
     // ==================== PROTOCOL REGISTRY ====================
     
@@ -196,7 +204,29 @@ contract ProtocolManager is Ownable {
         );
         _;
     }
-    
+
+    /// @notice Solo operatori: owner (sempre) + authorizedOperators (VAC). DEC-008 A2.
+    modifier onlyOperator() {
+        require(
+            msg.sender == owner() || authorizedOperators[msg.sender],
+            "ProtocolManager: not operator"
+        );
+        _;
+    }
+
+    /// @notice Autorizza un operatore (es. VAC). onlyOwner. DEC-008 A2.
+    function addOperator(address operator) external onlyOwner {
+        require(operator != address(0), "ProtocolManager: zero operator");
+        authorizedOperators[operator] = true;
+        emit OperatorAuthorized(operator, true);
+    }
+
+    /// @notice Revoca un operatore (istantaneo, per compromissione VAC). onlyOwner. DEC-008 A2.
+    function removeOperator(address operator) external onlyOwner {
+        authorizedOperators[operator] = false;
+        emit OperatorAuthorized(operator, false);
+    }
+
     // ==================== CONSTRUCTOR ====================
     
     /**
@@ -211,61 +241,65 @@ contract ProtocolManager is Ownable {
     // ==================== COMMON OPERATIONS ====================
     
     /**
-     * @notice Deposita token in un protocollo
+     * @notice Fornisce collaterale a un protocollo (pair-based)
      * @dev Flow: ProxyGeneral → Plugin → External Protocol
-     * @param protocolName Nome del protocollo (es. "DolomitePlugin")
-     * @param tokenCode Codice del token (es. "WETH", "USDC")
+     * @param protocolName Nome del protocollo (es. "Aave")
+     * @param collateral Codice del token collaterale (es. "WETH")
+     * @param loan Codice del mercato/loan (es. "USDC")
      * @param amount Importo da depositare (in wei)
      */
-    function deposit(
+    function supplyCollateral(
         string memory protocolName,
-        string memory tokenCode,
+        string memory collateral,
+        string memory loan,
         uint256 amount
-    ) external onlyOwner {
+    ) external onlyOperator {
         if (amount == 0) revert InvalidAmount(amount);
-        if (bytes(tokenCode).length == 0) revert InvalidTokenCode(tokenCode);
-        
+        if (bytes(collateral).length == 0) revert InvalidTokenCode(collateral);
+
         // 1. Resolve plugin via Beacon
         address plugin = _resolvePlugin(protocolName);
         _validateProtocol(plugin);
-        
-        // 2. Withdraw from ProxyGeneral to plugin
+
+        // 2. Withdraw collateral from ProxyGeneral to plugin
         address proxyGeneral = _getProxyGeneral();
-        IProxyGeneral(proxyGeneral).withdrawToken(tokenCode, amount, plugin);
-        
-        // 3. Delegate to plugin.deposit()
-        bool success = IProtocolManager(plugin).deposit(tokenCode, amount);
-        if (!success) revert OperationFailed("deposit", "Plugin deposit failed");
-        
+        IProxyGeneral(proxyGeneral).withdrawToken(collateral, amount, plugin);
+
+        // 3. Delegate to plugin.supplyCollateral() (pair-based, DEC-006/009)
+        bool success = IProtocolAdapter(plugin).supplyCollateral(collateral, loan, amount);
+        if (!success) revert OperationFailed("supplyCollateral", "Plugin supplyCollateral failed");
+
         // 4. Emit event
-        emit ProtocolOperationExecuted(protocolName, "deposit", tokenCode, amount);
+        emit ProtocolOperationExecuted(protocolName, "supplyCollateral", collateral, amount);
     }
     
     /**
-     * @notice Preleva token da un protocollo
+     * @notice Preleva collaterale da un protocollo (pair-based)
      * @dev Flow: External Protocol → Plugin → ProxyGeneral
      * @param protocolName Nome del protocollo
-     * @param tokenCode Codice del token
+     * @param collateral Codice del token collaterale
+     * @param loan Codice del mercato/loan
      * @param amount Importo da prelevare (in wei)
      */
-    function withdraw(
+    function withdrawCollateral(
         string memory protocolName,
-        string memory tokenCode,
+        string memory collateral,
+        string memory loan,
         uint256 amount
-    ) external onlyOwner {
+    ) external onlyOperator {
         if (amount == 0) revert InvalidAmount(amount);
-        if (bytes(tokenCode).length == 0) revert InvalidTokenCode(tokenCode);
-        
+        if (bytes(collateral).length == 0) revert InvalidTokenCode(collateral);
+
         // 1. Resolve plugin
         address plugin = _resolvePlugin(protocolName);
         _validateProtocol(plugin);
-        
-        // 2. Delegate to plugin.withdraw() (plugin returns to ProxyGeneral)
-        bool success = IProtocolManager(plugin).withdraw(tokenCode, amount);
-        if (!success) revert OperationFailed("withdraw", "Plugin withdraw failed");
-        
+
+        // 2. Delegate to plugin.withdrawCollateral() (plugin returns to ProxyGeneral)
+        bool success = IProtocolAdapter(plugin).withdrawCollateral(collateral, loan, amount);
+        if (!success) revert OperationFailed("withdrawCollateral", "Plugin withdrawCollateral failed");
+
         // 3. Emit event
-        emit ProtocolOperationExecuted(protocolName, "withdraw", tokenCode, amount);
+        emit ProtocolOperationExecuted(protocolName, "withdrawCollateral", collateral, amount);
     }
     
     /**
@@ -279,7 +313,7 @@ contract ProtocolManager is Ownable {
         string memory tokenCode
     ) external view returns (uint256 balance) {
         address plugin = _resolvePlugin(protocolName);
-        return IProtocolManager(plugin).getBalance(tokenCode);
+        return IProtocolAdapter(plugin).getBalance(tokenCode);
     }
     
     /**
@@ -300,59 +334,63 @@ contract ProtocolManager is Ownable {
     /**
      * @notice Prende in prestito token da un protocollo lending
      * @dev Flow: External Protocol → Plugin → ProxyGeneral (borrowed tokens)
-     * @param protocolName Nome del protocollo (es. "DolomitePlugin")
-     * @param tokenCode Codice del token da prendere in prestito (es. "USDC")
+     * @param protocolName Nome del protocollo (es. "Aave")
+     * @param collateral Codice del token collaterale
+     * @param loan Codice del token da prendere in prestito (es. "USDC")
      * @param amount Importo da prendere in prestito (in wei)
      */
     function borrow(
         string memory protocolName,
-        string memory tokenCode,
+        string memory collateral,
+        string memory loan,
         uint256 amount
-    ) external onlyOwner {
+    ) external onlyOperator {
         if (amount == 0) revert InvalidAmount(amount);
-        if (bytes(tokenCode).length == 0) revert InvalidTokenCode(tokenCode);
-        
+        if (bytes(loan).length == 0) revert InvalidTokenCode(loan);
+
         // 1. Resolve plugin
         address plugin = _resolvePlugin(protocolName);
         _validateProtocol(plugin);
-        
-        // 2. Delegate to plugin.borrow() (plugin transfers borrowed tokens to ProxyGeneral)
-        bool success = ILendingProtocol(plugin).borrow(tokenCode, amount);
+
+        // 2. Delegate to plugin.borrow() (pair-based; plugin transfers borrowed tokens to ProxyGeneral)
+        bool success = IProtocolAdapter(plugin).borrow(collateral, loan, amount);
         if (!success) revert OperationFailed("borrow", "Plugin borrow failed");
-        
+
         // 3. Emit event
-        emit LendingOperationExecuted(protocolName, "borrow", tokenCode, amount);
+        emit LendingOperationExecuted(protocolName, "borrow", loan, amount);
     }
     
     /**
      * @notice Ripaga un debito in un protocollo lending
      * @dev Flow: ProxyGeneral → Plugin → External Protocol (repayment tokens)
      * @param protocolName Nome del protocollo
-     * @param tokenCode Codice del token da ripagare (es. "USDC")
+     * @param collateral Codice del token collaterale
+     * @param loan Codice del token da ripagare (es. "USDC")
      * @param amount Importo da ripagare (in wei)
      */
     function repay(
         string memory protocolName,
-        string memory tokenCode,
+        string memory collateral,
+        string memory loan,
         uint256 amount
-    ) external onlyOwner {
+    ) external onlyOperator {
         // amount = 0 means "repay all" (handled by plugin)
-        if (bytes(tokenCode).length == 0) revert InvalidTokenCode(tokenCode);
-        
+        if (bytes(loan).length == 0) revert InvalidTokenCode(loan);
+
         // 1. Resolve plugin
         address plugin = _resolvePlugin(protocolName);
         _validateProtocol(plugin);
-        
-        // 2. Withdraw repayment tokens from ProxyGeneral to plugin
+
+        // 2. Withdraw repayment tokens (loan) from ProxyGeneral to plugin
         address proxyGeneral = _getProxyGeneral();
-        IProxyGeneral(proxyGeneral).withdrawToken(tokenCode, amount, plugin);
-        
-        // 3. Delegate to plugin.repay()
-        bool success = ILendingProtocol(plugin).repay(tokenCode, amount);
+        IProxyGeneral(proxyGeneral).withdrawToken(loan, amount, plugin);
+
+        // 3. Delegate to plugin.repay() (pair-based)
+        bool success = IProtocolAdapter(plugin).repay(collateral, loan, amount);
         if (!success) revert OperationFailed("repay", "Plugin repay failed");
-        
+
         // 4. Emit event
-        emit LendingOperationExecuted(protocolName, "repay", tokenCode, amount);
+        emit LendingOperationExecuted(protocolName, "repay", loan, amount);
     }
     
     /**
@@ -389,17 +427,19 @@ contract ProtocolManager is Ownable {
     }
     
     /**
-     * @notice Ottiene il debito corrente per un token
+     * @notice Ottiene il debito corrente per una coppia (collateral, loan)
      * @param protocolName Nome del protocollo
-     * @param tokenCode Codice del token
+     * @param collateral Codice del token collaterale
+     * @param loan Codice del token loan
      * @return debtAmount Importo del debito (in wei)
      */
     function getDebt(
         string memory protocolName,
-        string memory tokenCode
+        string memory collateral,
+        string memory loan
     ) external view returns (uint256 debtAmount) {
         address plugin = _resolvePlugin(protocolName);
-        return ILendingProtocol(plugin).getDebt(tokenCode);
+        return IProtocolAdapter(plugin).getDebt(collateral, loan);
     }
     
     /**
@@ -408,10 +448,12 @@ contract ProtocolManager is Ownable {
      * @return healthFactor Health factor in 18 decimali (1.0 = 1e18)
      */
     function getHealthFactor(
-        string memory protocolName
+        string memory protocolName,
+        string memory collateral,
+        string memory loan
     ) external view returns (uint256 healthFactor) {
         address plugin = _resolvePlugin(protocolName);
-        return ILendingProtocol(plugin).getHealthFactor();
+        return IProtocolAdapter(plugin).getHealthFactor(collateral, loan);
     }
 
     
@@ -539,6 +581,20 @@ contract ProtocolManager is Ownable {
     function _getProxyGeneral() internal view returns (address proxyGeneralAddress) {
         proxyGeneralAddress = IBeacon(beacon).getImplementation("ProxyGeneral");
         require(proxyGeneralAddress != address(0), "ProxyGeneral not found");
+    }
+
+    /**
+     * @notice True se `account` è autorizzato a triggerare l'emergenza (DEC-008 B2):
+     *         owner OPPURE emergency contact registrato in EmergencyHandler.
+     */
+    function _isEmergencyAuthorized(address account) internal view returns (bool) {
+        if (account == owner()) return true;
+        address handler = IBeacon(beacon).getImplementation("EmergencyHandler");
+        if (handler == address(0)) return false;
+        (bool ok, bytes memory data) = handler.staticcall(
+            abi.encodeWithSignature("isAuthorizedForEmergency(address)", account)
+        );
+        return ok && data.length >= 32 && abi.decode(data, (bool));
     }
     
     // ==================== PROTOCOL REGISTRY FUNCTIONS ====================
@@ -805,20 +861,55 @@ contract ProtocolManager is Ownable {
             string memory name = registeredProtocolNames[i];
             ProtocolInfo storage info = protocols[name];
             if (!info.isActive) continue;
-            
+
             uint256 stillNeeded = targetAmount - obtained;
-            
-            try IProtocolAdapter(info.plugin).closePositionsForBaseAsset(stillNeeded) 
-                returns (uint256 got, uint256 closed) 
+
+            // DEC-009 D2: indirizzo plugin risolto dal Beacon (fonte unica), non da info.plugin.
+            address plugin = _resolvePlugin(name);
+            try IProtocolAdapter(plugin).closePositionsForBaseAsset(stillNeeded)
+                returns (uint256 got, uint256 closed)
             {
                 obtained += got;
                 totalPositionsClosed += closed;
-                
+
                 if (closed > 0) {
                     emit PositionsClosedForBaseAsset(name, closed, got);
                 }
             } catch {
                 // Protocol failed, continue with next
+            }
+        }
+    }
+
+    /**
+     * @notice EMERGENCY unwind (DEC-007 "No drain"): chiude TUTTE le posizioni su tutti i
+     *         plugin riportando i fondi a base asset in ProxyGeneral (custody). NON manda
+     *         fondi a nessun EOA. Emergency mode = closePositionsForBaseAsset(type(uint256).max).
+     * @dev Triggerabile da owner + emergency contacts (DEC-008 B2).
+     * @return obtained Base asset totale riportato in custody
+     * @return totalPositionsClosed Posizioni chiuse su tutti i protocolli
+     */
+    function emergencyUnwindAll()
+        external
+        returns (uint256 obtained, uint256 totalPositionsClosed)
+    {
+        require(_isEmergencyAuthorized(msg.sender), "ProtocolManager: not emergency authorized");
+        for (uint256 i = 0; i < registeredProtocolNames.length; i++) {
+            string memory name = registeredProtocolNames[i];
+            ProtocolInfo storage info = protocols[name];
+            if (!info.isActive) continue;
+
+            address plugin = _resolvePlugin(name);
+            try IProtocolAdapter(plugin).closePositionsForBaseAsset(type(uint256).max)
+                returns (uint256 got, uint256 closed)
+            {
+                obtained += got;
+                totalPositionsClosed += closed;
+                if (closed > 0) {
+                    emit PositionsClosedForBaseAsset(name, closed, got);
+                }
+            } catch {
+                // Un plugin che fallisce non blocca l'unwind degli altri.
             }
         }
     }

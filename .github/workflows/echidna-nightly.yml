@@ -1,0 +1,64 @@
+name: Echidna (nightly)
+
+# Echidna nightly campaign — §S7 checklist.
+# Trigger:
+#   - schedule: cron 04:00 UTC
+#   - workflow_dispatch: manuale
+
+on:
+  schedule:
+    - cron: "0 4 * * *"          # 04:00 UTC (dopo Slither+Foundry+Fork)
+  workflow_dispatch:
+    inputs:
+      test_limit:
+        description: "testLimit (default 500000)"
+        required: false
+        default: "500000"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: echidna-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  ECHIDNA_VERSION: "v2.2.5"
+
+jobs:
+  echidna-lp-pool:
+    name: Echidna — LPPool harness
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore corpus (if any)
+        uses: actions/cache@v4
+        with:
+          path: security/echidna/corpus
+          key: echidna-corpus-lp-pool-${{ github.run_id }}
+          restore-keys: |
+            echidna-corpus-lp-pool-
+
+      - name: Run Echidna
+        uses: crytic/echidna-action@v2
+        with:
+          files: contracts/echidna/EchidnaLPPool.sol
+          contract: EchidnaLPPool
+          config: security/echidna/echidna.yaml
+          echidna-version: ${{ env.ECHIDNA_VERSION }}
+          test-limit: ${{ github.event.inputs.test_limit || '500000' }}
+
+      - name: Upload corpus + report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: echidna-lp-pool-${{ github.run_id }}
+          path: |
+            security/echidna/corpus/**
+            echidna.log
+          retention-days: 60
+          if-no-files-found: warn

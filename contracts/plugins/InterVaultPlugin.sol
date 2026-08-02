@@ -75,7 +75,8 @@ contract InterVaultPlugin is IInterVaultPlugin, Ownable, ReentrancyGuard {
 
     modifier onlyProtocolManager() {
         address manager = IBeacon(beacon).getImplementation("ProtocolManager");
-        if (msg.sender != manager && msg.sender != owner()) revert OnlyProtocolManager();
+        // PLG-084 fix (DEC-006/009): nessun bypass owner(). Escape hatch = emergencyClosePosition.
+        if (msg.sender != manager) revert OnlyProtocolManager();
         _;
     }
 
@@ -92,9 +93,10 @@ contract InterVaultPlugin is IInterVaultPlugin, Ownable, ReentrancyGuard {
         baseAssetCode = _baseAssetCode;
     }
 
-    function deposit(string memory tokenCode, uint256 amount)
+    function supplyCollateral(string memory collateral, string memory /* loan */, uint256 amount)
         external override onlyProtocolManager notCircuitBroken nonReentrant returns (bool)
     {
+        string memory tokenCode = collateral; // supply-only: loan == collateral
         if (amount == 0) revert InvalidAmount();
         IInterVaultRegistry.ChildVault memory child = registry.getChildForToken(tokenCode);
         _requireDepositable(child);
@@ -122,13 +124,13 @@ contract InterVaultPlugin is IInterVaultPlugin, Ownable, ReentrancyGuard {
         if (sharesReceived < minimumShares) revert InsufficientSharesOut(sharesReceived, minimumShares);
         _addActiveChild(child.childId);
         emit ChildDeposited(child.childId, tokenCode, amount, sharesReceived);
-        emit Deposited(tokenCode, amount);
         return true;
     }
 
-    function withdraw(string memory tokenCode, uint256 amount)
+    function withdrawCollateral(string memory collateral, string memory /* loan */, uint256 amount)
         external override onlyProtocolManager notCircuitBroken nonReentrant returns (bool)
     {
+        string memory tokenCode = collateral; // supply-only: loan == collateral
         if (amount == 0) revert InvalidAmount();
         IInterVaultRegistry.ChildVault memory child = registry.getChildForToken(tokenCode);
         _requireWithdrawable(child);
@@ -217,6 +219,62 @@ contract InterVaultPlugin is IInterVaultPlugin, Ownable, ReentrancyGuard {
         return _childAssets(registry.getChild(childId));
     }
 
+    // ==================== IProtocolAdapter: LENDING (supply-only → revert) ====================
+
+    /// @inheritdoc IProtocolAdapter
+    /// @dev Supply-only (DEC-009): borrow non supportato.
+    function borrow(string memory, string memory, uint256) external pure override returns (bool) {
+        revert UnsupportedOperation();
+    }
+
+    /// @inheritdoc IProtocolAdapter
+    /// @dev Supply-only (DEC-009): repay non supportato.
+    function repay(string memory, string memory, uint256) external pure override returns (bool) {
+        revert UnsupportedOperation();
+    }
+
+    /// @inheritdoc IProtocolAdapter
+    /// @dev Collaterale = valore in asset delle shares nel child per `collateral`.
+    function getCollateral(string memory collateral, string memory /* loan */)
+        external view override returns (uint256)
+    {
+        IInterVaultRegistry.ChildVault memory child = registry.getChildForToken(collateral);
+        uint256 shares = IERC20(child.shareToken).balanceOf(address(this));
+        return shares == 0 ? 0 : ILiquidityManager(child.liquidityManager).calculateWithdrawAmount(shares);
+    }
+
+    /// @inheritdoc IProtocolAdapter
+    /// @dev Supply-only: nessun debito.
+    function getDebt(string memory, string memory) external pure override returns (uint256) {
+        return 0;
+    }
+
+    /// @inheritdoc IProtocolAdapter
+    /// @dev Supply-only: nessun debito → health factor infinito.
+    function getHealthFactor(string memory, string memory) external pure override returns (uint256) {
+        return type(uint256).max;
+    }
+
+    /// @inheritdoc IProtocolAdapter
+    function protocolType() external pure override returns (string memory) {
+        return "INTERVAULT";
+    }
+
+    /// @inheritdoc IProtocolAdapter
+    /// @dev EMERGENCY escape hatch (supply-only): ritira tutto il child per `collateral`
+    ///      verso ProxyGeneral. onlyOwner.
+    function emergencyClosePosition(string memory collateral, string memory /* loan */)
+        external override onlyOwner nonReentrant returns (uint256 baseAssetReturned)
+    {
+        IInterVaultRegistry.ChildVault memory child = registry.getChildForToken(collateral);
+        uint256 beforeBalance = IERC20(child.baseAsset).balanceOf(_getProxyGeneral());
+        _withdrawAll(child, true);
+        if (child.baseAsset == _getBaseAsset()) {
+            baseAssetReturned = IERC20(child.baseAsset).balanceOf(_getProxyGeneral()) - beforeBalance;
+        }
+        emit PositionClosed(0, baseAssetReturned);
+    }
+
     function _withdrawAssets(IInterVaultRegistry.ChildVault memory child, uint256 amount, bool emergency) private {
         if (!emergency) _requireWithdrawable(child);
         uint256 sharesBefore = IERC20(child.shareToken).balanceOf(address(this));
@@ -232,7 +290,6 @@ contract InterVaultPlugin is IInterVaultPlugin, Ownable, ReentrancyGuard {
         uint256 sharesAfter = IERC20(child.shareToken).balanceOf(address(this));
         _removeActiveChildIfEmpty(child.childId, child.shareToken);
         emit ChildWithdrawn(child.childId, child.tokenCode, amount, assetsReceived, sharesBefore - sharesAfter);
-        emit Withdrawn(child.tokenCode, assetsReceived);
     }
 
     function _withdrawAll(IInterVaultRegistry.ChildVault memory child, bool emergency) private {

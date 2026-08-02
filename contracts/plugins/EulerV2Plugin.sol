@@ -209,9 +209,8 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     /// @notice Solo ProtocolManager può chiamare
     modifier onlyProtocolManager() {
         address protocolManager = IBeacon(beacon).getImplementation("ProtocolManager");
-        if (msg.sender != protocolManager && msg.sender != owner()) {
-            revert OnlyProtocolManager();
-        }
+        // PLG-084 fix (DEC-006/009): nessun bypass owner(). Escape hatch = emergencyClosePosition.
+        if (msg.sender != protocolManager) revert OnlyProtocolManager();
         _;
     }
     
@@ -254,24 +253,25 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
      *      I token devono essere già nel contratto (inviati da ProtocolManager)
      *      Auto-abilita il vault come collaterale in EVC se non già abilitato
      */
-    function deposit(string memory tokenCode, uint256 amount) 
-        external 
-        override 
+    function supplyCollateral(string memory collateral, string memory /* loan */, uint256 amount)
+        external
+        override
         onlyProtocolManager
         notCircuitBroken
         nonReentrant
-        returns (bool) 
+        returns (bool)
     {
+        string memory tokenCode = collateral; // Euler: supply nel vault del collaterale
         // 1. Risolvi token e vault
         address token = _resolveToken(tokenCode);
         address vault = _getVault(tokenCode);
-        
+
         // 2. Verifica balance
         uint256 balance = IERC20(token).balanceOf(address(this));
         if (balance < amount) {
             revert InsufficientBalance(balance, amount);
         }
-        
+
         // 3. Approva vault (prima del batch, ERC-20 approve non passa per EVC)
         IERC20(token).safeIncreaseAllowance(vault, amount);
         
@@ -309,18 +309,19 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
      * @dev Preleva token dal vault Euler e li invia a ProxyGeneral
      *      Auto-disabilita il collaterale se si ritira tutto e non ci sono debiti
      */
-    function withdraw(string memory tokenCode, uint256 amount) 
-        external 
-        override 
+    function withdrawCollateral(string memory collateral, string memory /* loan */, uint256 amount)
+        external
+        override
         onlyProtocolManager
         notCircuitBroken
         nonReentrant
-        returns (bool) 
+        returns (bool)
     {
+        string memory tokenCode = collateral;
         // 1. Risolvi token e vault
         address token = _resolveToken(tokenCode);
         address vault = _getVault(tokenCode);
-        
+
         // 2. Check se stiamo ritirando tutto
         uint256 totalShares = IEVault(vault).balanceOf(address(this));
         if (totalShares == 0) {
@@ -358,23 +359,24 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     // ==================== ILendingProtocol: BORROW/REPAY ====================
     
     /**
-     * @inheritdoc IEulerV2Plugin
+     * @inheritdoc IProtocolAdapter
      * @dev Prende in prestito dal vault e invia a ProxyGeneral
      *      Richiede collaterale già depositato
      *      Auto-abilita il vault come controller in EVC se non già abilitato
      */
-    function borrow(string memory tokenCode, uint256 amount) 
-        external 
-        override 
+    function borrow(string memory /* collateral */, string memory loan, uint256 amount)
+        external
+        override
         onlyProtocolManager
         notCircuitBroken
         nonReentrant
-        returns (bool) 
+        returns (bool)
     {
+        string memory tokenCode = loan; // Euler: borrow dal vault del loan
         // 1. Risolvi token e vault
         address token = _resolveToken(tokenCode);
         address vault = _getVault(tokenCode);
-        
+
         // 2. Costruisci batch EVC: [enableController (se necessario), borrow]
         bool needEnableController = !evc.isControllerEnabled(address(this), vault);
         uint256 batchSize = needEnableController ? 2 : 1;
@@ -408,23 +410,24 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     }
     
     /**
-     * @inheritdoc IEulerV2Plugin
+     * @inheritdoc IProtocolAdapter
      * @dev Ripaga un debito nel vault
      *      I token devono essere già nel contratto
      *      Auto-disabilita il controller se debt = 0 dopo repay
      */
-    function repay(string memory tokenCode, uint256 amount) 
-        external 
-        override 
+    function repay(string memory /* collateral */, string memory loan, uint256 amount)
+        external
+        override
         onlyProtocolManager
         notCircuitBroken
         nonReentrant
-        returns (bool) 
+        returns (bool)
     {
+        string memory tokenCode = loan;
         // 1. Risolvi token e vault
         address token = _resolveToken(tokenCode);
         address vault = _getVault(tokenCode);
-        
+
         // 2. Get actual debt to handle dust correctly
         uint256 currentDebt = IEVault(vault).debtOf(address(this));
         if (currentDebt == 0) {
@@ -573,32 +576,33 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     // ==================== DEBT FUNCTIONS ====================
     
     /**
-     * @notice Get debt for a specific token
-     * @param tokenCode Token code (e.g., "USDC")
-     * @return Debt amount
+     * @inheritdoc IProtocolAdapter
+     * @dev Debito corrente del token `loan` via vault.debtOf(). `collateral` è contesto.
      */
-    function getDebt(string memory tokenCode) 
-        external 
-        view 
-        returns (uint256) 
+    function getDebt(string memory /* collateral */, string memory loan)
+        external
+        view
+        override
+        returns (uint256)
     {
+        string memory tokenCode = loan;
         address vault = _getVaultSafe(tokenCode);
         if (vault == address(0)) return 0;
-        
+
         return IEVault(vault).debtOf(address(this));
     }
     
     /**
-     * @inheritdoc IEulerV2Plugin
+     * @inheritdoc IProtocolAdapter
      * @dev Calcola health factor usando AccountLens
      *      Health Factor = collateralValue / liabilityValue (in 1e18)
      *      Ritorna type(uint256).max se non ci sono debiti
      */
-    function getHealthFactor() 
-        external 
-        view 
-        override 
-        returns (uint256) 
+    function getHealthFactor(string memory /* collateral */, string memory /* loan */)
+        external
+        view
+        override
+        returns (uint256)
     {
         // Ottieni i controller abilitati (vault da cui abbiamo borrowato)
         address[] memory controllers = evc.getControllers(address(this));
@@ -644,16 +648,27 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     {
         address vault = _getVaultSafe(tokenCode);
         if (vault == address(0)) return 0;
-        
+
         // Shares convertite in assets
         uint256 shares = IEVault(vault).balanceOf(address(this));
         return IEVault(vault).convertToAssets(shares);
     }
-    
+
+    /// @inheritdoc IProtocolAdapter
+    function getCollateral(string memory collateral, string memory /* loan */) external view override returns (uint256) {
+        address vault = _getVaultSafe(collateral);
+        if (vault == address(0)) return 0;
+        uint256 shares = IEVault(vault).balanceOf(address(this));
+        return IEVault(vault).convertToAssets(shares);
+    }
+
+    /// @inheritdoc IProtocolAdapter
+    function protocolType() external pure override returns (string memory) { return "EULER_V2"; }
+
     /**
      * @inheritdoc IProtocolAdapter
      */
-    function emergencyWithdrawAll(string[] memory tokenCodes) 
+    function emergencyWithdrawAll(string[] memory tokenCodes)
         external 
         override 
         onlyOwner
@@ -673,10 +688,28 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
                 emit EmergencyWithdraw(tokenCodes[i], assets);
             }
         }
-        
+
         return true;
     }
-    
+
+    /// @inheritdoc IProtocolAdapter
+    /// @dev EMERGENCY escape hatch (DEC-006/007): onlyOwner. Ritira il collaterale
+    ///      liberamente ritirabile del `collateral` vault in ProxyGeneral. Per le posizioni
+    ///      a leva l'owner usa `closeLeverageAtomic` (che ripaga+chiude). Versione minimale
+    ///      per rispettare EIP-170 su Euler (il plugin più grande).
+    function emergencyClosePosition(string memory collateral, string memory /* loan */)
+        external override onlyOwner nonReentrant returns (uint256 baseAssetReturned)
+    {
+        address collVault = _getVaultSafe(collateral);
+        if (collVault == address(0)) return 0;
+        uint256 maxW = IEVault(collVault).maxWithdraw(address(this));
+        if (maxW > 0) {
+            IEVault(collVault).withdraw(maxW, _getProxyGeneral(), address(this));
+        }
+        baseAssetReturned = maxW;
+        emit PositionClosed(0, maxW);
+    }
+
     // ==================== ATOMIC LEVERAGE VIA FLASH LOAN SERVICE ====================
     
     /**
@@ -1362,7 +1395,8 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
         totalDebt = IEVault(borrowVault).debtOf(address(this));
         
         // Health factor - riusa logica esistente invece di duplicare
-        healthFactor = this.getHealthFactor();
+        // Euler ha HF globale/account: i parametri coppia sono ignorati.
+        healthFactor = this.getHealthFactor("", "");
     }
     
     // ==================== IProtocolAdapter IMPLEMENTATION ====================
@@ -1400,10 +1434,10 @@ contract EulerV2Plugin is IEulerV2Plugin, IFlashLoanCallback, Ownable, Reentranc
     }
     
     /// @inheritdoc IProtocolAdapter
-    function closePositionsForBaseAsset(uint256 targetAmount) 
-        external 
-        override 
-        onlyOwnerOrLiquidityManager
+    function closePositionsForBaseAsset(uint256 targetAmount)
+        external
+        override
+        onlyProtocolManager
         returns (uint256 obtained, uint256 positionsClosed) 
     {
         address baseAsset = IBeacon(beacon).getImplementation("BASE_ASSET");

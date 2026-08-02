@@ -1,0 +1,93 @@
+# CODEOWNERS — TestPOC
+#
+# Questo file assegna la responsabilità (ownership) dei path del repository.
+# Al momento della sua creazione (2026-07-15) il progetto è single-maintainer.
+#
+# Regole GitHub applicate:
+#   - Sintassi: <pattern-glob> <spazio> @handle-github [@altri]
+#   - L'ultima riga che matcha un file determina l'owner.
+#   - Pattern glob supportati: '*', '**', prefissi/suffissi.
+#
+# STATO ATTUALE (registrato in security/DECISIONS.md DEC-002):
+#   - Questo file funge da MARCATORE di responsabilità.
+#   - La "Require review from Code Owners" NON è attiva nelle branch protection
+#     rules di GitHub (bloccherebbe l'autore che è unico maintainer).
+#   - Al primo deploy mainnet o all'ingresso di un secondo maintainer,
+#     l'attivazione del required review va rivalutata (vedi DEC-002).
+#
+# Manutenzione:
+#   - Non modificare senza aggiungere una nuova entry in security/DECISIONS.md.
+#   - Ogni pattern nuovo o rimosso richiede motivazione tracciabile.
+
+# ============================================================================
+# Default owner: tutto il repository
+# ============================================================================
+* @Poppo753
+
+# ============================================================================
+# Security suite (configurazioni tool, baseline, findings)
+# ============================================================================
+/security/                                @Poppo753
+/security/**                              @Poppo753
+/slither.config.json                      @Poppo753
+/foundry.toml                             @Poppo753
+/echidna.yaml                             @Poppo753
+/halmos/**                                @Poppo753
+
+# ============================================================================
+# CI workflows (security-specific)
+# ============================================================================
+/.github/workflows/security*.yml          @Poppo753
+/.github/workflows/slither*.yml           @Poppo753
+/.github/workflows/foundry*.yml           @Poppo753
+/.github/workflows/echidna*.yml           @Poppo753
+
+# ============================================================================
+# CODEOWNERS stesso (meta)
+# ============================================================================
+/.github/CODEOWNERS                       @Poppo753
+
+# ============================================================================
+# Test dedicati alla security suite
+# ============================================================================
+/test/foundry/                            @Poppo753
+/test/foundry/**                          @Poppo753
+/test/security/                           @Poppo753
+/test/security/**                         @Poppo753
+/test/invariants/                         @Poppo753
+/test/invariants/**                       @Poppo753
+
+# ============================================================================
+# Toolchain fissata (invarianti di riproducibilità)
+# ============================================================================
+/hardhat.config.ts                        @Poppo753
+/package.json                             @Poppo753
+/package-lock.json                        @Poppo753
+/tsconfig.json                            @Poppo753
+/tsconfig.scripts.json                    @Poppo753
+
+# ============================================================================
+# Contratti production critici (le modifiche impattano NAV/share/withdraw)
+# ============================================================================
+/contracts/Beacon.sol                     @Poppo753
+/contracts/Liquiditymanager.sol           @Poppo753
+/contracts/ProxyGeneral.sol               @Poppo753
+/contracts/SwapManager.sol                @Poppo753
+/contracts/ValueCalculator.sol            @Poppo753
+/contracts/ProtocolManager.sol            @Poppo753
+/contracts/ParameterManager.sol           @Poppo753
+/contracts/EmergencyHandler.sol           @Poppo753
+/contracts/TokenManager.sol               @Poppo753
+/contracts/DepositHelper.sol              @Poppo753
+
+# ============================================================================
+# Adapter oracle e lending — modifiche impattano valuation
+# ============================================================================
+/contracts/adapters/                      @Poppo753
+/contracts/adapters/**                    @Poppo753
+/contracts/plugins/                       @Poppo753
+/contracts/plugins/**                     @Poppo753
+/contracts/services/                      @Poppo753
+/contracts/services/**                    @Poppo753
+/contracts/metavault/                     @Poppo753
+/contracts/metavault/**                   @Poppo753

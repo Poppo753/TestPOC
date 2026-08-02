@@ -162,10 +162,11 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
         _;
     }
 
-    /// @notice Solo ProtocolManager o owner può chiamare
+    /// @notice Solo ProtocolManager può chiamare (PLG-084 fix, DEC-006/009: nessun bypass owner).
+    ///         Accesso diretto d'emergenza via emergencyClosePosition (escape hatch onlyOwner).
     modifier onlyProtocolManager() {
         address protocolManager = IBeacon(beacon).getImplementation("ProtocolManager");
-        if (msg.sender != protocolManager && msg.sender != owner()) {
+        if (msg.sender != protocolManager) {
             revert OnlyProtocolManager();
         }
         _;
@@ -200,11 +201,11 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
 
     /**
      * @inheritdoc IProtocolAdapter
-     * @dev Deposita (supply) token nel Pool Aave V3
-     *      I token devono essere già nel contratto (inviati da ProtocolManager)
-     *      Aave abilita automaticamente il collaterale al primo supply
+     * @dev Fornisce collaterale (supply) al Pool Aave V3. Modello pooled: `collateral`
+     *      è il token fornito; `loan` è contesto (Aave ha account unico).
+     *      I token devono essere già nel contratto (inviati da ProtocolManager).
      */
-    function deposit(string memory tokenCode, uint256 amount)
+    function supplyCollateral(string memory collateral, string memory /* loan */, uint256 amount)
         external
         override
         onlyProtocolManager
@@ -213,7 +214,7 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
         returns (bool)
     {
         // 1. Risolvi token address
-        address token = _resolveToken(tokenCode);
+        address token = _resolveToken(collateral);
 
         // 2. Verifica balance
         uint256 balance = IERC20(token).balanceOf(address(this));
@@ -225,7 +226,7 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
         IERC20(token).safeIncreaseAllowance(address(aavePool), amount);
 
         // 4. Query aToken balance prima del deposit (per calcolo receipt)
-        address aToken = _getAToken(tokenCode);
+        address aToken = _getAToken(collateral);
         uint256 aTokenBefore = IERC20(aToken).balanceOf(address(this));
 
         // 5. Supply al Pool Aave
@@ -235,18 +236,17 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
         // 6. Calcola aToken ricevuti
         uint256 aTokenReceived = IERC20(aToken).balanceOf(address(this)) - aTokenBefore;
 
-        emit AaveDeposit(tokenCode, token, amount, aTokenReceived);
-        emit Deposited(tokenCode, amount);
+        emit AaveDeposit(collateral, token, amount, aTokenReceived);
 
         return true;
     }
 
     /**
      * @inheritdoc IProtocolAdapter
-     * @dev Preleva token dal Pool Aave V3 e li invia a ProxyGeneral
-     *      Aave V3 withdraw() supporta invio diretto a recipient (3° parametro)
+     * @dev Preleva collaterale dal Pool Aave V3 verso ProxyGeneral.
+     *      `collateral` è il token da ritirare; `loan` è contesto.
      */
-    function withdraw(string memory tokenCode, uint256 amount)
+    function withdrawCollateral(string memory collateral, string memory /* loan */, uint256 amount)
         external
         override
         onlyProtocolManager
@@ -255,10 +255,10 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
         returns (bool)
     {
         // 1. Risolvi token address
-        address token = _resolveToken(tokenCode);
+        address token = _resolveToken(collateral);
 
         // 2. Check saldo disponibile via aToken
-        address aToken = _getAToken(tokenCode);
+        address aToken = _getAToken(collateral);
         uint256 aTokenBalance = IERC20(aToken).balanceOf(address(this));
         if (aTokenBalance == 0) {
             revert InsufficientBalance(0, amount);
@@ -281,8 +281,7 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
         address proxyGeneral = _getProxyGeneral();
         uint256 actualWithdrawn = aavePool.withdraw(token, withdrawAmount, proxyGeneral);
 
-        emit AaveWithdrawal(tokenCode, token, actualWithdrawn);
-        emit Withdrawn(tokenCode, actualWithdrawn);
+        emit AaveWithdrawal(collateral, token, actualWithdrawn);
 
         return true;
     }
@@ -290,12 +289,12 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
     // ==================== LENDING: BORROW/REPAY ====================
 
     /**
-     * @inheritdoc IAaveV3Plugin
+     * @inheritdoc IProtocolAdapter
      * @dev Prende in prestito dal Pool Aave V3 e invia a ProxyGeneral
      *      Richiede collaterale già depositato (via supply)
      *      Usa variable rate (interestRateMode = 2)
      */
-    function borrow(string memory tokenCode, uint256 amount)
+    function borrow(string memory /* collateral */, string memory loan, uint256 amount)
         external
         override
         onlyProtocolManager
@@ -303,8 +302,8 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
         nonReentrant
         returns (bool)
     {
-        // 1. Risolvi token address
-        address token = _resolveToken(tokenCode);
+        // 1. Risolvi token da prendere in prestito (`loan`). `collateral` è contesto (account unico).
+        address token = _resolveToken(loan);
 
         // 2. Borrow da Aave V3
         // borrow(asset, amount, interestRateMode, referralCode, onBehalfOf)
@@ -314,19 +313,19 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
         address proxyGeneral = _getProxyGeneral();
         IERC20(token).safeTransfer(proxyGeneral, amount);
 
-        emit AaveBorrow(tokenCode, token, amount);
-        emit Borrowed(tokenCode, amount, 0); // accountNumber = 0 (Aave single account)
+        emit AaveBorrow(loan, token, amount);
+        emit Borrowed(loan, amount, 0); // accountNumber = 0 (Aave single account)
 
         return true;
     }
 
     /**
-     * @inheritdoc IAaveV3Plugin
+     * @inheritdoc IProtocolAdapter
      * @dev Ripaga un debito nel Pool Aave V3
      *      I token devono essere già nel contratto (inviati da ProtocolManager)
      *      Gestisce dust e repay completo
      */
-    function repay(string memory tokenCode, uint256 amount)
+    function repay(string memory /* collateral */, string memory loan, uint256 amount)
         external
         override
         onlyProtocolManager
@@ -334,9 +333,9 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
         nonReentrant
         returns (bool)
     {
-        // 1. Risolvi token e debt token
-        address token = _resolveToken(tokenCode);
-        address variableDebtToken = _getVariableDebtToken(tokenCode);
+        // 1. Risolvi token e debt token (`loan` è ciò che si ripaga)
+        address token = _resolveToken(loan);
+        address variableDebtToken = _getVariableDebtToken(loan);
 
         // 2. Get debito corrente
         uint256 currentDebt = IERC20(variableDebtToken).balanceOf(address(this));
@@ -370,8 +369,8 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
         // repay(asset, amount, interestRateMode, onBehalfOf)
         uint256 actualRepaid = aavePool.repay(token, repayAmount, VARIABLE_RATE_MODE, address(this));
 
-        emit AaveRepay(tokenCode, token, actualRepaid);
-        emit Repaid(tokenCode, actualRepaid, 0);
+        emit AaveRepay(loan, token, actualRepaid);
+        emit Repaid(loan, actualRepaid, 0);
 
         return true;
     }
@@ -422,6 +421,56 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
 
     /**
      * @inheritdoc IProtocolAdapter
+     * @dev EMERGENCY escape hatch (DEC-006/007): chiude la posizione (collateral, loan)
+     *      bypassando ProtocolManager. onlyOwner. Ripaga il debito `loan` e ritira il
+     *      collaterale in ProxyGeneral. Se collateral != base asset, baseAssetReturned può
+     *      essere 0 (fondi tornano comunque in custody); conversione a base coordinata con C1-06.
+     */
+    function emergencyClosePosition(string memory collateral, string memory loan)
+        external
+        override
+        onlyOwner
+        nonReentrant
+        returns (uint256 baseAssetReturned)
+    {
+        address baseAsset = _resolveToken(baseAssetCode);
+        address proxyGeneral = _getProxyGeneral();
+        uint256 balBefore = IERC20(baseAsset).balanceOf(proxyGeneral);
+
+        // 1. Ripaga il debito `loan` se presente
+        address variableDebtToken = _getVariableDebtTokenSafe(loan);
+        if (variableDebtToken != address(0)) {
+            uint256 debt = IERC20(variableDebtToken).balanceOf(address(this));
+            if (debt > 0) {
+                address loanToken = _resolveToken(loan);
+                uint256 bal = IERC20(loanToken).balanceOf(address(this));
+                uint256 repayAmt = bal < debt ? bal : debt;
+                if (repayAmt > 0) {
+                    IERC20(loanToken).safeIncreaseAllowance(address(aavePool), repayAmt);
+                    aavePool.repay(loanToken, repayAmt, VARIABLE_RATE_MODE, address(this));
+                }
+            }
+        }
+
+        // 2. Ritira il collaterale in ProxyGeneral
+        address aTok = _getATokenSafe(collateral);
+        if (aTok != address(0) && IERC20(aTok).balanceOf(address(this)) > 0) {
+            aavePool.withdraw(_resolveToken(collateral), type(uint256).max, proxyGeneral);
+        }
+
+        baseAssetReturned = IERC20(baseAsset).balanceOf(proxyGeneral) - balBefore;
+        emit PositionClosed(0, baseAssetReturned);
+    }
+
+    /**
+     * @inheritdoc IProtocolAdapter
+     */
+    function protocolType() external pure override returns (string memory) {
+        return "AAVE_V3";
+    }
+
+    /**
+     * @inheritdoc IProtocolAdapter
      * @dev Chiude una singola posizione (Aave ha account unico, non position-based)
      *      Per Aave, questo è equivalente a closePosition con i token dell'unica posizione
      */
@@ -454,7 +503,7 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
     function closePositionsForBaseAsset(uint256 targetAmount)
         external
         override
-        onlyOwnerOrLiquidityManager
+        onlyProtocolManager
         notCircuitBroken
         nonReentrant
         returns (uint256 obtained, uint256 positionsClosed)
@@ -478,26 +527,41 @@ contract AaveV3Plugin is IAaveV3Plugin, IFlashLoanCallback, Ownable, ReentrancyG
     // ==================== VIEW FUNCTIONS ====================
 
     /**
-     * @inheritdoc IAaveV3Plugin
-     * @dev Get debito corrente per un token via variableDebtToken balance
+     * @inheritdoc IProtocolAdapter
+     * @dev Debito corrente del token `loan` via variableDebtToken balance. `collateral` è contesto.
      */
-    function getDebt(string memory tokenCode)
+    function getDebt(string memory /* collateral */, string memory loan)
         external
         view
         override
         returns (uint256)
     {
-        address variableDebtToken = _getVariableDebtTokenSafe(tokenCode);
+        address variableDebtToken = _getVariableDebtTokenSafe(loan);
         if (variableDebtToken == address(0)) return 0;
         return IERC20(variableDebtToken).balanceOf(address(this));
     }
 
     /**
-     * @inheritdoc IAaveV3Plugin
-     * @dev Health factor NATIVO da Aave V3 getUserAccountData()
+     * @inheritdoc IProtocolAdapter
+     * @dev Collaterale corrente del token `collateral` = aToken balance. `loan` è contesto.
+     */
+    function getCollateral(string memory collateral, string memory /* loan */)
+        external
+        view
+        override
+        returns (uint256)
+    {
+        address aToken = _getATokenSafe(collateral);
+        if (aToken == address(0)) return 0;
+        return IERC20(aToken).balanceOf(address(this));
+    }
+
+    /**
+     * @inheritdoc IProtocolAdapter
+     * @dev Health factor NATIVO da Aave V3 getUserAccountData() (account unico → params ignorati).
      *      Ritorna type(uint256).max se non ci sono debiti
      */
-    function getHealthFactor()
+    function getHealthFactor(string memory /* collateral */, string memory /* loan */)
         external
         view
         override

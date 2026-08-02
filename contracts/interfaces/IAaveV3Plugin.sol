@@ -68,36 +68,9 @@ interface IAaveV3Plugin is IProtocolAdapter {
     /// @notice Emitted when tokens are repaid
     event Repaid(string tokenCode, uint256 amount, uint256 accountNumber);
 
-    // ==================== LENDING PROTOCOL FUNCTIONS ====================
-
-    /**
-     * @notice Borrow tokens from Aave V3
-     * @param tokenCode Token code (e.g., "USDC")
-     * @param amount Amount to borrow
-     * @return success True if successful
-     */
-    function borrow(string memory tokenCode, uint256 amount) external returns (bool success);
-
-    /**
-     * @notice Repay borrowed tokens to Aave V3
-     * @param tokenCode Token code (e.g., "USDC")
-     * @param amount Amount to repay (0 or type(uint256).max for full repay)
-     * @return success True if successful
-     */
-    function repay(string memory tokenCode, uint256 amount) external returns (bool success);
-
-    /**
-     * @notice Get current debt for a token
-     * @param tokenCode Token code
-     * @return debtAmount Current debt including accrued interest
-     */
-    function getDebt(string memory tokenCode) external view returns (uint256 debtAmount);
-
-    /**
-     * @notice Get health factor from Aave V3 (native)
-     * @return healthFactor Health factor in 1e18 scale. type(uint256).max if no debt
-     */
-    function getHealthFactor() external view returns (uint256 healthFactor);
+    // ==================== AAVE-SPECIFIC FUNCTIONS ====================
+    // NOTE (DEC-009): borrow/repay/getDebt/getHealthFactor sono ora PAIR-BASED
+    // ed ereditati da IProtocolAdapter. Qui restano solo i metodi Aave-specifici.
 
     /**
      * @notice Get borrowing capacity for a token

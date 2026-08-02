@@ -182,20 +182,9 @@ interface IEmergencyHandler {
      */
     function resumeAllOperations() external;
     
-    /**
-     * @notice Withdraw emergenza
-     * @param token Indirizzo token
-     * @param amount Quantità
-     * @param recipient Destinatario
-     */
-    function emergencyWithdraw(address token, uint256 amount, address recipient) external;
-    
-    /**
-     * @notice Trasferimento emergenza
-     * @param to Destinatario
-     * @param amount Quantità ETH
-     */
-    function emergencyTransfer(address payable to, uint256 amount) external;
+    // RIMOSSI (DEC-007 "No drain"): emergencyWithdraw(token,amount,recipient) e
+    // emergencyTransfer(to,amount) erano drain custody->owner. Il flusso emergenza è
+    // pause + ProtocolManager.emergencyUnwindAll + LP withdraw pro-rata. Nessun drain-to-owner.
 
     // ==================== ACCESS CONTROL ====================
     

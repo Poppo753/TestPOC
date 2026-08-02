@@ -1,0 +1,166 @@
+name: Foundry (fuzz + invariant)
+
+# Foundry sidecar — vedi §S5 checklist.
+# Trigger:
+#   - pull_request: profilo default (fuzz 1000 / invariant 100)
+#   - schedule (nightly): profilo nightly (fuzz 100000 / invariant 2000)
+#   - workflow_dispatch: manuale con profilo selezionabile
+
+on:
+  pull_request:
+    branches: [main, develop, "dev-*"]
+    paths:
+      - "contracts/**"
+      - "test/foundry/**"
+      - "foundry.toml"
+      - "lib/**"
+      - ".github/workflows/foundry.yml"
+  schedule:
+    - cron: "0 3 * * *"          # 03:00 UTC nightly (dopo Slither+fork)
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Foundry profile: default | ci | nightly"
+        required: false
+        default: "ci"
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+concurrency:
+  group: foundry-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Version pin — bump con nota in security/DECISIONS.md
+  FOUNDRY_VERSION: "v1.7.1"
+
+jobs:
+  # =========================================================================
+  # PR run: fuzz 1000 + invariant 100 (profilo default)
+  # =========================================================================
+  foundry-pr:
+    name: Foundry PR (default profile, seed 0x1)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      FOUNDRY_PROFILE: default
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Foundry build (parity check with Hardhat solc)
+        run: forge build --skip test
+
+      - name: Run Foundry tests (default profile — fuzz 1000, invariant 100)
+        id: forge
+        run: |
+          echo "Using profile: $FOUNDRY_PROFILE"
+          echo "Seed: 0x1 (fixed for PR reproducibility)"
+          forge test --match-path "test/foundry/**/*.t.sol" -vv 2>&1 | tee forge-report.txt
+
+      - name: Upload counterexamples & report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundry-pr-${{ github.run_id }}
+          path: |
+            forge-report.txt
+            out-foundry/**/*.json
+            cache-foundry/fuzz/failures
+            cache-foundry/invariant/failures
+          retention-days: 30
+          if-no-files-found: warn
+
+  # =========================================================================
+  # Nightly run: fuzz 100000 + invariant 2000 (profilo nightly)
+  # =========================================================================
+  foundry-nightly:
+    name: Foundry nightly (deep, seed 0x1)
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.profile == 'nightly')
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    env:
+      FOUNDRY_PROFILE: nightly
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+      - run: forge build --skip test
+
+      - name: Run Foundry deep campaign
+        run: |
+          echo "Nightly profile: fuzz 100000, invariant 2000"
+          forge test --match-path "test/foundry/**/*.t.sol" -vvv 2>&1 | tee forge-nightly-report.txt
+
+      - name: Upload counterexamples & report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundry-nightly-${{ github.run_id }}
+          path: |
+            forge-nightly-report.txt
+            cache-foundry/fuzz/failures
+            cache-foundry/invariant/failures
+          retention-days: 60
+          if-no-files-found: warn
+
+  # =========================================================================
+  # Manual (workflow_dispatch) — ci profile default
+  # =========================================================================
+  foundry-manual:
+    name: Foundry manual (profile ${{ github.event.inputs.profile }})
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.profile != 'nightly'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      FOUNDRY_PROFILE: ${{ github.event.inputs.profile }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci
+      - run: forge build --skip test
+      - name: Run
+        run: forge test --match-path "test/foundry/**/*.t.sol" -vv

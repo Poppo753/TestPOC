@@ -92,24 +92,8 @@ interface IEulerV2Plugin is IProtocolAdapter, IEulerV2PluginSpecific {
     event Repaid(string tokenCode, uint256 amount, uint256 accountNumber);
     
     // ==================== LENDING PROTOCOL FUNCTIONS ====================
-    // These come from ILendingProtocol which is being replaced by IProtocolAdapter
-    
-    /**
-     * @notice Borrow tokens from Euler
-     * @param tokenCode Token code (e.g., "USDC")
-     * @param amount Amount to borrow
-     * @return success True if successful
-     */
-    function borrow(string memory tokenCode, uint256 amount) external returns (bool success);
-    
-    /**
-     * @notice Repay borrowed tokens
-     * @param tokenCode Token code
-     * @param amount Amount to repay
-     * @return success True if successful
-     */
-    function repay(string memory tokenCode, uint256 amount) external returns (bool success);
-    
+    // borrow/repay/getHealthFactor are now inherited PAIR-BASED from IProtocolAdapter.
+
     /**
      * @notice Close a complete position atomically
      * @dev Repays all debt, disables controller, withdraws all collateral, disables collateral
@@ -118,18 +102,4 @@ interface IEulerV2Plugin is IProtocolAdapter, IEulerV2PluginSpecific {
      * @return success True if successful
      */
     function closePosition(string memory debtTokenCode, string memory collateralTokenCode) external returns (bool success);
-    
-    // DEPRECATED: Use getDebt() instead - same functionality
-    // /**
-    //  * @notice Get borrowed amount for a token
-    //  * @param tokenCode Token code
-    //  * @return amount Borrowed amount
-    //  */
-    // function getBorrowedAmount(string memory tokenCode) external view returns (uint256 amount);
-    
-    /**
-     * @notice Get health factor for the main account
-     * @return healthFactor Health factor (1e18 = 1.0)
-     */
-    function getHealthFactor() external view returns (uint256 healthFactor);
 }

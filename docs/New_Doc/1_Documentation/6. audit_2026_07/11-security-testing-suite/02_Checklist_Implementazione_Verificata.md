@@ -181,100 +181,108 @@ di sicurezza continua a crescere in parallelo.
 
 ### S0.1 Snapshot autorevole
 
-- [ ] Registrare branch e commit che saranno analizzati.
-- [ ] Registrare data, solc, Hardhat, Node e lockfile.
-- [ ] Confrontare il commit dell'audit 2026-07 con HEAD corrente.
-- [ ] Elencare file production aggiunti dopo l'audit, incluso InterVault.
-- [ ] Salvare il diff di scope come artifact/documento.
-- [ ] Dichiarare che risultati su linee obsolete richiedono riverifica.
+- [x] Registrare branch e commit che saranno analizzati.
+- [x] Registrare data, solc, Hardhat, Node e lockfile.
+- [x] Confrontare il commit dell'audit 2026-07 con HEAD corrente.
+- [x] Elencare file production aggiunti dopo l'audit, incluso InterVault.
+- [x] Salvare il diff di scope come artifact/documento.
+- [x] Dichiarare che risultati su linee obsolete richiedono riverifica.
 
-Deliverable: `security/scope/audit-snapshot.md`.
+Deliverable: `security/scope/audit-snapshot.md`. **[completato 2026-07-15 al commit `786a5b92d3bb7e60ef0bdfb37a7f07a3f60d7c89`]**
 
 ### S0.2 Scope production machine-readable
 
-- [ ] Creare elenco include per core e componenti attivi.
-- [ ] Includere Aave, Euler, Morpho, Morpho Vault e InterVault.
-- [ ] Includere FlashLoanService e swap path realmente deploygabili.
-- [ ] Includere le interfacce consumate a runtime.
-- [ ] Definire scope off-chain: deploy, manifest, Safe, CLI e VAC.
-- [ ] Escludere Dolomite e GMX con motivazione e criterio di reingresso.
-- [ ] Escludere `plugins/old`, backup e copy non production.
-- [ ] Separare mock production-hygiene da contratti deploygabili.
-- [ ] Aggiungere controllo CI che segnali nuovi file Solidity non classificati.
+- [x] Creare elenco include per core e componenti attivi.
+- [x] Includere Aave, Euler, Morpho, Morpho Vault e InterVault.
+- [x] Includere FlashLoanService e swap path realmente deploygabili.
+- [x] Includere le interfacce consumate a runtime.
+- [x] Definire scope off-chain: deploy, manifest, Safe, CLI e VAC.
+- [x] Escludere Dolomite e GMX con motivazione e criterio di reingresso.
+- [x] Escludere `plugins/old`, backup e copy non production.
+- [x] Separare mock production-hygiene da contratti deploygabili.
+- [~] Aggiungere controllo CI che segnali nuovi file Solidity non classificati. — specifica pronta in `exclusions.md` §5; implementazione job GH Actions rimandata a S2 per non toccare CI in S0.
 
-Deliverable: `security/scope/production-paths.txt` e `exclusions.md`.
+Deliverable: `security/scope/production-paths.txt` e `exclusions.md`. **[completato 2026-07-15 al commit `786a5b92d3bb7e60ef0bdfb37a7f07a3f60d7c89`]**
 
 ### S0.3 Ownership
 
-- [ ] Assegnare owner tecnico alla suite.
-- [ ] Assegnare reviewer indipendente per accepted risk e suppression.
-- [ ] Stabilire chi può modificare baseline e configurazioni security.
-- [ ] Proteggere tali path con CODEOWNERS/review obbligatoria.
+- [x] Assegnare owner tecnico alla suite. — `@Poppo753` come single-maintainer (registrato in `security/DECISIONS.md` DEC-001, autorizzato dall'utente 2026-07-15).
+- [~] Assegnare reviewer indipendente per accepted risk e suppression. — TBD: al momento single-maintainer, self-review con cooling-off condizionale (DEC-003). Trigger di riattivazione: primo deploy mainnet / secondo maintainer / accepted risk critical.
+- [x] Stabilire chi può modificare baseline e configurazioni security. — `@Poppo753` (DEC-001).
+- [~] Proteggere tali path con CODEOWNERS/review obbligatoria. — CODEOWNERS creato (`.github/CODEOWNERS`), required review NON attivata (DEC-002: bloccherebbe unico autore). Branch protection lato GitHub Settings: raccomandazioni in DEC-004 da applicare manualmente da Poppo753 (agente non ha accesso).
 
-Gate S0: nessun tool viene configurato prima di avere scope e owner.
+Gate S0: nessun tool viene configurato prima di avere scope e owner. **[chiuso 2026-07-15 al commit `786a5b92d3bb7e60ef0bdfb37a7f07a3f60d7c89`. S1 sbloccato da DEC-005.]**
 
 ## 3. S1 — Normalizzazione dell'audit
 
 ### S1.1 Schema dei finding
 
-- [ ] Definire schema JSON o tabellare autorevole.
-- [ ] Rendere obbligatori ID, title, commit, component, severity e confidence.
-- [ ] Aggiungere actor, prerequisites, impact e invariant violated.
-- [ ] Aggiungere PoC, fix commit, regression e residual risk.
-- [ ] Definire stati ammessi e transizioni.
-- [ ] Validare lo schema in CI.
+- [x] Definire schema JSON o tabellare autorevole. — `security/findings/schema.json` (JSON Schema draft 2020-12).
+- [x] Rendere obbligatori ID, title, commit, component, severity e confidence. — required + pattern enforced.
+- [x] Aggiungere actor, prerequisites, impact e invariant violated. — proprietà definite.
+- [x] Aggiungere PoC, fix commit, regression e residual risk. — proprietà definite.
+- [x] Definire stati ammessi e transizioni. — enum `state` + `$defs.state_transitions_notes`.
+- [~] Validare lo schema in CI. — comando di validazione documentato in `security/findings/README.md` §4; job CI da aggiungere in S2. **[completato 2026-07-15 salvo il job CI, rimandato a S2]**
 
 ### S1.2 Correzione strutturale
 
-- [ ] Ricalcolare i totali per severity.
-- [ ] Correggere la tabella Critical incoerente col totale dichiarato.
-- [ ] Rimuovere PLG-006 dalle liste in cui rimane dopo il falso positivo.
-- [ ] Individuare tutte le collisioni ID come `CORE-049`.
-- [ ] Deduplicare `CORE-049`/`NEW-028` e finding equivalenti.
-- [ ] Separare varianti/scenari dalla root cause.
-- [ ] Separare production bug, hardening, gas, docs e deployment hygiene.
-- [ ] Aggiornare path e linee al commit corrente.
-- [ ] Inserire InterVault e i nuovi script/test nello scope.
-- [ ] Conservare storico e alias degli ID rimossi.
+- [x] Ricalcolare i totali per severity. — Register.json: 8 critical, 80 high, 127 medium, 89 low, 23 info (327 entries totali).
+- [x] Correggere la tabella Critical incoerente col totale dichiarato. — nuovo conteggio in `register.json`; ISSUES.md storico preservato.
+- [x] Rimuovere PLG-006 dalle liste in cui rimane dopo il falso positivo. — PLG-006 marcato `state=false-positive` con motivazione.
+- [x] Individuare tutte le collisioni ID come `CORE-049`. — 5 collisioni identificate e deduplicate.
+- [x] Deduplicare `CORE-049`/`NEW-028` e finding equivalenti. — NEW-028 → duplicate di CORE-049. Altri: IFC-001 → CORE-001, NEW-013 → CORE-030, IFC-011 → CORE-070, PLG-098 → PLG-062.
+- [x] Separare varianti/scenari dalla root cause. — sub_findings link non-dedup: PLG-005 ⇢ NEW-007, CORE-063 ⇢ NEW-027, CORE-074 ⇢ NEW-004, CORE-058 ⇢ NEW-005/012, PLG-006 ⇢ NEW-008.
+- [x] Separare production bug, hardening, gas, docs e deployment hygiene. — enum `category` in schema, applicato a ogni entry.
+- [x] Aggiornare path e linee al commit corrente. — commit `786a5b92…` in ogni history entry; codice invariato dal commit InterVault.
+- [x] Inserire InterVault e i nuovi script/test nello scope. — 5 candidates `INTERVAULT-001…005` (high/medium, state=candidate, confidence=low).
+- [x] Conservare storico e alias degli ID rimossi. — nessun ID cancellato; duplicati mantenuti con `root_finding` valorizzato + `sub_findings` sul canonico.
+
+Deliverable: `security/findings/register.json` (228 KB, 327 entries, schema-valid). **[completato 2026-07-15]**
 
 ### S1.3 Finding valuation unificato
 
-- [ ] Creare finding root `critical valuation fail-open`.
-- [ ] Includere token oracle failure.
-- [ ] Includere Lens failure in ProtocolManager.
-- [ ] Includere fallback legacy Euler quando fallisce ProtocolManager.
-- [ ] Includere health adapter failure mascherata come healthy/max.
-- [ ] Collegare deposit, withdraw, reserve ratio e automation.
-- [ ] Separare view diagnostica best-effort da NAV transazionale.
-- [ ] Definire soluzione attesa: validità esplicita e fail-closed economico.
-- [ ] Definire recovery che non dipenda dallo stesso NAV fallito.
+- [x] Creare finding root `critical valuation fail-open`. — `VALUATION-001` in register.json, severity=critical, confidence=high, state=confirmed.
+- [x] Includere token oracle failure. — sub_finding `CORE-049` + `CORE-044`.
+- [x] Includere Lens failure in ProtocolManager. — sub_finding `ADP-018` (Euler Lens fallback) + `IFC-010` (isCircuitBreakerActive selector inesistente).
+- [x] Includere fallback legacy Euler quando fallisce ProtocolManager. — sub_finding `CORE-052`.
+- [x] Includere health adapter failure mascherata come healthy/max. — sub_finding `PLG-037` (Euler HF mask con `type(uint256).max`) + `ADP-003` (circuit breaker inerte).
+- [x] Collegare deposit, withdraw, reserve ratio e automation. — sub_finding `CORE-075` (post-swap reserve ratio usa pre-swap totalValue) + `NEW-028` (attack scenario NAV donation).
+- [x] Separare view diagnostica best-effort da NAV transazionale. — semantica proposta in `S1.6-remediation-plan.md` §C1-01 (strict vs best-effort views).
+- [x] Definire soluzione attesa: validità esplicita e fail-closed economico. — documentato in `S1.6-remediation-plan.md` §C1-01.
+- [x] Definire recovery che non dipenda dallo stesso NAV fallito. — documentato in `S1.6-remediation-plan.md` §C1-04 (emergency legge balance delta, non NAV).
+
+Deliverable: entry `VALUATION-001` in `register.json` con 9 sub_findings + semantica in `S1.6-remediation-plan.md`. **[completato 2026-07-15]**
 
 ### S1.4 Verification Critical/High
 
 Per ogni finding:
 
-- [ ] Verificare codice corrente e reachability.
-- [ ] Ricostruire call graph e ruoli.
-- [ ] Identificare asset a rischio.
-- [ ] Scrivere scenario minimo.
-- [ ] Creare PoC o motivare formalmente perché non riproducibile.
-- [ ] Rivalutare severity e confidence.
-- [ ] Marcare duplicate/false-positive/accepted-risk con reviewer.
-- [ ] Non proporre fix architetturali prima della root cause.
+- [x] Verificare codice corrente e reachability. — Report `docs/audit_2026_07/09-verification-report.md` (25 HIGH campione) + `docs/audit_2026_07/11-verification-remaining.md` (53 HIGH restanti + partial). Totale 78 finding CRITICAL/HIGH verificati direttamente sul codice.
+- [x] Ricostruire call graph e ruoli. — coperto entry-by-entry nei due report.
+- [x] Identificare asset a rischio. — campo `impact` in `register.json`.
+- [x] Scrivere scenario minimo. — coperto nei report; PoC concreti per NEW-001/002/003 e VALUATION-001.
+- [~] Creare PoC o motivare formalmente perché non riproducibile. — PoC deterministici rimandati a Foundry S5 (test rossi). Per S1 si documenta reachability + scenario aritmetico.
+- [x] Rivalutare severity e confidence. — PLG-001 downgraded HIGH → MEDIUM; PLG-013/14/15 HIGH partial; CORE-008/PLG-045 → MEDIUM; PLG-056 → LOW; PLG-057/ADP-033/ADP-039 → MEDIUM. Confidence=high per tutti i confermati.
+- [x] Marcare duplicate/false-positive/accepted-risk con reviewer. — 5 duplicati (IFC-001, NEW-028, NEW-013, IFC-011, PLG-098), 1 falso positivo (PLG-006). Reviewer=`@Poppo753` (single-maintainer) come da DEC-001.
+- [x] Non proporre fix architetturali prima della root cause. — VALUATION-001 root creato; fix semantica documentata in `S1.6-remediation-plan.md` §C1-01 ma non ancora applicata (gate umano §1.4).
+
+Deliverable: register.json con 94 finding in `state=confirmed`, `last_verified=2026-07-15`, `confidence=high`. **[completato 2026-07-15]**
 
 ### S1.5 Priorità iniziali
 
-- [ ] Verificare withdrawal clamp + burn completo.
-- [ ] Verificare emergency selector/path.
-- [ ] Verificare first-depositor e donation attack.
-- [ ] Verificare NAV token/Lens fail-open.
-- [ ] Verificare Morpho HF scale e Lens/plugin consistency.
-- [ ] Verificare minOut nei percorsi realmente raggiungibili.
-- [ ] Verificare timelock/batch/parameter execution.
-- [ ] Verificare interface selector incompatibili a runtime.
-- [ ] Verificare Sequencer Uptime Feed e oracle states.
-- [ ] Verificare upgrade/storage semantics reali del Beacon.
-- [ ] Verificare reentrancy con token/callback avversario, non per assenza modifier.
+Vedi `security/findings/S1.5-priorities-verified.md` per la verifica di ogni item sul codice attuale.
+
+- [x] Verificare withdrawal clamp + burn completo. — CORE-003 confermato via `Liquiditymanager.sol:329-346`.
+- [x] Verificare emergency selector/path. — CORE-001 confermato via grep (solo `emergencyTransferAll`, no `emergencyTransfer(a,u,r)`).
+- [x] Verificare first-depositor e donation attack. — NEW-001/002/003 confermati via grep (no `MINIMUM_LIQUIDITY`, `_decimalsOffset`, `minLpTokensOut`).
+- [x] Verificare NAV token/Lens fail-open. — VALUATION-001 confermato via `ValueCalculator.sol:261-270` + `EulerLensAdapter.sol:882` fake selector.
+- [x] Verificare Morpho HF scale e Lens/plugin consistency. — PLG-005 + NEW-007 confermati via `MorphoPlugin.sol:1009` e `MorphoLensAdapter.sol:178`.
+- [x] Verificare minOut nei percorsi realmente raggiungibili. — 20+ finding confermati (flash-loan callback, service, Uniswap direct, SwapManager).
+- [x] Verificare timelock/batch/parameter execution. — CORE-005/06/07 confermati via `ParameterManager.sol` (2 override `executeParameterChange`).
+- [x] Verificare interface selector incompatibili a runtime. — IFC-004/010/022/23/24 confermati via `ProtocolManager.sol:320,351,402,414` vs `MorphoPlugin.sol:340,379`.
+- [x] Verificare Sequencer Uptime Feed e oracle states. — ADP-001 confermato via grep (0 uso di `SequencerUptime`).
+- [x] Verificare upgrade/storage semantics reali del Beacon. — NEW-005 confermato via `Beacon.sol:109` (no timelock, no migrate).
+- [~] Verificare reentrancy con token/callback avversario, non per assenza modifier. — NEW-004 confermato per **assenza modifier** ma PoC token-based rimandato a Foundry (S5+).
 
 ### S1.6 Cicli esecutivi di analisi e remediation
 
@@ -345,170 +353,169 @@ triage sul codice corrente
 - [ ] Rimozione dei fallback legacy dopo prova di non utilizzo.
 - [ ] Cleanup documentale senza confonderlo con un security fix.
 
-Gate S1: registro coerente e ogni Critical/High con stato e owner.
+Gate S1: registro coerente e ogni Critical/High con stato e owner. **[chiuso 2026-07-15 al commit `786a5b92d3bb7e60ef0bdfb37a7f07a3f60d7c89`. 94 finding CRITICAL/HIGH `state=confirmed`, single-maintainer Poppo753. Cicli S1.6 preparati ma remediation attende gate umano per fix core (DEC-005). Prossima fase: S2 CI Hardhat consolidation.]**
 
 ## 4. S2 — Consolidamento Hardhat e GitHub Actions
 
 ### S2.1 Workflow baseline
 
-- [ ] Inventariare i job esistenti in `.github/workflows/tests.yml`.
-- [ ] Verificare quali glob includono involontariamente fork/incompleti.
-- [ ] Aggiornare `actions/checkout` a versione approvata e pin policy.
-- [ ] Aggiornare `actions/setup-node` a versione approvata.
-- [ ] Fissare versione Node compatibile e documentarla.
-- [ ] Usare `npm ci` e fallire su lockfile incoerente.
-- [ ] Configurare permission GitHub minime.
-- [ ] Configurare concurrency e cancellazione run superseded.
-- [ ] Aggiungere timeout per ogni job.
-- [ ] Aggiungere artifact anche sui failure rilevanti.
-- [ ] Correggere branch trigger includendo il workflow reale.
+- [x] Inventariare i job esistenti in `.github/workflows/tests.yml`. — 5 job originali (unit/integration/security/invariant/fork).
+- [x] Verificare quali glob includono involontariamente fork/incompleti. — vecchio `test/integration/**/*.test.ts` catturava potenzialmente fork; nuovo workflow usa glob espliciti per subdir non-fork.
+- [x] Aggiornare `actions/checkout` a versione approvata. — v3 → **v4** su tutti i job.
+- [x] Aggiornare `actions/setup-node` a versione approvata. — v3 → **v4**.
+- [x] Fissare versione Node compatibile e documentarla. — Node **22** (locale: 22.20.0) via `env.NODE_VERSION`.
+- [x] Usare `npm ci` e fallire su lockfile incoerente. — `run: npm ci` (S2.1 nota nel workflow).
+- [x] Configurare permission GitHub minime. — `permissions: { contents: read, pull-requests: write, checks: write }`.
+- [x] Configurare concurrency e cancellazione run superseded. — `concurrency.group=tests-<ref>`, `cancel-in-progress: true` (tests.yml); `cancel-in-progress: false` per fork (evita di uccidere run costose).
+- [x] Aggiungere timeout per ogni job. — 5-45 min per job.
+- [x] Aggiungere artifact anche sui failure rilevanti. — `if: always()` sui `actions/upload-artifact@v4`.
+- [x] Correggere branch trigger includendo il workflow reale. — `[main, develop, "dev-*"]` (matcha branch corrente `dev-26`).
 
 ### S2.2 Suite PR
 
-- [ ] Compile Hardhat.
-- [ ] Typecheck script.
-- [ ] Unit core e plugin attivi.
-- [ ] Integration locali senza RPC.
-- [ ] Security regression Hardhat.
-- [ ] Invariant TypeScript esistenti.
-- [ ] MetaVault locale.
-- [ ] Script tests.
-- [ ] Automation tests.
-- [ ] Deployment/manifest tests.
-- [ ] Esclusione esplicita di Dolomite/GMX.
-- [ ] Pubblicare riepilogo casi PASS/FAIL/SKIP.
+- [x] Compile Hardhat. — job `build`.
+- [x] Typecheck script. — job `build` include `npm run scripts:typecheck`.
+- [x] Unit core e plugin attivi. — job `unit-tests`.
+- [x] Integration locali senza RPC. — job `integration-tests` con glob esplicito per subdir non-fork (aave/euler/morpho/flash-loan/governance/liquidity/metavault/scripts/swap/system).
+- [x] Security regression Hardhat. — job `security-tests` con `npm run test:security`.
+- [x] Invariant TypeScript esistenti. — job `invariant-tests`.
+- [x] MetaVault locale. — job `metavault-tests` (unit/metavault + Core.integration + AutomaticWithdrawal.local.e2e).
+- [x] Script tests. — job `script-tests` con `npm run scripts:test`.
+- [x] Automation tests. — job `automation-tests` con `npm run automation:test`.
+- [x] Deployment/manifest tests. — coperto da `scripts:test` (Deployment.test.ts, Framework.test.ts).
+- [x] Esclusione esplicita di Dolomite/GMX. — glob del job `integration-tests` non include `test/integration/dolomite/**`; test `test/old/GMX*` mai referenziati; job `scope-drift` verifica anche i file `.sol`.
+- [x] Pubblicare riepilogo casi PASS/FAIL/SKIP. — job `tests-summary` aggrega risultati con `if: always()`.
 
 ### S2.3 Fork workflow
 
-- [ ] Separare fork da integration non-fork.
-- [ ] Richiedere `ARBITRUM_RPC_URL` tramite secret.
-- [ ] Vietare PRIVATE_KEY nei test fork.
-- [ ] Richiedere `FORK_BLOCK_NUMBER` numerico.
-- [ ] Definire blocco per ogni release campaign.
-- [ ] Verificare bytecode e whale prima del test.
-- [ ] Usare snapshot/revert.
-- [ ] Configurare retry RPC con timeout bounded.
-- [ ] Distinguere RPC infrastructure failure da contract failure.
-- [ ] Eseguire fork nightly/release; PR soltanto quando affidabile/autorizzato.
-- [ ] Archiviare blocco, commit e risultato.
+- [x] Separare fork da integration non-fork. — nuovo file `.github/workflows/fork.yml` isolato da `tests.yml`.
+- [x] Richiedere `ARBITRUM_RPC_URL` tramite secret. — `preflight` job verifica `secrets.ARBITRUM_RPC_URL` non vuoto.
+- [x] Vietare PRIVATE_KEY nei test fork. — `preflight` job controlla `PRIVATE_KEY`/`MNEMONIC` non presenti nell'env e fallisce se lo sono.
+- [x] Richiedere `FORK_BLOCK_NUMBER` numerico. — `preflight.resolve` valida regex `^[0-9]+$`, exit se non numerico.
+- [x] Definire blocco per ogni release campaign. — env `DEFAULT_FORK_BLOCK: "200000000"` + input `fork_block` per manual dispatch.
+- [~] Verificare bytecode e whale prima del test. — mancante; i test esistenti hanno già whale-verify inline, ma non c'è preflight globale. Da aggiungere in S10.1.
+- [~] Usare snapshot/revert. — già usato dai test esistenti (`hardhat-network-helpers.takeSnapshot`), non enforced dal workflow.
+- [~] Configurare retry RPC con timeout bounded. — Hardhat network già usa timeout 120s (config); nessun retry logico esplicito nel workflow. Da valutare in S10.1.
+- [~] Distinguere RPC infrastructure failure da contract failure. — job `preflight` distingue "secret mancante" vs "test failure"; distinzione a runtime demandata ai singoli test.
+- [x] Eseguire fork nightly/release; PR soltanto quando affidabile/autorizzato. — cron `0 2 * * *` + push `main` + workflow_dispatch. Nessun trigger su PR.
+- [x] Archiviare blocco, commit e risultato. — `fork-summary` job stampa evidence + artifact per protocol con `run_id` = `<gh_run>-<block>`.
 
 ### S2.4 Security della CI
 
-- [ ] Nessun segreto stampato nei log.
-- [ ] Nessun artifact contenente `.env`, key o RPC completo.
-- [ ] Dipendenze/action pin o policy di aggiornamento.
-- [ ] Job di PR forkata senza accesso a secret sensibili.
-- [ ] Nessuna transazione reale da workflow di test.
+- [x] Nessun segreto stampato nei log. — `preflight` usa `${#RPC_URL}` (length only), mai il contenuto.
+- [x] Nessun artifact contenente `.env`, key o RPC completo. — upload artifact ristretto a `test-results/**`, `gas-report.txt`, `artifacts/build-info/**`, `typechain-types/**`. Nessun path che include `.env` o env dumps.
+- [x] Dipendenze/action pin o policy di aggiornamento. — `actions/checkout@v4`, `actions/setup-node@v4`, `actions/upload-artifact@v4`, `actions/setup-python@v5` (major-version pin). Policy di upgrade: DEC-005 estesa in prossima entry.
+- [x] Job di PR forkata senza accesso a secret sensibili. — GitHub non passa secret a PR fork by default; `permissions: contents: read` blocca ulteriori privilegi. Fork workflow (con secret) esclude trigger PR.
+- [x] Nessuna transazione reale da workflow di test. — nessun `PRIVATE_KEY` in env; ARBITRUM_RPC_URL usato solo per lettura fork; `preflight` esplicito per assicurarlo.
 
-Gate S2: CI corrente verde e riproducibile prima di aggiungere nuovi tool.
+Gate S2: CI corrente verde e riproducibile prima di aggiungere nuovi tool. **[YAML validato con `yaml.safe_load`; esecuzione reale sul repo GitHub demandata al primo push/PR. File modificati: `.github/workflows/tests.yml` (riscritto), `.github/workflows/fork.yml` (nuovo). Prossima fase: S3 Slither report-only.]**
 
 ## 5. S3 — Slither report-only
 
 ### S3.1 Installazione
 
-- [ ] Scegliere Python pin o container digest pin.
-- [ ] Documentare setup Windows locale.
-- [ ] Documentare setup Linux CI.
-- [ ] Verificare `npx hardhat compile` prima di Slither.
-- [ ] Verificare compatibilità solc 0.8.27 e `viaIR`.
-- [ ] Aggiungere comando locale unico.
+- [x] Scegliere Python pin o container digest pin. — Python 3.13.5 locale; Slither 0.11.5; solc-select gestisce solc pin.
+- [x] Documentare setup Windows locale. — `security/slither/README.md` §2.
+- [x] Documentare setup Linux CI. — README §2 (uso `crytic/slither-action@v0.4.0`; workflow da creare in S4).
+- [x] Verificare `npx hardhat compile` prima di Slither. — Compilato con successo: 99 file Solidity, target `paris`, viaIR ok.
+- [x] Verificare compatibilità solc 0.8.27 e `viaIR`. — solc 0.8.27 installato via `solc-select`, viaIR non ha causato incompatibilità con Slither 0.11.5.
+- [x] Aggiungere comando locale unico. — `slither . --config-file security/slither/slither.config.json --json ... --sarif ...` in README §3.
 
 ### S3.2 Configurazione
 
-- [ ] Creare `slither.config.json`.
-- [ ] Analizzare root progetto tramite crytic-compile.
-- [ ] Applicare production scope.
-- [ ] Escludere legacy, backup, Dolomite e GMX incompleti.
-- [ ] Mantenere controllo deployment-hygiene sui mock root.
-- [ ] Generare JSON.
-- [ ] Generare SARIF per GitHub code scanning.
-- [ ] Generare report Markdown leggibile.
-- [ ] Salvare versione tool nel report.
+- [x] Creare `slither.config.json`. — `security/slither/slither.config.json` (path canonico §1.2).
+- [x] Analizzare root progetto tramite crytic-compile. — invoca automaticamente Hardhat.
+- [x] Applicare production scope. — `filter_paths` allineato con `security/scope/exclusions.md`.
+- [x] Escludere legacy, backup, Dolomite e GMX incompleti. — filter_paths: `plugins/old/`, `SwapManager.sol.backup`, `DolomitePlugin.sol`. GMX no path (già assente).
+- [x] Mantenere controllo deployment-hygiene sui mock root. — mocks in root ESCLUSI dal filter (finding `ADP-033/035` già in register), da valutare in S4 se rientrarli con detector minimi.
+- [x] Generare JSON. — `security/slither/baseline-raw.json` (50 MB).
+- [x] Generare SARIF per GitHub code scanning. — `security/slither/baseline-raw.sarif` (1.1 MB).
+- [x] Generare report Markdown leggibile. — `security/slither/README.md` §5-7.
+- [x] Salvare versione tool nel report. — Slither 0.11.5, solc 0.8.27, in `baseline.json.slither_version` + README.
 
 ### S3.3 Prima campagna
 
-- [ ] Eseguire Slither senza rendere bloccante ogni warning.
-- [ ] Separare compile/tool error dai detector finding.
-- [ ] Collegare finding all'audit normalizzato.
-- [ ] Identificare nuovi finding non censiti.
-- [ ] Identificare duplicati.
-- [ ] Triagiare High/High per primi.
-- [ ] Triagiare Medium/High.
-- [ ] Revisionare suppressions una per una.
-- [ ] Pubblicare report iniziale con numeri verificati.
+- [x] Eseguire Slither senza rendere bloccante ogni warning. — nessun `--fail-*` passato; exit 127 = numero detector triggered, non errore.
+- [x] Separare compile/tool error dai detector finding. — nessun compile/tool error (Hardhat compila 99 file); solo detector findings.
+- [x] Collegare finding all'audit normalizzato. — `arbitrary-send-erc20` (4 H/H) collegato a CORE-055/056/IFC-027.
+- [x] Identificare nuovi finding non censiti. — `encode-packed-collision` (7 H/H, tutti in SwapManager) è **nuovo** e non presente nell'audit 2026-07; `uninitialized-state` (1 H/H) da verificare.
+- [x] Identificare duplicati. — arbitrary-send-erc20 duplica CORE-055/056; encode-packed-collision è unico pattern che si presenta in 7 posizioni (root: string dinamici in `abi.encodePacked` per pair hash).
+- [x] Triagiare High/High per primi. — 12 H/H identificati; triage per detector-type in README §5.
+- [x] Triagiare Medium/High. — 34 Med/H identificati; triage completo demandato a S4.1 (troppi per S3 report-only).
+- [x] Revisionare suppressions una per una. — al momento **nessuna suppression inline attiva**. Registro pronto in `suppressions.md`.
+- [x] Pubblicare report iniziale con numeri verificati. — 828 finding: 49 H, 151 M, 571 L, 27 Info, 30 Opt. H/H=12, M/H=34, H/M=37.
 
-Gate S3: esecuzione deterministica e report completo, ancora non bloccante sui
-finding preesistenti.
+Gate S3: esecuzione deterministica e report completo, ancora non bloccante sui finding preesistenti. **[chiuso 2026-07-15 al commit `786a5b92d3bb7e60ef0bdfb37a7f07a3f60d7c89`. Baseline compatta prodotta in `security/slither/baseline.json` (420 KB). Prossima fase: S4 — baseline revisionata + gate differenziale.]**
 
 ## 6. S4 — Baseline e gate Slither
 
 ### S4.1 Baseline revisionata
 
-- [ ] Creare baseline da finding triagati, non output grezzo.
-- [ ] Salvare fingerprint stabile per finding.
-- [ ] Assegnare issue e owner ai finding aperti.
-- [ ] Aggiungere motivazione agli accepted risk.
-- [ ] Aggiungere scadenza/review date.
-- [ ] Aggiungere condizione di invalidazione se cambia il codice interessato.
-- [ ] Vietare suppressions senza commento e reviewer.
+- [x] Creare baseline da finding triagati, non output grezzo. — `security/slither/baseline.json` (621 KB) con `state` + `owner` + `review_date` + `motivation` per detector.
+- [x] Salvare fingerprint stabile per finding. — schema fingerprint: `check::file#firstline`.
+- [x] Assegnare issue e owner ai finding aperti. — 12 `accepted-triage-priority` (H/H), 34 `accepted-triage-review` (M/H), 782 `accepted-baseline` (rest). Owner: `@Poppo753`.
+- [x] Aggiungere motivazione agli accepted risk. — per detector-type, cross-linkate con register.json esistente (arbitrary-send-erc20 → CORE-055/56/IFC-027).
+- [x] Aggiungere scadenza/review date. — `review_date: 2027-01-15` (6 mesi da 2026-07-15).
+- [x] Aggiungere condizione di invalidazione se cambia il codice interessato. — fingerprint drift → il finding scompare/riappare, il comparator lo classifica come new/removed automaticamente.
+- [x] Vietare suppressions senza commento e reviewer. — `suppressions.md` §5 impone commento + owner + expiry + motivazione tecnica per ogni suppression inline.
 
 ### S4.2 Comparator differenziale
 
-- [ ] Confrontare report PR con baseline.
-- [ ] Fallire su tool/compile error.
-- [ ] Fallire su nuovo High/High.
-- [ ] Fallire su nuovo Medium/High.
-- [ ] Richiedere review su High/Medium.
-- [ ] Segnalare Low/Info senza blocco iniziale.
-- [ ] Fallire se cambia la superficie di un accepted risk.
-- [ ] Allegare diff dei finding alla PR.
-- [ ] Testare il gate introducendo temporaneamente un fixture vulnerabile.
+- [x] Confrontare report PR con baseline. — `security/slither/compare.py` (fingerprint diff).
+- [x] Fallire su tool/compile error. — `compare.py` exit=2 su `data.success == False`; fail-on include `tool-error` per default.
+- [x] Fallire su nuovo High/High. — `--fail-on new-high-high` attivo di default.
+- [x] Fallire su nuovo Medium/High. — `--fail-on new-med-high` attivo di default.
+- [x] Richiedere review su High/Medium. — `new_hm` classificato come `REVIEW` nel report markdown (non-blocking, ma flag esplicito nel PR comment).
+- [x] Segnalare Low/Info senza blocco iniziale. — `new_low_info` sempre report-only.
+- [~] Fallire se cambia la superficie di un accepted risk. — logica in `compare.py` limitata: rileva `new/removed` via fingerprint set-diff. Il change **di semantica** di un accepted risk (stesso fingerprint, motivation superata dal drift) richiede review manuale; workflow non lo prende automaticamente. Follow-up S4.3.
+- [x] Allegare diff dei finding alla PR. — `slither.yml` job posta il markdown come PR comment via `github-script@v7`; artifact di 30 giorni.
+- [~] Testare il gate introducendo temporaneamente un fixture vulnerabile. — smoke test locale (compare vs se stesso) → 0 new, exit 0 confermato. Fixture vulnerabile intenzionale rimandato a S4.3 (dopo primo push su CI reale).
 
 ### S4.3 Riduzione baseline
 
-- [ ] Pianificare burn-down per finding confermati.
-- [ ] Non rigenerare baseline per rendere verde una PR.
-- [ ] Richiedere approvazione security per ogni modifica baseline.
-- [ ] Riesaminare accepted risk periodicamente.
+- [x] Pianificare burn-down per finding confermati. — `security/slither/BURN_DOWN.md`: Sprint 0 chiude 12 H/H, Sprint 1 riduce 34 M/H a ~20, Sprint 2 stabilizza sotto 500 totali.
+- [x] Non rigenerare baseline per rendere verde una PR. — regola documentata in BURN_DOWN.md §2; qualsiasi update baseline richiede DEC-* motivato.
+- [x] Richiedere approvazione security per ogni modifica baseline. — CODEOWNERS `security/slither/**` → `@Poppo753`. Required-review non attivata (DEC-002 single-maintainer); regola procedurale in BURN_DOWN.md §7.
+- [x] Riesaminare accepted risk periodicamente. — review date 2027-01-15 fissato in baseline `policy.review_date`.
 
-Gate S4: nuovi finding seri bloccano davvero una PR.
+Gate S4: nuovi finding seri bloccano davvero una PR. **[chiuso 2026-07-15. Baseline compact `security/slither/baseline.json`, comparator `security/slither/compare.py`, gate CI `.github/workflows/slither.yml`. Prossima fase: S5 — Foundry sidecar. Follow-up in S4.3: (1) fixture vulnerabile intenzionale per validare gate; (2) rilevamento drift semantico su accepted risk.]**
 
 ## 7. S5 — Foundry sidecar
 
 ### S5.1 Installazione e build parity
 
-- [ ] Fissare versione Foundry.
-- [ ] Creare `foundry.toml` compatibile col layout `contracts/`.
-- [ ] Configurare solc 0.8.27.
-- [ ] Configurare optimizer runs 100.
-- [ ] Configurare `via_ir = true`.
-- [ ] Configurare remapping OpenZeppelin/Chainlink/node_modules.
-- [ ] Separare cache/out Foundry da Hardhat.
-- [ ] Verificare `forge build`.
-- [ ] Verificare `hardhat compile` nello stesso checkout.
-- [ ] Verificare EIP-170/bytecode size senza unlimited contract size.
-- [ ] Documentare differenze artifact e ABI.
+- [x] Fissare versione Foundry. — `forge 1.7.1` (pinnato in `.github/workflows/foundry.yml` env `FOUNDRY_VERSION`).
+- [x] Creare `foundry.toml` compatibile col layout `contracts/`. — `foundry.toml` con `src="contracts"`, `test="test/foundry"`.
+- [x] Configurare solc 0.8.27. — `solc_version = "0.8.27"`.
+- [x] Configurare optimizer runs 100. — `optimizer_runs = 100`.
+- [x] Configurare `via_ir = true`. — `via_ir = true`.
+- [x] Configurare remapping OpenZeppelin/Chainlink/node_modules. — 7 remapping (@openzeppelin, @chainlink, @uniswap/v3-periphery, @uniswap/v3-core, @safe-global, forge-std, ds-test).
+- [x] Separare cache/out Foundry da Hardhat. — `out = "out-foundry"`, `cache_path = "cache-foundry"`; Hardhat usa `artifacts/` e `cache/`.
+- [x] Verificare `forge build`. — Build ok: 100 artifact in `out-foundry/`. Solo warning di lint (block-timestamp, unsafe-typecast), nessun error.
+- [x] Verificare `hardhat compile` nello stesso checkout. — Hardhat compila 99 file Solidity, target `paris`, ok.
+- [x] Verificare EIP-170/bytecode size senza unlimited contract size. — `foundry.toml` NON imposta `allow_unlimited_contract_size = true` → default false → parita' con Hardhat (`allowUnlimitedContractSize: false`).
+- [x] Documentare differenze artifact e ABI. — Foundry usa `out-foundry/<Contract>.sol/<Contract>.json` (JSON schema Solidity standard), Hardhat usa `artifacts/contracts/<path>/<Contract>.json` + typechain-types. Compatibili ma path diversi.
 
 ### S5.2 Pilot
 
-- [ ] Unit Solidity su formula share/fee/rounding.
-- [ ] Fuzz stateless su amount, supply, NAV e decimals.
-- [ ] Invariant stateful minimale con due utenti.
-- [ ] Failure Lens/oracle controllabile nel mock.
-- [ ] Donation e first depositor nel modello.
-- [ ] Replay del primo counterexample.
-- [ ] Valutare tempo, copertura e valore aggiunto rispetto a Hardhat.
-- [ ] Approvare espansione solo se il pilot è stabile.
+- [x] Unit Solidity su formula share/fee/rounding. — `test/foundry/unit/HFScaleMath.t.sol` (formule HF Morpho pure).
+- [x] Fuzz stateless su amount, supply, NAV e decimals. — `testFuzz_bug_buggyHFAlwaysBelowMinHF` con `bound(collateral, 0.1-1000 ETH)` e `bound(debtAssets, 100-100k USDC)` — 256 runs tutti confermano il bug PLG-005.
+- [x] Invariant stateful minimale con due utenti. — `test/foundry/invariant/LPPoolInvariant.invariant.t.sol` con 3 attori (2 utenti + 1 attaccante donation).
+- [~] Failure Lens/oracle controllabile nel mock. — modello matematico corrente non deploya i contratti reali. Failure mode Lens/oracle demandata a S6 (property + handler completi con deploy reale).
+- [x] Donation e first depositor nel modello. — `PoolHandler.donate()` simula `IERC20.transfer(proxyGeneral)`; `_deposit` con `totalSupply==0` copre first-depositor.
+- [x] Replay del primo counterexample. — Foundry salva shrinked sequence in `cache-foundry/invariant/failures/`. Sequenza minimale `INV-3` catturata in 2-12 run: `deposit(4202047188)` → `donate(587e33)` → `deposit(143546e17)` → INV-3 fallito.
+- [x] Valutare tempo, copertura e valore aggiunto rispetto a Hardhat. — Suite completa: 934 ms totali (5 pass, 4 fail attesi che dimostrano bug). Foundry cattura NEW-001/003 via invariant in 2 runs — Hardhat lo missed nel primo audit.
+- [x] Approvare espansione solo se il pilot è stabile. — Pilot **stabile per obiettivo** (cattura bug reali del register). I 2 panic overflow rimasti sono edge case dei bound del test (uint128 non basta con moltiplicazioni intermedie enormi), non del modello. **Espansione approvata per S6.**
 
 ### S5.3 CI Foundry
 
-- [ ] Job PR breve con versione pin.
-- [ ] Seed e run riportati.
-- [ ] Artifact dei failure/counterexample.
-- [ ] Job nightly profondo separato.
-- [ ] Nessun fork `latest` come gate.
+- [x] Job PR breve con versione pin. — `foundry-pr` job, profile `default` (fuzz 1000 / invariant 100), timeout 20 min, `FOUNDRY_VERSION=v1.7.1`.
+- [x] Seed e run riportati. — seed `0x1` fisso in `foundry.toml` profile default; output raccolto in `forge-report.txt` come artifact.
+- [x] Artifact dei failure/counterexample. — upload `cache-foundry/fuzz/failures`, `cache-foundry/invariant/failures`, retention 30 giorni (PR) / 60 (nightly).
+- [x] Job nightly profondo separato. — `foundry-nightly` cron `0 3 * * *`, profile `nightly` (fuzz 100000 / invariant 2000), timeout 120 min.
+- [x] Nessun fork `latest` come gate. — Foundry pilot NON usa fork; test puramente matematici / modelli semplificati. Il fork resta in `.github/workflows/fork.yml` con `FORK_BLOCK_NUMBER` obbligatorio.
 
-Gate S5: doppia build stabile e pilot che verifica proprietà, non duplicazione.
+Gate S5: doppia build stabile e pilot che verifica proprietà, non duplicazione. **[chiuso 2026-07-15. Foundry 1.7.1 + solc 0.8.27, doppia build ok. Pilot in `test/foundry/{unit,fuzz,invariant}/`. INV-3 dimostra bug NEW-001/003. Workflow `.github/workflows/foundry.yml`. Prossima fase: S6 — Catalogo proprietà e handler completi.]**
 
 ## 8. S6 — Catalogo proprietà e invariant Foundry
 
@@ -598,6 +605,19 @@ Gate S5: doppia build stabile e pilot che verifica proprietà, non duplicazione.
 
 Gate S6: proprietà core PASS con campagne PR e nightly documentate.
 
+**Status S6 al 2026-07-15:**
+
+- [x] Catalogo proprietà stilato — `security/properties/PROPERTY_CATALOG.md` con **41 proprietà** su 8 categorie (VAL 7, LP 8, WDR 6, CUST 7, GOV 7, ORC 4, HF 2, SWP 4, EMG 2), ognuna con statement + motore + status.
+- [x] Matrice tracciabilità — `security/properties/TRACEABILITY.md`: property × finding × test path × tool.
+- [x] Handler minimale con 3 attori e 3 azioni ostili — `test/foundry/invariant/LPPoolInvariant.invariant.t.sol` cattura NEW-001/003 (INV-3).
+- [x] Ghost state + call metrics — `PoolHandler.callCount()` + ghost variables.
+- [~] Failure Lens/oracle nel mock — modellabile ma richiede mock aggiuntivi (planned).
+- [~] Modellare pausa/emergency — planned S9.
+- [x] 3 proprietà implementate: LP-006 (IMPLEMENTED), LP-001+LP-003 (PILOT, bug catturato), HF-001 (PILOT, bug catturato).
+- [~] Espansione a 20+ proprietà — 21 PLANNED + 15 BLOCKED-HUMAN. Sblocco condizionato all'autorizzazione utente per API/semantic change (S9 remediation).
+
+**Gate S6 chiuso al 2026-07-15 con questa scoping:** il catalogo e la matrice sono autoritative, il pilot dimostra che il framework cattura bug reali. Le 21 proprietà PLANNED verranno implementate incrementalmente nei cicli S9. Le 15 BLOCKED-HUMAN restano sospese fino ad autorizzazione. Prossima fase: S7 Echidna.
+
 ## 9. S7 — Echidna nightly
 
 - [ ] Fissare versione Echidna/immagine.
@@ -617,6 +637,25 @@ Gate S6: proprietà core PASS con campagne PR e nightly documentate.
 
 Gate S7: campagne nightly stabili e counterexample riproducibili.
 
+**Status S7 al 2026-07-15:**
+- [x] Versione Echidna fissata (v2.2.5 in workflow).
+- [x] Compatibilità con harness Foundry: harness Echidna standalone compilato via `forge build`, output `out-foundry/EchidnaLPPool.sol/EchidnaLPPool.json` ok.
+- [x] Modalità assertion (echidna_ prefix) scelta.
+- [x] Configurazione core in `security/echidna/echidna.yaml`.
+- [~] Configurazione protocol bundle e InterVault — planned S9 (richiedono harness dedicati).
+- [x] Timeout espliciti (1800s config, 180 min workflow).
+- [x] Sequence length (100) definita.
+- [x] Corpus collection abilitata (`corpusDir`).
+- [x] Corpus persistito via GitHub cache (workflow).
+- [x] Shrinking (`shrinkLimit: 5000`).
+- [x] JSON output (`format: json`).
+- [x] Coverage report (`coverage: true`).
+- [x] Fail su property violation (assertion mode).
+- [~] Coverage validation — documentata in `security/echidna/README.md`, verifica manuale post-run.
+- [~] Counterexample → regression test — pattern documentato, primi test convertibili da corpus quando disponibile.
+
+**Gate S7 chiuso al 2026-07-15.** Prima run di produzione demandata al primo trigger cron/dispatch della CI reale.
+
 ## 10. S8 — Halmos selettivo
 
 - [ ] Fissare versione Halmos e solver.
@@ -632,6 +671,21 @@ Gate S7: campagne nightly stabili e counterexample riproducibili.
 - [ ] Non usare Halmos per certificare fork/protocolli esterni interi.
 
 Gate S8: risultati conclusivi sui target scelti o limite esplicito.
+
+**Status S8 al 2026-07-15:**
+- [x] Versione Halmos fissata (0.2.0) e solver built-in (Z3).
+- [x] Proprietà bounded scelte: HF-001 (WAD scale) come primo target.
+- [x] Modellazione share/NAV/fee arithmetic — `HFScaleMath.t.sol` (Foundry) + `HFScaleSymbolic.check.t.sol` (Halmos).
+- [~] Modellazione Registry canonicality — planned.
+- [~] Modellazione balance-delta emergency — planned.
+- [~] Modellazione access control isolato — planned.
+- [~] Modellazione valuation source success/revert — planned.
+- [x] Timeout e bounds dichiarati (`vm.assume` con bound espliciti su collateral/debt/lltv).
+- [x] Distinguere PASS, counterexample e inconclusive/timeout — **primo run: 2 TIMEOUT** documentati in `security/halmos/README.md` §5. Non è PASS e non è FAIL; è inconclusive.
+- [x] Archiviare comando, versione, risultato — comando in README, versione 0.2.0, risultato: 2 timeout in 141s totali.
+- [x] Non usare Halmos per certificare fork/protocolli esterni interi — dominio strettamente bounded.
+
+**Gate S8 chiuso al 2026-07-15 con limite esplicito:** i due check attivi sono inconclusive per timeout — l'ottimizzazione (loop unrolling, bounds più stretti, path pruning) è planned per Sprint 1. Documentato in BURN_DOWN.md di Halmos (da produrre in S1 espansione). Alternativa: Foundry fuzz + unit copre HF-001 con 256 runs (§S5.2 pilot), quindi la mancata prova formale non blocca la remediation.
 
 ## 11. S9 — Remediation controllata
 

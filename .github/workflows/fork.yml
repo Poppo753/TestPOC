@@ -1,0 +1,276 @@
+name: Fork tests (Arbitrum, gated)
+
+# Fork tests — vedi §S2.3 della checklist di sicurezza.
+# Trigger:
+#   - schedule: ogni notte alle 02:00 UTC
+#   - workflow_dispatch: manuale da GitHub UI
+#   - push: main (post-merge)
+# NON trigger su PR (evita di rendere la PR rossa per RPC/rate-limit).
+#
+# Requisiti operativi:
+#   - ARBITRUM_RPC_URL: secret (Alchemy/Infura autenticato)
+#   - FORK_BLOCK_NUMBER: obbligatorio via env (nessun fork "latest")
+#   - Nessun PRIVATE_KEY: solo RPC read-only, snapshot/revert
+#   - Blocco/commit/risultato archiviati come artifact
+
+on:
+  schedule:
+    # 02:00 UTC ogni notte (04:00 CEST estate, 03:00 CET inverno)
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      fork_block:
+        description: "Fork block number (Arbitrum). Se vuoto, usa il default dell'env FORK_BLOCK_NUMBER."
+        required: false
+        default: ""
+      protocols:
+        description: "Protocolli da testare (all | aave | euler | morpho | metavault)"
+        required: false
+        default: "all"
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false   # non cancellare fork run in corso, sono costosi
+
+env:
+  NODE_VERSION: "22"
+  # Default fork block. Aggiornare a ogni release campaign.
+  # Ultima verifica whale: 2026-07-15 → block ~200_000_000 (placeholder)
+  DEFAULT_FORK_BLOCK: "200000000"
+
+jobs:
+  # =========================================================================
+  # Preflight: verifica secret e assemble configurazione
+  # =========================================================================
+  preflight:
+    name: Preflight (secret + block)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      fork_block: ${{ steps.resolve.outputs.fork_block }}
+      run_id: ${{ steps.resolve.outputs.run_id }}
+
+    steps:
+      - name: Verify ARBITRUM_RPC_URL secret is set
+        env:
+          RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
+        run: |
+          if [ -z "$RPC_URL" ]; then
+            echo "::error::ARBITRUM_RPC_URL secret is not set. Fork job aborted."
+            exit 1
+          fi
+          # Non stampa mai il contenuto del secret nei log
+          echo "ARBITRUM_RPC_URL: set (${#RPC_URL} char)"
+
+      # S2.4: verifica che non ci siano PRIVATE_KEY o mnemonic nel workflow env
+      - name: Ensure no signer secrets are exposed
+        run: |
+          if [ -n "${PRIVATE_KEY:-}" ] || [ -n "${MNEMONIC:-}" ]; then
+            echo "::error::PRIVATE_KEY / MNEMONIC found in env. Fork tests must be read-only."
+            exit 1
+          fi
+          echo "OK — no signer secrets exposed to fork job."
+
+      - name: Resolve fork block number
+        id: resolve
+        run: |
+          BLOCK="${{ github.event.inputs.fork_block }}"
+          if [ -z "$BLOCK" ]; then
+            BLOCK="${{ env.DEFAULT_FORK_BLOCK }}"
+          fi
+          if ! [[ "$BLOCK" =~ ^[0-9]+$ ]]; then
+            echo "::error::FORK_BLOCK_NUMBER must be numeric, got '$BLOCK'"
+            exit 1
+          fi
+          echo "fork_block=$BLOCK" >> $GITHUB_OUTPUT
+          echo "run_id=${{ github.run_id }}-${BLOCK}" >> $GITHUB_OUTPUT
+          echo "Fork will use block: $BLOCK"
+
+  # =========================================================================
+  # Fork tests — Aave
+  # =========================================================================
+  fork-aave:
+    name: Aave fork tests (block ${{ needs.preflight.outputs.fork_block }})
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: ${{ github.event.inputs.protocols == 'all' || github.event.inputs.protocols == 'aave' || github.event.inputs.protocols == '' }}
+    timeout-minutes: 45
+
+    env:
+      FORK_ENABLED: "true"
+      FORK_BLOCK_NUMBER: ${{ needs.preflight.outputs.fork_block }}
+      ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - run: npm ci
+      - run: npx hardhat compile
+
+      - name: Run Aave fork e2e tests
+        id: run
+        continue-on-error: false
+        run: |
+          npx hardhat test \
+            test/e2e/Aave.BorrowRepay.e2e.test.ts \
+            test/e2e/FlashLoan.LeverageAave.e2e.test.ts
+
+      - name: Archive result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fork-aave-${{ needs.preflight.outputs.run_id }}
+          path: |
+            test-results/**
+            gas-report.txt
+          retention-days: 30
+          if-no-files-found: ignore
+
+  # =========================================================================
+  # Fork tests — Euler
+  # =========================================================================
+  fork-euler:
+    name: Euler fork tests (block ${{ needs.preflight.outputs.fork_block }})
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: ${{ github.event.inputs.protocols == 'all' || github.event.inputs.protocols == 'euler' || github.event.inputs.protocols == '' }}
+    timeout-minutes: 45
+
+    env:
+      FORK_ENABLED: "true"
+      FORK_BLOCK_NUMBER: ${{ needs.preflight.outputs.fork_block }}
+      ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - run: npm ci
+      - run: npx hardhat compile
+
+      - name: Run Euler fork e2e tests
+        run: |
+          npx hardhat test \
+            test/e2e/Euler.BorrowRepay.e2e.test.ts \
+            test/e2e/Euler.USDC.e2e.test.ts
+
+      - name: Archive result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fork-euler-${{ needs.preflight.outputs.run_id }}
+          path: test-results/**
+          retention-days: 30
+          if-no-files-found: ignore
+
+  # =========================================================================
+  # Fork tests — Morpho
+  # =========================================================================
+  fork-morpho:
+    name: Morpho fork tests (block ${{ needs.preflight.outputs.fork_block }})
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: ${{ github.event.inputs.protocols == 'all' || github.event.inputs.protocols == 'morpho' || github.event.inputs.protocols == '' }}
+    timeout-minutes: 45
+
+    env:
+      FORK_ENABLED: "true"
+      FORK_BLOCK_NUMBER: ${{ needs.preflight.outputs.fork_block }}
+      ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - run: npm ci
+      - run: npx hardhat compile
+
+      - name: Run Morpho fork e2e tests
+        run: |
+          npx hardhat test \
+            test/e2e/Morpho.FullCycle.e2e.test.ts \
+            test/e2e/Morpho.WETH.e2e.test.ts \
+            test/e2e/MorphoVault.FullCycle.e2e.test.ts \
+            test/e2e/MorphoVault.USDC.e2e.test.ts
+
+      - name: Archive result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fork-morpho-${{ needs.preflight.outputs.run_id }}
+          path: test-results/**
+          retention-days: 30
+          if-no-files-found: ignore
+
+  # =========================================================================
+  # Fork tests — MetaVault (InterVault) POC leaf on fork
+  # =========================================================================
+  fork-metavault:
+    name: MetaVault fork tests (block ${{ needs.preflight.outputs.fork_block }})
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: ${{ github.event.inputs.protocols == 'all' || github.event.inputs.protocols == 'metavault' || github.event.inputs.protocols == '' }}
+    timeout-minutes: 45
+
+    env:
+      FORK_ENABLED: "true"
+      FORK_BLOCK_NUMBER: ${{ needs.preflight.outputs.fork_block }}
+      ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - run: npm ci
+      - run: npx hardhat compile
+
+      - name: Run MetaVault fork tests
+        run: npm run test:metavault:fork
+
+      - name: Archive result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fork-metavault-${{ needs.preflight.outputs.run_id }}
+          path: test-results/**
+          retention-days: 30
+          if-no-files-found: ignore
+
+  # =========================================================================
+  # Fork summary — aggrega risultato + registra evidenza
+  # =========================================================================
+  fork-summary:
+    name: Fork summary (block ${{ needs.preflight.outputs.fork_block }})
+    runs-on: ubuntu-latest
+    needs: [preflight, fork-aave, fork-euler, fork-morpho, fork-metavault]
+    if: always()
+    timeout-minutes: 5
+
+    steps:
+      - name: Record run evidence
+        run: |
+          echo "=== Fork run evidence ==="
+          echo "Fork block:  ${{ needs.preflight.outputs.fork_block }}"
+          echo "Commit:      ${{ github.sha }}"
+          echo "Trigger:     ${{ github.event_name }}"
+          echo "Run URL:     ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo ""
+          echo "=== Results ==="
+          echo "aave:      ${{ needs.fork-aave.result }}"
+          echo "euler:     ${{ needs.fork-euler.result }}"
+          echo "morpho:    ${{ needs.fork-morpho.result }}"
+          echo "metavault: ${{ needs.fork-metavault.result }}"

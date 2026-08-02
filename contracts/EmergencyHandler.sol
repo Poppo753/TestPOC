@@ -283,110 +283,14 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
 
     // ==================== EMERGENCY WITHDRAW ====================
 
-    /**
-     * @notice Prelievo di emergenza di tutti gli asset
-     * @dev Preleva tutti i token e base asset dal ProxyGeneral all'owner
-     * @return results Array con risultati per ogni token
-     */
-    function emergencyWithdraw() external onlyOwner returns (WithdrawResult[] memory results) {
-        require(!emergencyExecuted["withdraw"], "Emergency withdraw already executed");
-        
-        address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
-        address tokenManager = IBeacon(beacon).getImplementation("TokenManager");
-        address baseAssetAddress = IBeacon(beacon).getImplementation("BASE_ASSET");
-        
-        IProxyGeneral proxy = IProxyGeneral(proxyGeneral);
-        ITokenManagerForModules tokens = ITokenManagerForModules(tokenManager);
-        
-        uint256 totalValueBefore = _getCurrentTotalValue();
-        
-        emit EmergencyWithdrawInitiated(msg.sender, block.timestamp, totalValueBefore);
-        
-        _logAssetSnapshot(owner());
-        
-        string[] memory activeTokens = tokens.getActiveTokens();
-        
-        // CREATE RESULTS ARRAY (tokens + base asset)
-        results = new WithdrawResult[](activeTokens.length + 1);
-        
-        uint256 successfulWithdraws = 0;
-        uint256 failedWithdraws = 0;
-        uint256 totalWithdrawn = 0;
-        
-        for (uint256 i = 0; i < activeTokens.length; i++) {
-            string memory tokenCode = activeTokens[i];
-            address tokenAddress = tokens.getTokenAddress(tokenCode);
-            uint256 balance = IERC20(tokenAddress).balanceOf(proxyGeneral);
-            
-            results[i] = WithdrawResult({
-                tokenCode: tokenCode,
-                tokenAddress: tokenAddress,
-                amount: balance,
-                success: false,
-                errorReason: ""
-            });
-            
-            if (balance > 0) {
-                try proxy.emergencyTransfer(tokenAddress, balance, owner()) {
-                    results[i].success = true;
-                    successfulWithdraws++;
-                    totalWithdrawn += balance;
-                    
-                    emit TokenWithdrawAttempted(tokenCode, balance, true, "");
-                } catch Error(string memory reason) {
-                    results[i].errorReason = reason;
-                    failedWithdraws++;
-                    
-                    emit TokenWithdrawAttempted(tokenCode, balance, false, reason);
-                } catch {
-                    results[i].errorReason = "Unknown error during withdrawal";
-                    failedWithdraws++;
-                    
-                    emit TokenWithdrawAttempted(tokenCode, balance, false, "Unknown error");
-                }
-            } else {
-                results[i].errorReason = "No balance to withdraw";
-            }
-        }
-        
-        // WITHDRAW BASE ASSET
-        uint256 baseAssetBalance = IERC20(baseAssetAddress).balanceOf(proxyGeneral);
-        results[activeTokens.length] = WithdrawResult({
-            tokenCode: "BASE_ASSET",
-            tokenAddress: baseAssetAddress,
-            amount: baseAssetBalance,
-            success: false,
-            errorReason: ""
-        });
-        
-        if (baseAssetBalance > 0) {
-            try proxy.emergencyTransfer(baseAssetAddress, baseAssetBalance, owner()) {
-                results[activeTokens.length].success = true;
-                successfulWithdraws++;
-                totalWithdrawn += baseAssetBalance;
-                
-                emit TokenWithdrawAttempted("BASE_ASSET", baseAssetBalance, true, "");
-            } catch Error(string memory reason) {
-                results[activeTokens.length].errorReason = reason;
-                failedWithdraws++;
-                
-                emit TokenWithdrawAttempted("BASE_ASSET", baseAssetBalance, false, reason);
-            } catch {
-                results[activeTokens.length].errorReason = "Unknown error during base asset withdrawal";
-                failedWithdraws++;
-                
-                emit TokenWithdrawAttempted("BASE_ASSET", baseAssetBalance, false, "Unknown error");
-            }
-        } else {
-            results[activeTokens.length].errorReason = "No base asset balance to withdraw";
-        }
-        
-        emergencyExecuted["withdraw"] = true;
-        
-        emit EmergencyWithdrawCompleted(totalWithdrawn, successfulWithdraws, failedWithdraws);
-        
-        return results;
-    }
+    // ==================== EMERGENCY WITHDRAW — RIMOSSO (DEC-007 "No drain") ====================
+    // emergencyWithdraw()/emergencyWithdraw(token,amount,recipient)/emergencyTransfer(to,amount)
+    // (drain custody verso owner) sono state RIMOSSE: erano un rug vector, e comunque rotte
+    // (ProxyGeneral.emergencyTransfer non esiste). Nuovo flusso emergenza No-drain:
+    //   1. emergencyPause()               (owner + emergency contacts)
+    //   2. ProtocolManager.emergencyUnwindAll()  (owner + emergency contacts) -> base asset in custody
+    //   3. gli LP ritirano pro-rata via LiquidityManager.withdraw
+    // Nessuna funzione da custody all owner. Chiude CORE-001/015/010, NEW-010/018.
 
     // ==================== EMERGENCY REPORTING ====================
 
@@ -939,33 +843,7 @@ contract EmergencyHandler is IEmergencyHandler, Ownable {
         emergencyUnpause();
     }
 
-    /**
-     * @notice Withdraw emergenza con interfaccia compatibile
-     * @param token Indirizzo token
-     * @param amount Quantità
-     * @param recipient Destinatario
-     */
-    function emergencyWithdraw(address token, uint256 amount, address recipient) external override onlyOwner {
-        require(recipient != address(0), "Invalid recipient");
-        
-        address proxyGeneral = IBeacon(beacon).getImplementation("ProxyGeneral");
-        IProxyGeneral(proxyGeneral).emergencyTransfer(token, amount, recipient);
-        
-        emit EmergencyWithdrawExecuted(token, amount, recipient);
-    }
 
-    /**
-     * @notice Trasferimento emergenza ETH
-     * @param to Destinatario
-     * @param amount Quantità ETH
-     */
-    function emergencyTransfer(address payable to, uint256 amount) external override onlyOwner {
-        require(to != address(0), "Invalid recipient");
-        require(address(this).balance >= amount, "Insufficient balance");
-        
-        to.transfer(amount);
-        emit EmergencyTransferExecuted(to, amount);
-    }
 
     /**
      * @notice Verifica permessi emergenza per utente

@@ -1,0 +1,134 @@
+name: Slither differential gate
+
+# Static analysis differenziale con baseline immutabile — vedi §S3/§S4 checklist.
+# Trigger:
+#   - pull_request: verso main, develop, dev-*
+#   - push su main (per aggiornamento baseline post-merge, sempre report-only)
+#   - workflow_dispatch: rerun manuale
+
+on:
+  pull_request:
+    branches: [main, develop, "dev-*"]
+    paths:
+      - "contracts/**"
+      - "security/slither/**"
+      - "hardhat.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/slither.yml"
+  push:
+    branches: [main]
+    paths:
+      - "contracts/**"
+      - "security/slither/**"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write   # per pubblicare SARIF su GitHub Code Scanning
+  checks: write
+
+concurrency:
+  group: slither-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+  PYTHON_VERSION: "3.12"
+  SLITHER_VERSION: "0.11.5"
+  SOLC_VERSION: "0.8.27"
+
+jobs:
+  slither:
+    name: Slither differential
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Slither + solc-select (pinned)
+        run: |
+          pip install "slither-analyzer==${{ env.SLITHER_VERSION }}" solc-select jsonschema
+          solc-select install ${{ env.SOLC_VERSION }}
+          solc-select use ${{ env.SOLC_VERSION }}
+          slither --version
+          solc --version
+
+      - name: Compile with Hardhat (needed by crytic-compile)
+        run: npx hardhat compile
+
+      - name: Run Slither (report-only, JSON + SARIF)
+        id: slither
+        continue-on-error: true
+        run: |
+          set +e
+          slither . \
+            --config-file security/slither/slither.config.json \
+            --json /tmp/slither-current.json \
+            --sarif /tmp/slither-current.sarif
+          EXIT=$?
+          echo "Slither exit code: $EXIT"
+          # Slither's exit code is the count of triggered detectors, not an error signal.
+          # A real tool error would be reflected in "success": false in the JSON.
+          exit 0
+
+      - name: Compare against baseline (gate differenziale)
+        id: compare
+        run: |
+          python security/slither/compare.py \
+            --baseline security/slither/baseline.json \
+            --current /tmp/slither-current.json \
+            --report-md /tmp/slither-diff.md \
+            --fail-on new-high-high,new-med-high,tool-error
+
+      - name: Upload SARIF to GitHub Code Scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: /tmp/slither-current.sarif
+          category: slither
+
+      - name: Upload artifacts (raw JSON + diff markdown)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: slither-run-${{ github.run_id }}
+          path: |
+            /tmp/slither-current.json
+            /tmp/slither-diff.md
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Comment diff on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('/tmp/slither-diff.md', 'utf8');
+            const truncated = body.length > 60000
+              ? body.substring(0, 60000) + '\n\n_(report truncated — see artifact for full text)_'
+              : body;
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `<!-- slither-diff-comment -->\n${truncated}`
+            });

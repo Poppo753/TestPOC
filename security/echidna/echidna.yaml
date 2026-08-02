@@ -1,0 +1,32 @@
+# Echidna configuration — §S7 checklist.
+# Version pin: v2.2.5 (bump via security/DECISIONS.md).
+
+testMode: assertion             # usiamo assert() dentro l'harness invece di echidna_* prefix
+testLimit: 50000                # 50k sequenze per run; nightly può salire a 500k
+seqLen: 100                     # max 100 tx per sequenza
+shrinkLimit: 5000               # shrinking counterexample fino a 5000 tentativi
+
+corpusDir: security/echidna/corpus   # corpus persistente cross-run
+
+# Coverage-guided fuzzing
+coverage: true
+codeSize: 0x6000                # max bytecode consentito (evita out-of-code)
+
+# Deterministic seed per riproducibilità PR (non-blocking in report-only)
+seed: 1
+
+# Output
+format: json                    # JSON output per parsing successivo
+
+# Timeout complessivo (secondi) — 30 min nel PR profile, molto piu' in nightly
+timeout: 1800
+
+# Prefissi function/property
+prefix: echidna_
+
+# Escludi contratti di test/mock dal deployment
+filterFunctions: []
+filterBlacklist: false
+
+# Bilanciamento senders — se true, Echidna randomizza msg.sender
+allContracts: false             # scala su singolo harness contract

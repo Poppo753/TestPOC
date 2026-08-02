@@ -93,7 +93,8 @@ contract MorphoVaultPlugin is IProtocolAdapter, Ownable, ReentrancyGuard {
 
     modifier onlyProtocolManager() {
         address protocolManager = IBeacon(beacon).getImplementation("ProtocolManager");
-        if (msg.sender != protocolManager && msg.sender != owner()) {
+        // PLG-084 fix (DEC-006/009): nessun bypass owner(). Escape hatch = emergencyClosePosition.
+        if (msg.sender != protocolManager) {
             revert OnlyProtocolManager();
         }
         _;
@@ -118,7 +119,7 @@ contract MorphoVaultPlugin is IProtocolAdapter, Ownable, ReentrancyGuard {
      * @inheritdoc IProtocolAdapter
      * @dev Routes deposit to the default vault for this tokenCode
      */
-    function deposit(string memory tokenCode, uint256 amount)
+    function supplyCollateral(string memory collateral, string memory /* loan */, uint256 amount)
         external
         override
         onlyProtocolManager
@@ -126,16 +127,17 @@ contract MorphoVaultPlugin is IProtocolAdapter, Ownable, ReentrancyGuard {
         nonReentrant
         returns (bool)
     {
-        address vault = _getRegistry().getDefaultVault(tokenCode);
-        if (vault == address(0)) revert NoDefaultVault(tokenCode);
+        // Supply-only (loan == collateral): deposita nel vault di default per `collateral`.
+        address vault = _getRegistry().getDefaultVault(collateral);
+        if (vault == address(0)) revert NoDefaultVault(collateral);
         return _vaultDeposit(vault, amount);
     }
 
     /**
      * @inheritdoc IProtocolAdapter
-     * @dev Routes withdraw to the default vault for this tokenCode
+     * @dev Routes withdraw to the default vault for `collateral`
      */
-    function withdraw(string memory tokenCode, uint256 amount)
+    function withdrawCollateral(string memory collateral, string memory /* loan */, uint256 amount)
         external
         override
         onlyProtocolManager
@@ -143,8 +145,8 @@ contract MorphoVaultPlugin is IProtocolAdapter, Ownable, ReentrancyGuard {
         nonReentrant
         returns (bool)
     {
-        address vault = _getRegistry().getDefaultVault(tokenCode);
-        if (vault == address(0)) revert NoDefaultVault(tokenCode);
+        address vault = _getRegistry().getDefaultVault(collateral);
+        if (vault == address(0)) revert NoDefaultVault(collateral);
         return _vaultWithdraw(vault, amount);
     }
 
@@ -193,7 +195,7 @@ contract MorphoVaultPlugin is IProtocolAdapter, Ownable, ReentrancyGuard {
      * @dev Vaults are supply-only — no target extraction per se, 
      *      but we redeem from vaults and report what came back as base asset
      */
-    function closePositionsForBaseAsset(uint256 /* targetAmount */)
+    function closePositionsForBaseAsset(uint256 targetAmount)
         external
         override
         onlyProtocolManager
@@ -205,10 +207,20 @@ contract MorphoVaultPlugin is IProtocolAdapter, Ownable, ReentrancyGuard {
         address baseAsset = IBeacon(beacon).getImplementation("BASE_ASSET");
         uint256 balBefore = IERC20(baseAsset).balanceOf(proxyGeneral);
 
-        _redeemAllVaults(proxyGeneral);
-
-        obtained = IERC20(baseAsset).balanceOf(proxyGeneral) - balBefore;
-        positionsClosed = activeVaults.length;
+        // Supply-only: riscatta i vault (snapshot) rispettando targetAmount (CORE-081 fix).
+        // targetAmount == type(uint256).max → emergency mode: riscatta tutto.
+        address[] memory vaults = activeVaults;
+        for (uint256 i = 0; i < vaults.length; i++) {
+            IERC4626 v = IERC4626(vaults[i]);
+            uint256 shares = v.balanceOf(address(this));
+            if (shares > 0) {
+                try v.redeem(shares, proxyGeneral, address(this)) {} catch {}
+                if (v.balanceOf(address(this)) == 0) _removeActiveVault(vaults[i]);
+                positionsClosed++;
+            }
+            obtained = IERC20(baseAsset).balanceOf(proxyGeneral) - balBefore;
+            if (obtained >= targetAmount) break;
+        }
     }
 
     /**
@@ -243,6 +255,71 @@ contract MorphoVaultPlugin is IProtocolAdapter, Ownable, ReentrancyGuard {
     function activateCircuitBreaker() external override onlyOwner {
         circuitBreakerTripped = true;
         emit CircuitBreakerActivated(msg.sender);
+    }
+
+    // ==================== IProtocolAdapter: LENDING (supply-only → revert) ====================
+
+    /// @inheritdoc IProtocolAdapter
+    /// @dev Supply-only (DEC-009): borrow non supportato.
+    function borrow(string memory, string memory, uint256) external pure override returns (bool) {
+        revert UnsupportedOperation();
+    }
+
+    /// @inheritdoc IProtocolAdapter
+    /// @dev Supply-only (DEC-009): repay non supportato.
+    function repay(string memory, string memory, uint256) external pure override returns (bool) {
+        revert UnsupportedOperation();
+    }
+
+    /// @inheritdoc IProtocolAdapter
+    /// @dev Collaterale = valore in asset delle shares nel vault di default per `collateral`.
+    function getCollateral(string memory collateral, string memory /* loan */)
+        external view override returns (uint256)
+    {
+        address vault = _getRegistry().getDefaultVault(collateral);
+        if (vault == address(0)) return 0;
+        uint256 shares = IERC4626(vault).balanceOf(address(this));
+        return shares == 0 ? 0 : IERC4626(vault).convertToAssets(shares);
+    }
+
+    /// @inheritdoc IProtocolAdapter
+    /// @dev Supply-only: nessun debito.
+    function getDebt(string memory, string memory) external pure override returns (uint256) {
+        return 0;
+    }
+
+    /// @inheritdoc IProtocolAdapter
+    /// @dev Supply-only: nessun debito → health factor infinito.
+    function getHealthFactor(string memory, string memory) external pure override returns (uint256) {
+        return type(uint256).max;
+    }
+
+    /// @inheritdoc IProtocolAdapter
+    function protocolType() external pure override returns (string memory) {
+        return "MORPHO_VAULT";
+    }
+
+    /// @inheritdoc IProtocolAdapter
+    /// @dev EMERGENCY escape hatch (supply-only): riscatta il vault di default per `collateral`
+    ///      verso ProxyGeneral. onlyOwner.
+    function emergencyClosePosition(string memory collateral, string memory /* loan */)
+        external override onlyOwner nonReentrant returns (uint256 baseAssetReturned)
+    {
+        address proxyGeneral = _getProxyGeneral();
+        address baseAsset = IBeacon(beacon).getImplementation("BASE_ASSET");
+        uint256 balBefore = IERC20(baseAsset).balanceOf(proxyGeneral);
+
+        address vault = _getRegistry().getDefaultVault(collateral);
+        if (vault != address(0)) {
+            IERC4626 v = IERC4626(vault);
+            uint256 shares = v.balanceOf(address(this));
+            if (shares > 0) {
+                v.redeem(shares, proxyGeneral, address(this));
+                if (v.balanceOf(address(this)) == 0) _removeActiveVault(vault);
+            }
+        }
+        baseAssetReturned = IERC20(baseAsset).balanceOf(proxyGeneral) - balBefore;
+        emit PositionClosed(0, baseAssetReturned);
     }
 
     // ==================== VAULT-SPECIFIC OPERATIONS ====================
@@ -388,7 +465,6 @@ contract MorphoVaultPlugin is IProtocolAdapter, Ownable, ReentrancyGuard {
 
         _addActiveVault(vault);
         emit VaultDeposited(vault, asset, amount, shares);
-        emit Deposited("VAULT", amount);
         return true;
     }
 
@@ -416,7 +492,6 @@ contract MorphoVaultPlugin is IProtocolAdapter, Ownable, ReentrancyGuard {
         }
 
         emit VaultWithdrawn(vault, v.asset(), withdrawAmount, sharesBurned);
-        emit Withdrawn("VAULT", withdrawAmount);
         return true;
     }
 

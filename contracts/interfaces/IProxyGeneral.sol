@@ -284,13 +284,8 @@ interface IProxyGeneral {
      */
     function paused() external view returns (bool paused);
     
-    /**
-     * @notice Trasferimento emergenza
-     * @param token Indirizzo token (address(0) per ETH)
-     * @param amount Quantità
-     * @param to Destinatario
-     */
-    function emergencyTransfer(address token, uint256 amount, address to) external;
+    // RIMOSSO (DEC-007 "No drain"): emergencyTransfer(token,amount,to) era un drain
+    // custody->owner mai implementato in ProxyGeneral. Emergenza = pause + unwind + LP withdraw.
 
     // ==================== EVENTS ====================
     

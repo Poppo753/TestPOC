@@ -1,0 +1,171 @@
+# Production scope — machine-readable path list
+# Generato in S0.2 (2026-07-15) al commit 786a5b92d3bb7e60ef0bdfb37a7f07a3f60d7c89.
+# Formato: una entry per riga, POSIX glob relativo alla root del repository.
+#   - '#' inizia un commento.
+#   - Le entry sono "include" a meno che non siano prefissate con '!' (exclude override).
+# Motivazioni testuali e criterio di reingresso: vedi security/scope/exclusions.md.
+#
+# Consumatori attesi:
+#   - Slither (filter_paths/target)
+#   - workflow CI per gating diff sui contratti in scope
+#   - script di catalogazione proprietà (properties/TRACEABILITY.md)
+# Ogni consumatore deve sempre trattare '#' come commento e supportare almeno
+# gli operatori '**/*.sol' e la negazione '!'.
+
+# ============================================================================
+# CORE (10 contratti — analizzati nell'audit 2026-07)
+# ============================================================================
+contracts/Beacon.sol
+contracts/DepositHelper.sol
+contracts/EmergencyHandler.sol
+contracts/Liquiditymanager.sol
+contracts/ParameterManager.sol
+contracts/ProtocolManager.sol
+contracts/ProxyGeneral.sol
+contracts/SwapManager.sol
+contracts/TokenManager.sol
+contracts/ValueCalculator.sol
+
+# ============================================================================
+# METAVAULT / INTERVAULT (3 contratti — production ma NON analizzati nell'audit
+# 2026-07: da trattare come "in-scope, non-audited" fino al ciclo S1.6)
+# ============================================================================
+contracts/metavault/InterVaultRegistry.sol
+contracts/plugins/InterVaultPlugin.sol
+contracts/adapters/InterVaultLensAdapter.sol
+
+# ============================================================================
+# PLUGINS lending/vault production (esclusi old/, DolomitePlugin, GMX assente)
+# ============================================================================
+contracts/plugins/AaveV3Plugin.sol
+contracts/plugins/AaveV3Registry.sol
+contracts/plugins/EulerV2Plugin.sol
+contracts/plugins/EulerRegistry.sol
+contracts/plugins/MorphoPlugin.sol
+contracts/plugins/MorphoRegistry.sol
+contracts/plugins/MorphoVaultPlugin.sol
+
+# ============================================================================
+# SWAP plugin production
+# ============================================================================
+contracts/plugins/UniswapV3Plugin.sol
+contracts/plugins/UniswapV3PluginDirect.sol
+
+# ============================================================================
+# ADAPTERS production (5 — analizzati nell'audit)
+# ============================================================================
+contracts/adapters/AaveV3LensAdapter.sol
+contracts/adapters/ChainlinkAdapter.sol
+contracts/adapters/EulerLensAdapter.sol
+contracts/adapters/MorphoLensAdapter.sol
+contracts/adapters/MorphoVaultLensAdapter.sol
+
+# ============================================================================
+# SERVICES (1)
+# ============================================================================
+contracts/services/FlashLoanService.sol
+
+# ============================================================================
+# INTERFACES consumate a runtime dal codice production (root livello)
+# ============================================================================
+contracts/interfaces/IAaveV3Plugin.sol
+contracts/interfaces/IAaveV3Registry.sol
+contracts/interfaces/IBeacon.sol
+contracts/interfaces/IEmergencyHandler.sol
+contracts/interfaces/IEulerLensAdapter.sol
+contracts/interfaces/IEulerRegistry.sol
+contracts/interfaces/IEulerV2Plugin.sol
+contracts/interfaces/IEulerV2PluginSpecific.sol
+contracts/interfaces/IFlashLoanCallback.sol
+contracts/interfaces/ILendingProtocol.sol
+contracts/interfaces/ILensAdapter.sol
+contracts/interfaces/ILiquidityManager.sol
+contracts/interfaces/IMorphoPlugin.sol
+contracts/interfaces/IMorphoRegistry.sol
+contracts/interfaces/IOracleAdapter.sol
+contracts/interfaces/IParameterManager.sol
+contracts/interfaces/IParameterManagerForModules.sol
+contracts/interfaces/IProtocolAdapter.sol
+contracts/interfaces/IProtocolManager.sol
+contracts/interfaces/IProxyGeneral.sol
+contracts/interfaces/ISimpleSwap.sol
+contracts/interfaces/ISwapManager.sol
+contracts/interfaces/ISwapManagerForModules.sol
+contracts/interfaces/ISwapPlugin.sol
+contracts/interfaces/ITokenManagerForModules.sol
+contracts/interfaces/IUniswapV3Pool.sol
+contracts/interfaces/IUniswapV3QuoterV2.sol
+contracts/interfaces/IUniswapV3Router.sol
+contracts/interfaces/IValueCalculatorForModules.sol
+contracts/interfaces/IWETH.sol
+
+# ============================================================================
+# INTERFACES protocolli esterni (namespace)
+# ============================================================================
+contracts/interfaces/aave/IAaveV3Pool.sol
+contracts/interfaces/balancer/IBalancerVault.sol
+contracts/interfaces/euler/IAccountLens.sol
+contracts/interfaces/euler/IEulerVaultRegistry.sol
+contracts/interfaces/euler/IEVault.sol
+contracts/interfaces/euler/IEVC.sol
+contracts/interfaces/euler/ISwapper.sol
+contracts/interfaces/morpho/IERC4626.sol
+contracts/interfaces/morpho/IMorpho.sol
+
+# ============================================================================
+# INTERFACES metavault (namespace — in-scope, non-audited)
+# ============================================================================
+contracts/interfaces/metavault/IInterVaultLensAdapter.sol
+contracts/interfaces/metavault/IInterVaultPlugin.sol
+contracts/interfaces/metavault/IInterVaultRegistry.sol
+
+# ============================================================================
+# ESCLUSIONI (documentate in exclusions.md — le seguenti NON sono in scope)
+# ============================================================================
+# !contracts/plugins/old/**
+# !contracts/plugins/DolomitePlugin.sol
+# !contracts/plugins/EulerV2Plugin copy.sol.md
+# !contracts/SwapManager.sol.backup
+# !contracts/MockChainlinkOracle.sol
+# !contracts/MockERC20.sol
+# !contracts/MockWETH.sol
+# !contracts/mocks/**
+
+# ============================================================================
+# OFF-CHAIN scope (TypeScript, non compilato con solc — coperto da tsc/Hardhat,
+# NON da Slither/Foundry/Echidna/Halmos)
+# ============================================================================
+scripts/cli.ts
+scripts/framework/**/*.ts
+scripts/manifests/**/*.ts
+scripts/manifests/**/*.json
+scripts/operations/**/*.ts
+scripts/verification/**/*.ts
+scripts/config/**/*.ts
+scripts/utils/**/*.ts
+scripts/core/**/*.ts
+
+# Vault Automation Controller
+scripts/automation/alerts.ts
+scripts/automation/cli.ts
+scripts/automation/config.ts
+scripts/automation/controller.ts
+scripts/automation/observer.ts
+scripts/automation/planner.ts
+scripts/automation/preflight.ts
+scripts/automation/risk.ts
+scripts/automation/safe.ts
+scripts/automation/service.ts
+scripts/automation/store.ts
+scripts/automation/strategy.ts
+scripts/automation/types.ts
+scripts/automation/verifier.ts
+
+# ============================================================================
+# CONFIG / BUILD (fissano riproducibilità)
+# ============================================================================
+hardhat.config.ts
+package.json
+package-lock.json
+tsconfig.json
+tsconfig.scripts.json

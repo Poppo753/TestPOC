@@ -451,35 +451,10 @@ contract ProxyGeneral is ERC20, Ownable, ReentrancyGuard {
         return paused;
     }
 
-    /**
-     * @notice Trasferisce tutti gli asset in caso di emergenza
-     * @dev Solo l'owner può chiamare questa funzione e solo quando in pausa
-     * @param recipient Indirizzo che riceverà tutti gli asset
-     */
-    function emergencyTransferAll(address recipient) external onlyOwner whenPaused {
-        require(recipient != address(0), "Invalid recipient");
-        
-        // Transfer base asset
-        address baseAssetAddr = IBeacon(beacon).getImplementation("BASE_ASSET");
-        if (baseAssetAddr != address(0)) {
-            uint256 baseBalance = IERC20(baseAssetAddr).balanceOf(address(this));
-            if (baseBalance > 0) {
-                IERC20(baseAssetAddr).safeTransfer(recipient, baseBalance);
-            }
-        }
-        
-        // Transfer ETH se presente (from DepositHelper or other sources)
-        uint256 ethBalance = address(this).balance;
-        if (ethBalance > 0) {
-            (bool success, ) = recipient.call{value: ethBalance}("");
-            require(success, "ETH emergency transfer failed");
-        }
-        
-        emergencyRecipient = recipient;
-        emergencyExecutedAt = block.timestamp;
-        
-        emit EmergencyTransferExecuted(recipient, block.timestamp);
-    }
+    // RIMOSSO (DEC-007 "No drain"): emergencyTransferAll(recipient) sweeppava base asset + ETH
+    // verso un recipient (tipicamente owner). Drain custody->owner eliminato. Emergenza =
+    // pause + ProtocolManager.emergencyUnwindAll + LP withdraw pro-rata. Storage emergencyRecipient/At
+    // resta (sempre zero) per non alterare lo storage layout.
 
     // ==================== CROSS-MODULE STATE MANAGEMENT ====================
 

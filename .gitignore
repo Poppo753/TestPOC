@@ -21,3 +21,8 @@ ignition/deployments/chain-31337
 
 *.svg
 *.png
+
+# Foundry build artifacts
+/out-foundry
+/cache-foundry
+foundry.lock

@@ -171,7 +171,9 @@ contract MorphoPlugin is IMorphoPlugin, IFlashLoanCallback, Ownable, ReentrancyG
 
     modifier onlyProtocolManager() {
         address protocolManager = IBeacon(beacon).getImplementation("ProtocolManager");
-        if (msg.sender != protocolManager && msg.sender != owner()) {
+        // PLG-084 fix (DEC-006/009): NESSUN bypass owner(). Solo ProtocolManager instrada qui.
+        // L'accesso diretto d'emergenza passa da emergencyClosePosition (escape hatch onlyOwner).
+        if (msg.sender != protocolManager) {
             revert OnlyProtocolManager();
         }
         _;
@@ -196,44 +198,10 @@ contract MorphoPlugin is IMorphoPlugin, IFlashLoanCallback, Ownable, ReentrancyG
         morpho = IMorpho(_morphoAddress);
     }
 
-    // ==================== IProtocolAdapter: DEPOSIT/WITHDRAW ====================
-    // NOTE: For Morpho, "deposit" means supplyCollateral to a market
-    // The simple deposit(tokenCode, amount) uses the first configured market for that token
-
-    /**
-     * @inheritdoc IProtocolAdapter
-     * @dev Deposita collaterale nel primo mercato configurato per quel token.
-     *      Per operazioni specifiche per mercato, usare supplyCollateral(collateralCode, loanCode, amount).
-     */
-    function deposit(string memory tokenCode, uint256 amount)
-        external
-        override
-        onlyProtocolManager
-        notCircuitBroken
-        nonReentrant
-        returns (bool)
-    {
-        // Per Morpho, il "deposit" semplice fornisce collaterale
-        // Trova il primo mercato dove questo token è collaterale
-        (string memory collateralCode, string memory loanCode) = _findMarketForCollateral(tokenCode);
-        return _supplyCollateral(collateralCode, loanCode, amount);
-    }
-
-    /**
-     * @inheritdoc IProtocolAdapter
-     * @dev Ritira collaterale dal primo mercato configurato per quel token.
-     */
-    function withdraw(string memory tokenCode, uint256 amount)
-        external
-        override
-        onlyProtocolManager
-        notCircuitBroken
-        nonReentrant
-        returns (bool)
-    {
-        (string memory collateralCode, string memory loanCode) = _findMarketForCollateral(tokenCode);
-        return _withdrawCollateral(collateralCode, loanCode, amount);
-    }
+    // ==================== IProtocolAdapter: SUPPLY/WITHDRAW (pair-based) ====================
+    // NOTE (DEC-009): i vecchi deposit/withdraw single-token sono stati RIMOSSI.
+    // L'interfaccia universale usa supplyCollateral / withdrawCollateral (collateral, loan, amount).
+    // _findMarketForCollateral resta come helper interno (non più usato dopo la rimozione).
 
     // ==================== MORPHO-SPECIFIC: SUPPLY COLLATERAL ====================
 
@@ -277,7 +245,6 @@ contract MorphoPlugin is IMorphoPlugin, IFlashLoanCallback, Ownable, ReentrancyG
         morpho.supplyCollateral(params, amount, address(this), "");
 
         emit MorphoSupplyCollateral(collateralCode, loanCode, params.collateralToken, amount);
-        emit Deposited(collateralCode, amount);
 
         return true;
     }
@@ -326,7 +293,6 @@ contract MorphoPlugin is IMorphoPlugin, IFlashLoanCallback, Ownable, ReentrancyG
         morpho.withdrawCollateral(params, withdrawAmount, address(this), proxyGeneral);
 
         emit MorphoWithdrawCollateral(collateralCode, loanCode, params.collateralToken, withdrawAmount);
-        emit Withdrawn(collateralCode, withdrawAmount);
 
         return true;
     }
@@ -483,6 +449,51 @@ contract MorphoPlugin is IMorphoPlugin, IFlashLoanCallback, Ownable, ReentrancyG
 
     /**
      * @inheritdoc IProtocolAdapter
+     * @dev EMERGENCY escape hatch (DEC-006/007): chiude direttamente la posizione
+     *      (collateral, loan) bypassando ProtocolManager. onlyOwner. Ripaga il debito e
+     *      ritira il collaterale in ProxyGeneral. Nota: se il collaterale != base asset,
+     *      baseAssetReturned può essere 0 (i fondi tornano comunque in custody come collaterale);
+     *      la conversione a base asset è coordinata con C1-06 (swap+slippage).
+     */
+    function emergencyClosePosition(string memory collateral, string memory loan)
+        external
+        override
+        onlyOwner
+        nonReentrant
+        returns (uint256 baseAssetReturned)
+    {
+        address baseAsset = _resolveToken(baseAssetCode);
+        address proxyGeneral = _getProxyGeneral();
+        uint256 balBefore = IERC20(baseAsset).balanceOf(proxyGeneral);
+
+        MarketParams memory params = _getMarketParams(collateral, loan);
+        Id marketId = params.id();
+        MorphoPosition memory pos = morpho.position(marketId, address(this));
+
+        if (pos.borrowShares > 0) {
+            uint256 bal = IERC20(params.loanToken).balanceOf(address(this));
+            if (bal > 0) {
+                IERC20(params.loanToken).safeIncreaseAllowance(address(morpho), bal);
+                morpho.repay(params, 0, pos.borrowShares, address(this), "");
+            }
+        }
+        pos = morpho.position(marketId, address(this));
+        if (pos.collateral > 0) {
+            morpho.withdrawCollateral(params, pos.collateral, address(this), proxyGeneral);
+        }
+        baseAssetReturned = IERC20(baseAsset).balanceOf(proxyGeneral) - balBefore;
+        emit PositionClosed(0, baseAssetReturned);
+    }
+
+    /**
+     * @inheritdoc IProtocolAdapter
+     */
+    function protocolType() external pure override returns (string memory) {
+        return "MORPHO_BLUE";
+    }
+
+    /**
+     * @inheritdoc IProtocolAdapter
      * @dev Chiude posizione per ID (Morpho non ha positionId, usa market-based)
      */
     function closePosition(uint256 /* positionId */)
@@ -530,7 +541,7 @@ contract MorphoPlugin is IMorphoPlugin, IFlashLoanCallback, Ownable, ReentrancyG
     function closePositionsForBaseAsset(uint256 targetAmount)
         external
         override
-        onlyOwnerOrLiquidityManager
+        onlyProtocolManager
         notCircuitBroken
         nonReentrant
         returns (uint256 obtained, uint256 positionsClosed)

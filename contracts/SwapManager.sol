@@ -502,7 +502,7 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         );
         
         // Update success tracking
-        bytes32 pairHash = keccak256(abi.encodePacked(spendTokenCode, receiveTokenCode));
+        bytes32 pairHash = _pairHash(spendTokenCode, receiveTokenCode);
         swapSuccesses[pairHash]++;
         
         return amountOut;
@@ -589,7 +589,7 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
                 "Slippage exceeds maximum allowed"
             );
             
-            bytes32 pairHash = keccak256(abi.encodePacked(spendTokenCode, baseAssetCode));
+            bytes32 pairHash = _pairHash(spendTokenCode, baseAssetCode);
             swapSuccesses[pairHash]++;
             
             uint256 slippage;
@@ -644,7 +644,7 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
                 "Slippage exceeds maximum allowed"
             );
             
-            bytes32 pairHash = keccak256(abi.encodePacked(baseAssetCode, receiveTokenCode));
+            bytes32 pairHash = _pairHash(baseAssetCode, receiveTokenCode);
             swapSuccesses[pairHash]++;
             
             uint256 slippage;
@@ -705,7 +705,7 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
             );
             
             // UPDATE SUCCESS TRACKING
-            bytes32 pairHash = keccak256(abi.encodePacked(spendTokenCode, receiveTokenCode));
+            bytes32 pairHash = _pairHash(spendTokenCode, receiveTokenCode);
             swapSuccesses[pairHash]++;
             
             // CALCULATE SLIPPAGE FOR ANALYTICS (avoid underflow if actualReceived > expectedOutput)
@@ -1102,6 +1102,20 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
     }
 
     /**
+     * @notice Chiave canonica dei mapping di statistiche swap per coppia di token.
+     * @dev Usa abi.encode (NON abi.encodePacked) per evitare collisioni tra coppie
+     *      di string a lunghezza variabile: con encodePacked "AB"+"CD" == "ABC"+"D"
+     *      produrrebbero lo stesso hash. abi.encode è size-prefixed e iniettivo sulla
+     *      tupla, quindi non collide. Vedi fix C1-09 (audit 2026-07).
+     * @param a Primo token code
+     * @param b Secondo token code
+     * @return Chiave bytes32 per swapSuccesses / swapErrors
+     */
+    function _pairHash(string memory a, string memory b) internal pure returns (bytes32) {
+        return keccak256(abi.encode(a, b));
+    }
+
+    /**
      * @notice Gestisce errori swap con tracking
      */
     function _handleSwapError(
@@ -1110,7 +1124,7 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         uint256 amountIn,
         string memory reason
     ) internal {
-        bytes32 pairHash = keccak256(abi.encodePacked(spendTokenCode, receiveTokenCode));
+        bytes32 pairHash = _pairHash(spendTokenCode, receiveTokenCode);
         swapErrors[pairHash]++;
         
         // Swap failed event - logged internally
@@ -1151,7 +1165,7 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         string memory spendTokenCode,
         string memory receiveTokenCode
     ) external view returns (uint256 successCount, uint256 errorCount) {
-        bytes32 pairHash = keccak256(abi.encodePacked(spendTokenCode, receiveTokenCode));
+        bytes32 pairHash = _pairHash(spendTokenCode, receiveTokenCode);
         return (swapSuccesses[pairHash], swapErrors[pairHash]);
     }
 
@@ -1313,7 +1327,7 @@ contract SwapManager is ISwapManager, Ownable, ReentrancyGuard {
         string memory spendTokenCode,
         string memory receiveTokenCode
     ) external onlyOwner {
-        bytes32 pairHash = keccak256(abi.encodePacked(spendTokenCode, receiveTokenCode));
+        bytes32 pairHash = _pairHash(spendTokenCode, receiveTokenCode);
         delete swapErrors[pairHash];
         delete swapSuccesses[pairHash];
     }
