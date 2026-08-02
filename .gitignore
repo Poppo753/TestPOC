@@ -26,3 +26,7 @@ ignition/deployments/chain-31337
 /out-foundry
 /cache-foundry
 foundry.lock
+
+# Slither raw artifacts (generati, non versionati - vedi security/slither/README.md)
+security/slither/baseline-raw.json
+security/slither/baseline-raw.sarif
