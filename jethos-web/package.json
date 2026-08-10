@@ -1,0 +1,47 @@
+{
+  "name": "@jethos/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build && node scripts/finalize-static-output.mjs && node scripts/generate-security-headers.mjs && node scripts/validate-build-output.mjs && node scripts/check-performance-budgets.mjs && node scripts/create-release-manifest.mjs",
+    "preview": "astro preview",
+    "check": "astro check",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:desktop": "playwright test --project=desktop-edge",
+    "sync:legacy": "node scripts/sync-legacy-sources.mjs --write",
+    "check:parity": "node scripts/sync-legacy-sources.mjs --check",
+    "verify": "npm run check:parity && npm run check && npm run lint && npm run format:check && npm run test && npm run build"
+  },
+  "dependencies": {
+    "astro": "7.1.6",
+    "ethers": "6.17.0",
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.10",
+    "@axe-core/playwright": "4.12.1",
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.62.1",
+    "@types/three": "0.185.0",
+    "eslint": "10.8.0",
+    "eslint-plugin-astro": "3.1.0",
+    "prettier": "3.9.6",
+    "prettier-plugin-astro": "0.14.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.61.0",
+    "vitest": "4.1.10"
+  },
+  "overrides": {
+    "sharp": "0.35.0"
+  }
+}

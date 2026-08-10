@@ -1,0 +1,221 @@
+---
+import { protocolEvidenceRepository } from '../../content/local-repository';
+import Callout from '../../design-system/components/Callout.astro';
+import Card from '../../design-system/components/Card.astro';
+import DataRow from '../../design-system/components/DataRow.astro';
+import SourceLabel from '../../design-system/components/SourceLabel.astro';
+import Section from '../../design-system/composition/Section.astro';
+import Split from '../../design-system/composition/Split.astro';
+import Badge from '../../design-system/primitives/Badge.astro';
+import DataTable from '../../design-system/patterns/DataTable.astro';
+import PageHero from '../../design-system/patterns/PageHero.astro';
+import SectionHeading from '../../design-system/patterns/SectionHeading.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const protocols = await protocolEvidenceRepository.getProtocols();
+const route = [
+  ['User', 'Signs an explicit action.'],
+  ['Vault entry', 'Validates deposit or withdrawal.'],
+  ['Custody & accounting', 'Moves assets and updates shares.'],
+  ['Strategy manager', 'Uses authorized routes.'],
+  ['Protocol modules', 'Execute and report positions.'],
+] as const;
+const modules = [
+  [
+    'Beacon',
+    'Module registry and lookup',
+    'Configuration references',
+    'Wrong module resolution',
+    'implemented',
+    'Implemented',
+  ],
+  [
+    'LiquidityManager',
+    'User entry and custom accounting flow',
+    'Deposit/withdraw orchestration',
+    'Consumer actions unavailable or mis-accounted',
+    'poc',
+    'PoC',
+  ],
+  [
+    'ProxyGeneral',
+    'Custody and share mint/burn',
+    'Base assets and share state',
+    'Custody or share failure',
+    'poc',
+    'PoC',
+  ],
+  [
+    'ValueCalculator',
+    'Aggregate custody and positions',
+    'Accounting inputs',
+    'Incorrect pool valuation',
+    'implemented',
+    'Implemented',
+  ],
+  [
+    'ProtocolManager',
+    'Authorized integration routes',
+    'Calls configured modules',
+    'Allocation action failure',
+    'implemented',
+    'Implemented',
+  ],
+  [
+    'Registry',
+    'Supported addresses and markets',
+    'Configuration surface',
+    'Wrong target or market metadata',
+    'implemented',
+    'Implemented',
+  ],
+  [
+    'Plugin',
+    'Execute integration action',
+    'Protocol-specific calls',
+    'Protocol interaction failure',
+    'implemented',
+    'Implemented',
+  ],
+  [
+    'LensAdapter',
+    'Read balances, values and health',
+    'Observation only by design',
+    'Incomplete or wrong visibility',
+    'implemented',
+    'Implemented',
+  ],
+  [
+    'Parameter / emergency',
+    'Limits, pause and recovery controls',
+    'Administrative powers',
+    'Availability or privileged-control risk',
+    'validation',
+    'Review open',
+  ],
+] as const;
+---
+
+<BaseLayout
+  title="Jethos Protocol — Architecture and integrations"
+  description="Understand the Jethos user route and inspect the technical responsibilities, powers and failure impact of current PoC modules."
+  page="protocol"
+  canonicalPath="/pages/protocol.html"
+  webglScene="protocol-stack"
+>
+  <PageHero
+    eyebrow="Protocol"
+    title="The modular engine beneath Jethos."
+    description="Start with the understandable capital route, then inspect the exact modules that coordinate entry, custody, accounting, strategy execution and observation."
+  />
+  <Section compact>
+    <SectionHeading
+      eyebrow="Understand the architecture"
+      title="One user route, separated responsibilities."
+    />
+    <div class="architecture-route">
+      {
+        route.map(([title, copy]) => (
+          <div>
+            <>
+              <strong>{title}</strong>
+              <p>{copy}</p>
+            </>
+          </div>
+        ))
+      }
+    </div>
+  </Section>
+  <section class="immersive-section" aria-labelledby="stack-title">
+    <div class="container immersive-shell">
+      <header class="immersive-head">
+        <div>
+          <span class="eyebrow">Transparent Stack · exploded view</span><h2 id="stack-title">
+            Inspect one technical layer at a time.
+          </h2>
+        </div><p class="muted">
+          The 3D model explains separation; contract documentation remains authoritative.
+        </p>
+      </header>
+      <div class="immersive-viewport" data-webgl-host>
+        <div class="immersive-fallback" aria-hidden="true">
+          <div class="fallback-object fallback--stack"><i></i><i></i><i></i><i></i></div>
+        </div><span class="immersive-status" data-webgl-status>Loading visual</span>
+      </div>
+      <div class="immersive-controls" aria-label="Protocol layers">
+        <button class="immersive-control" type="button" data-scene-all>Complete stack</button
+        ><button class="immersive-control" type="button" data-scene-layer aria-pressed="false"
+          >Liquidity entry</button
+        ><button class="immersive-control" type="button" data-scene-layer aria-pressed="false"
+          >Custody &amp; shares</button
+        ><button class="immersive-control" type="button" data-scene-layer aria-pressed="false"
+          >Orchestration</button
+        ><button class="immersive-control" type="button" data-scene-layer aria-pressed="false"
+          >Integration modules</button
+        >
+      </div>
+    </div>
+  </section>
+  <Section>
+    <SectionHeading
+      eyebrow="Technical architecture"
+      title="Responsibility, power and failure impact."
+    />
+    <DataTable label="Protocol module responsibilities">
+      <table>
+        <thead
+          ><tr
+            ><th>Module</th><th>Responsibility</th><th>Assets / power</th><th>Failure impact</th><th
+              >Current status</th
+            ></tr
+          ></thead
+        ><tbody>
+          {
+            modules.map(([name, responsibility, power, impact, tone, label]) => (
+              <tr>
+                <>
+                  <td>{name}</td>
+                  <td>{responsibility}</td>
+                  <td>{power}</td>
+                  <td>{impact}</td>
+                  <td>
+                    <Badge {tone}>{label}</Badge>
+                  </td>
+                </>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </DataTable>
+    <SourceLabel
+      >Admin roles and exact callable boundaries require the contract documentation and
+      deployment-specific role reads.</SourceLabel
+    >
+  </Section>
+  <Section band>
+    <Split>
+      <div>
+        <p class="eyebrow">Integration pattern</p><h2>Registry. Plugin. LensAdapter.</h2><p>
+          Configuration, execution and observation remain separately inspectable.
+        </p>
+      </div>
+      <Card
+        ><h3>Recorded PoC integrations</h3><div class="data-list">
+          {
+            protocols.protocols.map((protocol) => (
+              <DataRow label={protocol.name} value="Registered module" />
+            ))
+          }
+        </div><SourceLabel>Registration does not prove current allocation</SourceLabel></Card
+      >
+    </Split>
+  </Section>
+  <Section>
+    <Callout tone="warning"
+      ><strong>Current accounting note:</strong> the PoC consumer entry uses custom LiquidityManager/ProxyGeneral
+      accounting. ERC-4626 interfaces also appear for external protocol vaults; a complete ERC-4626 consumer
+      vault is a target direction, not a current claim.</Callout
+    >
+  </Section>
+</BaseLayout>

@@ -1,0 +1,15 @@
+---
+interface Props {
+  label: string;
+  value?: string;
+  class?: string;
+}
+
+const { label, value, class: className } = Astro.props;
+---
+
+<div class:list={['metric', className]}>
+  <span class="metric__label">{label}</span>
+  <strong class="metric__value">{value}<slot name="value" /></strong>
+  <slot />
+</div>

@@ -1,0 +1,14 @@
+---
+interface Props {
+  question: string;
+  open?: boolean;
+  class?: string;
+}
+
+const { question, open = false, class: className } = Astro.props;
+---
+
+<details class:list={['faq-item', className]} {open}>
+  <summary>{question}</summary>
+  <div class="faq-answer"><slot /></div>
+</details>

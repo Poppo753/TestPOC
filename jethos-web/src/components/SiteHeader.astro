@@ -1,0 +1,51 @@
+---
+import { siteConfig, sitePath, type PageId } from '../config/site';
+import BrandLink from './BrandLink.astro';
+import VisuallyHidden from '../design-system/primitives/VisuallyHidden.astro';
+
+interface Props {
+  page: PageId;
+}
+
+const { page } = Astro.props;
+---
+
+<a class="skip-link" href="#main-content">Skip to content</a>
+<header class="site-header" data-site-header>
+  <nav class="site-nav container" aria-label="Primary navigation">
+    <BrandLink />
+    <button
+      class="nav-toggle"
+      type="button"
+      aria-expanded="false"
+      aria-controls="primary-links"
+      data-nav-toggle
+    >
+      <span aria-hidden="true">☰</span>
+      <VisuallyHidden><span data-nav-label>Open menu</span></VisuallyHidden>
+    </button>
+    <div class="nav-links" id="primary-links" data-nav-links data-open="false">
+      {
+        siteConfig.navigation.map((item) => (
+          <a href={sitePath(item.href)} aria-current={page === item.id ? 'page' : undefined}>
+            {item.label}
+          </a>
+        ))
+      }
+      <a
+        class="button button--primary"
+        href={sitePath('/demo/index.html')}
+        aria-current={page === 'demo' ? 'page' : undefined}
+      >
+        Try demo
+      </a>
+    </div>
+  </nav>
+</header>
+
+<script>
+  import { mountNavigation } from '../features/navigation';
+
+  const header = document.querySelector<HTMLElement>('[data-site-header]');
+  if (header) mountNavigation(header);
+</script>

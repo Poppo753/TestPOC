@@ -1,0 +1,59 @@
+---
+import type { PageId } from '../config/site';
+import SiteFooter from '../components/SiteFooter.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import '../design-system/index.css';
+import '../styles/legacy/pages.css';
+import '../styles/legacy/webgl.css';
+import '../styles/site-shell.css';
+
+interface Props {
+  title: string;
+  description: string;
+  page: PageId;
+  canonicalPath?: string;
+  bodyClass?: string;
+  mainClass?: string;
+  webglScene?: string;
+  robots?: string;
+  showFooter?: boolean;
+}
+
+const {
+  title,
+  description,
+  page,
+  canonicalPath,
+  bodyClass,
+  mainClass,
+  webglScene,
+  robots,
+  showFooter = true,
+} = Astro.props;
+const canonical = canonicalPath && Astro.site ? new URL(canonicalPath, Astro.site) : undefined;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    {robots && <meta name="robots" content={robots} />}
+    {canonical && <link rel="canonical" href={canonical} />}
+    <title>{title}</title>
+  </head>
+  <body class={bodyClass} data-page={page} data-webgl-scene={webglScene}>
+    <div class="page-grid" aria-hidden="true"></div>
+    <SiteHeader {page} />
+    <main id="main-content" class={mainClass}><slot /></main>
+    {showFooter && <SiteFooter />}
+    <script>
+      if (document.body.dataset.webglScene) {
+        void import('../features/webgl/bootstrap').then(({ initWebGLExperience }) =>
+          initWebGLExperience(),
+        );
+      }
+    </script>
+  </body>
+</html>

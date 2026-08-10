@@ -1,0 +1,98 @@
+:root {
+  color-scheme: dark;
+
+  /* Legacy primitives: values remain exact until visual parity is closed. */
+  --ink-950: #07101f;
+  --ink-900: #0b1426;
+  --ink-850: #101b31;
+  --ink-800: #142139;
+  --ink-700: #22304a;
+  --text-100: #f5f7fb;
+  --text-200: #d9e0ec;
+  --text-300: #abb7ca;
+  --text-400: #7f8ba0;
+  --violet-300: #c4b5fd;
+  --violet-400: #a78bfa;
+  --violet-500: #8b5cf6;
+  --violet-600: #7345e8;
+  --cyan-300: #67e8f9;
+  --cyan-400: #22d3ee;
+  --blue-400: #60a5fa;
+  --green-400: #34d399;
+  --mint-300: #86efcf;
+  --mint-400: #45ddb5;
+  --amber-400: #fbbf24;
+  --red-400: #fb7185;
+  --border: rgb(181 197 222 / 15%);
+  --border-strong: rgb(181 197 222 / 27%);
+  --surface: rgb(16 27 49 / 82%);
+  --surface-solid: #101b31;
+  --surface-soft: rgb(255 255 255 / 3.5%);
+  --surface-violet: rgb(139 92 246 / 9%);
+  --surface-cyan: rgb(34 211 238 / 6.5%);
+  --line-violet: rgb(167 139 250 / 36%);
+  --line-cyan: rgb(34 211 238 / 32%);
+  --wallet: var(--mint-400);
+  --vault: var(--violet-400);
+  --proof: var(--cyan-400);
+  --limit: var(--amber-400);
+  --shadow: 0 24px 70px rgb(0 0 0 / 34%);
+  --shadow-soft: 0 12px 36px rgb(0 0 0 / 22%);
+  --radius-sm: 0.65rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.45rem;
+  --radius-xl: 2rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --content: 1180px;
+  --content-narrow: 780px;
+  --header-height: 72px;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Semantic contract consumed by new components. */
+  --color-background-canvas: var(--ink-950);
+  --color-background-subtle: var(--ink-900);
+  --color-background-raised: var(--ink-850);
+  --color-background-overlay: var(--surface);
+  --color-text-strong: var(--text-100);
+  --color-text-default: var(--text-200);
+  --color-text-muted: var(--text-300);
+  --color-text-subtle: var(--text-400);
+  --color-border-default: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-action-primary: var(--violet-400);
+  --color-action-secondary: var(--cyan-300);
+  --color-positive: var(--mint-400);
+  --color-caution: var(--amber-400);
+  --color-negative: var(--red-400);
+  --color-focus-ring: var(--cyan-400);
+  --color-selection-background: rgb(34 211 238 / 22%);
+  --color-selection-text: var(--text-100);
+
+  --font-sans:
+    Inter, ui-sans-serif, system-ui, -apple-system, blinkmacsystemfont, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, sfmono-regular, consolas, 'Liberation Mono', monospace;
+  --font-size-body: 1rem;
+  --line-height-body: 1.65;
+  --tracking-heading: -0.035em;
+  --measure-copy: 65ch;
+
+  --layout-content: var(--content);
+  --layout-content-narrow: var(--content-narrow);
+  --layout-gutter: clamp(1rem, 4vw, 2rem);
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 3px;
+  --motion-duration-fast: 180ms;
+  --motion-duration-normal: 320ms;
+  --motion-duration-reveal: 650ms;
+  --motion-ease-out: var(--ease-out);
+}

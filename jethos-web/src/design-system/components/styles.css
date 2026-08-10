@@ -1,0 +1,121 @@
+@layer components {
+  .card {
+    position: relative;
+    padding: clamp(1.25rem, 3vw, 2rem);
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--radius-lg);
+    background: linear-gradient(150deg, rgb(20 33 57 / 92%), rgb(11 20 38 / 92%));
+    box-shadow: var(--shadow-soft);
+    transition:
+      transform var(--motion-duration-normal) var(--motion-ease-out),
+      border-color var(--motion-duration-normal) ease,
+      box-shadow var(--motion-duration-normal) ease;
+  }
+
+  .card:hover {
+    border-color: var(--color-border-strong);
+  }
+
+  .card--accent {
+    border-color: rgb(139 92 246 / 35%);
+    background: linear-gradient(145deg, rgb(139 92 246 / 12%), rgb(16 27 49 / 90%));
+  }
+
+  .card--accent:hover {
+    box-shadow: var(--shadow);
+    transform: translateY(-3px);
+  }
+
+  .card--soft {
+    background: var(--surface-soft);
+    box-shadow: none;
+  }
+
+  .metric {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .metric__label {
+    display: block;
+    color: var(--color-text-subtle);
+    font-size: 0.75rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+  }
+
+  .metric__value {
+    display: block;
+    color: var(--color-text-strong);
+    font-size: clamp(1.35rem, 3vw, 2rem);
+    font-weight: 820;
+    line-height: 1.2;
+  }
+
+  .data-list {
+    display: grid;
+    gap: 0.7rem;
+  }
+
+  .data-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block-end: 0.7rem;
+    border-block-end: 1px solid var(--color-border-default);
+  }
+
+  .data-row:last-child {
+    padding-block-end: 0;
+    border: 0;
+  }
+
+  .data-row > :first-child {
+    color: var(--color-text-subtle);
+  }
+
+  .data-row > :last-child {
+    color: var(--color-text-strong);
+    font-weight: 650;
+    overflow-wrap: anywhere;
+    text-align: end;
+  }
+
+  .callout {
+    padding: 1rem 1.2rem;
+    border-inline-start: 3px solid var(--violet-400);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    background: rgb(139 92 246 / 8%);
+  }
+
+  .callout--warning {
+    border-color: var(--color-caution);
+    background: rgb(251 191 36 / 7%);
+  }
+
+  .source-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--color-text-subtle);
+    font-size: 0.72rem;
+  }
+
+  .source-label::before {
+    color: var(--proof);
+    content: '●';
+  }
+
+  @media (width <= 600px) {
+    .data-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.2rem;
+    }
+
+    .data-row > :last-child {
+      text-align: start;
+    }
+  }
+}

@@ -1,0 +1,47 @@
+<aside class="stack app-sidebar" data-app-mode-panel="advanced" hidden>
+  <section class="card">
+    <h2 style="font-size:1.35rem">Vault details</h2>
+    <div class="data-list">
+      <div class="data-row"><span>Deposit fee</span><span id="deposit-fee">Loading…</span></div>
+      <div class="data-row"><span>Withdraw fee</span><span id="withdraw-fee">Loading…</span></div>
+      <div class="data-row">
+        <span>Share supply (raw)</span><span id="share-supply-raw">Loading…</span>
+      </div>
+      <div class="data-row">
+        <span>Your allowance</span><span id="user-allowance">Connect wallet</span>
+      </div>
+      <div class="data-row">
+        <span>LiquidityManager</span><a
+          id="contract-liquidity"
+          target="_blank"
+          rel="noopener noreferrer">Loading…</a
+        >
+      </div>
+    </div>
+    <button
+      id="revoke-approval"
+      type="button"
+      class="button button--danger"
+      style="margin-top:1rem;width:100%"
+      data-requires-wallet
+      disabled>Revoke USDC approval</button
+    >
+  </section>
+  <section class="card">
+    <div class="cluster" style="justify-content:space-between">
+      <h2 style="font-size:1.35rem;margin:0">Protocol registry</h2>
+      <span class="badge badge--live">Read only</span>
+    </div>
+    <p class="muted">Registered does not mean currently allocated.</p>
+    <div id="protocol-list" class="protocol-list">
+      <div class="skeleton"></div><div class="skeleton"></div>
+    </div>
+  </section>
+  <section class="callout callout--warning">
+    <strong>Estimate notice</strong>
+    <p>
+      Deposit and withdrawal estimates call current LiquidityManager view helpers. They are not
+      standard ERC-4626 previews and can change before execution.
+    </p>
+  </section>
+</aside>

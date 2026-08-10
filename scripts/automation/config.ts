@@ -55,6 +55,10 @@ export function validateAutomationConfig(value: unknown): AutomationConfig {
   integer(config.policy?.verificationToleranceBps, "policy.verificationToleranceBps", 0, 10_000);
   if (config.policy?.supplyOnly !== true) throw new Error("POC requires policy.supplyOnly=true");
   if (typeof config.policy.requireOracleFreshness !== "boolean") throw new Error("policy.requireOracleFreshness must be boolean");
+  // Optional, backward compatible: absent maxTotalCapitalUnits means no cap is
+  // enforced (pre-Fase 5 behavior). When present it must be a valid unsigned
+  // integer string, same shape as the other base-asset amount fields.
+  if (config.policy?.maxTotalCapitalUnits !== undefined) bigintString(config.policy.maxTotalCapitalUnits, "policy.maxTotalCapitalUnits");
   for (const protocol of config.protocols) {
     if (!protocol || typeof protocol.name !== "string" || !protocol.name.trim()) throw new Error("Protocol name is required");
     if (names.has(protocol.name)) throw new Error(`Duplicate protocol: ${protocol.name}`);

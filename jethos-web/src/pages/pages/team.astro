@@ -1,0 +1,44 @@
+---
+import Callout from '../../design-system/components/Callout.astro';
+import Section from '../../design-system/composition/Section.astro';
+import Badge from '../../design-system/primitives/Badge.astro';
+import PageHero from '../../design-system/patterns/PageHero.astro';
+import StatusLedger from '../../design-system/patterns/StatusLedger.astro';
+import StatusLedgerRow from '../../design-system/patterns/StatusLedgerRow.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const disclosures = [
+  ['Founders and contributors', 'Public profiles pending'],
+  ['Legal entity', 'Not disclosed in the current evidence pack'],
+  ['Protocol ownership', 'Role and address publication pending'],
+  ['Security contact', 'Public channel pending'],
+  ['Advisors and partners', 'No public claim'],
+] as const;
+---
+
+<BaseLayout
+  title="Jethos team — Disclosure status"
+  description="Current status of Jethos team, ownership and contact disclosures without invented profiles."
+  page="team"
+  canonicalPath="/pages/team.html"
+>
+  <PageHero
+    eyebrow="Team disclosure"
+    title="Trust also requires people and accountability."
+    description="The current repository does not contain verified public biographies, legal-entity details or a security contact. This page makes that absence explicit instead of inventing credibility."
+  />
+  <Section
+    ><StatusLedger label="Team and accountability disclosures"
+      >{
+        disclosures.map(([label, value]) => (
+          <StatusLedgerRow {label} {value}>
+            <Badge tone="planned">Open</Badge>
+          </StatusLedgerRow>
+        ))
+      }</StatusLedger
+    ><Callout tone="warning" class="u-margin-top-6"
+      ><strong>Required before broader release.</strong> Publish accountable people, relevant experience,
+      administrative responsibility, contact channels and conflicts of interest with verifiable sources.</Callout
+    ></Section
+  >
+</BaseLayout>

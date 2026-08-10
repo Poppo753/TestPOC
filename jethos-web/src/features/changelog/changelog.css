@@ -1,0 +1,27 @@
+@layer patterns {
+  .changelog {
+    display: grid;
+    gap: var(--space-4);
+  }
+
+  .changelog-entry {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: var(--space-6);
+    padding: var(--space-6);
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--radius-lg);
+    background: rgb(255 255 255 / 2.5%);
+  }
+
+  .changelog-entry time {
+    color: var(--violet-300);
+    font: 750 0.78rem var(--font-mono);
+  }
+
+  @media (width <= 650px) {
+    .changelog-entry {
+      grid-template-columns: 1fr;
+    }
+  }
+}

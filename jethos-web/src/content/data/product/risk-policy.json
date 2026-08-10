@@ -1,0 +1,30 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-07-23",
+  "vaultId": "usdc-conservative-arbitrum",
+  "recordedRules": [
+    { "label": "Base asset", "value": "Native USDC", "state": "recorded" },
+    { "label": "Strategy class", "value": "Supply-only", "state": "recorded" },
+    { "label": "Approval model", "value": "Exact amount in the PoC App", "state": "implemented" },
+    { "label": "Withdrawal path", "value": "Synchronous contract path", "state": "implemented" }
+  ],
+  "pendingDecisions": [
+    "Minimum liquid reserve",
+    "Maximum exposure per protocol",
+    "Minimum protocol maturity",
+    "Oracle staleness threshold",
+    "Maximum utilization",
+    "TVL and available-liquidity minimum",
+    "Maximum allocation change",
+    "Depeg threshold",
+    "Withdrawal stress assumptions"
+  ],
+  "illustrativeScenario": {
+    "notice": "Example only — not a live allocation or approved production policy.",
+    "opportunities": [
+      { "protocol": "Aave V3", "nominalApy": "4.3%", "decision": "Higher allocation", "reason": "Illustratively stronger maturity and available liquidity." },
+      { "protocol": "Euler V2", "nominalApy": "5.1%", "decision": "Limited allocation", "reason": "Illustratively constrained by utilization and concentration." },
+      { "protocol": "Morpho", "nominalApy": "5.4%", "decision": "Limited allocation", "reason": "Illustratively constrained by market-specific liquidity." }
+    ]
+  }
+}

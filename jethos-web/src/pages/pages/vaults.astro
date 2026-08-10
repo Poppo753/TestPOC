@@ -1,0 +1,180 @@
+---
+import { editorialContentRepository } from '../../content/local-repository';
+import Cluster from '../../design-system/composition/Cluster.astro';
+import Section from '../../design-system/composition/Section.astro';
+import Split from '../../design-system/composition/Split.astro';
+import Badge from '../../design-system/primitives/Badge.astro';
+import Button from '../../design-system/primitives/Button.astro';
+import DataTable from '../../design-system/patterns/DataTable.astro';
+import PageHero from '../../design-system/patterns/PageHero.astro';
+import SectionHeading from '../../design-system/patterns/SectionHeading.astro';
+import StatusLedger from '../../design-system/patterns/StatusLedger.astro';
+import StatusLedgerRow from '../../design-system/patterns/StatusLedgerRow.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const [catalogue, riskPolicy] = await Promise.all([
+  editorialContentRepository.getVaultCatalogue(),
+  editorialContentRepository.getRiskPolicy(),
+]);
+const currentVaults = catalogue.vaults.filter((vault) => vault.status === 'poc');
+const vaultByAssetAndProfile = new Map(
+  catalogue.vaults.map((vault) => [`${vault.asset}:${vault.profile}`, vault]),
+);
+const assets = ['USDC', 'ETH', 'BTC'] as const;
+const profiles = ['Conservative', 'Balanced', 'Advanced'] as const;
+const displayAsset = { USDC: 'Stablecoin', ETH: 'ETH', BTC: 'BTC' } as const;
+const statusLabel = { poc: 'USDC private PoC', planned: 'Planned', vision: 'Vision' } as const;
+const vaultStatusLabel = (status: (typeof catalogue.vaults)[number]['status']) =>
+  status in statusLabel ? statusLabel[status as keyof typeof statusLabel] : status;
+const recordedRules = riskPolicy.recordedRules.slice(0, 2);
+---
+
+<BaseLayout
+  title="Jethos vaults — Assets and risk profiles"
+  description="Inspect the current USDC Conservative PoC, its recorded limits, open policy decisions and future vault families."
+  page="vaults"
+  canonicalPath="/pages/vaults.html"
+>
+  <PageHero
+    eyebrow={`Vaults · ${currentVaults.length} private PoC`}
+    title="One asset. One goal. Clear limits."
+    description="Start with what is actually being validated. Future asset and risk families remain visibly separate from the current deployment."
+  />
+
+  <Section>
+    <SectionHeading
+      eyebrow="Available for private validation"
+      title="USDC Conservative — Arbitrum."
+    />
+    <article class="product-showcase">
+      <div class="product-showcase__main">
+        <Cluster
+          ><Badge tone="poc">Private PoC</Badge><Badge tone="implemented">Supply-only</Badge
+          ></Cluster
+        >
+        <h3>Why this vault exists</h3>
+        <p>
+          Validate the smallest useful Jethos foundation: native USDC, explicit approvals, custom
+          accounting, liquid reserve awareness and approved lending integrations before adding more
+          assets or strategy complexity.
+        </p>
+        <Cluster>
+          <Button href="/app.html">Inspect the PoC</Button>
+          <Button href="/pages/trust-center.html" variant="secondary">Verify evidence</Button>
+        </Cluster>
+      </div>
+      <div class="product-showcase__facts">
+        <div><span>Base asset</span><strong>Native USDC</strong></div>
+        <div><span>Chain</span><strong>Arbitrum One</strong></div>
+        <div><span>Audience</span><strong>Private validation</strong></div>
+        <div><span>Strategies</span><strong>Supply-only</strong></div>
+        <div><span>Recorded integrations</span><strong>Aave · Euler · Morpho</strong></div>
+        <div><span>Audit status</span><strong>No whole-system audit claimed</strong></div>
+      </div>
+    </article>
+  </Section>
+
+  <Section band>
+    <Split>
+      <div>
+        <p class="eyebrow">Current implementation</p>
+        <h2>Custom PoC accounting.</h2>
+        <p>
+          LiquidityManager and ProxyGeneral coordinate current consumer entry, shares and custody.
+          Estimates use project-specific view helpers and remain indicative.
+        </p>
+        <Badge tone="implemented">Implemented in PoC</Badge>
+      </div>
+      <div>
+        <p class="eyebrow">Target direction</p>
+        <h2>ERC-4626-compatible vault surface.</h2>
+        <p>
+          A standardized consumer vault interface is the architectural direction described by the
+          documentation, but is not claimed as complete in the current PoC.
+        </p>
+        <Badge tone="planned">Target standard</Badge>
+      </div>
+    </Split>
+  </Section>
+
+  <Section>
+    <SectionHeading
+      eyebrow="Policy ledger"
+      title="What is known—and what still needs a decision."
+      description="Pending parameters are intentionally visible instead of being replaced with invented “conservative” numbers."
+    />
+    <StatusLedger kind="policy" label="USDC Conservative policy">
+      {
+        recordedRules.map((rule) => (
+          <StatusLedgerRow kind="policy" label={rule.label} value={rule.value}>
+            <Badge tone={rule.state}>
+              {rule.label === 'Base asset' ? 'Recorded' : 'Implemented'}
+            </Badge>
+          </StatusLedgerRow>
+        ))
+      }
+      <StatusLedgerRow
+        kind="policy"
+        label="Permitted strategies"
+        value="Configured lending supply modules"
+      >
+        <Badge tone="implemented">Implemented</Badge>
+      </StatusLedgerRow>
+      <StatusLedgerRow
+        kind="policy"
+        label="Prohibited in current scope"
+        value="Borrowing, leverage and unapproved arbitrary targets"
+      >
+        <Badge tone="poc">PoC boundary</Badge>
+      </StatusLedgerRow>
+      <StatusLedgerRow
+        kind="policy"
+        label="Reserve, concentration and utilization limits"
+        value="Policy decision pending"
+        pending
+      >
+        <Badge tone="planned">Pending</Badge>
+      </StatusLedgerRow>
+      <StatusLedgerRow
+        kind="policy"
+        label="Depeg, oracle and stress thresholds"
+        value="Policy decision pending"
+        pending
+      >
+        <Badge tone="planned">Pending</Badge>
+      </StatusLedgerRow>
+    </StatusLedger>
+  </Section>
+
+  <Section>
+    <SectionHeading
+      eyebrow="Future product map"
+      title="Additional families only after dedicated validation."
+    />
+    <DataTable label="Future vault families">
+      <table>
+        <thead><tr><th>Base asset</th>{profiles.map((profile) => <th>{profile}</th>)}</tr></thead>
+        <tbody>
+          {
+            assets.map((asset) => (
+              <tr>
+                <th>{displayAsset[asset]}</th>
+                {profiles.map((profile) => {
+                  const vault = vaultByAssetAndProfile.get(`${asset}:${profile}`);
+                  if (!vault) throw new Error(`Vault missing for ${asset}:${profile}`);
+                  return (
+                    <td>
+                      <Badge tone={vault.status}>{vaultStatusLabel(vault.status)}</Badge>
+                      <br />
+                      {vault.description}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </DataTable>
+  </Section>
+</BaseLayout>

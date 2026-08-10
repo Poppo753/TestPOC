@@ -1,0 +1,25 @@
+---
+import PocConfirmation from '../components/app/PocConfirmation.astro';
+import PocHeader from '../components/app/PocHeader.astro';
+import PocSidebar from '../components/app/PocSidebar.astro';
+import PocWorkspace from '../components/app/PocWorkspace.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Jethos USDC PoC console"
+  description="Read-only status and explicit wallet interactions for the private Jethos USDC proof of concept."
+  page="app"
+  canonicalPath="/app.html"
+  robots="noindex,nofollow"
+  mainClass="app-shell"
+>
+  <div class="container">
+    <PocHeader />
+    <div class="app-layout"><PocWorkspace /><PocSidebar /></div>
+  </div>
+  <PocConfirmation />
+  <script>
+    void import('../features/app/legacy/controller.js');
+  </script>
+</BaseLayout>

@@ -1,0 +1,22 @@
+---
+import Container from '../composition/Container.astro';
+import Eyebrow from '../primitives/Eyebrow.astro';
+
+interface Props {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  class?: string;
+}
+
+const { eyebrow, title, description, class: className } = Astro.props;
+---
+
+<header class:list={['page-hero', className]}>
+  <Container>
+    {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
+    <h1>{title}</h1>
+    {description && <p class="lede">{description}</p>}
+    <slot />
+  </Container>
+</header>

@@ -197,6 +197,10 @@ npm run automation:cli -- service-status --config=scripts/automation/config.arbi
 
 ## 7. Fase 3 — Definire governance e Safe
 
+### Stato esecuzione — 2 agosto 2026
+
+Parcheggiata. Documentazione creata in `09_Phase_3_Safe/`. Esecuzione rinviata: nessun capitale significativo in gestione e nessun utente reale. Le fasi 4 e 5 (fork simulation e policy) procedono in parallelo perché non dipendono dalla Safe. Riprendere prima della Fase 6.
+
 ### Decisioni richieste all'utente
 
 Prima di creare la Safe devono essere scelti:
@@ -231,6 +235,21 @@ Per un POC personale evoluto può avere senso una Safe `2-of-3`, purché i tre o
 
 ## 8. Fase 4 — Simulare il trasferimento delle ownership su fork
 
+### Stato esecuzione — 2 agosto 2026
+
+Fase completa, PASS. Rehearsal deterministica eseguita due volte sullo stesso
+`FORK_BLOCK_NUMBER=490447686` con `test/deployment/OwnershipTransfer.fork.test.ts`
+(13/13 PASS in entrambe le esecuzioni). Safe effimera 2-of-3 creata con
+`contracts/mocks/EphemeralMultisig.sol` (non è la Safe di produzione). Matrice
+ownership 22/22 completa, 21/21 trasferimenti riusciti (20 uno-step + Beacon
+due-step), 21/21 revert del vecchio deployer, quorum verificato (una firma
+rifiutata, due firme accettate). Amministrazione, rollback, deposit, withdraw
+e health check post-trasferimento tutti riusciti. Trovato un problema non
+bloccante (`emergencyHandler.emergencyUnpause()` irraggiungibile per un
+mismatch di `msg.sender` con `ProxyGeneral.onlyOwner`), gestito con un
+percorso diretto alternativo verificato e documentato per la Fase 6. Nessuna
+transazione inviata ad Arbitrum One. Evidenza completa in `10_Phase_4_Fork/`.
+
 ### Obiettivo
 
 Evitare di trasferire controllo alla Safe e scoprire dopo che un componente è rimasto sul deployer o che una procedura è irreversibile.
@@ -256,6 +275,29 @@ Alla fine del test nessun componente amministrativo deve essere controllato acci
 Matrice completa `contratto -> owner attuale -> owner atteso -> metodo di trasferimento -> evidenza` senza righe mancanti.
 
 ## 9. Fase 5 — Definire policy economiche e selector whitelist
+
+### Stato esecuzione — 2 agosto 2026
+
+PASS tecnico parziale. Creato control file candidato separato
+(`config.arbitrum-usdc-poc-1.policy-candidate.json`) con state directory
+distinta, sempre `observe`/`disabled`/`autonomous=false`. Trovato e corretto
+un gap tecnico reale: mancava qualunque enforcement di un capitale massimo
+totale; aggiunto `policy.maxTotalCapitalUnits` (opzionale, retrocompatibile)
+in `types.ts`/`config.ts`/`risk.ts`, con test dedicato
+(`test/automation/RiskTotalCapitalCap.test.ts`, 5/5 PASS). Audit selector
+whitelist confermato: **zero selector generici autorizzati** su AaveV3,
+EulerV2, MorphoVault e Morpho (`test/deployment/PolicyWhitelist.fork.test.ts`,
+7/7 PASS, due esecuzioni deterministiche sul blocco `490447686`). Trovata una
+limitazione RPC non risolvibile via codice: Alchemy piano Free limita
+`eth_getLogs` a 10 blocchi per chiamata, rendendo impraticabile la
+ricostruzione storica completa degli eventi `SelectorAllowanceChanged` su
+~6,6M blocchi; sostituita con verifica dello stato attuale, equivalente per
+lo scopo del POC. Trovato un secondo gap non bloccante (FASE5-002):
+`ParameterManager.poolReserveRatio` on-chain è `0`, più permissivo della
+policy off-chain (`reserveMinimumBps=1500`), da correggere in Fase 6/7.
+Restano aperti tutti i valori economici della policy umana e l'approvazione
+esplicita dell'utente: usati i valori POC attuali come placeholder tecnico
+non approvato. Evidenza completa in `11_Phase_5_Policy_e_Whitelist/`.
 
 ### Problema attuale
 

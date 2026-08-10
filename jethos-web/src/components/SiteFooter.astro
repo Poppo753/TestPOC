@@ -1,0 +1,29 @@
+---
+import { siteConfig, sitePath } from '../config/site';
+import BrandLink from './BrandLink.astro';
+---
+
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div>
+      <BrandLink />
+      <p class="muted footer-positioning">
+        A self-custodial financial experience built around explicit ownership, visible routes and
+        verifiable DeFi.
+      </p>
+    </div>
+    {
+      siteConfig.footer.map((group) => (
+        <div>
+          <strong>{group.title}</strong>
+          <div class="footer-links">
+            {group.links.map((link) => (
+              <a href={sitePath(link.href)}>{link.label}</a>
+            ))}
+          </div>
+        </div>
+      ))
+    }
+  </div>
+  <p class="container muted footer-disclaimer">{siteConfig.disclaimer}</p>
+</footer>
