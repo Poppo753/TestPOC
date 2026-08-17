@@ -1,0 +1,96 @@
+/*
+ * Jethos immersive layer v2
+ *
+ * WebGL is a full-viewport background on the four authored scene pages. The
+ * canvas stays decorative and never owns navigation or financial controls.
+ */
+body > [data-site-header] { position: relative; z-index: 1000; }
+body > main { position: relative; z-index: 1; }
+body > [data-site-footer] { position: relative; z-index: 2; }
+.page-grid { z-index: 0; }
+
+.immersive-section { position: relative; padding: 0 0 clamp(1.5rem, 4vw, 3rem); }
+.immersive-shell {
+  position: relative;
+  overflow: visible;
+  min-height: 0;
+  display: block;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.immersive-viewport::after {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(7,16,31,.94) 0 23%, rgba(7,16,31,.58) 42%, rgba(7,16,31,.08) 72%),
+    linear-gradient(180deg, rgba(7,16,31,.5), transparent 38%, rgba(7,16,31,.58));
+}
+.immersive-head { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; border: 0 !important; }
+.immersive-viewport { position: fixed; z-index: -1; inset: 0; width: 100vw; height: 100vh; overflow: hidden; pointer-events: none; }
+.immersive-canvas { position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; opacity: 0; transition: opacity 1s ease; }
+[data-webgl-state="ready"] .immersive-canvas { opacity: .86; }
+.immersive-fallback { position: absolute; z-index: 1; inset: 0; display: grid; place-items: center; pointer-events: none; transition: opacity .5s ease; }
+[data-webgl-state="ready"] .immersive-fallback { opacity: 0; }
+.immersive-status { position: fixed; z-index: 5; right: 1rem; bottom: .8rem; color: rgba(171,183,202,.42); font: 650 .6rem/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: .08em; text-transform: uppercase; }
+.immersive-controls { position: relative; z-index: 4; width: fit-content; max-width: 100%; display: flex; flex-wrap: wrap; gap: .45rem; padding: .45rem; border: 1px solid rgba(181,197,222,.1); border-radius: 999px; background: rgba(7,16,31,.34); backdrop-filter: blur(10px); }
+.immersive-control { min-height: 38px; padding: .52rem .78rem; border: 1px solid transparent; border-radius: 999px; color: var(--text-300); background: transparent; cursor: pointer; font-weight: 740; font-size: .74rem; }
+.immersive-control:hover, .immersive-control:focus-visible, .immersive-control[aria-pressed="true"] { color: white; border-color: rgba(103,232,249,.42); background: rgba(34,211,238,.08); }
+.immersive-legend { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem 1rem; padding: .35rem .55rem; margin-left: 0; color: var(--text-400); font-size: .68rem; }
+.immersive-key { display: inline-flex; align-items: center; gap: .4rem; }
+.immersive-key::before { content: ''; width: .5rem; height: .5rem; border-radius: 50%; background: var(--key); box-shadow: 0 0 14px color-mix(in srgb, var(--key) 65%, transparent); }
+.immersive-key--wallet { --key: var(--wallet); }
+.immersive-key--gate { --key: var(--limit); }
+.immersive-key--vault { --key: var(--vault); }
+.immersive-key--proof { --key: var(--proof); }
+
+/* Each fallback has a different silhouette; an unavailable GPU never creates
+   four identical empty boxes. */
+.fallback-object { position: relative; width: min(72%, 660px); height: 180px; filter: drop-shadow(0 30px 45px rgba(0,0,0,.4)); }
+.fallback-object i { position: absolute; display: block; }
+/* Static echo of the controlled-orbit composition: partial arcs, an amber
+   authorization gate and a small vault core. */
+.fallback--ownership::before { content: ''; position: absolute; left: 2%; right: 46%; top: 63%; height: 1px; background: linear-gradient(90deg, transparent, rgba(87,199,163,.5)); }
+.fallback--ownership::after { content: ''; position: absolute; right: 27%; top: 50%; width: 46px; aspect-ratio: 1; transform: translateY(-50%); border: 2px solid rgba(183,164,237,.6); border-radius: 50%; box-shadow: 0 0 34px rgba(139,115,217,.28), inset 0 0 18px rgba(139,115,217,.22); }
+.fallback--ownership i:nth-child(1) { right: 6%; top: 50%; width: 210px; aspect-ratio: 1; transform: translateY(-50%) rotate(-34deg); border: 13px solid transparent; border-right-color: rgba(103,90,150,.55); border-radius: 50%; }
+.fallback--ownership i:nth-child(2) { right: 16%; top: 50%; width: 140px; aspect-ratio: 1; transform: translateY(-50%) rotate(-30deg); border: 9px solid transparent; border-right-color: rgba(139,120,180,.42); border-radius: 50%; }
+.fallback--ownership i:nth-child(3) { right: 13%; top: 63%; width: 32px; height: 9px; border-radius: 99px; transform: rotate(52deg); background: var(--limit); box-shadow: 0 0 22px rgba(215,166,75,.45); }
+.fallback--journey { display: flex; align-items: center; justify-content: space-between; }
+.fallback--journey::before { content: ''; position: absolute; left: 7%; right: 7%; top: 50%; height: 2px; background: linear-gradient(90deg,var(--wallet),var(--limit),var(--vault),var(--proof)); }
+.fallback--journey i { position: relative; width: 54px; aspect-ratio: 1; border: 6px solid rgba(255,255,255,.16); border-radius: 50%; background: var(--ink-850); box-shadow: 0 0 26px rgba(103,232,249,.12); }
+.fallback--stack { height: 215px; perspective: 700px; }
+.fallback--stack i { left: 22%; width: 56%; height: 52px; border: 1px solid rgba(196,181,253,.42); border-radius: .6rem; transform: rotateX(58deg) rotateZ(-10deg); background: linear-gradient(110deg, rgba(139,92,246,.32), rgba(34,211,238,.08)); box-shadow: 0 20px 30px rgba(0,0,0,.26); }
+.fallback--stack i:nth-child(1) { top: 0; } .fallback--stack i:nth-child(2) { top: 48px; } .fallback--stack i:nth-child(3) { top: 96px; } .fallback--stack i:nth-child(4) { top: 144px; }
+.fallback--reactor { display: flex; align-items: center; justify-content: space-around; }
+.fallback--reactor::before { content: ''; position: absolute; left: 10%; right: 10%; top: 50%; height: 3px; background: linear-gradient(90deg,var(--wallet),rgba(69,221,181,.15)); }
+.fallback--reactor i { position: relative; width: 76px; aspect-ratio: 1; border: 7px solid rgba(103,232,249,.23); border-radius: 50%; background: radial-gradient(circle, rgba(34,211,238,.16), transparent 48%); }
+
+.webgl-debug { position: absolute; z-index: 10; left: .75rem; bottom: .75rem; max-width: 270px; padding: .55rem .7rem; border: 1px solid rgba(103,232,249,.25); border-radius: .5rem; color: var(--cyan-300); background: rgba(7,16,31,.86); font: 600 .65rem/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; pointer-events: none; white-space: pre-line; }
+
+.roadmap-game { padding: 0 0 clamp(3rem, 7vw, 6rem); }
+.roadmap-game__panel { display: grid; grid-template-columns: .72fr 1.28fr; gap: 2rem; padding: clamp(1.25rem,4vw,2.5rem); border: 1px solid rgba(34,211,238,.22); border-radius: var(--radius-xl); background: linear-gradient(145deg, rgba(7,16,31,.94), rgba(16,27,49,.88)); box-shadow: var(--shadow); }
+.roadmap-game__intro, .roadmap-game__body { align-self: center; min-width: 0; }
+.roadmap-game__rail { display: flex; align-items: center; gap: .5rem; margin-bottom: 1.5rem; }
+.roadmap-game__rail span { width: 2rem; height: 2rem; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 50%; color: var(--text-400); font-size: .7rem; font-weight: 850; }
+.roadmap-game__rail .is-complete { color: var(--ink-950); border-color: var(--wallet); background: var(--wallet); }
+.roadmap-game__rail .is-current { color: var(--limit); border-color: var(--limit); box-shadow: 0 0 24px rgba(251,191,36,.18); }
+.roadmap-game__answers { display: grid; gap: .6rem; margin-top: 1rem; }
+.roadmap-answer { width: 100%; padding: .85rem 1rem; color: var(--text-200); text-align: left; border: 1px solid var(--border); border-radius: .75rem; background: rgba(255,255,255,.03); cursor: pointer; }
+.roadmap-answer:hover, .roadmap-answer:focus-visible { color: white; border-color: var(--proof); background: rgba(34,211,238,.06); }
+.roadmap-game__message { margin-top: .8rem; color: var(--limit); font-weight: 750; }
+
+@media (max-width: 760px) {
+  .immersive-section { padding-bottom: 1.25rem; }
+  .immersive-viewport::after { background: linear-gradient(180deg, rgba(7,16,31,.8) 0 34%, rgba(7,16,31,.36) 60%, rgba(7,16,31,.68)); }
+  [data-webgl-state="ready"] .immersive-canvas { opacity: .66; }
+  .immersive-controls { width: 100%; border-radius: 1rem; }
+  .immersive-legend { width: 100%; margin: .35rem 0 0; }
+  .fallback-object { width: 88%; transform: scale(.78); }
+  .roadmap-game__panel { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .immersive-canvas, .immersive-fallback { transition: none; }
+}

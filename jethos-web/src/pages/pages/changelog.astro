@@ -1,0 +1,47 @@
+---
+import { editorialContentRepository } from '../../content/local-repository';
+import Section from '../../design-system/composition/Section.astro';
+import Badge from '../../design-system/primitives/Badge.astro';
+import SourceLabel from '../../design-system/components/SourceLabel.astro';
+import PageHero from '../../design-system/patterns/PageHero.astro';
+import { toChangelogItems } from '../../features/changelog/model';
+import '../../features/changelog/changelog.css';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const changelog = await editorialContentRepository.getChangelog();
+const entries = toChangelogItems(changelog);
+---
+
+<BaseLayout
+  title="Jethos changelog — Product and evidence updates"
+  description="Dated Jethos website, documentation, deployment-record and product-evidence updates."
+  page="changelog"
+  canonicalPath="/pages/changelog.html"
+>
+  <PageHero
+    eyebrow="Changelog"
+    title="Progress you can date and inspect."
+    description="For a proof of concept, changes, corrected assumptions and new evidence are more useful than promotional promises."
+  />
+  <Section>
+    <div class="changelog">
+      {
+        entries.map((entry) => (
+          <article class="changelog-entry">
+            <time datetime={entry.date}>{entry.displayDate}</time>
+            <div>
+              <Badge tone={entry.badge}>{entry.typeLabel}</Badge>
+              <h2>{entry.title}</h2>
+              <ul>
+                {entry.changes.map((change) => (
+                  <li>{change}</li>
+                ))}
+              </ul>
+            </div>
+          </article>
+        ))
+      }
+      <SourceLabel>Structured source: data/product/changelog.json</SourceLabel>
+    </div>
+  </Section>
+</BaseLayout>

@@ -1,0 +1,14 @@
+---
+interface Props {
+  kind?: 'data' | 'column-header' | 'row-header';
+  class?: string;
+}
+
+const { kind = 'data', class: className } = Astro.props;
+const role =
+  kind === 'column-header' ? 'columnheader' : kind === 'row-header' ? 'rowheader' : 'cell';
+---
+
+<div class:list={['comparison-cell', kind !== 'data' && 'comparison-cell--head', className]} {role}>
+  <slot />
+</div>

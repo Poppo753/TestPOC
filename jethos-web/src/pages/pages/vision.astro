@@ -1,0 +1,194 @@
+---
+import Callout from '../../design-system/components/Callout.astro';
+import Card from '../../design-system/components/Card.astro';
+import Cluster from '../../design-system/composition/Cluster.astro';
+import Grid from '../../design-system/composition/Grid.astro';
+import Section from '../../design-system/composition/Section.astro';
+import Split from '../../design-system/composition/Split.astro';
+import Badge from '../../design-system/primitives/Badge.astro';
+import Flow from '../../design-system/patterns/Flow.astro';
+import PageHero from '../../design-system/patterns/PageHero.astro';
+import SectionHeading from '../../design-system/patterns/SectionHeading.astro';
+import Timeline from '../../design-system/patterns/Timeline.astro';
+import '../../features/vision/vision.css';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const day = [
+  [
+    'MORNING',
+    'Review',
+    'Separate wallet liquidity from invested positions and inspect risk changes.',
+  ],
+  [
+    'DECISION',
+    'Invest 1,000 USDC',
+    'Review exact approval, shares, fees, contract and risks before signing.',
+  ],
+  [
+    'AFTERNOON',
+    'Understand a reallocation',
+    'See that reserve increased because a policy threshold was reached.',
+  ],
+  [
+    'EVENING / INCIDENT',
+    'Use or exit',
+    'Withdraw when available—or see clearly that a protocol is paused and capital is unwinding.',
+  ],
+] as const;
+const direction = [
+  [
+    'Multi-asset vault families',
+    'Stablecoin, ETH and BTC products organized by understandable risk profiles.',
+  ],
+  [
+    'Independent EVM deployments',
+    'Chain-specific deployments with explicit configuration and no hidden bridge assumption.',
+  ],
+  [
+    'Composable vault network',
+    'Higher-level vaults after cycle, look-through accounting and liquidity controls are validated.',
+  ],
+  [
+    'Everyday financial experience',
+    'Potential partner-enabled payments, credit and tokenized real-world assets.',
+  ],
+] as const;
+---
+
+<BaseLayout
+  title="Jethos vision — A self-custodial financial home"
+  description="The long-term Jethos vision: protocol infrastructure, a self-custodial app and partner-enabled financial services."
+  page="vision"
+  canonicalPath="/pages/vision.html"
+>
+  <PageHero
+    eyebrow="Vision"
+    title="Digital finance that feels familiar—and remains verifiable."
+    description="Jethos is working toward a self-custodial financial home where people can hold, invest, send and eventually use digital assets without surrendering visibility over their capital."
+  />
+  <Section
+    ><Grid columns={3}
+      ><Card
+        ><Badge tone="validation">Priority now</Badge><h2 class="u-margin-top-4">Protocol</h2><p>
+          Vaults, accounting, integrations, monitoring, automation and constraints.
+        </p></Card
+      ><Card
+        ><Badge tone="planned">Progressive</Badge><h2 class="u-margin-top-4">App</h2><p>
+          A wallet-led consumer experience that separates available assets from invested capital.
+        </p></Card
+      ><Card
+        ><Badge tone="vision">Future</Badge><h2 class="u-margin-top-4">Services</h2><p>
+          Payments, cards, credit and tokenized assets through specialized, compliant partners.
+        </p></Card
+      ></Grid
+    ></Section
+  >
+  <Section band
+    ><SectionHeading
+      eyebrow="Product vision · not currently available"
+      title="What the complete financial home could feel like."
+      description="This dashboard is an interface concept, not a screenshot of the PoC or a promise of partner-enabled services."
+    /><div class="vision-dashboard">
+      <div class="vision-dashboard__balance">
+        <Cluster justify="between"
+          ><Badge tone="vision">Product vision</Badge><Badge tone="illustrative">Illustrative</Badge
+          ></Cluster
+        ><span class="metric__label u-margin-top-6">Total visible assets</span><strong
+          >$48,260</strong
+        ><div class="balance-split">
+          <div class="balance-card balance-card--wallet">
+            <span>Available</span><strong>$18,400</strong>
+          </div><div class="balance-card balance-card--vault">
+            <span>Invested</span><strong>$29,860</strong>
+          </div>
+        </div><div class="allocation u-margin-top-4">
+          <div class="allocation-row">
+            <span>Stablecoins</span><div class="allocation-track">
+              <div class="allocation-fill allocation-fill--48"></div>
+            </div><strong>48%</strong>
+          </div><div class="allocation-row">
+            <span>ETH</span><div class="allocation-track">
+              <div class="allocation-fill allocation-fill--34"></div>
+            </div><strong>34%</strong>
+          </div><div class="allocation-row">
+            <span>BTC</span><div class="allocation-track">
+              <div class="allocation-fill allocation-fill--18"></div>
+            </div><strong>18%</strong>
+          </div>
+        </div>
+      </div><div class="vision-dashboard__modules">
+        <div>
+          <Badge tone="vision">Future</Badge><h3>Transfer</h3><p>Send from a clear asset view.</p>
+        </div><div>
+          <Badge tone="vision">Future</Badge><h3>Vault selection</h3><p>
+            Choose goal and risk profile.
+          </p>
+        </div><div>
+          <Badge tone="illustrative">Concept</Badge><h3>Risk status</h3><p>
+            See route changes and warnings.
+          </p>
+        </div><div>
+          <Badge tone="vision">Partner-enabled</Badge><h3>Cards & credit</h3><p>
+            Only through suitable regulated partners.
+          </p>
+        </div>
+      </div>
+    </div></Section
+  >
+  <Section
+    ><Split
+      ><div>
+        <p class="eyebrow">Why</p><h2>DeFi is powerful, but fragmented.</h2><p>
+          Users navigate wallets, chains, markets, bridges, rewards, liquidations and interfaces to
+          perform activities that should be understandable from one place.
+        </p><p>
+          Traditional financial interfaces are familiar but rarely expose a real-time, verifiable
+          map of how deposited capital is used.
+        </p>
+      </div><Card variant="accent"
+        ><h3>Jethos direction</h3><p>
+          Combine the ownership model of self-custody with the usability of digital banking and the
+          transparency of public infrastructure.
+        </p><p class="muted">
+          This direction does not make Jethos a regulated bank and does not turn smart contracts
+          into insured deposits.
+        </p></Card
+      ></Split
+    ></Section
+  >
+  <Section
+    ><SectionHeading
+      eyebrow="A day with Jethos"
+      title="The outcome is ordinary. The infrastructure is not."
+    /><Flow label="A day with Jethos"
+      >{
+        day.map(([label, title, copy]) => (
+          <Card class="flow-step">
+            <>
+              <span class="flow-step__number">{label}</span>
+              <h3>{title}</h3>
+              <p>{copy}</p>
+            </>
+          </Card>
+        ))
+      }</Flow
+    ></Section
+  >
+  <Section
+    ><SectionHeading title="Five-year direction" /><Timeline
+      >{
+        direction.map(([title, copy]) => (
+          <Card class="timeline-item">
+            <>
+              <h3>{title}</h3>
+              <p>{copy}</p>
+            </>
+          </Card>
+        ))
+      }</Timeline
+    ><Callout tone="warning" class="u-margin-top-6"
+      ><strong>Vision is not availability.</strong> Every future capability needs technical validation;
+      regulated services also require suitable partners, legal analysis and compliance.</Callout
+    ></Section
+  >
+</BaseLayout>

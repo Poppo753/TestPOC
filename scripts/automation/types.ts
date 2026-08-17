@@ -36,6 +36,17 @@ export interface AutomationConfig {
     requireOracleFreshness: boolean;
     supplyOnly: true;
     verificationToleranceBps: number;
+    /**
+     * Optional absolute cap on total assets under management (custody + all
+     * protocol balances), in base asset smallest units. Introduced by Fase 5
+     * (docs/New_Doc/1_Documentation/4. First Deployment/11_Phase_5_Policy_e_Whitelist/)
+     * as a technical gap fix: no prior version of this config enforced a
+     * total-capital ceiling. Optional and backward compatible: omitted or
+     * absent means no cap is enforced (identical behavior to before Fase 5).
+     * The numeric value is an economic decision reserved for the user and
+     * must never be inferred by an assistant.
+     */
+    maxTotalCapitalUnits?: string;
   };
   autonomous: {
     enabled: boolean;

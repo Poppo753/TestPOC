@@ -1,0 +1,35 @@
+{
+  "version": "2.0.0",
+  "updatedAt": "2026-07-23",
+  "horizons": [
+    {
+      "id": "today",
+      "title": "Today — Validate the foundation",
+      "status": "validation",
+      "description": "Validate accounting, withdrawals, automation and recovery for the private USDC Conservative PoC.",
+      "exitCriteria": ["Accounting reconciles", "Normal withdrawals recover expected capital", "No unexplained loss", "Monitoring and pause procedures are reproducible"]
+    },
+    {
+      "id": "next",
+      "title": "Next — Expand the experience",
+      "status": "planned",
+      "description": "Consolidate the app, risk methodology and additional asset/risk families after the PoC criteria are met.",
+      "exitCriteria": ["Product policies approved", "Vault-specific tests complete", "Clear risk and liquidity disclosures", "Independent review before public capital"]
+    },
+    {
+      "id": "later",
+      "title": "Later — Compose and scale",
+      "status": "planned",
+      "description": "Independent EVM deployments and progressively composable vaults with cycle and look-through controls.",
+      "exitCriteria": ["DAG constraints tested", "Cross-vault accounting validated", "Chain-specific configuration certified", "Liquidity model documented"]
+    },
+    {
+      "id": "vision",
+      "title": "Vision — A complete self-custodial financial home",
+      "status": "vision",
+      "description": "Hold, invest, send and eventually access partner-enabled payments, credit and tokenized assets from one transparent experience.",
+      "exitCriteria": ["Requires specialized partners", "Requires legal and compliance analysis", "Never implied by the current PoC"]
+    }
+  ]
+}
+

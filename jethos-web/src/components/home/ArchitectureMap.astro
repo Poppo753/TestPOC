@@ -1,0 +1,216 @@
+<section
+  class="section architecture-section"
+  id="architecture"
+  data-architecture-map
+  data-boundary-scene-state="network"
+>
+  <div class="container">
+    <header class="architecture-heading reveal">
+      <div>
+        <p class="eyebrow">Modular architecture</p>
+        <h2>One interface. Modular vaults. Explicit routes.</h2>
+        <p class="lede">
+          Follow the current PoC or explore how Plasma risk vaults can coordinate matching master
+          vaults across multiple networks.
+        </p>
+      </div>
+      <div class="architecture-mode" role="group" aria-label="Architecture view">
+        <button type="button" data-architecture-mode="today" aria-pressed="false">Today</button>
+        <button type="button" data-architecture-mode="direction" aria-pressed="true"
+          >Product direction</button
+        >
+      </div>
+    </header>
+
+    <div class="architecture-map reveal">
+      <div class="architecture-today" data-architecture-panel="today" hidden>
+        <div class="architecture-today__path">
+          <article>
+            <span>01 · Interface</span><strong>Jethos App</strong><small
+              >Choice and visibility</small
+            >
+          </article>
+          <i></i>
+          <article>
+            <span>02 · Current network</span><strong>Arbitrum</strong><small
+              >Private validation</small
+            >
+          </article>
+          <i></i>
+          <article class="is-current">
+            <span>03 · Current vault</span><strong>USDC Conservative</strong><small
+              >Supply-only PoC</small
+            >
+          </article>
+          <i></i>
+          <article>
+            <span>04 · Approved adapters</span><strong>Aave · Euler · Morpho</strong><small
+              >Recorded integrations</small
+            >
+          </article>
+        </div>
+        <footer>
+          <span class="badge badge--poc">Current validation path</span><p>
+            This view represents the intentionally limited PoC—not the complete multi-chain
+            architecture.
+          </p>
+        </footer>
+      </div>
+
+      <div class="architecture-direction" data-architecture-panel="direction">
+        <div class="architecture-app-node">
+          <img src="assets/brand/jethos-mark.svg" alt="" /><div>
+            <span>Jethos App</span><strong>One control and visibility layer</strong>
+          </div>
+        </div>
+        <div class="architecture-trunk" aria-hidden="true"><i></i></div>
+
+        <article class="architecture-plasma">
+          <header>
+            <span class="badge badge--vision">Conceptual direction</span><small>PLASMA</small>
+          </header>
+          <h3>Main contract</h3>
+          <p>
+            Coordinates registry, policy and cross-chain allocation routes. Local vaults remain
+            visible as separate positions.
+          </p>
+          <div class="architecture-risk-selector" role="group" aria-label="Plasma risk vault">
+            <button type="button" data-architecture-risk="conservative" aria-pressed="false"
+              ><i>01</i><span>Conservative</span><small>Lower risk</small></button
+            >
+            <button type="button" data-architecture-risk="balanced" aria-pressed="true"
+              ><i>02</i><span>Balanced</span><small>Moderate risk</small></button
+            >
+            <button type="button" data-architecture-risk="opportunity" aria-pressed="false"
+              ><i>03</i><span>Opportunity</span><small>Higher risk</small></button
+            >
+          </div>
+        </article>
+
+        <div class="architecture-crosschain-label">
+          <span>Cross-chain allocation</span><strong
+            >Risk tier remains consistent across every destination</strong
+          >
+        </div>
+        <div class="architecture-chain-bus" aria-hidden="true"><i></i><i></i><i></i></div>
+
+        <div class="architecture-chains">
+          <article class="architecture-chain is-expanded" data-architecture-chain="arbitrum">
+            <button type="button" class="architecture-chain__header" aria-expanded="true">
+              <span><i></i>Arbitrum</span><em>Example network</em>
+            </button>
+            <div class="architecture-master">
+              <small data-master-tier>Balanced</small><strong data-master-name
+                >Balanced Master Vault</strong
+              ><span>Network-level coordinator</span>
+            </div>
+            <div class="architecture-chain__detail">
+              <div class="architecture-asset-vaults">
+                <button type="button" data-architecture-asset="usdc"
+                  ><i>USDC</i><span data-child-tier>Balanced Vault</span></button
+                >
+                <button type="button" data-architecture-asset="eth"
+                  ><i>ETH</i><span data-child-tier>Balanced Vault</span></button
+                >
+                <button type="button" data-architecture-asset="btc"
+                  ><i>BTC</i><span data-child-tier>Balanced Vault</span></button
+                >
+              </div>
+              <div class="architecture-adapters">
+                <span>Approved adapters</span><strong>Aave · Euler · Morpho</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="architecture-chain" data-architecture-chain="base">
+            <button type="button" class="architecture-chain__header" aria-expanded="false">
+              <span><i></i>Base</span><em>Example network</em>
+            </button>
+            <div class="architecture-master">
+              <small data-master-tier>Balanced</small><strong data-master-name
+                >Balanced Master Vault</strong
+              ><span>Network-level coordinator</span>
+            </div>
+            <div class="architecture-chain__detail">
+              <div class="architecture-asset-vaults">
+                <button type="button" data-architecture-asset="usdc"
+                  ><i>USDC</i><span data-child-tier>Balanced Vault</span></button
+                >
+                <button type="button" data-architecture-asset="eth"
+                  ><i>ETH</i><span data-child-tier>Balanced Vault</span></button
+                >
+                <button type="button" data-architecture-asset="btc"
+                  ><i>BTC</i><span data-child-tier>Balanced Vault</span></button
+                >
+              </div>
+              <div class="architecture-adapters">
+                <span>Approved adapters</span><strong>Network-specific modules</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="architecture-chain" data-architecture-chain="ethereum">
+            <button type="button" class="architecture-chain__header" aria-expanded="false">
+              <span><i></i>Ethereum</span><em>Example network</em>
+            </button>
+            <div class="architecture-master">
+              <small data-master-tier>Balanced</small><strong data-master-name
+                >Balanced Master Vault</strong
+              ><span>Network-level coordinator</span>
+            </div>
+            <div class="architecture-chain__detail">
+              <div class="architecture-asset-vaults">
+                <button type="button" data-architecture-asset="usdc"
+                  ><i>USDC</i><span data-child-tier>Balanced Vault</span></button
+                >
+                <button type="button" data-architecture-asset="eth"
+                  ><i>ETH</i><span data-child-tier>Balanced Vault</span></button
+                >
+                <button type="button" data-architecture-asset="btc"
+                  ><i>BTC</i><span data-child-tier>Balanced Vault</span></button
+                >
+              </div>
+              <div class="architecture-adapters">
+                <span>Approved adapters</span><strong>Network-specific modules</strong>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <aside class="architecture-asset-popover" data-architecture-asset-popover hidden>
+          <header>
+            <div>
+              <span>Illustrative route candidates</span><strong data-asset-popover-title
+                >Arbitrum · Balanced USDC Vault</strong
+              >
+            </div>
+            <button type="button" data-asset-popover-close aria-label="Close route candidates"
+              >×</button
+            >
+          </header>
+          <p data-asset-popover-copy>
+            Example modules that could be evaluated for this network, asset and risk tier.
+          </p>
+          <div class="architecture-asset-popover__list" data-asset-popover-list></div>
+          <footer>
+            <i></i><span
+              >Examples only · every route requires dedicated validation and approval.</span
+            >
+          </footer>
+        </aside>
+
+        <footer class="architecture-note">
+          <i></i><p>
+            Plasma can also contain asset-specific child vaults. They are intentionally collapsed
+            here to keep the hierarchy readable.
+          </p><strong>Conceptual topology · not fully implemented</strong>
+        </footer>
+      </div>
+    </div>
+    <div class="architecture-action reveal">
+      <a class="button button--secondary" href="pages/protocol.html"
+        >Explore the technical architecture</a
+      >
+    </div>
+  </div>
+</section>

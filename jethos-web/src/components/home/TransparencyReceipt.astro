@@ -1,0 +1,188 @@
+<section class="section" id="transparency" data-boundary-scene-state="transparent">
+  <div class="container receipt-layout">
+    <div class="reveal">
+      <p class="eyebrow">Jethos Transparency Receipt</p><h2>
+        A vault position should explain itself.
+      </h2><p class="lede">
+        The goal is not merely to show where capital sits, but why a route was selected, what it
+        costs, whether it can exit and which evidence supports it.
+      </p><p class="callout">
+        <strong>Explainability is part of the product.</strong> A balance without route, policy and proof
+        is incomplete.
+      </p>
+    </div>
+    <article
+      class="proof-receipt receipt-dashboard reveal"
+      aria-label="Illustrative transparency receipt"
+    >
+      <div class="cluster cluster--between">
+        <div>
+          <span class="source-label">USDC CONSERVATIVE · EXAMPLE</span><h3>
+            Vault position receipt
+          </h3>
+        </div><span class="badge badge--illustrative">Illustrative</span>
+      </div>
+      <div class="receipt-total"><span>Position value</span><strong>1,024.71 USDC</strong></div>
+      <div class="receipt-grid">
+        <div class="receipt-stat"><span>Expected net yield</span><strong>4.18%</strong></div>
+        <div class="receipt-stat receipt-stat--costs">
+          <span>Estimated costs</span>
+          <strong>3.42 USDC</strong>
+          <button
+            class="receipt-help"
+            type="button"
+            aria-label="Show estimated cost breakdown"
+            aria-describedby="receipt-cost-breakdown">?</button
+          >
+          <div class="receipt-cost-tooltip" id="receipt-cost-breakdown" role="tooltip">
+            <strong>Illustrative cost breakdown</strong>
+            <span><em>Network execution</em><b>0.18 USDC</b></span>
+            <span><em>Vault entry and exit</em><b>0.24 USDC</b></span>
+            <span><em>Underlying protocols</em><b>3.00 USDC</b></span>
+            <span class="receipt-cost-total"><em>Total estimate</em><b>3.42 USDC</b></span>
+          </div>
+        </div>
+        <div class="receipt-stat"><span>Exit status</span><strong>Available now</strong></div>
+        <div class="receipt-stat">
+          <span>Evidence snapshot</span><strong>Illustrative · not live</strong><small
+            >In production: block and timestamp</small
+          >
+        </div>
+      </div>
+      <div class="receipt-allocation" data-receipt-allocation-chart>
+        <div class="receipt-allocation__heading">
+          <h4>Vault current allocations</h4>
+          <span>Illustrative snapshot</span>
+        </div>
+        <div class="receipt-allocation__layout">
+          <svg
+            class="allocation-donut"
+            viewBox="0 0 120 120"
+            role="group"
+            aria-label="Illustrative allocation: 35% liquid reserve, 25% Aave V3, 20% Euler V2 and 20% Morpho"
+          >
+            <circle class="allocation-donut__track" cx="60" cy="60" r="42" pathLength="100"
+            ></circle>
+            <g transform="rotate(-90 60 60)">
+              <circle
+                class="allocation-donut__slice allocation-donut__slice--reserve"
+                data-receipt-slice="reserve"
+                cx="60"
+                cy="60"
+                r="42"
+                pathLength="100"
+                stroke-dasharray="35 65"
+                stroke-dashoffset="0"
+                tabindex="0"
+                role="button"
+                aria-label="Liquid reserve: 35 percent allocation, 0.0 percent illustrative APY"
+              ></circle>
+              <circle
+                class="allocation-donut__slice allocation-donut__slice--aave"
+                data-receipt-slice="aave"
+                cx="60"
+                cy="60"
+                r="42"
+                pathLength="100"
+                stroke-dasharray="25 75"
+                stroke-dashoffset="-35"
+                tabindex="0"
+                role="button"
+                aria-label="Aave V3: 25 percent allocation, 4.1 percent illustrative APY"></circle>
+              <circle
+                class="allocation-donut__slice allocation-donut__slice--euler"
+                data-receipt-slice="euler"
+                cx="60"
+                cy="60"
+                r="42"
+                pathLength="100"
+                stroke-dasharray="20 80"
+                stroke-dashoffset="-60"
+                tabindex="0"
+                role="button"
+                aria-label="Euler V2: 20 percent allocation, 5.3 percent illustrative APY"></circle>
+              <circle
+                class="allocation-donut__slice allocation-donut__slice--morpho"
+                data-receipt-slice="morpho"
+                cx="60"
+                cy="60"
+                r="42"
+                pathLength="100"
+                stroke-dasharray="20 80"
+                stroke-dashoffset="-80"
+                tabindex="0"
+                role="button"
+                aria-label="Morpho: 20 percent allocation, 4.8 percent illustrative APY"></circle>
+            </g>
+            <text x="60" y="57" text-anchor="middle" data-receipt-chart-value>100%</text>
+            <text x="60" y="70" text-anchor="middle" data-receipt-chart-label>mapped</text>
+          </svg>
+          <div class="allocation allocation--receipt">
+            <div class="allocation-head" aria-hidden="true">
+              <span></span><span></span><span>Allocation</span><span>APY</span>
+            </div>
+            <div
+              class="allocation-row allocation-row--reserve"
+              data-receipt-allocation="reserve"
+              tabindex="0"
+              role="button"
+              aria-label="Liquid reserve: 35 percent allocation, 0.0 percent illustrative APY"
+            >
+              <span><i></i>Liquid reserve</span><div class="allocation-track">
+                <div class="allocation-fill" style="--allocation:35%"></div>
+              </div><strong>35%</strong><b>0.0%</b>
+            </div>
+            <div
+              class="allocation-row allocation-row--aave"
+              data-receipt-allocation="aave"
+              tabindex="0"
+              role="button"
+              aria-label="Aave V3: 25 percent allocation, 4.1 percent illustrative APY"
+            >
+              <span><i></i>Aave V3</span><div class="allocation-track">
+                <div class="allocation-fill" style="--allocation:25%"></div>
+              </div><strong>25%</strong><b>4.1%</b>
+            </div>
+            <div
+              class="allocation-row allocation-row--euler"
+              data-receipt-allocation="euler"
+              tabindex="0"
+              role="button"
+              aria-label="Euler V2: 20 percent allocation, 5.3 percent illustrative APY"
+            >
+              <span><i></i>Euler V2</span><div class="allocation-track">
+                <div class="allocation-fill" style="--allocation:20%"></div>
+              </div><strong>20%</strong><b>5.3%</b>
+            </div>
+            <div
+              class="allocation-row allocation-row--morpho"
+              data-receipt-allocation="morpho"
+              tabindex="0"
+              role="button"
+              aria-label="Morpho: 20 percent allocation, 4.8 percent illustrative APY"
+            >
+              <span><i></i>Morpho</span><div class="allocation-track">
+                <div class="allocation-fill" style="--allocation:20%"></div>
+              </div><strong>20%</strong><b>4.8%</b>
+            </div>
+            <small>APYs are illustrative and may change.</small>
+          </div>
+        </div>
+      </div>
+      <div class="receipt-decision">
+        <span>Last allocation decision</span><strong
+          >Reserve increased because Euler utilization exceeded the illustrative policy threshold.</strong
+        >
+      </div>
+      <div class="proof-row proof-row--explained">
+        <span>Allocation rationale<small>Why this mix was selected.</small></span><strong
+          >Best eligible result after yield, costs, liquidity and risk limits</strong
+        >
+      </div>
+      <div class="proof-row proof-row--explained">
+        <span>Verification evidence<small>What lets you verify it independently.</small></span
+        ><strong>Transaction · contract · block · timestamp</strong>
+      </div>
+    </article>
+  </div>
+</section>

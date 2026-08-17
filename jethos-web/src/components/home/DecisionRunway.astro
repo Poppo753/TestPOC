@@ -1,0 +1,86 @@
+<section class="section decision-section" id="risk-intelligence" data-boundary-scene-state="route">
+  <div class="container decision-layout">
+    <div class="decision-copy reveal">
+      <p class="eyebrow">Risk-adjusted intelligence</p>
+      <h2>The highest displayed APY is not automatically the best result.</h2>
+      <p class="lede">
+        Jethos is intended to compare expected return with costs, liquidity, capacity and risk
+        policy before an opportunity becomes eligible.
+      </p>
+      <div class="decision-principle">
+        <span>Headline APY</span><i>≠</i><strong>Best eligible outcome</strong>
+      </div>
+      <a class="button button--secondary" href="pages/risk-transparency.html"
+        >See the risk framework</a
+      >
+    </div>
+
+    <article
+      class="decision-runway reveal"
+      data-decision-runway
+      aria-labelledby="decision-runway-title"
+    >
+      <header class="decision-runway__header">
+        <span class="badge badge--illustrative">Illustrative decision model</span>
+        <p class="eyebrow">Route selection</p>
+        <h3 id="decision-runway-title">Three opportunities. One explainable decision.</h3>
+      </header>
+
+      <div class="decision-candidates" aria-label="Illustrative candidate routes">
+        <button
+          type="button"
+          class="decision-candidate decision-candidate--selected is-active"
+          data-decision-route="route-a"
+          aria-pressed="true"
+        >
+          <span>Route A</span><strong>4.8%</strong><small>Headline APY</small><em>Selected</em>
+        </button>
+        <button
+          type="button"
+          class="decision-candidate decision-candidate--watch"
+          data-decision-route="route-b"
+          aria-pressed="false"
+        >
+          <span>Route B</span><strong>6.1%</strong><small>Headline APY</small><em>Watch</em>
+        </button>
+        <button
+          type="button"
+          class="decision-candidate decision-candidate--excluded"
+          data-decision-route="route-c"
+          aria-pressed="false"
+        >
+          <span>Route C</span><strong>7.4%</strong><small>Headline APY</small><em>Excluded</em>
+        </button>
+      </div>
+
+      <div class="decision-gates" aria-label="Decision checks">
+        <div data-decision-gate><i>01</i><span>Net yield</span></div>
+        <div data-decision-gate><i>02</i><span>Liquidity</span></div>
+        <div data-decision-gate><i>03</i><span>Capacity</span></div>
+        <div data-decision-gate><i>04</i><span>Risk policy</span></div>
+      </div>
+
+      <div class="decision-readout" aria-live="polite">
+        <div class="decision-readout__title">
+          <span class="decision-state decision-state--eligible" data-decision-state
+            >Eligible · selected</span
+          >
+          <h4 data-decision-name>Route A · Liquid lending</h4>
+        </div>
+        <div class="decision-readout__metrics">
+          <div><span>Estimated net yield</span><strong data-decision-net>4.4%</strong></div>
+          <div><span>Liquidity</span><strong data-decision-liquidity>Strong</strong></div>
+          <div><span>Policy result</span><strong data-decision-policy>Pass</strong></div>
+        </div>
+        <p data-decision-reason>
+          Selected because it remains the strongest eligible outcome after estimated costs,
+          liquidity and policy limits.
+        </p>
+      </div>
+
+      <footer>
+        <i></i><span>Illustrative values—not live opportunities or promised returns.</span>
+      </footer>
+    </article>
+  </div>
+</section>

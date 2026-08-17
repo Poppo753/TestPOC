@@ -1,0 +1,169 @@
+---
+import { editorialContentRepository } from '../../content/local-repository';
+import Callout from '../../design-system/components/Callout.astro';
+import Card from '../../design-system/components/Card.astro';
+import SourceLabel from '../../design-system/components/SourceLabel.astro';
+import Grid from '../../design-system/composition/Grid.astro';
+import Section from '../../design-system/composition/Section.astro';
+import Badge from '../../design-system/primitives/Badge.astro';
+import DataTable from '../../design-system/patterns/DataTable.astro';
+import PageHero from '../../design-system/patterns/PageHero.astro';
+import SectionHeading from '../../design-system/patterns/SectionHeading.astro';
+import StatusLedger from '../../design-system/patterns/StatusLedger.astro';
+import StatusLedgerRow from '../../design-system/patterns/StatusLedgerRow.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const riskPolicy = await editorialContentRepository.getRiskPolicy();
+const displayedRules = riskPolicy.recordedRules.slice(0, 3);
+const pendingRows = [
+  ['Minimum liquid reserve', 'Minimum liquid reserve'],
+  ['Maximum protocol exposure', 'Maximum exposure per protocol'],
+  ['Oracle, depeg and utilization thresholds', 'Oracle staleness threshold'],
+  ['Withdrawal stress assumptions', 'Withdrawal stress assumptions'],
+] as const;
+---
+
+<BaseLayout
+  title="Risk and transparency — Jethos"
+  description="Inspect recorded rules, open policy decisions and an illustrative risk-adjusted allocation example for Jethos vaults."
+  page="risk"
+  canonicalPath="/pages/risk-transparency.html"
+>
+  <PageHero
+    eyebrow="Risk & transparency"
+    title="Simple profiles. Measurable constraints."
+    description="Conservative, Balanced and Advanced must become quantitative policies—not labels of safety. Undecided limits are shown as pending."
+  />
+  <Section>
+    <Grid columns={3}>
+      <Card
+        ><Badge tone="poc">Conservative PoC</Badge><h3>Preservation and liquidity</h3><p>
+          Supply-only scope today; reserve and concentration targets still require approved policy.
+        </p></Card
+      >
+      <Card
+        ><Badge tone="planned">Balanced</Badge><h3>Controlled complexity</h3><p>
+          Selected composed strategies only after dedicated constraints and evidence.
+        </p></Card
+      >
+      <Card
+        ><Badge tone="vision">Advanced</Badge><h3>Higher complexity</h3><p>
+          Potential leverage or hedging after strategy-specific validation and hard limits.
+        </p></Card
+      >
+    </Grid>
+  </Section>
+  <Section band>
+    <SectionHeading eyebrow="USDC Conservative policy" title="Recorded rules and open decisions." />
+    <StatusLedger kind="policy" label="USDC Conservative policy rules">
+      {
+        displayedRules.map((rule) => (
+          <StatusLedgerRow kind="policy" label={rule.label} value={rule.value}>
+            <Badge tone={rule.state}>
+              {rule.state === 'recorded' ? 'Recorded' : 'Implemented'}
+            </Badge>
+          </StatusLedgerRow>
+        ))
+      }
+      {
+        pendingRows.map(([label, sourceDecision]) => {
+          if (!riskPolicy.pendingDecisions.includes(sourceDecision)) {
+            throw new Error(`Risk decision missing from source: ${sourceDecision}`);
+          }
+          return (
+            <StatusLedgerRow kind="policy" {label} value="Policy decision pending" pending>
+              <Badge tone="planned">Pending</Badge>
+            </StatusLedgerRow>
+          );
+        })
+      }
+    </StatusLedger>
+    <SourceLabel>
+      Source model: data/product/risk-policy.json · updated {riskPolicy.updatedAt}
+    </SourceLabel>
+  </Section>
+  <Section>
+    <div class="receipt-layout">
+      <div>
+        <p class="eyebrow">Illustrative decision</p>
+        <h2>Higher APY can receive a lower allocation.</h2>
+        <p>
+          Return is evaluated with liquidity, maturity, utilization and concentration. This example
+          demonstrates reasoning only; it is not a live allocation or approved policy.
+        </p>
+        <Callout tone="warning"
+          ><strong>Example data.</strong> All APYs and reasons in this block are illustrative.</Callout
+        >
+      </div>
+      <Card>
+        <DataTable label="Illustrative risk-adjusted allocation">
+          <table>
+            <thead
+              ><tr
+                ><th>Opportunity</th><th>Nominal APY</th><th>Illustrative decision</th><th>Why</th
+                ></tr
+              ></thead
+            >
+            <tbody>
+              {
+                riskPolicy.illustrativeScenario.opportunities.map((opportunity) => (
+                  <tr>
+                    <>
+                      <td>{opportunity.protocol}</td>
+                      <td>{opportunity.nominalApy}</td>
+                      <td>{opportunity.decision}</td>
+                      <td>{opportunity.reason}</td>
+                    </>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </DataTable>
+      </Card>
+    </div>
+  </Section>
+  <Section>
+    <SectionHeading title="What risk analysis must cover" />
+    <Grid columns={4}>
+      <Card variant="soft"
+        ><h3>Smart contracts</h3><p>
+          Audits, maturity, incidents, upgrades and bug bounties.
+        </p></Card
+      >
+      <Card variant="soft"
+        ><h3>Markets</h3><p>TVL, utilization, liquidity and concentration.</p></Card
+      >
+      <Card variant="soft"
+        ><h3>Assets & oracles</h3><p>Depeg, wrappers, issuers, staleness and manipulation.</p></Card
+      >
+      <Card variant="soft"
+        ><h3>Operations</h3><p>Keys, monitoring, replay and emergency procedures.</p></Card
+      >
+    </Grid>
+  </Section>
+  <Section band>
+    <Callout tone="warning"
+      ><strong>Risk cannot be eliminated.</strong> Smart contracts, protocols, assets, oracles, sequencers
+      and operational systems can fail. Liquidity can disappear.</Callout
+    >
+    <h2 class="u-margin-top-12">Data provenance</h2>
+    <Grid columns={3}>
+      <Card
+        ><Badge tone="live">Live</Badge><p>
+          Timestamped chain read with explicit failure state.
+        </p></Card
+      >
+      <Card
+        ><Badge tone="poc">Recorded</Badge><p>
+          Versioned local deployment or policy record; verify freshness.
+        </p></Card
+      >
+      <Card
+        ><Badge tone="illustrative">Illustrative</Badge><p>
+          Explanatory example, never an account value or quote.
+        </p></Card
+      >
+    </Grid>
+  </Section>
+</BaseLayout>

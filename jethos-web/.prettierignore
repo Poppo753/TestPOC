@@ -1,0 +1,14 @@
+.astro/
+dist/
+node_modules/
+playwright-report/
+test-results/
+coverage/
+public/assets/brand/
+public/content/docs/
+src/content/data/
+src/content/docs/
+src/styles/legacy/
+src/features/webgl/legacy/
+src/features/demo/legacy/
+src/features/app/legacy/

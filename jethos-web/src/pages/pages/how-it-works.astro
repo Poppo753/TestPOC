@@ -1,0 +1,182 @@
+---
+import Callout from '../../design-system/components/Callout.astro';
+import Card from '../../design-system/components/Card.astro';
+import DataRow from '../../design-system/components/DataRow.astro';
+import SourceLabel from '../../design-system/components/SourceLabel.astro';
+import Section from '../../design-system/composition/Section.astro';
+import Split from '../../design-system/composition/Split.astro';
+import Badge from '../../design-system/primitives/Badge.astro';
+import Button from '../../design-system/primitives/Button.astro';
+import ComparisonCell from '../../design-system/patterns/ComparisonCell.astro';
+import ComparisonGrid from '../../design-system/patterns/ComparisonGrid.astro';
+import ComparisonRow from '../../design-system/patterns/ComparisonRow.astro';
+import PageHero from '../../design-system/patterns/PageHero.astro';
+import SectionHeading from '../../design-system/patterns/SectionHeading.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const journey = [
+  ['01', 'Hold', 'Assets remain at the address controlled by your wallet.'],
+  ['02', 'Authorize', 'You approve a known contract for a defined token amount.'],
+  ['03', 'Deposit', 'The vault receives USDC and issues shares for your position.'],
+  [
+    '04',
+    'Allocate & monitor',
+    'Eligible modules can route capital while evidence remains visible.',
+  ],
+  ['05', 'Withdraw or use', 'Shares are redeemed under current vault and liquidity conditions.'],
+] as const;
+const receipt = [
+  ['Wallet balance before', '2,500 USDC'],
+  ['Exact approval', '1,000 USDC'],
+  ['Illustrative deposit fee', '0 USDC'],
+  ['Illustrative shares received', 'Depends on current accounting'],
+  ['Wallet balance after', '1,500 USDC'],
+  ['Vault position', 'Represented by shares'],
+] as const;
+---
+
+<BaseLayout
+  title="How Jethos works — Wallets, vaults and withdrawals"
+  description="Follow the five-state journey from wallet control to authorization, vault allocation, monitoring and exit."
+  page="how"
+  canonicalPath="/pages/how-it-works.html"
+  webglScene="journey"
+>
+  <PageHero eyebrow="How it works" title="One explicit route. Five understandable states."
+    ><p class="lede">
+      <strong>What stays in your wallet stays under your control.</strong> Authorization, deposit, allocation
+      and withdrawal are separate states with different rules and risks.
+    </p></PageHero
+  >
+  <section class="immersive-section" aria-labelledby="journey-title">
+    <div class="container immersive-shell">
+      <header class="immersive-head">
+        <div>
+          <span class="eyebrow">Capital Journey · interactive model</span><h2 id="journey-title">
+            From available to invested—and back.
+          </h2>
+        </div><p class="muted">
+          Select a step to follow one conceptual capital unit. The model explains sequence, not live
+          execution or guaranteed liquidity.
+        </p>
+      </header><div class="immersive-viewport" data-webgl-host>
+        <div class="immersive-fallback" aria-hidden="true">
+          <div class="fallback-object fallback--journey"><i></i><i></i><i></i><i></i></div>
+        </div><span class="immersive-status" data-webgl-status>Loading visual</span>
+      </div><div class="immersive-controls" aria-label="Capital journey steps">
+        {
+          journey.map(([number, title], index) => (
+            <button
+              class="immersive-control"
+              type="button"
+              data-scene-step
+              aria-pressed={index === 0}
+            >
+              {number} {title}
+            </button>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+  <Section
+    ><div class="boundary-steps">
+      {
+        journey.map(([number, title, copy]) => (
+          <article>
+            <>
+              <span>{number}</span>
+              <strong>{title}</strong>
+              <small>{copy}</small>
+            </>
+          </article>
+        ))
+      }
+    </div></Section
+  >
+  <Section band
+    ><div class="receipt-layout">
+      <div>
+        <p class="eyebrow">Worked example · illustrative</p><h2>
+          What a 1,000 USDC journey means.
+        </h2><p>
+          Numbers below explain accounting concepts; they are not a quote, live vault state or
+          promise.
+        </p><Callout tone="warning"
+          ><strong>Allowance is not a deposit.</strong> An ERC-20 allowance permits a specific contract
+          to transfer up to an amount. The PoC App requests the exact selected amount, then deposit remains
+          a separate wallet confirmation.</Callout
+        >
+      </div><Card
+        ><div class="data-list">
+          {receipt.map(([label, value]) => <DataRow {label} {value} />)}
+        </div><SourceLabel>Illustrative arithmetic only</SourceLabel></Card
+      >
+    </div></Section
+  >
+  <Section
+    ><Split
+      ><div>
+        <p class="eyebrow">Shares</p><h2>A proportional position—not a fixed deposit receipt.</h2><p
+        >
+          Shares track your economic claim according to the implemented vault accounting. Their
+          redeemable value can change with yield, fees, losses and accounting updates.
+        </p><p>
+          The current PoC uses custom LiquidityManager/ProxyGeneral accounting. A complete ERC-4626
+          consumer vault is a target direction, not the interface currently claimed.
+        </p>
+      </div><div class="status-legend">
+        <div><Badge tone="live">Available</Badge><p>In the wallet or liquid reserve.</p></div><div>
+          <Badge tone="implemented">Invested</Badge><p>Allocated through an approved route.</p>
+        </div><div>
+          <Badge tone="planned">Unwinding</Badge><p>
+            Exit action required before liquidity becomes available.
+          </p>
+        </div><div>
+          <Badge tone="poc">Withdrawable</Badge><p>
+            Current rules and liquidity allow a withdrawal request.
+          </p>
+        </div>
+      </div></Split
+    ></Section
+  >
+  <Section
+    ><SectionHeading
+      eyebrow="Different control boundaries"
+      title="Three models answer the same questions differently."
+    /><ComparisonGrid label="Comparison of financial control models"
+      ><ComparisonRow
+        ><ComparisonCell kind="column-header">Question</ComparisonCell><ComparisonCell
+          kind="column-header">Intermediated account</ComparisonCell
+        ><ComparisonCell kind="column-header">Self-custodial wallet</ComparisonCell><ComparisonCell
+          kind="column-header">Jethos vault</ComparisonCell
+        ></ComparisonRow
+      ><ComparisonRow
+        ><ComparisonCell kind="row-header">Who authorizes movement?</ComparisonCell><ComparisonCell
+          >The provider under account terms.</ComparisonCell
+        ><ComparisonCell>Whoever controls valid keys and approvals.</ComparisonCell><ComparisonCell
+          >The user deposits; then public vault rules apply.</ComparisonCell
+        ></ComparisonRow
+      ><ComparisonRow
+        ><ComparisonCell kind="row-header">Is capital invested?</ComparisonCell><ComparisonCell
+          >According to the provider’s product model.</ComparisonCell
+        ><ComparisonCell>Not automatically by Jethos.</ComparisonCell><ComparisonCell
+          >Only after an explicit on-chain deposit.</ComparisonCell
+        ></ComparisonRow
+      ><ComparisonRow
+        ><ComparisonCell kind="row-header">What is visible?</ComparisonCell><ComparisonCell
+          >Statements and disclosures.</ComparisonCell
+        ><ComparisonCell>Balances, approvals and transactions.</ComparisonCell><ComparisonCell
+          >Contracts, routes, fees, movements and exit state.</ComparisonCell
+        ></ComparisonRow
+      ></ComparisonGrid
+    ></Section
+  >
+  <Section compact
+    ><Card variant="accent"
+      ><h2>See the current proof of concept.</h2><p>
+        The PoC console separates consumer actions from advanced deployment and registry details.
+      </p><Button href="/app.html">Open PoC</Button></Card
+    ></Section
+  >
+</BaseLayout>

@@ -1,0 +1,10 @@
+.astro/
+dist/
+node_modules/
+coverage/
+playwright-report/
+test-results/
+artifacts/
+.env
+.env.*
+!.env.example

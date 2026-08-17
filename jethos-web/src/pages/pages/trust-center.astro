@@ -1,0 +1,207 @@
+---
+import { protocolEvidenceRepository } from '../../content/local-repository';
+import { formatLongDate, shortAddress } from '../../core/format';
+import Card from '../../design-system/components/Card.astro';
+import SourceLabel from '../../design-system/components/SourceLabel.astro';
+import Cluster from '../../design-system/composition/Cluster.astro';
+import Section from '../../design-system/composition/Section.astro';
+import Split from '../../design-system/composition/Split.astro';
+import Badge from '../../design-system/primitives/Badge.astro';
+import Button from '../../design-system/primitives/Button.astro';
+import PageHero from '../../design-system/patterns/PageHero.astro';
+import SectionHeading from '../../design-system/patterns/SectionHeading.astro';
+import StatusLedger from '../../design-system/patterns/StatusLedger.astro';
+import StatusLedgerRow from '../../design-system/patterns/StatusLedgerRow.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const [deployments, protocols, trust] = await Promise.all([
+  protocolEvidenceRepository.getDeployments(),
+  protocolEvidenceRepository.getProtocols(),
+  protocolEvidenceRepository.getTrustEvidence(),
+]);
+const deployment = deployments.deployments.find((item) => item.id === trust.deploymentId);
+if (!deployment) throw new Error(`Trust deployment missing: ${trust.deploymentId}`);
+const liquidityManager = deployment.contracts.liquidityManager;
+const protocolManager = deployment.contracts.protocolManager;
+if (!liquidityManager || !protocolManager) {
+  throw new Error(`Required core contracts missing from deployment: ${deployment.id}`);
+}
+
+const evidenceValue = (label: string) => {
+  const entry = trust.evidence.find((item) => item.label === label);
+  if (!entry) throw new Error(`Trust evidence missing: ${label}`);
+  return entry.value;
+};
+const contractUrl = (address: string) => `https://arbiscan.io/address/${address}`;
+const evidenceRows = [
+  {
+    label: 'Deployment record',
+    value: `${formatLongDate(deployments.recordedAt)} · ${deployment.id}`,
+    tone: 'poc',
+    badge: 'Recorded',
+  },
+  {
+    label: 'Contract version',
+    value: evidenceValue('Contract version'),
+    tone: 'poc',
+    badge: 'Recorded',
+  },
+  {
+    label: 'Source commit',
+    value: evidenceValue('Source commit'),
+    tone: 'planned',
+    badge: 'Missing evidence',
+  },
+  {
+    label: 'Owner / admin addresses',
+    value: evidenceValue('Owner and admin addresses'),
+    tone: 'planned',
+    badge: 'Missing evidence',
+  },
+  { label: 'Multisig / timelock', value: 'Not evidenced', tone: 'planned', badge: 'Open' },
+  {
+    label: 'Upgradeability',
+    value: evidenceValue('Upgradeability'),
+    tone: 'validation',
+    badge: 'Review',
+  },
+  {
+    label: 'Monitoring / incidents',
+    value: evidenceValue('Monitoring'),
+    tone: 'planned',
+    badge: 'Draft',
+  },
+  {
+    label: 'Audit / bug bounty',
+    value: 'No whole-system audit or bounty claimed',
+    tone: 'planned',
+    badge: 'Open',
+  },
+  {
+    label: 'Security contact',
+    value: evidenceValue('Security contact'),
+    tone: 'planned',
+    badge: 'Open',
+  },
+] as const;
+const gateTone = (status: string): 'validation' | 'planned' =>
+  status === 'In progress' ? 'validation' : 'planned';
+---
+
+<BaseLayout
+  title="Jethos Trust Center — Evidence, boundaries and status"
+  description="Inspect deployment evidence, administrative unknowns, assurance gates and current proof-of-concept boundaries."
+  page="trust"
+  canonicalPath="/pages/trust-center.html"
+>
+  <PageHero
+    eyebrow="Trust Center · evidence before assurance"
+    title="Know what is recorded—and what remains unproven."
+    description="Trust is decomposed into deployment sources, powers, open questions and failure assumptions. Nothing on this page is an audit claim."
+    class="trust-hero"
+  >
+    <div class="trust-pulse">
+      <Badge tone="poc">Private PoC</Badge>
+      <span>{deployment.network} · chain {deployment.chainId}</span>
+      <span>Recorded deployment evidence</span>
+    </div>
+  </PageHero>
+  <Section compact>
+    <div class="trust-grid">
+      <article class="trust-tile trust-tile--wide">
+        <span class="trust-index">01 / DEPLOYMENT</span><h2>One explicit configuration</h2><p
+          class="lede"
+        >
+          {deployment.id}
+        </p><p>The browser config, public record and read-only diagnostics must agree.</p>
+      </article>
+      <article class="trust-tile">
+        <span class="trust-index">02 / ASSET</span><h3>Native USDC</h3><a
+          href={contractUrl(deployment.baseAsset.address)}
+          target="_blank"
+          rel="noopener noreferrer">{shortAddress(deployment.baseAsset.address)}</a
+        ><p class="muted">Issuer and asset risk remain.</p>
+      </article>
+      <article class="trust-tile">
+        <span class="trust-index">03 / CORE</span><h3>LiquidityManager</h3><a
+          href={contractUrl(liquidityManager)}
+          target="_blank"
+          rel="noopener noreferrer">{shortAddress(liquidityManager)}</a
+        ><p class="muted">Consumer entry contract.</p>
+      </article>
+      <article class="trust-tile">
+        <span class="trust-index">04 / REGISTRY</span><h3>ProtocolManager</h3><a
+          href={contractUrl(protocolManager)}
+          target="_blank"
+          rel="noopener noreferrer">{shortAddress(protocolManager)}</a
+        ><p class="muted">
+          {protocols.protocols.length} recorded integrations; not current allocation.
+        </p>
+      </article>
+    </div>
+  </Section>
+  <Section band>
+    <SectionHeading eyebrow="Evidence register" title="Known facts and explicit unknowns." />
+    <StatusLedger label="Known evidence and explicit unknowns">
+      {
+        evidenceRows.map((row) => (
+          <StatusLedgerRow label={row.label} value={row.value}>
+            <Badge tone={row.tone}>{row.badge}</Badge>
+          </StatusLedgerRow>
+        ))
+      }
+    </StatusLedger>
+    <SourceLabel
+      >Evidence model: data/protocol/trust-evidence.json · updated {trust.updatedAt}</SourceLabel
+    >
+  </Section>
+  <Section>
+    <Split>
+      <div>
+        <p class="eyebrow">Status language</p><h2>Every badge has a limited meaning.</h2><p>
+          Live is timestamped data—not safe. Implemented is present in code—not audited. PoC is
+          controlled validation—not public readiness.
+        </p>
+      </div>
+      <div class="status-legend">
+        <div><Badge tone="live">Live</Badge><p>Timestamped on-chain read.</p></div>
+        <div><Badge tone="implemented">Implemented</Badge><p>Present in the repository.</p></div>
+        <div><Badge tone="poc">Private PoC</Badge><p>Controlled validation deployment.</p></div>
+        <div><Badge tone="planned">Planned</Badge><p>Direction or open gate.</p></div>
+        <div><Badge tone="vision">Vision</Badge><p>Long-term possibility.</p></div>
+        <div><Badge tone="illustrative">Illustrative</Badge><p>Example, not account data.</p></div>
+      </div>
+    </Split>
+  </Section>
+  <Section band>
+    <SectionHeading
+      eyebrow="Assurance checklist"
+      title="Evidence required before a public production claim."
+    />
+    <StatusLedger kind="roadmap" label="Production assurance gates">
+      {
+        trust.assuranceGates.map((gate) => (
+          <StatusLedgerRow label={gate.title} value={gate.evidence}>
+            <Badge tone={gateTone(gate.status)}>{gate.status}</Badge>
+          </StatusLedgerRow>
+        ))
+      }
+    </StatusLedger>
+  </Section>
+  <Section compact>
+    <Card variant="accent" class="split">
+      <div>
+        <h2>Reproduce the read-only evidence.</h2><p>
+          The PoC console and developer commands expose deployment and registry reads without
+          turning them into an audit.
+        </p>
+      </div>
+      <Cluster
+        ><Button href="/app.html">Inspect PoC</Button><Button
+          href="/pages/security.html"
+          variant="secondary">Security model</Button
+        ><Button href="/pages/docs.html" variant="ghost">Documentation</Button></Cluster
+      >
+    </Card>
+  </Section>
+</BaseLayout>

@@ -1,0 +1,153 @@
+---
+import { editorialContentRepository } from '../../content/local-repository';
+import Card from '../../design-system/components/Card.astro';
+import Section from '../../design-system/composition/Section.astro';
+import Badge from '../../design-system/primitives/Badge.astro';
+import PageHero from '../../design-system/patterns/PageHero.astro';
+import Timeline from '../../design-system/patterns/Timeline.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const roadmap = await editorialContentRepository.getRoadmap();
+const presentation = {
+  today: {
+    label: 'Today',
+    title: 'Validate the foundation',
+    status: 'In validation',
+    owner: 'Pending publication',
+    blockers:
+      'Policy decisions, repeatable fork scenarios, operational evidence and independent review.',
+    href: '/pages/trust-center.html',
+    link: 'Linked evidence: Trust Center →',
+  },
+  next: {
+    label: 'Next',
+    title: 'Expand the app and vault families',
+    status: 'Planned',
+    owner: 'Pending publication',
+    blockers:
+      'Conservative numeric limits, target vault standard, asset-specific liquidity models and release governance.',
+    href: '/pages/vaults.html',
+    link: 'Linked product map: Vaults →',
+  },
+  later: {
+    label: 'Later',
+    title: 'Compose and scale',
+    status: 'Planned',
+    owner: 'Pending publication',
+    blockers: 'Cross-vault accounting, chain-specific operations and explicit failure containment.',
+    href: '/pages/docs.html?doc=09',
+    link: 'Linked documentation: multichain and composability →',
+  },
+  vision: {
+    label: 'Vision',
+    title: 'Complete the financial home',
+    status: 'Vision',
+    owner: 'Future partner model',
+    blockers:
+      'Specialized partners, legal and compliance analysis, product governance and technical integration. None is implied by the PoC.',
+    href: '/pages/vision.html',
+    link: 'Linked direction: Vision →',
+  },
+} as const;
+const roadmapItems = roadmap.horizons.map((horizon) => {
+  const item = presentation[horizon.id as keyof typeof presentation];
+  if (!item) throw new Error(`Roadmap presentation missing: ${horizon.id}`);
+  return { horizon, item };
+});
+---
+
+<BaseLayout
+  title="Jethos roadmap — Validate, expand, compose"
+  description="An evidence-based Jethos roadmap with capabilities, acceptance criteria, blockers, owners and linked documentation."
+  page="roadmap"
+  canonicalPath="/pages/roadmap.html"
+  webglScene="roadmap-reactor"
+>
+  <PageHero
+    eyebrow="Roadmap"
+    title="Evidence before expansion."
+    description="Progress is reported through capability gates, acceptance criteria and blockers—not arbitrary completion percentages."
+  />
+  <section class="immersive-section" aria-labelledby="reactor-title">
+    <div class="container immersive-shell">
+      <header class="immersive-head">
+        <div>
+          <span class="eyebrow">Evidence Reactor · optional model</span><h2 id="reactor-title">
+            Progress stabilizes when evidence is real.
+          </h2>
+        </div><p class="muted">
+          The Proof Path is educational; the HTML evidence cards below are the roadmap record.
+        </p>
+      </header><div class="immersive-viewport" data-webgl-host>
+        <div class="immersive-fallback" aria-hidden="true">
+          <div class="fallback-object fallback--reactor"><i></i><i></i><i></i><i></i><i></i></div>
+        </div><span class="immersive-status" data-webgl-status>Loading visual</span>
+      </div><div class="immersive-controls">
+        <div class="immersive-legend">
+          <span class="immersive-key immersive-key--wallet">Completed evidence</span><span
+            class="immersive-key immersive-key--gate">Current gate</span
+          ><span class="immersive-key immersive-key--proof">Future capability</span>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="roadmap-game" aria-label="Proof Path game" data-roadmap-game>
+    <p class="sr-only">
+      The optional interactive Proof Path loads when enhanced visuals are supported. The complete
+      roadmap follows.
+    </p>
+  </section>
+  <Section>
+    <Timeline>
+      {
+        roadmapItems.map(({ horizon, item }) => (
+          <Card class="timeline-item">
+            <Badge tone={horizon.status}>{item.label}</Badge>
+            <h2>{item.title}</h2>
+            <p>{horizon.description}</p>
+            <div class="roadmap-meta">
+              <div>
+                <>
+                  <span>Status</span>
+                  <strong>{item.status}</strong>
+                </>
+              </div>
+              <div>
+                <>
+                  <span>Last update</span>
+                  <strong>23 July 2026</strong>
+                </>
+              </div>
+              <div>
+                <>
+                  <span>Decision owner</span>
+                  <strong>{item.owner}</strong>
+                </>
+              </div>
+            </div>
+            <h3>
+              {horizon.id === 'today'
+                ? 'Capabilities and evidence'
+                : horizon.id === 'vision'
+                  ? 'Dependencies'
+                  : 'Acceptance criteria'}
+            </h3>
+            <ul>
+              {horizon.exitCriteria.map((criterion) => (
+                <li>{criterion}</li>
+              ))}
+            </ul>
+            {horizon.id !== 'vision' && (
+              <>
+                <h3>Blockers</h3>
+                <p>{item.blockers}</p>
+              </>
+            )}
+            {horizon.id === 'vision' && <p>{item.blockers}</p>}
+            <a href={item.href}>{item.link}</a>
+          </Card>
+        ))
+      }
+    </Timeline>
+  </Section>
+</BaseLayout>

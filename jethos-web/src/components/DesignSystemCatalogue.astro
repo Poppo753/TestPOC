@@ -1,0 +1,80 @@
+---
+import Card from '../design-system/components/Card.astro';
+import Grid from '../design-system/composition/Grid.astro';
+import Section from '../design-system/composition/Section.astro';
+import Badge from '../design-system/primitives/Badge.astro';
+import ComparisonCell from '../design-system/patterns/ComparisonCell.astro';
+import ComparisonGrid from '../design-system/patterns/ComparisonGrid.astro';
+import ComparisonRow from '../design-system/patterns/ComparisonRow.astro';
+import DataTable from '../design-system/patterns/DataTable.astro';
+import FaqItem from '../design-system/patterns/FaqItem.astro';
+import FaqList from '../design-system/patterns/FaqList.astro';
+import Flow from '../design-system/patterns/Flow.astro';
+import SectionHeading from '../design-system/patterns/SectionHeading.astro';
+import StatusLedger from '../design-system/patterns/StatusLedger.astro';
+import StatusLedgerRow from '../design-system/patterns/StatusLedgerRow.astro';
+import Timeline from '../design-system/patterns/Timeline.astro';
+---
+
+<Section band labelledby="editorial-catalogue">
+  <SectionHeading
+    id="editorial-catalogue"
+    eyebrow="Editorial catalogue"
+    title="Recurring evidence patterns."
+    description="A temporary migration fixture used by browser and accessibility tests."
+  />
+  <Grid columns={2}>
+    <StatusLedger kind="evidence" label="Evidence pattern fixture">
+      <StatusLedgerRow label="Deployment record" value="Versioned source">
+        <Badge tone="recorded">Recorded</Badge>
+      </StatusLedgerRow>
+      <StatusLedgerRow label="Independent audit" value="No report linked">
+        <Badge tone="planned">Open</Badge>
+      </StatusLedgerRow>
+    </StatusLedger>
+    <FaqList>
+      <FaqItem question="Does a fixture become production content?">
+        <p>No. It proves the reusable semantic and visual contract before route migration.</p>
+      </FaqItem>
+      <FaqItem question="Does it require JavaScript?">
+        <p>No. Details and summary provide the interaction natively.</p>
+      </FaqItem>
+    </FaqList>
+  </Grid>
+  <DataTable label="Pattern status fixture">
+    <table>
+      <thead><tr><th>Pattern</th><th>Source</th><th>Status</th></tr></thead>
+      <tbody><tr><td>Data table</td><td>Design system</td><td>Verified</td></tr></tbody>
+    </table>
+  </DataTable>
+  <ComparisonGrid label="Control model fixture">
+    <ComparisonRow>
+      <ComparisonCell kind="column-header">Question</ComparisonCell>
+      <ComparisonCell kind="column-header">Wallet</ComparisonCell>
+      <ComparisonCell kind="column-header">Vault</ComparisonCell>
+      <ComparisonCell kind="column-header">Evidence</ComparisonCell>
+    </ComparisonRow>
+    <ComparisonRow>
+      <ComparisonCell kind="row-header">Control</ComparisonCell>
+      <ComparisonCell>User</ComparisonCell>
+      <ComparisonCell>Rules</ComparisonCell>
+      <ComparisonCell>Verifiable</ComparisonCell>
+    </ComparisonRow>
+  </ComparisonGrid>
+  <Timeline>
+    <Card class="timeline-item"><h3>Foundation</h3><p>Establish contracts.</p></Card>
+    <Card class="timeline-item"><h3>Migration</h3><p>Prove consumers.</p></Card>
+  </Timeline>
+  <Flow label="Editorial flow fixture">
+    {
+      ['Source', 'Validate', 'Compose', 'Verify'].map((step, index) => (
+        <Card class="flow-step">
+          <>
+            <span class="flow-step__number">0{index + 1}</span>
+            <h3>{step}</h3>
+          </>
+        </Card>
+      ))
+    }
+  </Flow>
+</Section>

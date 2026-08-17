@@ -1,0 +1,146 @@
+---
+import Card from '../../design-system/components/Card.astro';
+import Cluster from '../../design-system/composition/Cluster.astro';
+import Grid from '../../design-system/composition/Grid.astro';
+import Section from '../../design-system/composition/Section.astro';
+import Split from '../../design-system/composition/Split.astro';
+import Badge from '../../design-system/primitives/Badge.astro';
+import Button from '../../design-system/primitives/Button.astro';
+import ComparisonCell from '../../design-system/patterns/ComparisonCell.astro';
+import ComparisonGrid from '../../design-system/patterns/ComparisonGrid.astro';
+import ComparisonRow from '../../design-system/patterns/ComparisonRow.astro';
+import PageHero from '../../design-system/patterns/PageHero.astro';
+import SectionHeading from '../../design-system/patterns/SectionHeading.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Jethos security — Controls, assumptions and responsibilities"
+  description="Understand Jethos security controls, residual risks, wallet responsibilities and assurance status."
+  page="security"
+  canonicalPath="/pages/security.html"
+>
+  <PageHero
+    eyebrow="Security"
+    title="Controls reduce risk. They do not remove it."
+    description="Jethos combines explicit authorization, modular integrations, monitoring and pause mechanisms while documenting the trust and failure assumptions that remain."
+  />
+  <Section>
+    <Grid columns={3}>
+      <Card
+        ><h3>Wallet boundary</h3><p>
+          Assets outside a vault are not automatically managed by Jethos. Users remain responsible
+          for keys, signatures and approvals.
+        </p></Card
+      >
+      <Card
+        ><h3>Contract boundary</h3><p>
+          Deposited assets follow deployed code, authorized modules and administrative permissions.
+        </p></Card
+      >
+      <Card
+        ><h3>Protocol boundary</h3><p>
+          Underlying integrations add smart-contract, market, oracle, governance and liquidity risk.
+        </p></Card
+      >
+    </Grid>
+  </Section>
+  <Section band>
+    <SectionHeading title="Security is shared across boundaries." />
+    <ComparisonGrid label="Security responsibilities across boundaries">
+      <ComparisonRow>
+        <ComparisonCell kind="column-header">Boundary</ComparisonCell><ComparisonCell
+          kind="column-header">User</ComparisonCell
+        ><ComparisonCell kind="column-header">Jethos</ComparisonCell><ComparisonCell
+          kind="column-header">Underlying systems</ComparisonCell
+        >
+      </ComparisonRow>
+      <ComparisonRow>
+        <ComparisonCell kind="row-header">Responsibility</ComparisonCell><ComparisonCell
+          >Protect keys, inspect signatures, review/revoke approvals.</ComparisonCell
+        ><ComparisonCell
+          >Constrain routes, monitor state, disclose powers and incidents.</ComparisonCell
+        ><ComparisonCell
+          >Protocol code, governance, markets, assets and oracles must continue functioning.</ComparisonCell
+        >
+      </ComparisonRow>
+    </ComparisonGrid>
+  </Section>
+  <Section>
+    <Split>
+      <div>
+        <h2>Control layers</h2><ul>
+          <li>Deposit and withdrawal toggles.</li><li>Global and module pause capabilities.</li><li>
+            Protocol registration and activation.
+          </li><li>Registry-based market allowlists.</li><li>
+            Position observation through LensAdapters.
+          </li><li>Operational monitoring and transaction records.</li>
+        </ul>
+      </div>
+      <Card class="callout--warning"
+        ><Badge tone="poc">Assurance status</Badge><h3 class="u-margin-top-4">
+          Private PoC—not a completed audit claim.
+        </h3><p>
+          Contracts have local tests and a recorded verified deployment. This site does not
+          represent the complete Jethos system as independently audited or free of vulnerabilities.
+        </p></Card
+      >
+    </Split>
+  </Section>
+  <Section band>
+    <SectionHeading
+      eyebrow="Residual threats"
+      title="Self-custody changes responsibility; it does not create immunity."
+    />
+    <Grid columns={3}>
+      <Card
+        ><h3>Keys and signatures</h3><p>
+          Compromised keys, deceptive signatures or malicious wallet software can authorize
+          movements that Jethos cannot reverse.
+        </p></Card
+      >
+      <Card
+        ><h3>Allowances and assets</h3><p>
+          Previous approvals and token-issuer controls can affect wallet assets independently of a
+          new Jethos deposit.
+        </p></Card
+      >
+      <Card
+        ><h3>Code and dependencies</h3><p>
+          Bugs, upgrades, admins, oracles, bridges and underlying protocols may affect deposited
+          capital and exit conditions.
+        </p></Card
+      >
+    </Grid>
+    <p class="u-margin-top-6">
+      <a href="/pages/trust-center.html">Review current evidence and open assurance gates →</a>
+    </p>
+  </Section>
+  <Section>
+    <h2>Underlying protocol resources</h2>
+    <p>
+      Audits of Aave, Euler or Morpho cover their respective systems, not Jethos integration logic
+      as a whole.
+    </p>
+    <Cluster>
+      <Button
+        href="https://docs.aave.com/developers/deployed-contracts/security-and-audits"
+        variant="secondary"
+        target="_blank"
+        rel="noopener noreferrer">Aave resources ↗</Button
+      >
+      <Button
+        href="https://docs.euler.finance/security/audits"
+        variant="secondary"
+        target="_blank"
+        rel="noopener noreferrer">Euler resources ↗</Button
+      >
+      <Button
+        href="https://docs.morpho.org/security/audits"
+        variant="secondary"
+        target="_blank"
+        rel="noopener noreferrer">Morpho resources ↗</Button
+      >
+    </Cluster>
+  </Section>
+</BaseLayout>

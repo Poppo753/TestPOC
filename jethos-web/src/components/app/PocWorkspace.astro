@@ -1,0 +1,110 @@
+<div class="stack">
+  <section class="card">
+    <div class="cluster" style="justify-content:space-between">
+      <h2 style="font-size:1.5rem;margin:0">Your position</h2>
+      <span class="badge badge--live" id="wallet-network">Not connected</span>
+    </div>
+    <div class="grid grid--4" style="margin-top:1.25rem">
+      <div class="metric">
+        <span class="metric__label">Gas balance</span><span
+          class="metric__value"
+          id="user-eth"
+          style="font-size:1rem">Connect wallet</span
+        >
+      </div>
+      <div class="metric">
+        <span class="metric__label">Wallet USDC</span><span
+          class="metric__value"
+          id="user-usdc"
+          style="font-size:1rem">Connect wallet</span
+        >
+      </div>
+      <div class="metric">
+        <span class="metric__label">Vault shares</span><span
+          class="metric__value"
+          id="user-shares"
+          style="font-size:1rem">Connect wallet</span
+        >
+      </div>
+      <div class="metric">
+        <span class="metric__label">Redeemable estimate</span><span
+          class="metric__value"
+          id="user-position"
+          style="font-size:1rem">Connect wallet</span
+        >
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="tabs" role="tablist" aria-label="Vault actions">
+      <button class="tab" role="tab" data-tab="deposit" aria-selected="true">Deposit</button>
+      <button class="tab" role="tab" data-tab="withdraw" aria-selected="false">Withdraw</button>
+    </div>
+    <div data-tab-panel="deposit" style="margin-top:1.2rem">
+      <form id="deposit-form" class="stack">
+        <div class="form-field">
+          <label for="deposit-amount">USDC amount you choose to invest</label>
+          <div class="cluster" style="flex-wrap:nowrap">
+            <input id="deposit-amount" inputmode="decimal" autocomplete="off" placeholder="0.00" />
+            <button id="max-deposit" class="button button--ghost" type="button">Max</button>
+          </div>
+          <p id="deposit-preview" class="form-help">
+            Approval permits only LiquidityManager to transfer the selected amount; deposit is a
+            separate wallet confirmation.
+          </p>
+          <p id="deposit-error" class="form-error" role="alert"></p>
+        </div>
+        <button class="button button--primary" type="submit" data-requires-wallet disabled
+          >Review explicit approval &amp; deposit</button
+        >
+      </form>
+    </div>
+    <div data-tab-panel="withdraw" hidden style="margin-top:1.2rem">
+      <form id="withdraw-form" class="stack">
+        <div class="form-field">
+          <label for="withdraw-shares">Share token amount</label>
+          <div class="cluster" style="flex-wrap:nowrap">
+            <input id="withdraw-shares" inputmode="decimal" autocomplete="off" placeholder="0" />
+            <button id="max-withdraw" class="button button--ghost" type="button">Max</button>
+          </div>
+          <p id="withdraw-preview" class="form-help">
+            Connect and enter shares to request the current contract estimate.
+          </p>
+          <p id="withdraw-error" class="form-error" role="alert"></p>
+        </div>
+        <button class="button button--primary" type="submit" data-requires-wallet disabled
+          >Review withdrawal</button
+        >
+      </form>
+    </div>
+    <div class="transaction-summary" aria-label="Transaction review summary">
+      <div><span>Chain</span><strong id="summary-chain">Arbitrum One · 42161</strong></div>
+      <div><span>Contract</span><strong id="summary-contract">LiquidityManager</strong></div>
+      <div><span>Current fees</span><strong id="summary-fees">Loading public state…</strong></div>
+      <div>
+        <span>Withdrawal status</span><strong id="summary-withdrawal">Loading public state…</strong>
+      </div>
+    </div>
+    <div class="callout callout--warning" style="margin-top:1rem">
+      <strong>Major risks</strong>
+      <p>
+        Smart-contract, protocol, USDC, liquidity, sequencer and administrative risk remain.
+        Estimates can change before execution.
+      </p>
+    </div>
+    <div class="tx-status" id="tx-status" aria-live="polite" style="margin-top:1rem">
+      No transaction pending.
+    </div>
+  </section>
+
+  <section class="card" data-app-mode-panel="advanced" hidden>
+    <div class="cluster" style="justify-content:space-between">
+      <h2 style="font-size:1.5rem;margin:0">Recent vault events</h2>
+      <span class="source-label">Last 50,000 blocks</span>
+    </div>
+    <div id="event-list" class="data-list" style="margin-top:1rem">
+      <p class="muted">Wallet not connected. Connect to load bounded user events.</p>
+    </div>
+  </section>
+</div>

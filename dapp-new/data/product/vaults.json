@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-07-23",
+  "vaults": [
+    { "id": "usdc-conservative-arbitrum", "asset": "USDC", "profile": "Conservative", "status": "poc", "chain": "Arbitrum", "description": "Private supply-only proof of concept using approved lending integrations." },
+    { "id": "usdc-balanced", "asset": "USDC", "profile": "Balanced", "status": "planned", "description": "Diversified stablecoin strategies within tighter risk limits than advanced products." },
+    { "id": "usdc-advanced", "asset": "USDC", "profile": "Advanced", "status": "vision", "description": "Higher-complexity strategies subject to dedicated limits and validation." },
+    { "id": "eth-conservative", "asset": "ETH", "profile": "Conservative", "status": "planned", "description": "Preserve ETH-denominated exposure while pursuing conservative yield." },
+    { "id": "eth-balanced", "asset": "ETH", "profile": "Balanced", "status": "vision", "description": "Managed ETH strategies with explicitly measured exposure." },
+    { "id": "eth-advanced", "asset": "ETH", "profile": "Advanced", "status": "vision", "description": "Potential hedged and multi-leg ETH strategies." },
+    { "id": "btc-conservative", "asset": "BTC", "profile": "Conservative", "status": "planned", "description": "Wrapped-BTC denominated vault with wrapper and liquidity risk disclosed." },
+    { "id": "btc-balanced", "asset": "BTC", "profile": "Balanced", "status": "vision", "description": "Diversified BTC-denominated yield strategies." },
+    { "id": "btc-advanced", "asset": "BTC", "profile": "Advanced", "status": "vision", "description": "Advanced BTC strategies after risk and liquidity validation." }
+  ]
+}
+

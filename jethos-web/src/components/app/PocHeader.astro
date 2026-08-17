@@ -1,0 +1,56 @@
+<div class="callout callout--warning app-warning">
+  <strong>Private proof of concept.</strong> Jethos cannot move assets you have not deposited or separately
+  approved. Every action below requires explicit wallet confirmation; verify chain, contract and amount
+  independently. <a href="/pages/trust-center.html">Trust Center →</a>
+</div>
+
+<header class="cluster" style="justify-content:space-between;margin:1.5rem 0">
+  <div>
+    <p class="eyebrow">Arbitrum · native USDC</p>
+    <h1 style="font-size:clamp(2rem,5vw,3.4rem);margin-bottom:.3rem">USDC Conservative PoC</h1>
+    <p id="data-status" class="source-label">Initializing public state…</p>
+  </div>
+  <div class="cluster">
+    <button class="button button--ghost" id="refresh-data" type="button">Refresh</button>
+    <button class="button button--secondary" id="switch-network" type="button" hidden
+      >Switch network</button
+    >
+    <button class="button button--primary" id="connect-wallet" type="button">Connect wallet</button>
+  </div>
+</header>
+
+<div class="cluster" style="justify-content:space-between;margin-bottom:1.25rem">
+  <div>
+    <strong>Choose your level of detail</strong>
+    <p class="muted" style="margin:0">
+      Simple keeps the consumer workflow visible. Advanced exposes diagnostics and raw records.
+    </p>
+  </div>
+  <div class="mode-switch" role="tablist" aria-label="PoC console mode">
+    <button type="button" role="tab" aria-selected="true" data-app-mode="simple">Simple</button>
+    <button type="button" role="tab" aria-selected="false" data-app-mode="advanced"
+      >Advanced details</button
+    >
+  </div>
+</div>
+
+<div class="grid grid--4" style="margin-bottom:1.25rem">
+  <article class="card">
+    <span class="metric__label">Pool accounting value</span>
+    <strong class="metric__value" id="pool-value">Loading…</strong>
+  </article>
+  <article class="card">
+    <span class="metric__label">Liquid USDC reserve</span>
+    <strong class="metric__value" id="pool-reserve">Loading…</strong>
+  </article>
+  <article class="card">
+    <span class="metric__label">Deposit status</span>
+    <strong class="metric__value" id="deposit-state" style="font-size:1.15rem">Loading…</strong>
+    <span class="metric__label" style="margin-top:.7rem">Withdrawal status</span>
+    <strong class="metric__value" id="withdraw-state" style="font-size:1.15rem">Loading…</strong>
+  </article>
+  <article class="card">
+    <span class="metric__label">Pause status</span>
+    <strong class="metric__value" id="pause-state" style="font-size:1.25rem">Loading…</strong>
+  </article>
+</div>

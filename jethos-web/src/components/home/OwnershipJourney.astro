@@ -1,0 +1,388 @@
+<section
+  class="immersive-section ownership-journey"
+  id="capital-boundary"
+  data-ownership-journey
+  data-boundary-scene-state="boundary"
+  aria-labelledby="capital-boundary-title"
+>
+  <div class="immersive-shell">
+    <header class="container ownership-journey__head">
+      <div>
+        <span class="eyebrow">The center of Jethos</span><h2 id="capital-boundary-title">
+          One home where you stay in control.
+        </h2>
+      </div>
+      <p class="lede">
+        Jethos cannot move, invest or use assets held in your wallet unless you authorize it. If you
+        choose to invest, you decide how much, when and where. You also choose how much complexity
+        you want to manage, so you can always understand where your money goes.
+      </p>
+    </header>
+    <div class="immersive-viewport" data-webgl-host>
+      <div class="immersive-fallback" aria-hidden="true">
+        <div class="fallback-object fallback--ownership"><i></i><i></i><i></i></div>
+      </div><span class="immersive-status" data-webgl-status>Loading visual</span>
+    </div>
+    <div class="ownership-stage-wrap">
+      <div class="ownership-stage">
+        <article class="ownership-side ownership-side--wallet" data-ownership-side="wallet">
+          <span class="ownership-side__index">01 · Your account</span>
+          <h3>You have control. You have custody.</h3>
+          <p>
+            Your wallet is yours. Its 24-word recovery phrase is created for you when you sign up
+            and is never stored by Jethos.
+          </p>
+          <p>
+            Your money stays in your wallet until you approve an action. You choose what moves, how
+            much and where it goes.
+          </p>
+          <div
+            class="ownership-app-window ownership-wallet-preview"
+            data-wallet-allocation
+            aria-label="Illustrative wallet interface"
+          >
+            <div class="ownership-window-bar"><span>Wallet</span><small>Liquid assets</small></div>
+            <div class="wallet-preview__total">
+              <small>Total balance</small><strong>$9,200.00</strong><span
+                >Available in your wallet</span
+              >
+            </div>
+            <div class="wallet-preview__body">
+              <div class="wallet-preview__assets">
+                <button type="button" data-wallet-asset="usdc" aria-pressed="false"
+                  ><i class="asset-dot asset-dot--usdc"></i><span
+                    ><strong>USDC</strong><small>3,900 USDC</small></span
+                  ><span class="wallet-asset-value"><b>$3,900</b><small>42% of wallet</small></span
+                  ></button
+                >
+                <button type="button" data-wallet-asset="usdt" aria-pressed="false"
+                  ><i class="asset-dot asset-dot--usdt"></i><span
+                    ><strong>USDT</strong><small>1,800 USDT</small></span
+                  ><span class="wallet-asset-value"><b>$1,800</b><small>20% of wallet</small></span
+                  ></button
+                >
+                <button type="button" data-wallet-asset="btc" aria-pressed="false"
+                  ><i class="asset-dot asset-dot--btc"></i><span
+                    ><strong>BTC</strong><small>0.031 BTC</small></span
+                  ><span class="wallet-asset-value"><b>$2,100</b><small>23% of wallet</small></span
+                  ></button
+                >
+                <button type="button" data-wallet-asset="eth" aria-pressed="false"
+                  ><i class="asset-dot asset-dot--eth"></i><span
+                    ><strong>ETH</strong><small>0.48 ETH</small></span
+                  ><span class="wallet-asset-value"><b>$1,400</b><small>15% of wallet</small></span
+                  ></button
+                >
+              </div>
+              <svg
+                class="wallet-preview__chart"
+                viewBox="0 0 100 100"
+                role="group"
+                aria-label="Illustrative asset allocation. Use each asset row or chart segment to inspect its share."
+              >
+                <circle class="wallet-preview__track" cx="50" cy="50" r="34" pathLength="100"
+                ></circle>
+                <g transform="rotate(-90 50 50)">
+                  <circle
+                    class="wallet-preview__slice wallet-preview__slice--usdc"
+                    data-wallet-slice="usdc"
+                    cx="50"
+                    cy="50"
+                    r="34"
+                    pathLength="100"
+                    stroke-dasharray="40 60"
+                    stroke-dashoffset="0"
+                    tabindex="0"
+                    role="button"
+                    aria-label="USDC: 42 percent, 3,900 dollars"></circle>
+                  <circle
+                    class="wallet-preview__slice wallet-preview__slice--usdt"
+                    data-wallet-slice="usdt"
+                    cx="50"
+                    cy="50"
+                    r="34"
+                    pathLength="100"
+                    stroke-dasharray="18 82"
+                    stroke-dashoffset="-42"
+                    tabindex="0"
+                    role="button"
+                    aria-label="USDT: 20 percent, 1,800 dollars"></circle>
+                  <circle
+                    class="wallet-preview__slice wallet-preview__slice--btc"
+                    data-wallet-slice="btc"
+                    cx="50"
+                    cy="50"
+                    r="34"
+                    pathLength="100"
+                    stroke-dasharray="21 79"
+                    stroke-dashoffset="-62"
+                    tabindex="0"
+                    role="button"
+                    aria-label="BTC: 23 percent, 2,100 dollars"></circle>
+                  <circle
+                    class="wallet-preview__slice wallet-preview__slice--eth"
+                    data-wallet-slice="eth"
+                    cx="50"
+                    cy="50"
+                    r="34"
+                    pathLength="100"
+                    stroke-dasharray="13 87"
+                    stroke-dashoffset="-85"
+                    tabindex="0"
+                    role="button"
+                    aria-label="ETH: 15 percent, 1,400 dollars"></circle>
+                </g>
+                <text
+                  x="50"
+                  y="48"
+                  text-anchor="middle"
+                  class="wallet-preview__chart-value"
+                  data-wallet-chart-value>$9.2k</text
+                >
+                <text
+                  x="50"
+                  y="59"
+                  text-anchor="middle"
+                  class="wallet-preview__chart-label"
+                  data-wallet-chart-label>liquid</text
+                >
+              </svg>
+            </div>
+            <span class="ownership-bridge ownership-bridge--out" aria-hidden="true"><i></i></span>
+          </div>
+          <div class="ownership-warning">
+            <strong>Keep your recovery phrase private.</strong><span
+              >It is the key to recovering your wallet. Never share it with anyone.</span
+            >
+          </div>
+        </article>
+
+        <article
+          class="finance-panel ownership-ledger ownership-ledger--center"
+          data-ownership-dashboard
+          aria-label="The Jethos account and vault boundary"
+        >
+          <div class="cluster cluster--between">
+            <span class="eyebrow">Your financial home</span><span class="badge badge--illustrative"
+              >Illustrative</span
+            >
+          </div>
+          <p class="muted panel-kicker">Assets visible through Jethos</p><div class="balance-total">
+            $12,480.00
+          </div>
+          <div class="balance-split">
+            <div class="balance-card balance-card--wallet">
+              <span class="badge badge--live">Available</span><span class="metric__label"
+                >In your wallet</span
+              ><div class="metric__value">$9,200</div><small class="muted"
+                >Under your direct control</small
+              >
+            </div>
+            <div class="balance-card balance-card--vault">
+              <span class="badge badge--illustrative">Invested</span><span class="metric__label"
+                >In transparent vaults</span
+              ><div class="metric__value">$3,280</div><small class="muted"
+                >Route, rules and risk visible</small
+              >
+            </div>
+          </div>
+          <div class="finance-panel__boundary">
+            <span>Exact authorization</span><i class="boundary-node" aria-hidden="true"></i><span
+              >Transparent vault</span
+            >
+          </div>
+          <div class="route-strip">
+            <span>Hold</span><i class="route-line" aria-hidden="true"></i><span
+              >Invest · understand · exit</span
+            >
+          </div>
+          <p class="source-label panel-source">Example interface—not live account data</p>
+        </article>
+
+        <article class="ownership-side ownership-side--vaults" data-ownership-side="vaults">
+          <span class="ownership-side__index">02 · Your vault experience</span>
+          <h3>You choose how, when and where to invest.</h3>
+          <p class="ownership-mode-intro">
+            Pick the experience that feels right. Base keeps it simple. Pro adds network choice.
+            Advanced also lets you choose the asset.
+          </p>
+          <div class="ownership-app-window ownership-vault-preview">
+            <aside class="ownership-vault-popover" data-vault-popover hidden aria-live="polite">
+              <div class="ownership-vault-popover__head">
+                <div>
+                  <span class="eyebrow">Illustrative allocation</span><strong
+                    data-vault-popover-title>Conservative vault</strong
+                  >
+                </div><button
+                  type="button"
+                  data-vault-popover-close
+                  aria-label="Close allocation details">×</button
+                >
+              </div>
+              <p data-vault-popover-summary>
+                Where this illustrative vault would place its capital.
+              </p>
+              <div class="ownership-allocation-layout">
+                <div class="ownership-allocation-list" data-vault-popover-allocations></div>
+                <svg
+                  class="ownership-allocation-chart"
+                  viewBox="0 0 120 120"
+                  role="img"
+                  aria-label="Illustrative vault allocation. Hover a segment or list item to inspect it."
+                >
+                  <circle
+                    class="ownership-allocation-chart__track"
+                    cx="60"
+                    cy="60"
+                    r="42"
+                    pathLength="100"></circle>
+                  <g transform="rotate(-90 60 60)" data-vault-popover-slices></g>
+                  <text x="60" y="57" text-anchor="middle" data-vault-chart-value>100%</text>
+                  <text x="60" y="70" text-anchor="middle" data-vault-chart-label>allocated</text>
+                </svg>
+              </div>
+              <small>Example only. This is not a live allocation or an available product.</small>
+            </aside>
+            <div class="ownership-window-bar">
+              <span>Vaults</span><small>Choose your view</small>
+            </div>
+            <div class="ownership-mode-tabs" role="tablist" aria-label="Vault experience level">
+              <button
+                type="button"
+                role="tab"
+                aria-selected="true"
+                aria-controls="vault-mode-panel"
+                data-vault-mode="base">Base</button
+              >
+              <button
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="vault-mode-panel"
+                data-vault-mode="pro">Pro</button
+              >
+              <button
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="vault-mode-panel"
+                data-vault-mode="advanced">Advanced</button
+              >
+            </div>
+            <div class="ownership-mode-panel" id="vault-mode-panel" role="tabpanel">
+              <div class="ownership-mode-copy">
+                <span class="badge badge--illustrative">Example</span><p data-vault-mode-copy>
+                  Choose how much to invest and the level of risk that feels right. Jethos keeps
+                  network and asset details out of the way.
+                </p>
+              </div>
+              <div class="ownership-filters" data-chain-filter hidden>
+                <span>Network</span>
+                <div class="ownership-chip-row" role="group" aria-label="Illustrative network">
+                  <button type="button" aria-pressed="true" data-chain="plasma">Plasma</button>
+                  <button type="button" aria-pressed="false" data-chain="ethereum">Ethereum</button>
+                  <button type="button" aria-pressed="false" data-chain="arbitrum">Arbitrum</button>
+                  <button type="button" aria-pressed="false" data-chain="base">Base</button>
+                  <button type="button" aria-pressed="false" data-chain="bnb">BNB Chain</button>
+                </div>
+              </div>
+              <div class="ownership-filters" data-token-filter hidden>
+                <span>Authorized asset</span>
+                <div class="ownership-chip-row" role="group" aria-label="Illustrative asset">
+                  <button type="button" aria-pressed="true" data-token="usdc">USDC</button>
+                  <button type="button" aria-pressed="false" data-token="usdt">USDT</button>
+                  <button type="button" aria-pressed="false" data-token="btc">BTC</button>
+                  <button type="button" aria-pressed="false" data-token="eth">ETH</button>
+                </div>
+              </div>
+              <div class="ownership-vault-list" aria-live="polite">
+                <button type="button" data-vault-option="conservative"
+                  ><div>
+                    <span class="vault-risk vault-risk--low">Lower risk</span><strong
+                      data-vault-name>Conservative</strong
+                    ><small data-vault-detail>More liquidity, fewer moving parts</small>
+                  </div><span
+                    ><small>Illustrative APY</small><strong data-vault-apy>3.2%</strong></span
+                  ></button
+                >
+                <button type="button" data-vault-option="balanced"
+                  ><div>
+                    <span class="vault-risk vault-risk--medium">Moderate risk</span><strong
+                      data-vault-name>Balanced</strong
+                    ><small data-vault-detail>A balance between growth and flexibility</small>
+                  </div><span
+                    ><small>Illustrative APY</small><strong data-vault-apy>5.1%</strong></span
+                  ></button
+                >
+                <button type="button" data-vault-option="opportunity"
+                  ><div>
+                    <span class="vault-risk vault-risk--high">Higher risk</span><strong
+                      data-vault-name>Opportunity</strong
+                    ><small data-vault-detail>More ways to earn, with more risk</small>
+                  </div><span
+                    ><small>Illustrative APY</small><strong data-vault-apy>7.8%</strong></span
+                  ></button
+                >
+              </div>
+            </div>
+            <span class="ownership-bridge ownership-bridge--in" aria-hidden="true"><i></i></span>
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <div class="container ownership-boundary-explainer">
+      <header>
+        <p class="eyebrow">The capital boundary · six checks</p><h3>
+          Nothing crosses it silently.
+        </h3><p>
+          Six distinct checks follow capital from wallet ownership to withdrawal: who controls it,
+          what is requested, what gets signed, how the position is represented, where it is
+          allocated and under which conditions it can return.
+        </p>
+      </header>
+      <div class="boundary-steps">
+        <article class="boundary-step--wallet">
+          <span>01</span><strong>Wallet ownership</strong><small
+            >Your recovery phrase secures the wallet. Jethos neither stores it nor can recreate it.</small
+          >
+        </article>
+        <article class="boundary-step--authorization">
+          <span>02</span><strong>Explicit intent</strong><small
+            >You choose the asset, exact amount, requested action and destination before continuing.</small
+          >
+        </article>
+        <article class="boundary-step--authorization">
+          <span>03</span><strong>Wallet authorization</strong><small
+            >The wallet shows what will be signed. Nothing moves without a valid confirmation.</small
+          >
+        </article>
+        <article class="boundary-step--vault">
+          <span>04</span><strong>Vault position</strong><small
+            >Only the deposited amount enters vault rules; shares represent the resulting economic
+            position.</small
+          >
+        </article>
+        <article class="boundary-step--vault">
+          <span>05</span><strong>Visible allocation</strong><small
+            >Eligible integrations, current routes, costs and material dependencies should remain
+            inspectable.</small
+          >
+        </article>
+        <article class="boundary-step--vault">
+          <span>06</span><strong>Withdrawal</strong><small
+            >You request the exit; timing and amount remain subject to contract state, reserves and
+            available liquidity.</small
+          >
+        </article>
+      </div>
+      <div class="immersive-controls boundary-path-controls">
+        <div class="immersive-legend" aria-label="Step color legend">
+          <span class="immersive-key immersive-key--wallet">Wallet control</span><span
+            class="immersive-key immersive-key--gate">Intent &amp; authorization</span
+          ><span class="immersive-key immersive-key--vault">Vault position &amp; exit</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

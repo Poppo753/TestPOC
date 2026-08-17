@@ -1,0 +1,13 @@
+@layer components {
+  .allocation-fill--48 {
+    --allocation: 48%;
+  }
+
+  .allocation-fill--34 {
+    --allocation: 34%;
+  }
+
+  .allocation-fill--18 {
+    --allocation: 18%;
+  }
+}

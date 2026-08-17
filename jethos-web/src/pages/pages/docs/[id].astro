@@ -1,0 +1,126 @@
+---
+import { getCollection, render, type CollectionEntry } from 'astro:content';
+
+import Container from '../../../design-system/composition/Container.astro';
+import Section from '../../../design-system/composition/Section.astro';
+import Badge from '../../../design-system/primitives/Badge.astro';
+import Eyebrow from '../../../design-system/primitives/Eyebrow.astro';
+import { editorialContentRepository } from '../../../content/local-repository';
+import type { DocsManifest } from '../../../content/schemas';
+import { documentDownload } from '../../../features/docs/model';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import '../../../styles/legacy/documentation.css';
+
+type DocumentRecord = DocsManifest['documents'][number];
+
+interface Props {
+  document: DocumentRecord;
+  entry: CollectionEntry<'documents'>;
+}
+
+export async function getStaticPaths() {
+  const [manifest, entries] = await Promise.all([
+    editorialContentRepository.getDocsManifest(),
+    getCollection('documents'),
+  ]);
+  const entriesById = new Map(entries.map((entry) => [entry.id, entry]));
+
+  return manifest.documents.map((document) => {
+    const id = document.file.replace(/\.md$/u, '');
+    const entry = entriesById.get(id);
+    if (!entry) throw new Error(`Documentation source missing: ${document.file}`);
+    return { params: { id: document.id }, props: { document, entry } };
+  });
+}
+
+const { document, entry } = Astro.props;
+const { Content, headings } = await render(entry);
+const tocHeadings = headings.filter((heading) => heading.depth <= 3);
+---
+
+<BaseLayout
+  title={`${document.title} — Jethos documentation`}
+  description={document.subtitle}
+  page="docs"
+  canonicalPath={`/pages/docs/${document.id}.html`}
+>
+  <header class="page-hero document-page-header">
+    <Container>
+      <Eyebrow>Documentation · {document.category}</Eyebrow>
+      <p class="lede">{document.subtitle}</p>
+      <div class="document-page-actions">
+        <Badge>{document.id}</Badge>
+        <a class="button button--secondary" href={documentDownload(document.file)} download>
+          Download .md
+        </a>
+        <a class="button button--ghost" href="/pages/docs.html">All documents</a>
+      </div>
+    </Container>
+  </header>
+  <Section>
+    <div class="document-page-layout">
+      <nav class="doc-toc" data-document-toc aria-label="Document sections">
+        {
+          tocHeadings.map((heading) => (
+            <a class={`doc-toc__level-${heading.depth}`} href={`#${heading.slug}`}>
+              {heading.text}
+            </a>
+          ))
+        }
+      </nav>
+      <article class="doc-article document-page-article" tabindex="0" aria-label="Document content">
+        <div class="doc-article__inner" data-document-body>
+          <Content />
+        </div>
+      </article>
+    </div>
+  </Section>
+</BaseLayout>
+
+<style>
+  .document-page-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+  }
+
+  .document-page-header .lede {
+    max-width: 62rem;
+    margin-top: 0.75rem;
+  }
+
+  .document-page-layout {
+    display: grid;
+    grid-template-columns: minmax(13rem, 16rem) minmax(0, 1fr);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--surface-raised);
+  }
+
+  .document-page-layout > .doc-toc {
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100vh - 2rem);
+  }
+
+  .document-page-article {
+    overflow: visible;
+  }
+
+  @media (max-width: 800px) {
+    .document-page-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .document-page-layout > .doc-toc {
+      display: block;
+      position: static;
+      max-height: none;
+      border-right: 0;
+      border-bottom: 1px solid var(--border);
+    }
+  }
+</style>

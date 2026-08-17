@@ -1,0 +1,12 @@
+---
+interface Props {
+  variant?: 'default' | 'soft' | 'accent';
+  class?: string;
+}
+
+const { variant = 'default', class: className } = Astro.props;
+---
+
+<article class:list={['card', variant !== 'default' && `card--${variant}`, className]}>
+  <slot />
+</article>

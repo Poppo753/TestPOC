@@ -1,0 +1,12 @@
+---
+interface Props {
+  justify?: 'start' | 'between' | 'center';
+  class?: string;
+}
+
+const { justify = 'start', class: className } = Astro.props;
+---
+
+<div class:list={['cluster', justify !== 'start' && `cluster--${justify}`, className]}>
+  <slot />
+</div>

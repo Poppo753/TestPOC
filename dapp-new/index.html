@@ -1,278 +1,569 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-root=".">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
-  <meta name="googlebot" content="noindex, nofollow">
-  <title>Jethos Protocol - DeFi Strategy</title>
-  
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- Custom Tailwind Config -->
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            purple: {
-              50: '#faf5ff',
-              100: '#f3e8ff',
-              200: '#e9d5ff',
-              300: '#d8b4fe',
-              400: '#c084fc',
-              500: '#a855f7',
-              600: '#9333ea',
-              700: '#7e22ce',
-              800: '#6b21a8',
-              900: '#581c87',
-            },
-          },
-          animation: {
-            'spin': 'spin 1s linear infinite',
-            'slide-in': 'slideIn 0.3s ease-out',
-            'slide-out': 'slideOut 0.3s ease-in',
-          },
-          keyframes: {
-            slideIn: {
-              '0%': { transform: 'translateX(100%)', opacity: '0' },
-              '100%': { transform: 'translateX(0)', opacity: '1' },
-            },
-            slideOut: {
-              '0%': { transform: 'translateX(0)', opacity: '1' },
-              '100%': { transform: 'translateX(100%)', opacity: '0' },
-            },
-          },
-        },
-      },
-    }
-  </script>
-  
-  <!-- Custom Styles -->
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-        sans-serif;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
-
-    /* Custom scrollbar */
-    ::-webkit-scrollbar {
-      width: 10px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: rgba(255, 255, 255, 0.1);
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: rgba(147, 51, 234, 0.5);
-      border-radius: 5px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: rgba(147, 51, 234, 0.8);
-    }
-
-    /* Loading animation */
-    @keyframes pulse {
-      0%, 100% {
-        opacity: 1;
-      }
-      50% {
-        opacity: 0.5;
-      }
-    }
-
-    .animate-pulse {
-      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-    }
-
-    /* Gradient text */
-    .gradient-text {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    /* Glass effect */
-    .glass {
-      background: rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-    }
-
-    /* Hover glow effect */
-    .hover-glow {
-      transition: all 0.3s ease;
-    }
-
-    .hover-glow:hover {
-      box-shadow: 0 0 30px rgba(147, 51, 234, 0.5);
-    }
-
-    /* Hide number input arrows */
-    input[type=number]::-webkit-inner-spin-button,
-    input[type=number]::-webkit-outer-spin-button {
-      -webkit-appearance: none;
-      margin: 0;
-    }
-
-    input[type=number] {
-      -moz-appearance: textfield;
-    }
-
-    /* Custom animations for alerts */
-    .animate-slide-in {
-      animation: slideIn 0.3s ease-out forwards;
-    }
-
-    .animate-slide-out {
-      animation: slideOut 0.3s ease-in forwards;
-    }
-
-    /* Link styles */
-    a {
-      color: inherit;
-      text-decoration: none;
-      transition: opacity 0.2s ease;
-    }
-
-    a:hover {
-      opacity: 0.8;
-    }
-
-    /* Focus styles for accessibility */
-    *:focus {
-      outline: 2px solid rgba(147, 51, 234, 0.5);
-      outline-offset: 2px;
-    }
-
-    button:focus {
-      outline: 2px solid rgba(147, 51, 234, 0.8);
-    }
-
-    /* Skeleton Loading Styles */
-    .skeleton {
-      display: block !important;
-      position: relative;
-      overflow: hidden;
-      background: rgba(255, 255, 255, 0.15) !important;
-      border: 2px solid rgba(147, 51, 234, 0.5) !important; /* Debug border */
-      border-radius: 8px;
-      min-width: 20px;
-      min-height: 20px;
-    }
-
-    .skeleton.rectangular {
-      border-radius: 8px;
-    }
-
-    .skeleton.circular {
-      border-radius: 50%;
-    }
-
-    .skeleton.text {
-      border-radius: 4px;
-      height: 1em;
-      margin-bottom: 0.5em;
-    }
-
-    .skeleton-shimmer {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(
-        90deg,
-        rgba(244, 114, 182, 0) 0%,
-        rgba(244, 114, 182, 0.6) 50%,
-        rgba(244, 114, 182, 0) 100%
-      );
-      animation: shimmer 2s ease-in-out infinite;
-      transform: translateX(-100%);
-    }
-
-    @keyframes shimmer {
-      0% {
-        transform: translateX(-100%);
-      }
-      100% {
-        transform: translateX(200%);
-      }
-    }
-
-    .skeleton-container {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    /* Video Background */
-    #video-background {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      z-index: -1;
-      opacity: 0.95;
-    }
-
-    /* Ensure content is above video */
-    #app {
-      position: relative;
-      z-index: 1;
-      padding-top: 64px; /* Space for fixed navbar */
-    }
-  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Jethos — Home banking, rebuilt around ownership</title>
+  <meta name="description" content="Hold, invest and understand digital assets from a self-custodial financial home built around transparent vaults and verifiable capital routes.">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/layouts.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/pages.css">
+  <link rel="stylesheet" href="assets/css/home-refresh.css">
+  <script type="module" src="assets/js/core/site-shell.js"></script>
+  <script type="module" src="assets/js/features/site-features.js"></script>
+  <script type="module" src="assets/js/features/ownership-journey.js"></script>
+  <script type="module" src="assets/js/features/roadmap-strip.js"></script>
+  <script type="module" src="assets/js/features/receipt-allocation.js"></script>
+  <script type="module" src="assets/js/features/financial-synthesis.js"></script>
+  <script type="module" src="assets/js/features/decision-runway.js"></script>
+  <script type="module" src="assets/js/features/strategy-inspector.js"></script>
+  <script type="module" src="assets/js/features/architecture-map.js"></script>
 </head>
-<body>
-  <!-- NavBar -->
-  <div id="navbar-root"></div>
-
-  <!-- Video Background -->
-  <video id="video-background" autoplay loop muted playsinline>
-    <source src="./20s slowed compolex backgound.mp4" type="video/mp4">
-  </video>
-
-  <!-- App Container -->
-  <div id="app"></div>
-
-  <!-- Loading Indicator (optional, shown while app initializes) -->
-  <div id="loader" style="display: none;">
-    <div class="fixed inset-0 bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 flex items-center justify-center">
-      <div class="text-center">
-        <div class="text-6xl mb-4 animate-pulse">🌊</div>
-        <h2 class="text-2xl font-bold text-white mb-2">Loading Jethos Protocol</h2>
-        <p class="text-purple-200">Connecting to Arbitrum...</p>
+<body data-page="home" data-webgl-scene="ownership">
+  <div class="page-grid" aria-hidden="true"></div>
+  <div data-site-header></div>
+  <main id="main-content">
+    <section class="hero" data-boundary-scene-state="closed">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <span class="badge badge--poc">Private PoC · USDC Conservative · Arbitrum</span>
+          <h1>Home banking, <span class="text-gradient">rebuilt around ownership.</span></h1>
+          <p class="lede">Hold, invest and understand your digital assets from one financial home. Jethos combines self-custody, transparent vaults and verifiable capital allocation in a familiar experience.</p>
+          <div class="cluster"><a class="button button--primary" href="demo/index.html">Try the interactive demo</a><a class="button button--secondary" href="#capital-boundary">Explore Jethos</a></div>
+          <p class="hero-text-link"><a href="pages/docs.html">Read the documentation →</a></p>
+          <p class="muted hero-disclaimer">Only explicitly approved or deposited assets enter Jethos vault rules. Current availability: private USDC Conservative PoC on Arbitrum. Jethos is software, not a bank or a guarantee of returns.</p>
+        </div>
+        <div class="finance-panel ownership-ledger" data-ownership-source aria-label="Illustrative Jethos financial-home overview">
+          <div class="cluster cluster--between"><span class="eyebrow">Financial home preview</span><span class="badge badge--illustrative">Illustrative</span></div>
+          <p class="muted panel-kicker">Assets visible through Jethos</p><div class="balance-total">$12,480.00</div>
+          <div class="balance-split">
+            <div class="balance-card balance-card--wallet"><span class="badge badge--live">Available</span><span class="metric__label">In your wallet</span><div class="metric__value">$9,200</div><small class="muted">Outside vault rules</small></div>
+            <div class="balance-card balance-card--vault"><span class="badge badge--illustrative">Invested</span><span class="metric__label">In a vault</span><div class="metric__value">$3,280</div><small class="muted">Route and rules visible</small></div>
+          </div>
+          <div class="finance-panel__boundary"><span>Exact authorization</span><i class="boundary-node" aria-hidden="true"></i><span>Transparent vault</span></div>
+          <div class="route-strip"><span>Hold</span><i class="route-line" aria-hidden="true"></i><span>Invest · understand · exit</span></div>
+          <p class="source-label panel-source">Example interface—not live account data</p>
+        </div>
       </div>
-    </div>
-  </div>
+    </section>
 
-  <!-- NavBar Script -->
-  <script type="module">
-    import { NavBar } from './src/organisms/NavBar.js';
-    const navbar = new NavBar({ activePage: 'app', transparent: false });
-    document.getElementById('navbar-root').appendChild(navbar.render());
-  </script>
+    <section class="product-horizons" aria-label="Jethos product horizons">
+      <div class="container horizon-strip">
+        <button type="button" class="horizon-item horizon-item--current" data-horizon-step="poc" aria-expanded="false"><span class="horizon-node"><b>01</b><small>Now</small></span><span class="horizon-copy"><strong>Private USDC PoC</strong><small>Validate one focused vault</small></span></button>
+        <span class="horizon-link" aria-hidden="true"><i></i></span>
+        <button type="button" class="horizon-item" data-horizon-step="multi-asset" aria-expanded="false"><span class="horizon-node"><b>02</b><small>Next</small></span><span class="horizon-copy"><strong>Multi-asset vaults</strong><small>Add authorized assets</small></span></button>
+        <span class="horizon-link" aria-hidden="true"><i></i></span>
+        <button type="button" class="horizon-item" data-horizon-step="multi-chain" aria-expanded="false"><span class="horizon-node"><b>03</b><small>Expand</small></span><span class="horizon-copy"><strong>Multi-chain vaults</strong><small>Open validated networks</small></span></button>
+        <span class="horizon-link" aria-hidden="true"><i></i></span>
+        <button type="button" class="horizon-item" data-horizon-step="consumer" aria-expanded="false"><span class="horizon-node"><b>04</b><small>Product</small></span><span class="horizon-copy"><strong>Consumer app</strong><small>Make the experience effortless</small></span></button>
+        <span class="horizon-link" aria-hidden="true"><i></i></span>
+        <button type="button" class="horizon-item horizon-item--vision" data-horizon-step="vision" aria-expanded="false"><span class="horizon-node"><b>05</b><small>Vision</small></span><span class="horizon-copy"><strong>Complete financial home</strong><small>Hold, invest, understand and use</small></span></button>
+      </div>
+      <aside class="horizon-popover" data-horizon-popover hidden aria-live="polite" aria-labelledby="horizon-popover-title">
+        <span class="eyebrow" data-horizon-popover-label>Phase 01 · Now</span>
+        <strong id="horizon-popover-title" data-horizon-popover-title>Private USDC PoC</strong>
+        <p data-horizon-popover-description></p>
+        <small data-horizon-popover-gate></small>
+      </aside>
+    </section>
 
-  <!-- Import Scripts -->
-  <script type="module" src="./main.js"></script>
+    <section class="immersive-section ownership-journey" id="capital-boundary" data-ownership-journey data-boundary-scene-state="boundary" aria-labelledby="capital-boundary-title">
+      <div class="immersive-shell">
+        <header class="container ownership-journey__head">
+          <div><span class="eyebrow">The center of Jethos</span><h2 id="capital-boundary-title">One home where you stay in control.</h2></div>
+          <p class="lede">Jethos cannot move, invest or use assets held in your wallet unless you authorize it. If you choose to invest, you decide how much, when and where. You also choose how much complexity you want to manage, so you can always understand where your money goes.</p>
+        </header>
+        <div class="immersive-viewport" data-webgl-host><div class="immersive-fallback" aria-hidden="true"><div class="fallback-object fallback--ownership"><i></i><i></i><i></i></div></div><span class="immersive-status" data-webgl-status>Loading visual</span></div>
+        <div class="ownership-stage-wrap">
+          <div class="ownership-stage">
+            <article class="ownership-side ownership-side--wallet" data-ownership-side="wallet">
+              <span class="ownership-side__index">01 · Your account</span>
+              <h3>You have control. You have custody.</h3>
+              <p>Your wallet is yours. Its 24-word recovery phrase is created for you when you sign up and is never stored by Jethos.</p>
+              <p>Your money stays in your wallet until you approve an action. You choose what moves, how much and where it goes.</p>
+              <div class="ownership-app-window ownership-wallet-preview" data-wallet-allocation aria-label="Illustrative wallet interface">
+                <div class="ownership-window-bar"><span>Wallet</span><small>Liquid assets</small></div>
+                <div class="wallet-preview__total"><small>Total balance</small><strong>$9,200.00</strong><span>Available in your wallet</span></div>
+                <div class="wallet-preview__body">
+                  <div class="wallet-preview__assets">
+                    <button type="button" data-wallet-asset="usdc" aria-pressed="false"><i class="asset-dot asset-dot--usdc"></i><span><strong>USDC</strong><small>3,900 USDC</small></span><span class="wallet-asset-value"><b>$3,900</b><small>42% of wallet</small></span></button>
+                    <button type="button" data-wallet-asset="usdt" aria-pressed="false"><i class="asset-dot asset-dot--usdt"></i><span><strong>USDT</strong><small>1,800 USDT</small></span><span class="wallet-asset-value"><b>$1,800</b><small>20% of wallet</small></span></button>
+                    <button type="button" data-wallet-asset="btc" aria-pressed="false"><i class="asset-dot asset-dot--btc"></i><span><strong>BTC</strong><small>0.031 BTC</small></span><span class="wallet-asset-value"><b>$2,100</b><small>23% of wallet</small></span></button>
+                    <button type="button" data-wallet-asset="eth" aria-pressed="false"><i class="asset-dot asset-dot--eth"></i><span><strong>ETH</strong><small>0.48 ETH</small></span><span class="wallet-asset-value"><b>$1,400</b><small>15% of wallet</small></span></button>
+                  </div>
+                  <svg class="wallet-preview__chart" viewBox="0 0 100 100" role="img" aria-label="Illustrative asset allocation. Use each asset row or chart segment to inspect its share.">
+                    <circle class="wallet-preview__track" cx="50" cy="50" r="34" pathLength="100"></circle>
+                    <g transform="rotate(-90 50 50)">
+                      <circle class="wallet-preview__slice wallet-preview__slice--usdc" data-wallet-slice="usdc" cx="50" cy="50" r="34" pathLength="100" stroke-dasharray="40 60" stroke-dashoffset="0" tabindex="0" role="button" aria-label="USDC: 42 percent, 3,900 dollars"></circle>
+                      <circle class="wallet-preview__slice wallet-preview__slice--usdt" data-wallet-slice="usdt" cx="50" cy="50" r="34" pathLength="100" stroke-dasharray="18 82" stroke-dashoffset="-42" tabindex="0" role="button" aria-label="USDT: 20 percent, 1,800 dollars"></circle>
+                      <circle class="wallet-preview__slice wallet-preview__slice--btc" data-wallet-slice="btc" cx="50" cy="50" r="34" pathLength="100" stroke-dasharray="21 79" stroke-dashoffset="-62" tabindex="0" role="button" aria-label="BTC: 23 percent, 2,100 dollars"></circle>
+                      <circle class="wallet-preview__slice wallet-preview__slice--eth" data-wallet-slice="eth" cx="50" cy="50" r="34" pathLength="100" stroke-dasharray="13 87" stroke-dashoffset="-85" tabindex="0" role="button" aria-label="ETH: 15 percent, 1,400 dollars"></circle>
+                    </g>
+                    <text x="50" y="48" text-anchor="middle" class="wallet-preview__chart-value" data-wallet-chart-value>$9.2k</text>
+                    <text x="50" y="59" text-anchor="middle" class="wallet-preview__chart-label" data-wallet-chart-label>liquid</text>
+                  </svg>
+                </div>
+                <span class="ownership-bridge ownership-bridge--out" aria-hidden="true"><i></i></span>
+              </div>
+              <div class="ownership-warning"><strong>Keep your recovery phrase private.</strong><span>It is the key to recovering your wallet. Never share it with anyone.</span></div>
+            </article>
+
+            <article class="finance-panel ownership-ledger ownership-ledger--center" data-ownership-dashboard aria-label="The Jethos account and vault boundary">
+              <div class="cluster cluster--between"><span class="eyebrow">Your financial home</span><span class="badge badge--illustrative">Illustrative</span></div>
+              <p class="muted panel-kicker">Assets visible through Jethos</p><div class="balance-total">$12,480.00</div>
+              <div class="balance-split">
+                <div class="balance-card balance-card--wallet"><span class="badge badge--live">Available</span><span class="metric__label">In your wallet</span><div class="metric__value">$9,200</div><small class="muted">Under your direct control</small></div>
+                <div class="balance-card balance-card--vault"><span class="badge badge--illustrative">Invested</span><span class="metric__label">In transparent vaults</span><div class="metric__value">$3,280</div><small class="muted">Route, rules and risk visible</small></div>
+              </div>
+              <div class="finance-panel__boundary"><span>Exact authorization</span><i class="boundary-node" aria-hidden="true"></i><span>Transparent vault</span></div>
+              <div class="route-strip"><span>Hold</span><i class="route-line" aria-hidden="true"></i><span>Invest · understand · exit</span></div>
+              <p class="source-label panel-source">Example interface—not live account data</p>
+            </article>
+
+            <article class="ownership-side ownership-side--vaults" data-ownership-side="vaults">
+              <span class="ownership-side__index">02 · Your vault experience</span>
+              <h3>You choose how, when and where to invest.</h3>
+              <p class="ownership-mode-intro">Pick the experience that feels right. Base keeps it simple. Pro adds network choice. Advanced also lets you choose the asset.</p>
+              <div class="ownership-app-window ownership-vault-preview">
+                <aside class="ownership-vault-popover" data-vault-popover hidden aria-live="polite">
+                  <div class="ownership-vault-popover__head"><div><span class="eyebrow">Illustrative allocation</span><strong data-vault-popover-title>Conservative vault</strong></div><button type="button" data-vault-popover-close aria-label="Close allocation details">×</button></div>
+                  <p data-vault-popover-summary>Where this illustrative vault would place its capital.</p>
+                  <div class="ownership-allocation-layout">
+                    <div class="ownership-allocation-list" data-vault-popover-allocations></div>
+                    <svg class="ownership-allocation-chart" viewBox="0 0 120 120" role="img" aria-label="Illustrative vault allocation. Hover a segment or list item to inspect it.">
+                      <circle class="ownership-allocation-chart__track" cx="60" cy="60" r="42" pathLength="100"></circle>
+                      <g transform="rotate(-90 60 60)" data-vault-popover-slices></g>
+                      <text x="60" y="57" text-anchor="middle" data-vault-chart-value>100%</text>
+                      <text x="60" y="70" text-anchor="middle" data-vault-chart-label>allocated</text>
+                    </svg>
+                  </div>
+                  <small>Example only. This is not a live allocation or an available product.</small>
+                </aside>
+                <div class="ownership-window-bar"><span>Vaults</span><small>Choose your view</small></div>
+                <div class="ownership-mode-tabs" role="tablist" aria-label="Vault experience level">
+                  <button type="button" role="tab" aria-selected="true" aria-controls="vault-mode-panel" data-vault-mode="base">Base</button>
+                  <button type="button" role="tab" aria-selected="false" aria-controls="vault-mode-panel" data-vault-mode="pro">Pro</button>
+                  <button type="button" role="tab" aria-selected="false" aria-controls="vault-mode-panel" data-vault-mode="advanced">Advanced</button>
+                </div>
+                <div class="ownership-mode-panel" id="vault-mode-panel" role="tabpanel">
+                  <div class="ownership-mode-copy"><span class="badge badge--illustrative">Example</span><p data-vault-mode-copy>Choose how much to invest and the level of risk that feels right. Jethos keeps network and asset details out of the way.</p></div>
+                <div class="ownership-filters" data-chain-filter hidden>
+                  <span>Network</span>
+                  <div class="ownership-chip-row" role="group" aria-label="Illustrative network">
+                    <button type="button" aria-pressed="true" data-chain="plasma">Plasma</button>
+                    <button type="button" aria-pressed="false" data-chain="ethereum">Ethereum</button>
+                    <button type="button" aria-pressed="false" data-chain="arbitrum">Arbitrum</button>
+                    <button type="button" aria-pressed="false" data-chain="base">Base</button>
+                    <button type="button" aria-pressed="false" data-chain="bnb">BNB Chain</button>
+                  </div>
+                </div>
+                <div class="ownership-filters" data-token-filter hidden>
+                  <span>Authorized asset</span>
+                  <div class="ownership-chip-row" role="group" aria-label="Illustrative asset">
+                    <button type="button" aria-pressed="true" data-token="usdc">USDC</button>
+                    <button type="button" aria-pressed="false" data-token="usdt">USDT</button>
+                    <button type="button" aria-pressed="false" data-token="btc">BTC</button>
+                    <button type="button" aria-pressed="false" data-token="eth">ETH</button>
+                  </div>
+                </div>
+                  <div class="ownership-vault-list" aria-live="polite">
+                    <button type="button" data-vault-option="conservative"><div><span class="vault-risk vault-risk--low">Lower risk</span><strong data-vault-name>Conservative</strong><small data-vault-detail>More liquidity, fewer moving parts</small></div><span><small>Illustrative APY</small><strong data-vault-apy>3.2%</strong></span></button>
+                    <button type="button" data-vault-option="balanced"><div><span class="vault-risk vault-risk--medium">Moderate risk</span><strong data-vault-name>Balanced</strong><small data-vault-detail>A balance between growth and flexibility</small></div><span><small>Illustrative APY</small><strong data-vault-apy>5.1%</strong></span></button>
+                    <button type="button" data-vault-option="opportunity"><div><span class="vault-risk vault-risk--high">Higher risk</span><strong data-vault-name>Opportunity</strong><small data-vault-detail>More ways to earn, with more risk</small></div><span><small>Illustrative APY</small><strong data-vault-apy>7.8%</strong></span></button>
+                  </div>
+                </div>
+                <span class="ownership-bridge ownership-bridge--in" aria-hidden="true"><i></i></span>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <div class="container ownership-boundary-explainer">
+          <header><p class="eyebrow">The capital boundary · six checks</p><h3>Nothing crosses it silently.</h3><p>Six distinct checks follow capital from wallet ownership to withdrawal: who controls it, what is requested, what gets signed, how the position is represented, where it is allocated and under which conditions it can return.</p></header>
+          <div class="boundary-steps">
+            <article class="boundary-step--wallet"><span>01</span><strong>Wallet ownership</strong><small>Your recovery phrase secures the wallet. Jethos neither stores it nor can recreate it.</small></article>
+            <article class="boundary-step--authorization"><span>02</span><strong>Explicit intent</strong><small>You choose the asset, exact amount, requested action and destination before continuing.</small></article>
+            <article class="boundary-step--authorization"><span>03</span><strong>Wallet authorization</strong><small>The wallet shows what will be signed. Nothing moves without a valid confirmation.</small></article>
+            <article class="boundary-step--vault"><span>04</span><strong>Vault position</strong><small>Only the deposited amount enters vault rules; shares represent the resulting economic position.</small></article>
+            <article class="boundary-step--vault"><span>05</span><strong>Visible allocation</strong><small>Eligible integrations, current routes, costs and material dependencies should remain inspectable.</small></article>
+            <article class="boundary-step--vault"><span>06</span><strong>Withdrawal</strong><small>You request the exit; timing and amount remain subject to contract state, reserves and available liquidity.</small></article>
+          </div>
+          <div class="immersive-controls boundary-path-controls"><div class="immersive-legend" aria-label="Step color legend"><span class="immersive-key immersive-key--wallet">Wallet control</span><span class="immersive-key immersive-key--gate">Intent &amp; authorization</span><span class="immersive-key immersive-key--vault">Vault position &amp; exit</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="transparency" data-boundary-scene-state="transparent">
+      <div class="container receipt-layout">
+        <div class="reveal"><p class="eyebrow">Jethos Transparency Receipt</p><h2>A vault position should explain itself.</h2><p class="lede">The goal is not merely to show where capital sits, but why a route was selected, what it costs, whether it can exit and which evidence supports it.</p><p class="callout"><strong>Explainability is part of the product.</strong> A balance without route, policy and proof is incomplete.</p></div>
+        <article class="proof-receipt receipt-dashboard reveal" aria-label="Illustrative transparency receipt">
+          <div class="cluster cluster--between"><div><span class="source-label">USDC CONSERVATIVE · EXAMPLE</span><h3>Vault position receipt</h3></div><span class="badge badge--illustrative">Illustrative</span></div>
+          <div class="receipt-total"><span>Position value</span><strong>1,024.71 USDC</strong></div>
+          <div class="receipt-grid">
+            <div class="receipt-stat"><span>Expected net yield</span><strong>4.18%</strong></div>
+            <div class="receipt-stat receipt-stat--costs">
+              <span>Estimated costs</span>
+              <strong>3.42 USDC</strong>
+              <button class="receipt-help" type="button" aria-label="Show estimated cost breakdown" aria-describedby="receipt-cost-breakdown">?</button>
+              <div class="receipt-cost-tooltip" id="receipt-cost-breakdown" role="tooltip">
+                <strong>Illustrative cost breakdown</strong>
+                <span><em>Network execution</em><b>0.18 USDC</b></span>
+                <span><em>Vault entry and exit</em><b>0.24 USDC</b></span>
+                <span><em>Underlying protocols</em><b>3.00 USDC</b></span>
+                <span class="receipt-cost-total"><em>Total estimate</em><b>3.42 USDC</b></span>
+              </div>
+            </div>
+            <div class="receipt-stat"><span>Exit status</span><strong>Available now</strong></div>
+            <div class="receipt-stat"><span>Evidence snapshot</span><strong>Illustrative · not live</strong><small>In production: block and timestamp</small></div>
+          </div>
+          <div class="receipt-allocation" data-receipt-allocation-chart>
+            <div class="receipt-allocation__heading">
+              <h4>Vault current allocations</h4>
+              <span>Illustrative snapshot</span>
+            </div>
+            <div class="receipt-allocation__layout">
+              <svg class="allocation-donut" viewBox="0 0 120 120" role="img" aria-label="Illustrative allocation: 35% liquid reserve, 25% Aave V3, 20% Euler V2 and 20% Morpho">
+                <circle class="allocation-donut__track" cx="60" cy="60" r="42" pathLength="100"></circle>
+                <g transform="rotate(-90 60 60)">
+                  <circle class="allocation-donut__slice allocation-donut__slice--reserve" data-receipt-slice="reserve" cx="60" cy="60" r="42" pathLength="100" stroke-dasharray="35 65" stroke-dashoffset="0" tabindex="0" role="button" aria-label="Liquid reserve: 35 percent allocation, 0.0 percent illustrative APY"></circle>
+                  <circle class="allocation-donut__slice allocation-donut__slice--aave" data-receipt-slice="aave" cx="60" cy="60" r="42" pathLength="100" stroke-dasharray="25 75" stroke-dashoffset="-35" tabindex="0" role="button" aria-label="Aave V3: 25 percent allocation, 4.1 percent illustrative APY"></circle>
+                  <circle class="allocation-donut__slice allocation-donut__slice--euler" data-receipt-slice="euler" cx="60" cy="60" r="42" pathLength="100" stroke-dasharray="20 80" stroke-dashoffset="-60" tabindex="0" role="button" aria-label="Euler V2: 20 percent allocation, 5.3 percent illustrative APY"></circle>
+                  <circle class="allocation-donut__slice allocation-donut__slice--morpho" data-receipt-slice="morpho" cx="60" cy="60" r="42" pathLength="100" stroke-dasharray="20 80" stroke-dashoffset="-80" tabindex="0" role="button" aria-label="Morpho: 20 percent allocation, 4.8 percent illustrative APY"></circle>
+                </g>
+                <text x="60" y="57" text-anchor="middle" data-receipt-chart-value>100%</text>
+                <text x="60" y="70" text-anchor="middle" data-receipt-chart-label>mapped</text>
+              </svg>
+              <div class="allocation allocation--receipt">
+                <div class="allocation-head" aria-hidden="true"><span></span><span></span><span>Allocation</span><span>APY</span></div>
+                <div class="allocation-row allocation-row--reserve" data-receipt-allocation="reserve" tabindex="0" role="button" aria-label="Liquid reserve: 35 percent allocation, 0.0 percent illustrative APY"><span><i></i>Liquid reserve</span><div class="allocation-track"><div class="allocation-fill" style="--allocation:35%"></div></div><strong>35%</strong><b>0.0%</b></div>
+                <div class="allocation-row allocation-row--aave" data-receipt-allocation="aave" tabindex="0" role="button" aria-label="Aave V3: 25 percent allocation, 4.1 percent illustrative APY"><span><i></i>Aave V3</span><div class="allocation-track"><div class="allocation-fill" style="--allocation:25%"></div></div><strong>25%</strong><b>4.1%</b></div>
+                <div class="allocation-row allocation-row--euler" data-receipt-allocation="euler" tabindex="0" role="button" aria-label="Euler V2: 20 percent allocation, 5.3 percent illustrative APY"><span><i></i>Euler V2</span><div class="allocation-track"><div class="allocation-fill" style="--allocation:20%"></div></div><strong>20%</strong><b>5.3%</b></div>
+                <div class="allocation-row allocation-row--morpho" data-receipt-allocation="morpho" tabindex="0" role="button" aria-label="Morpho: 20 percent allocation, 4.8 percent illustrative APY"><span><i></i>Morpho</span><div class="allocation-track"><div class="allocation-fill" style="--allocation:20%"></div></div><strong>20%</strong><b>4.8%</b></div>
+                <small>APYs are illustrative and may change.</small>
+              </div>
+            </div>
+          </div>
+          <div class="receipt-decision"><span>Last allocation decision</span><strong>Reserve increased because Euler utilization exceeded the illustrative policy threshold.</strong></div>
+          <div class="proof-row proof-row--explained"><span>Allocation rationale<small>Why this mix was selected.</small></span><strong>Best eligible result after yield, costs, liquidity and risk limits</strong></div>
+          <div class="proof-row proof-row--explained"><span>Verification evidence<small>What lets you verify it independently.</small></span><strong>Transaction · contract · block · timestamp</strong></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section decision-section" id="risk-intelligence" data-boundary-scene-state="route">
+      <div class="container decision-layout">
+        <div class="decision-copy reveal">
+          <p class="eyebrow">Risk-adjusted intelligence</p>
+          <h2>The highest displayed APY is not automatically the best result.</h2>
+          <p class="lede">Jethos is intended to compare expected return with costs, liquidity, capacity and risk policy before an opportunity becomes eligible.</p>
+          <div class="decision-principle"><span>Headline APY</span><i>≠</i><strong>Best eligible outcome</strong></div>
+          <a class="button button--secondary" href="pages/risk-transparency.html">See the risk framework</a>
+        </div>
+
+        <article class="decision-runway reveal" data-decision-runway aria-labelledby="decision-runway-title">
+          <header class="decision-runway__header">
+            <span class="badge badge--illustrative">Illustrative decision model</span>
+            <p class="eyebrow">Route selection</p>
+            <h3 id="decision-runway-title">Three opportunities. One explainable decision.</h3>
+          </header>
+
+          <div class="decision-candidates" aria-label="Illustrative candidate routes">
+            <button type="button" class="decision-candidate decision-candidate--selected is-active" data-decision-route="route-a" aria-pressed="true">
+              <span>Route A</span><strong>4.8%</strong><small>Headline APY</small><em>Selected</em>
+            </button>
+            <button type="button" class="decision-candidate decision-candidate--watch" data-decision-route="route-b" aria-pressed="false">
+              <span>Route B</span><strong>6.1%</strong><small>Headline APY</small><em>Watch</em>
+            </button>
+            <button type="button" class="decision-candidate decision-candidate--excluded" data-decision-route="route-c" aria-pressed="false">
+              <span>Route C</span><strong>7.4%</strong><small>Headline APY</small><em>Excluded</em>
+            </button>
+          </div>
+
+          <div class="decision-gates" aria-label="Decision checks">
+            <div data-decision-gate><i>01</i><span>Net yield</span></div>
+            <div data-decision-gate><i>02</i><span>Liquidity</span></div>
+            <div data-decision-gate><i>03</i><span>Capacity</span></div>
+            <div data-decision-gate><i>04</i><span>Risk policy</span></div>
+          </div>
+
+          <div class="decision-readout" aria-live="polite">
+            <div class="decision-readout__title">
+              <span class="decision-state decision-state--eligible" data-decision-state>Eligible · selected</span>
+              <h4 data-decision-name>Route A · Liquid lending</h4>
+            </div>
+            <div class="decision-readout__metrics">
+              <div><span>Estimated net yield</span><strong data-decision-net>4.4%</strong></div>
+              <div><span>Liquidity</span><strong data-decision-liquidity>Strong</strong></div>
+              <div><span>Policy result</span><strong data-decision-policy>Pass</strong></div>
+            </div>
+            <p data-decision-reason>Selected because it remains the strongest eligible outcome after estimated costs, liquidity and policy limits.</p>
+          </div>
+
+          <footer><i></i><span>Illustrative values—not live opportunities or promised returns.</span></footer>
+        </article>
+      </div>
+    </section>
+
+    <section class="section financial-synthesis" id="financial-home" data-financial-synthesis>
+      <div class="container">
+        <header class="section-heading section-heading--center reveal">
+          <p class="eyebrow">Why Jethos</p>
+          <h2><span>Familiar to use.</span><span>Open to inspect.</span><strong>Clear at every depth.</strong></h2>
+          <p class="lede">Jethos combines a familiar financial interface with self-custody and inspectable vaults—then explains routes, costs and risks at the level of detail you choose.</p>
+        </header>
+
+        <div class="synthesis-scene reveal" data-synthesis-scene aria-label="How familiar financial interfaces and verifiable DeFi infrastructure combine in Jethos">
+          <article class="synthesis-source synthesis-source--finance" data-synthesis-source="finance" tabindex="0">
+            <div class="synthesis-source__top"><span class="synthesis-source__number">01</span><div class="card-icon" data-icon="wallet"></div></div>
+            <p class="eyebrow">Familiar financial UX</p>
+            <h3>Clear at first glance.</h3>
+            <p>Balances, available funds, invested positions and actions appear where you expect them.</p>
+            <small>What we keep: clarity and ease of use. Not intermediary custody.</small>
+          </article>
+
+          <div class="synthesis-flow synthesis-flow--finance" aria-hidden="true"><span></span><i></i></div>
+
+          <article class="synthesis-core" aria-label="Jethos explains one financial position at three levels of depth">
+            <div class="synthesis-core__brand">
+              <img src="assets/brand/jethos-mark.svg" alt="">
+              <div><span>Jethos</span><strong>Financial home</strong></div>
+              <em>THE JETHOS LAYER</em>
+            </div>
+            <div class="synthesis-core__intro" data-synthesis-output="finance">
+              <p class="eyebrow">Familiar above. Verifiable underneath.</p>
+              <h3>Simple first. Explainable all the way down.</h3>
+              <p>Start with what matters, then open the same position from plain English to protocols, rules and proof.</p>
+            </div>
+            <div class="synthesis-insights" data-synthesis-output="defi">
+              <div><span>01</span><p>What do I own?</p><strong>Wallet balance and vault positions</strong></div>
+              <div><span>02</span><p>Where does it go?</p><strong>Allocation, chain, protocols and strategy</strong></div>
+              <div><span>03</span><p>What can change?</p><strong>Yield, borrowing, fees, health and exit</strong></div>
+            </div>
+            <div class="synthesis-core__result"><i></i><span>One position · three depths</span><strong>Base · Pro · Advanced</strong></div>
+          </article>
+
+          <div class="synthesis-flow synthesis-flow--defi" aria-hidden="true"><span></span><i></i></div>
+
+          <article class="synthesis-source synthesis-source--defi" data-synthesis-source="defi" tabindex="0">
+            <div class="synthesis-source__top"><span class="synthesis-source__number">02</span><div class="card-icon" data-icon="ledger"></div></div>
+            <p class="eyebrow">Self-custody + on-chain evidence</p>
+            <h3>Open underneath.</h3>
+            <p>Ownership, transactions, contracts and vault routes can be independently checked.</p>
+            <small>What we keep: control and evidence. Not fragmented protocol complexity.</small>
+          </article>
+        </div>
+        <a class="synthesis-hint reveal" href="#strategy-inspector">Next: inspect the same strategy at each depth ↓</a>
+      </div>
+    </section>
+
+    <section class="section section-band strategy-inspector-section" id="strategy-inspector" data-boundary-scene-state="inspect">
+      <div class="container">
+        <header class="section-heading section-heading--center reveal">
+          <p class="eyebrow">Clarity, at your depth</p>
+          <h2>Simple when you want it. Detailed when you need it.</h2>
+          <p class="lede">Inspect the same illustrative strategy through three levels of detail. The underlying position does not change—only how deeply Jethos explains it.</p>
+        </header>
+
+        <div class="strategy-inspector reveal" data-strategy-inspector>
+          <div class="strategy-inspector__toolbar">
+            <div><span>Choose a strategy</span><strong data-inspector-selection>Balanced strategy</strong></div>
+            <div class="strategy-selector" role="group" aria-label="Illustrative strategy">
+              <button type="button" data-inspector-strategy="conservative" aria-pressed="false">Conservative</button>
+              <button type="button" data-inspector-strategy="balanced" aria-pressed="true">Balanced</button>
+              <button type="button" data-inspector-strategy="opportunity" aria-pressed="false">Opportunity</button>
+            </div>
+          </div>
+
+          <div class="strategy-depth" aria-hidden="true">
+            <div><i>01</i><span>Base</span><small>Clear summary</small></div>
+            <div><i>02</i><span>Pro</span><small>Protocol context</small></div>
+            <div><i>03</i><span>Advanced</span><small>Policy and evidence</small></div>
+          </div>
+
+          <div class="strategy-views">
+            <article class="strategy-view strategy-view--base">
+              <header><div><span>01 · Base</span><h3>The decision, clearly.</h3></div><button type="button" data-view-detail="base" aria-expanded="false">Explain</button></header>
+              <p>Understand the goal, risk and broad allocation without protocol-level detail.</p>
+              <aside class="strategy-view-detail" data-view-detail-panel="base" hidden><header><div><span>Base explanation</span><strong data-view-detail-title></strong></div><button type="button" data-view-detail-close aria-label="Close Base explanation">×</button></header><div data-view-detail-content></div></aside>
+              <div class="strategy-summary">
+                <div><span>Risk</span><strong data-base-risk>Moderate</strong></div>
+                <div><span>Illustrative APY</span><strong data-base-yield>5.1%</strong></div>
+                <div><span>Exit profile</span><strong data-base-exit>Balanced</strong></div>
+              </div>
+              <div class="strategy-allocation" data-inspector-allocation="base">
+                <div class="strategy-donut" data-inspector-chart aria-label="Base allocation chart"></div>
+                <div class="strategy-allocation__list" data-inspector-list></div>
+              </div>
+              <div class="strategy-explanation"><span>In plain English</span><strong data-base-explanation>A balance between available liquidity and diversified yield routes.</strong></div>
+            </article>
+
+            <article class="strategy-view strategy-view--pro">
+              <header><div><span>02 · Pro</span><h3>See where it goes.</h3></div><button type="button" data-view-detail="pro" aria-expanded="false">Explain</button></header>
+              <p>Open the broad categories into networks, protocols and their individual contribution.</p>
+              <aside class="strategy-view-detail" data-view-detail-panel="pro" hidden><header><div><span>Pro explanation</span><strong data-view-detail-title></strong></div><button type="button" data-view-detail-close aria-label="Close Pro explanation">×</button></header><div data-view-detail-content></div></aside>
+              <div class="strategy-context">
+                <div><span>Network</span><strong data-pro-network>Arbitrum</strong></div>
+                <div><span>Asset</span><strong>USDC</strong></div>
+                <div><span>Estimated costs</span><strong data-pro-cost>0.34%</strong></div>
+              </div>
+              <div class="strategy-allocation strategy-allocation--pro" data-inspector-allocation="pro">
+                <div class="strategy-donut" data-inspector-chart aria-label="Protocol allocation chart"></div>
+                <div class="strategy-allocation__list" data-inspector-list></div>
+              </div>
+              <div class="strategy-decision"><span>Last illustrative decision</span><strong data-pro-decision>Keep a larger reserve while lending utilization remains elevated.</strong></div>
+            </article>
+
+            <article class="strategy-view strategy-view--advanced">
+              <header><div><span>03 · Advanced</span><h3>Verify the rules.</h3></div><button type="button" data-view-detail="advanced" aria-expanded="false">Explain</button></header>
+              <p>Inspect the precise route records, limits and evidence behind the same strategy.</p>
+              <aside class="strategy-view-detail" data-view-detail-panel="advanced" hidden><header><div><span>Advanced explanation</span><strong data-view-detail-title></strong></div><button type="button" data-view-detail-close aria-label="Close Advanced explanation">×</button></header><div data-view-detail-content></div></aside>
+              <div class="strategy-policy">
+                <div><span>Minimum reserve</span><strong data-advanced-reserve>20%</strong></div>
+                <div><span>Maximum route</span><strong data-advanced-cap>35%</strong></div>
+                <div><span>Rebalance trigger</span><strong data-advanced-trigger>Utilization &gt; 78%</strong></div>
+              </div>
+              <div class="strategy-route-ledger">
+                <div class="strategy-route-ledger__head"><span>Position</span><span>Route</span><span>Share</span><span>Proof</span></div>
+                <div data-advanced-routes></div>
+              </div>
+              <div class="strategy-proof">
+                <i></i>
+                <div><span>Verification package</span><strong>Contract · transaction · block · timestamp</strong></div>
+                <button type="button" data-inspector-proof>Inspect</button>
+              </div>
+              <div class="strategy-proof-note" data-inspector-proof-note hidden>In a live product, each record would link to the corresponding on-chain evidence. This preview uses illustrative route identifiers only.</div>
+            </article>
+          </div>
+
+          <footer class="strategy-inspector__footer"><i></i><span>Illustrative interface—not live allocations, available products or promised returns.</span><strong>Same strategy · progressively deeper explanation</strong></footer>
+
+        </div>
+      </div>
+    </section>
+
+    <section class="section architecture-section" id="architecture" data-architecture-map data-boundary-scene-state="network">
+      <div class="container">
+        <header class="architecture-heading reveal">
+          <div>
+            <p class="eyebrow">Modular architecture</p>
+            <h2>One interface. Modular vaults. Explicit routes.</h2>
+            <p class="lede">Follow the current PoC or explore how Plasma risk vaults can coordinate matching master vaults across multiple networks.</p>
+          </div>
+          <div class="architecture-mode" role="group" aria-label="Architecture view">
+            <button type="button" data-architecture-mode="today" aria-pressed="false">Today</button>
+            <button type="button" data-architecture-mode="direction" aria-pressed="true">Product direction</button>
+          </div>
+        </header>
+
+        <div class="architecture-map reveal">
+          <div class="architecture-today" data-architecture-panel="today" hidden>
+            <div class="architecture-today__path">
+              <article><span>01 · Interface</span><strong>Jethos App</strong><small>Choice and visibility</small></article>
+              <i></i>
+              <article><span>02 · Current network</span><strong>Arbitrum</strong><small>Private validation</small></article>
+              <i></i>
+              <article class="is-current"><span>03 · Current vault</span><strong>USDC Conservative</strong><small>Supply-only PoC</small></article>
+              <i></i>
+              <article><span>04 · Approved adapters</span><strong>Aave · Euler · Morpho</strong><small>Recorded integrations</small></article>
+            </div>
+            <footer><span class="badge badge--poc">Current validation path</span><p>This view represents the intentionally limited PoC—not the complete multi-chain architecture.</p></footer>
+          </div>
+
+          <div class="architecture-direction" data-architecture-panel="direction">
+            <div class="architecture-app-node"><img src="assets/brand/jethos-mark.svg" alt=""><div><span>Jethos App</span><strong>One control and visibility layer</strong></div></div>
+            <div class="architecture-trunk" aria-hidden="true"><i></i></div>
+
+            <article class="architecture-plasma">
+              <header><span class="badge badge--vision">Conceptual direction</span><small>PLASMA</small></header>
+              <h3>Main contract</h3>
+              <p>Coordinates registry, policy and cross-chain allocation routes. Local vaults remain visible as separate positions.</p>
+              <div class="architecture-risk-selector" role="group" aria-label="Plasma risk vault">
+                <button type="button" data-architecture-risk="conservative" aria-pressed="false"><i>01</i><span>Conservative</span><small>Lower risk</small></button>
+                <button type="button" data-architecture-risk="balanced" aria-pressed="true"><i>02</i><span>Balanced</span><small>Moderate risk</small></button>
+                <button type="button" data-architecture-risk="opportunity" aria-pressed="false"><i>03</i><span>Opportunity</span><small>Higher risk</small></button>
+              </div>
+            </article>
+
+            <div class="architecture-crosschain-label"><span>Cross-chain allocation</span><strong>Risk tier remains consistent across every destination</strong></div>
+            <div class="architecture-chain-bus" aria-hidden="true"><i></i><i></i><i></i></div>
+
+            <div class="architecture-chains">
+              <article class="architecture-chain is-expanded" data-architecture-chain="arbitrum">
+                <button type="button" class="architecture-chain__header" aria-expanded="true">
+                  <span><i></i>Arbitrum</span><em>Example network</em>
+                </button>
+                <div class="architecture-master"><small data-master-tier>Balanced</small><strong data-master-name>Balanced Master Vault</strong><span>Network-level coordinator</span></div>
+                <div class="architecture-chain__detail">
+                  <div class="architecture-asset-vaults">
+                    <button type="button" data-architecture-asset="usdc"><i>USDC</i><span data-child-tier>Balanced Vault</span></button>
+                    <button type="button" data-architecture-asset="eth"><i>ETH</i><span data-child-tier>Balanced Vault</span></button>
+                    <button type="button" data-architecture-asset="btc"><i>BTC</i><span data-child-tier>Balanced Vault</span></button>
+                  </div>
+                  <div class="architecture-adapters"><span>Approved adapters</span><strong>Aave · Euler · Morpho</strong></div>
+                </div>
+              </article>
+
+              <article class="architecture-chain" data-architecture-chain="base">
+                <button type="button" class="architecture-chain__header" aria-expanded="false">
+                  <span><i></i>Base</span><em>Example network</em>
+                </button>
+                <div class="architecture-master"><small data-master-tier>Balanced</small><strong data-master-name>Balanced Master Vault</strong><span>Network-level coordinator</span></div>
+                <div class="architecture-chain__detail">
+                  <div class="architecture-asset-vaults">
+                    <button type="button" data-architecture-asset="usdc"><i>USDC</i><span data-child-tier>Balanced Vault</span></button>
+                    <button type="button" data-architecture-asset="eth"><i>ETH</i><span data-child-tier>Balanced Vault</span></button>
+                    <button type="button" data-architecture-asset="btc"><i>BTC</i><span data-child-tier>Balanced Vault</span></button>
+                  </div>
+                  <div class="architecture-adapters"><span>Approved adapters</span><strong>Network-specific modules</strong></div>
+                </div>
+              </article>
+
+              <article class="architecture-chain" data-architecture-chain="ethereum">
+                <button type="button" class="architecture-chain__header" aria-expanded="false">
+                  <span><i></i>Ethereum</span><em>Example network</em>
+                </button>
+                <div class="architecture-master"><small data-master-tier>Balanced</small><strong data-master-name>Balanced Master Vault</strong><span>Network-level coordinator</span></div>
+                <div class="architecture-chain__detail">
+                  <div class="architecture-asset-vaults">
+                    <button type="button" data-architecture-asset="usdc"><i>USDC</i><span data-child-tier>Balanced Vault</span></button>
+                    <button type="button" data-architecture-asset="eth"><i>ETH</i><span data-child-tier>Balanced Vault</span></button>
+                    <button type="button" data-architecture-asset="btc"><i>BTC</i><span data-child-tier>Balanced Vault</span></button>
+                  </div>
+                  <div class="architecture-adapters"><span>Approved adapters</span><strong>Network-specific modules</strong></div>
+                </div>
+              </article>
+            </div>
+
+            <aside class="architecture-asset-popover" data-architecture-asset-popover hidden>
+              <header>
+                <div><span>Illustrative route candidates</span><strong data-asset-popover-title>Arbitrum · Balanced USDC Vault</strong></div>
+                <button type="button" data-asset-popover-close aria-label="Close route candidates">×</button>
+              </header>
+              <p data-asset-popover-copy>Example modules that could be evaluated for this network, asset and risk tier.</p>
+              <div class="architecture-asset-popover__list" data-asset-popover-list></div>
+              <footer><i></i><span>Examples only · every route requires dedicated validation and approval.</span></footer>
+            </aside>
+
+            <footer class="architecture-note"><i></i><p>Plasma can also contain asset-specific child vaults. They are intentionally collapsed here to keep the hierarchy readable.</p><strong>Conceptual topology · not fully implemented</strong></footer>
+          </div>
+        </div>
+        <div class="architecture-action reveal"><a class="button button--secondary" href="pages/protocol.html">Explore the technical architecture</a></div>
+      </div>
+    </section>
+
+    <section class="section section-band" id="current-product">
+      <div class="container"><header class="section-heading reveal"><p class="eyebrow">Available for private validation</p><h2>USDC Conservative is the foundation being tested now.</h2><p class="lede">One explicit deployment, one base asset and a deliberately limited supply-only policy.</p></header>
+        <article class="product-showcase reveal">
+          <div class="product-showcase__main"><div class="cluster"><span class="badge badge--poc">Private PoC</span><span class="badge badge--implemented">Arbitrum One</span></div><h3>USDC Conservative</h3><p>Validate accounting, deposits, withdrawals, reserves, registered integrations and operational recovery before expanding the product surface.</p><div class="cluster"><a class="button button--primary" href="app.html">Open PoC console</a><a class="button button--secondary" href="pages/trust-center.html">Inspect evidence</a></div></div>
+          <div class="product-showcase__facts"><div><span>Base asset</span><strong>Native USDC</strong></div><div><span>Strategy class</span><strong>Supply-only</strong></div><div><span>Approval</span><strong>Exact amount</strong></div><div><span>Accounting</span><strong>Custom PoC</strong></div><div><span>Integrations</span><strong>Aave · Euler · Morpho</strong></div><div><span>Assurance</span><strong>Not independently audited</strong></div></div>
+        </article>
+        <div class="future-vaults"><article class="card reveal"><span class="badge badge--planned">Future family</span><h3>ETH vaults</h3><p>ETH-denominated strategies after dedicated risk, wrapper and liquidity validation.</p></article><article class="card reveal"><span class="badge badge--planned">Future family</span><h3>BTC vaults</h3><p>BTC-denominated strategies with wrapper, bridge and exit assumptions exposed.</p></article></div>
+      </div>
+    </section>
+
+    <section class="section section--compact" data-boundary-scene-state="settled"><div class="container card card--accent split"><div><img src="assets/brand/jethos-mark.svg" alt="" class="final-mark"><p class="eyebrow">Experience the model</p><h2>Do not just read about Jethos. Try the complete journey.</h2><p class="lede">Deposit, inspect a transparent route, simulate a position and withdraw—all with browser-only demo funds.</p></div><div class="cluster"><a class="button button--primary" href="demo/index.html">Try interactive demo</a><a class="button button--secondary" href="pages/docs.html">Documentation</a><a class="button button--ghost" href="pages/trust-center.html">Trust Center</a></div></div></section>
+  </main>
+  <div data-site-footer></div>
 </body>
 </html>

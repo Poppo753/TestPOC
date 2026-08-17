@@ -1,231 +1,232 @@
-# 🌊 Jethos Protocol - Modular DApp
+# Jethos website and PoC console
 
-cd "e:\Documents\Crypto\Defi\Arbitrum\Coding\Project4\TestSmartContract\dapp-new"; python -m http.server 8000
+This directory contains the public multi-page Jethos website, a browser-only
+Interactive Demo and a separate `noindex` console for the private Arbitrum USDC
+proof of concept.
 
-## 📁 Project Structure (Atomic Design Pattern)
+## Run locally
 
-```
-dapp-new/
-├── index.html              # Main HTML entry point
-├── main.js                 # Application bootstrapper
-├── style.css              # Custom styles (optional, using Tailwind)
-│
-└── src/
-    ├── atoms/             # Basic building blocks
-    │   ├── Button.js      # Reusable button component
-    │   ├── Input.js       # Form input with validation
-    │   ├── Badge.js       # Status badges
-    │   └── Icon.js        # SVG icon library
-    │
-    ├── molecules/         # Combinations of atoms
-    │   ├── Card.js        # Card container with variants
-    │   ├── FormGroup.js   # Form with inputs & buttons
-    │   ├── StatDisplay.js # Stat card with icon & trend
-    │   └── Alert.js       # Toast notifications
-    │
-    ├── organisms/         # Complex UI sections
-    │   ├── WalletConnect.js   # Wallet connection flow
-    │   ├── StatsGrid.js       # Dashboard stats display
-    │   ├── DepositForm.js     # Deposit functionality
-    │   └── WithdrawForm.js    # Withdraw functionality
-    │
-    ├── templates/         # Page layouts
-    │   ├── DashboardTemplate.js  # Main dashboard layout
-    │   └── GridLayout.js         # Flexible grid system
-    │
-    ├── utils/             # Helper functions
-    │   ├── web3.js        # Web3/Ethers.js integration
-    │   └── formatting.js  # Number & address formatting
-    │
-    └── config/            # Configuration
-        ├── contracts.js   # Contract addresses & ABIs
-        └── constants.js   # UI constants & messages
+From this directory:
+
+```powershell
+python -m http.server 8000
 ```
 
-## 🎨 Design System
+Open `http://localhost:8000/`. Do not open pages directly with `file://` because
+ES modules, JSON and remote dependencies require an HTTP origin.
 
-### Atomic Design Hierarchy
+Every active page currently uses the lightweight private-preview gate. The
+username and password are both `Poppo753`; authentication lasts for the current
+browser tab. This is client-side access friction, not protection for secret or
+confidential files. Production privacy requires authentication at the hosting
+or server layer.
 
-1. **Atoms** - Individual UI elements
-   - Button, Input, Badge, Icon
-   - Cannot be broken down further
-   - Highly reusable
+## Structure
 
-2. **Molecules** - Groups of atoms
-   - Card, FormGroup, StatDisplay, Alert
-   - Single responsibility
-   - Still generic and reusable
+The local `package.json` declares ES-module semantics and exposes read-only
+maintenance commands. It introduces no site-specific dependency installation.
 
-3. **Organisms** - Complete UI sections
-   - WalletConnect, StatsGrid, Forms
-   - Business logic starts here
-   - Feature-specific
-
-4. **Templates** - Page layouts
-   - DashboardTemplate, GridLayout
-   - Composition of organisms
-   - Layout structure
-
-## 🚀 Key Features
-
-### ✅ Modular Architecture
-- Each component is self-contained
-- Easy to add/remove/modify features
-- Components can be reused across pages
-
-### ✅ Grid System
-The `Card` component supports flexible grid positioning:
-
-```javascript
-new Card({
-  colSpan: 2,  // spans 2 columns
-  rowSpan: 3,  // spans 3 rows
-  // ... other config
-});
+```text
+index.html                 public landing
+demo/                      simulated product journey; no wallet or real funds
+app.html                   private PoC console
+pages/                     informational pages
+assets/css/                local design system
+assets/js/core/            shared shell and utilities
+assets/js/config/          cross-page navigation and status taxonomy
+assets/js/components/      reusable UI behavior
+assets/js/features/        editorial enhancements
+assets/js/docs/            safe Markdown renderer and documentation viewer
+assets/js/webgl/           optional 3D engine, scenes and accessible bridges
+assets/js/app/             PoC console orchestration, forms and renderers
+assets/js/demo/            illustrative catalog, storage, engine and UI
+assets/js/web3/            deployment, readers and transaction workflows
+data/editorial/            cross-page editorial records
+data/product/              product state, vaults, roadmap, risk and changelog
+data/protocol/             deployment, integrations and trust evidence
+content/docs/              synchronized, web-readable documentation pack
+scripts/browser/           runtime smoke tests and review captures
+scripts/diagnostics/       read-only deployment and protocol diagnostics
+scripts/documentation/     DOCX/Markdown synchronization
+scripts/validation/        static release gates
+legacy/                    retained prototypes, references, data and media
+artifacts/                 ignored local review output
 ```
 
-Grid layouts use CSS Grid with 12-column system:
-- Mobile: 1 column
-- Tablet: 2-6 columns
-- Desktop: 12 columns
+## Validate and inspect
 
-### ✅ Component Configuration
-All components accept config objects:
+No dependency installation is required for these commands. Node.js 20 or newer
+is recommended.
 
-```javascript
-new Button({
-  label: 'Connect',
-  variant: 'primary',    // primary, secondary, outline, ghost, danger
-  size: 'lg',            // sm, md, lg
-  fullWidth: true,
-  loading: false,
-  icon: '🦊',
-  onClick: () => {...}
-});
+```powershell
+npm run validate
+npm run check:content
+npm run check:product
+npm run check:demo
+npm run check:webgl
+npm run check:docs
+npm run check:deployment
+npm run inspect:protocols
+npm run ready
 ```
 
-### ✅ State Management
-- Web3Manager singleton for blockchain state
-- Component-level state for UI
-- Subscribe pattern for reactive updates
+The two diagnostic commands only perform RPC reads against the configured
+Arbitrum deployment. Machine-readable output is available with:
 
-### ✅ Styling
-- **Tailwind CSS** for utility-first styling
-- **Dark mode** ready
-- **Responsive** mobile-first design
-- **Custom animations** for smooth UX
-
-## 📦 How to Use
-
-### Basic Setup
-
-1. **Open `index.html`** in a browser (or use a local server)
-2. The app auto-initializes on page load
-3. Connect MetaMask to start using
-
-### Adding a New Page/View
-
-1. Create a new template in `src/templates/`
-2. Import and mount it in `main.js`
-3. Use existing organisms or create new ones
-
-Example:
-```javascript
-// src/templates/SwapView.js
-import { Card } from '../molecules/Card.js';
-
-export class SwapView {
-  render() {
-    // Your swap UI here
-  }
-  
-  mount(target) {
-    target.appendChild(this.render());
-  }
-}
+```powershell
+npm run check:deployment -- --json
+npm run inspect:protocols -- --json
 ```
 
-### Creating Custom Card Layouts
+They never request a signer, private key or token approval. Consumer write
+operations remain limited to the browser console and pass through the Jethos
+core contracts; plugins are inspected but are not exposed as arbitrary write
+targets.
 
-Using the GridLayout system:
+## Interactive Demo
 
-```javascript
-import { GridLayout } from './templates/GridLayout.js';
-import { Card } from './molecules/Card.js';
+Open `demo/index.html` through the local HTTP server to experience the complete
+browser-only journey: explore illustrative vaults, deposit demo USDC, advance
+simulated time, inspect the capital route and withdraw. State is stored under a
+versioned `localStorage` key and can be reset from the demo rail.
 
-const layout = new GridLayout({ columns: 12, gap: 6 });
+The initial snapshot deliberately matches the landing-page preview: `$12,480`
+visible, split between `$9,200` in liquid wallet assets and a `$3,280`
+illustrative Conservative position. The screens preserve the same product
+model used on Home:
 
-// Big card (2 wide, 3 tall)
-layout.addItem(
-  new Card({ title: 'Big', content: '...' }),
-  { colSpan: 2, rowSpan: 3 }
-);
+- Overview reproduces the central financial-home dashboard.
+- Wallet links each asset row to an interactive allocation chart.
+- Vaults exposes the same Base, Pro and Advanced views and opens progressively
+  deeper strategy explanations.
+- Positions contains deposit growth, receipt and withdrawal actions.
+- Understand shows allocation APYs, estimated costs, rationale and illustrative
+  verification fields.
+- Activity records browser-only actions without inventing blockchain evidence.
 
-// Small cards
-layout.addItem(
-  new Card({ title: 'Small 1', content: '...' }),
-  { colSpan: 1, rowSpan: 2 }
-);
+The demo never imports `assets/js/web3/`, never opens a wallet and never
+generates fake transaction hashes. Run `npm run check:demo` after changing its
+catalog, engine, UI or copy. With a local server on port 4175, execute the real
+browser smoke test with:
 
-layout.addItem(
-  new Card({ title: 'Small 2', content: '...' }),
-  { colSpan: 1, rowSpan: 1 }
-);
-
-document.body.appendChild(layout.render());
+```powershell
+npm run check:demo:browser -- http://127.0.0.1:4175
 ```
 
-## 🎯 Future Enhancements
+`npm run ready` executes static validation, the editorial contract, the WebGL
+manifest, the documentation reader and both live diagnostics as one release gate. Passing it is useful operational
+evidence, but is not an audit or authorization to publish a financial product.
 
-### Easy to Add:
-- ✅ Swap interface (new organism)
-- ✅ Portfolio view (new template)
-- ✅ Transaction history (new organism)
-- ✅ Charts & analytics (new molecules)
-- ✅ Multi-token support (extend config)
-- ✅ Governance voting (new page)
-- ✅ Notifications system (extend toast)
+## Product-state and evidence sources
 
-### Example: Adding Swap Feature
+The consumer narrative keeps current capability, open policy and long-term
+direction separate through four reviewed sources:
 
-1. Create `src/organisms/SwapForm.js`
-2. Import in `DashboardTemplate.js`
-3. Add to grid layout
-4. Done! No changes to existing code
+- `data/product/product-state.json`
+- `data/product/risk-policy.json`
+- `data/protocol/trust-evidence.json`
+- `data/product/changelog.json`
 
-## 🛠️ Technologies
+`npm run check:product` verifies the homepage hierarchy, illustrative labels,
+pending risk decisions, Trust Center unknowns, Docs fallback and PoC
+Simple/Advanced modes.
 
-- **Vanilla JavaScript** - No framework overhead
-- **ES6 Modules** - Clean imports/exports
-- **Tailwind CSS** - Rapid styling
-- **Ethers.js v6** - Web3 integration
-- **CSS Grid** - Flexible layouts
+## Dynamic documentation
 
-## 📝 Notes
+The Docs page builds its searchable catalog from `content/docs/manifest.json`
+and opens each Markdown document in an in-site reader with a section index,
+deep links and an optional `.md` download. The canonical pack remains in
+`docs/New_Doc/1_Documentation/jethos_docs_v0_1/`; it is never edited by the
+website.
 
-- All components return HTMLElements
-- Use `.render()` to create DOM elements
-- Use `.update()` to re-render (if implemented)
-- Components are stateful but independent
-- Grid system auto-handles responsive breakpoints
+After changing a source DOCX or Markdown file, synchronize and validate it:
 
-## 🎨 Color Palette
+```powershell
+npm run sync:docs
+npm run check:docs
+```
 
-- Primary: Purple (`#9333ea`)
-- Secondary: Indigo (`#4f46e5`)
-- Accent: Blue (`#3b82f6`)
-- Success: Green (`#10b981`)
-- Warning: Yellow (`#f59e0b`)
-- Error: Red (`#ef4444`)
+The synchronization requires Microsoft Word for semantic DOCX conversion. With
+a local server on port 4173, the runtime smoke test is:
 
-## 📱 Responsive Breakpoints
+```powershell
+npm run check:docs:browser -- http://127.0.0.1:4173
+```
 
-- `sm`: 640px
-- `md`: 768px
-- `lg`: 1024px
-- `xl`: 1280px
-- `2xl`: 1536px
+## Contained WebGL2 enhancement
 
----
+Only Home, How it works, Protocol and Roadmap declare a scene and one authored
+`data-webgl-host`. Each page has a separate scene factory and renders a fixed,
+full-viewport background behind its normal content. Three.js is imported only
+for those four pages, from the pinned jsDelivr URL declared by
+`assets/js/webgl/scene-manifest.js`. The HTML/CSS experience remains complete
+when the CDN, GPU or animation preference disables the enhancement. The PoC and
+editorial pages never mount a renderer.
 
-**Made with ❤️ for modular, scalable DeFi interfaces**
+Use `?webgl=off`, `?webgl=low`, `?webgl=medium` or `?webgl=high` for local
+fallback and quality testing. Canvas elements are decorative; all controls are
+normal HTML elements and remain keyboard accessible.
+
+With a local server running on port 4173, validate the real browser runtime and
+capture review frames with:
+
+```bash
+npm run check:webgl:browser -- http://127.0.0.1:4173
+npm run capture:webgl -- http://127.0.0.1:4173 ./artifacts/webgl-review
+```
+
+Legacy URLs (`landing.html`, `documentation.html`, `config.html` and
+`portfolio.html`) are compatibility redirects.
+
+Historical prototypes, API references, unused JSON and the old background video
+are retained under `legacy/`. Nothing in that directory is referenced by the
+active entry points.
+
+## Safety model
+
+- Public pages work without a wallet.
+- Wallet connection occurs only after a user click.
+- The app targets one explicit deployment in
+  `assets/js/web3/deployment-config.js`.
+- Users interact through LiquidityManager, not directly with plugins.
+- Approvals use the exact requested USDC amount and can be revoked.
+- Estimates are clearly identified and do not guarantee execution.
+- No private key or secret belongs in this directory.
+
+## Updating the deployment
+
+Do not replace addresses individually from memory. Start from a verified
+deployment manifest, update `data/protocol/deployments.json` and
+`assets/js/web3/deployment-config.js`, then validate bytecode, ABI reads and the
+complete deposit/withdraw flow on a safe fork before enabling writes.
+
+Full implementation and script guides are stored in:
+
+`docs/New_Doc/1_Documentation/8. Web Site/1. First_23.07.26/`
+
+Second-iteration audit and guides are stored in:
+
+`docs/New_Doc/1_Documentation/8. Web Site/2. Second_23.07.26/`
+
+Third-iteration product audit and guides are stored in:
+
+`docs/New_Doc/1_Documentation/8. Web Site/3. Third_23.07.26/`
+
+WebGL architecture, scene and maintenance guides are stored in:
+
+`docs/New_Doc/1_Documentation/8. Web Site/4. WebGL_23.07.26/`
+
+The corrected contained-WebGL2 implementation, critical review, consolidated
+checklist, Blender pipeline and verification evidence are stored in:
+
+`docs/New_Doc/1_Documentation/8. Web Site/5. WebGL2_23.07.26/`
+
+The product-narrative revision, checked implementation checklist and final
+maintenance/verification guides are stored in:
+
+`docs/New_Doc/1_Documentation/8. Web Site/6. Six_23.07.26/`
+
+Interactive Demo strategy, checked implementation checklist, delivery report
+and user/maintenance guides are stored in:
+
+`docs/New_Doc/1_Documentation/8. Web Site/7. Seven_Demo_23.07.26/`

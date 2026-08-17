@@ -13,6 +13,15 @@ export function evaluateRisk(config: AutomationConfig, observation: VaultObserva
   if (config.policy.requireOracleFreshness && !observation.oracleDataAvailable) blocking("ORACLE_DATA_UNAVAILABLE", "Policy requires normalized oracle freshness data, which the POC observer cannot provide");
   if (config.mode === "autonomous" && (!config.autonomous.enabled || config.autonomous.acknowledgement !== AUTONOMOUS_ACKNOWLEDGEMENT)) blocking("AUTONOMY_NOT_ACKNOWLEDGED", "Autonomous execution is not explicitly acknowledged");
   if (!observation.oracleDataAvailable) warning("ORACLE_TELEMETRY_MISSING", "Allocation is restricted to one base asset because normalized oracle telemetry is unavailable");
+  // Optional absolute ceiling on total assets under management (custody + all
+  // protocol balances). Introduced by Fase 5 as a fix for a documented
+  // technical gap: previously no policy field enforced a total-capital cap.
+  // Backward compatible: skipped entirely when the field is absent, which
+  // matches every config that predates Fase 5 (including the live observe
+  // config still running on the VPS).
+  if (config.policy.maxTotalCapitalUnits !== undefined && BigInt(observation.managedAssets) > BigInt(config.policy.maxTotalCapitalUnits)) {
+    blocking("TOTAL_CAPITAL_EXCEEDED", "Managed assets exceed the policy total-capital cap", { managedAssets: observation.managedAssets, maxTotalCapitalUnits: config.policy.maxTotalCapitalUnits });
+  }
   let projectedReserve = BigInt(observation.custodyBalance);
   const projected: Record<string, bigint> = Object.fromEntries(observation.protocols.map(item => [item.name, BigInt(item.balance)]));
   const maxMovement = BigInt(observation.managedAssets) * BigInt(config.policy.maxMovementBpsPerCycle) / 10_000n;

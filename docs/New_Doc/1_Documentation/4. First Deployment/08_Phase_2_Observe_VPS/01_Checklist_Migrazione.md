@@ -10,7 +10,7 @@ Legenda: `[x]` completato; `[ ]` da completare; `[~]` in corso; `[!]` fallito.
 - [x] Creare e collegare firewall cloud SSH-only.
 - [x] Registrare IPv4 e fingerprint host.
 - [x] Verificare primo accesso SSH come root.
-- [ ] Verificare fingerprint host contro console Hetzner.
+- [x] Verificare fingerprint host contro console Hetzner — **16 luglio 2026**, `SHA256:Rv4aL01OZGbyQ2heFUUh/qT2gS4lquogNfDHGyKs8bA` confermata.
 
 ## B. Bootstrap
 
@@ -42,9 +42,18 @@ Legenda: `[x]` completato; `[ ]` da completare; `[~]` in corso; `[!]` fallito.
 ## E. Periodo shadow
 
 - [x] Registrare timestamp iniziale.
-- [~] Osservare almeno 24 ore, preferibilmente 72.
-- [~] Censire cicli, failure, restart, heartbeat ed errori RPC.
+- [x] Osservare almeno 24 ore — **PASS**: da `2026-07-14T23:40:26Z` a `2026-07-16T15:14Z`, ~39.6 ore, 476 run, 0 failure.
+- [x] Censire cicli, failure, restart, heartbeat ed errori RPC — archiviati in `03_Registro_Esecuzione.md`.
 - [x] Non completare il gate prima della durata minima.
+
+## G. Chiusura Fase 2
+
+- [x] Raccolta live SSH read-only completata — 16 luglio 2026 ore 15:02–15:14 UTC.
+- [x] Tutti i 12 criteri PASS verificati con evidenza live.
+- [x] Evento reboot kernel documentato e classificato come non bloccante.
+- [x] Registro aggiornato con heartbeat, preflight, run count, commit e permessi.
+- [ ] Creare config advisory separata (gate per Fase 3).
+- [ ] Configurare Safe e Transaction Service senza signer sulla VPS observer.
 
 ## F. Handoff
 
