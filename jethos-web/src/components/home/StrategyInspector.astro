@@ -1,0 +1,181 @@
+<section
+  class="section section-band strategy-inspector-section"
+  id="strategy-inspector"
+  data-boundary-scene-state="inspect"
+>
+  <div class="container">
+    <header class="section-heading section-heading--center reveal">
+      <p class="eyebrow">Clarity, at your depth</p>
+      <h2>Simple when you want it. Detailed when you need it.</h2>
+      <p class="lede">
+        Inspect the same illustrative strategy through three levels of detail. The underlying
+        position does not change—only how deeply Jethos explains it.
+      </p>
+    </header>
+
+    <div class="strategy-inspector reveal" data-strategy-inspector>
+      <div class="strategy-inspector__toolbar">
+        <div>
+          <span>Choose a strategy</span><strong data-inspector-selection>Balanced strategy</strong>
+        </div>
+        <div class="strategy-selector" role="group" aria-label="Illustrative strategy">
+          <button type="button" data-inspector-strategy="conservative" aria-pressed="false"
+            >Conservative</button
+          >
+          <button type="button" data-inspector-strategy="balanced" aria-pressed="true"
+            >Balanced</button
+          >
+          <button type="button" data-inspector-strategy="opportunity" aria-pressed="false"
+            >Opportunity</button
+          >
+        </div>
+      </div>
+
+      <div class="strategy-depth" aria-hidden="true">
+        <div><i>01</i><span>Base</span><small>Clear summary</small></div>
+        <div><i>02</i><span>Pro</span><small>Protocol context</small></div>
+        <div><i>03</i><span>Advanced</span><small>Policy and evidence</small></div>
+      </div>
+
+      <div class="strategy-views">
+        <article class="strategy-view strategy-view--base">
+          <header>
+            <div><span>01 · Base</span><h3>The decision, clearly.</h3></div><button
+              type="button"
+              data-view-detail="base"
+              aria-expanded="false">Explain</button
+            >
+          </header>
+          <p>Understand the goal, risk and broad allocation without protocol-level detail.</p>
+          <aside class="strategy-view-detail" data-view-detail-panel="base" hidden>
+            <header>
+              <div>
+                <span>Base explanation</span><strong data-view-detail-title></strong>
+              </div><button type="button" data-view-detail-close aria-label="Close Base explanation"
+                >×</button
+              >
+            </header><div data-view-detail-content></div>
+          </aside>
+          <div class="strategy-summary">
+            <div><span>Risk</span><strong data-base-risk>Moderate</strong></div>
+            <div><span>Illustrative APY</span><strong data-base-yield>5.1%</strong></div>
+            <div><span>Exit profile</span><strong data-base-exit>Balanced</strong></div>
+          </div>
+          <div class="strategy-allocation" data-inspector-allocation="base">
+            <div
+              class="strategy-donut"
+              data-inspector-chart
+              role="img"
+              aria-label="Base allocation chart"
+            >
+            </div>
+            <div class="strategy-allocation__list" data-inspector-list></div>
+          </div>
+          <div class="strategy-explanation">
+            <span>In plain English</span><strong data-base-explanation
+              >A balance between available liquidity and diversified yield routes.</strong
+            >
+          </div>
+        </article>
+
+        <article class="strategy-view strategy-view--pro">
+          <header>
+            <div><span>02 · Pro</span><h3>See where it goes.</h3></div><button
+              type="button"
+              data-view-detail="pro"
+              aria-expanded="false">Explain</button
+            >
+          </header>
+          <p>
+            Open the broad categories into networks, protocols and their individual contribution.
+          </p>
+          <aside class="strategy-view-detail" data-view-detail-panel="pro" hidden>
+            <header>
+              <div><span>Pro explanation</span><strong data-view-detail-title></strong></div><button
+                type="button"
+                data-view-detail-close
+                aria-label="Close Pro explanation">×</button
+              >
+            </header><div data-view-detail-content></div>
+          </aside>
+          <div class="strategy-context">
+            <div><span>Network</span><strong data-pro-network>Arbitrum</strong></div>
+            <div><span>Asset</span><strong>USDC</strong></div>
+            <div><span>Estimated costs</span><strong data-pro-cost>0.34%</strong></div>
+          </div>
+          <div class="strategy-allocation strategy-allocation--pro" data-inspector-allocation="pro">
+            <div
+              class="strategy-donut"
+              data-inspector-chart
+              role="img"
+              aria-label="Protocol allocation chart"
+            >
+            </div>
+            <div class="strategy-allocation__list" data-inspector-list></div>
+          </div>
+          <div class="strategy-decision">
+            <span>Last illustrative decision</span><strong data-pro-decision
+              >Keep a larger reserve while lending utilization remains elevated.</strong
+            >
+          </div>
+        </article>
+
+        <article class="strategy-view strategy-view--advanced">
+          <header>
+            <div><span>03 · Advanced</span><h3>Verify the rules.</h3></div><button
+              type="button"
+              data-view-detail="advanced"
+              aria-expanded="false">Explain</button
+            >
+          </header>
+          <p>Inspect the precise route records, limits and evidence behind the same strategy.</p>
+          <aside class="strategy-view-detail" data-view-detail-panel="advanced" hidden>
+            <header>
+              <div>
+                <span>Advanced explanation</span><strong data-view-detail-title></strong>
+              </div><button
+                type="button"
+                data-view-detail-close
+                aria-label="Close Advanced explanation">×</button
+              >
+            </header><div data-view-detail-content></div>
+          </aside>
+          <div class="strategy-policy">
+            <div><span>Minimum reserve</span><strong data-advanced-reserve>20%</strong></div>
+            <div><span>Maximum route</span><strong data-advanced-cap>35%</strong></div>
+            <div>
+              <span>Rebalance trigger</span><strong data-advanced-trigger
+                >Utilization &gt; 78%</strong
+              >
+            </div>
+          </div>
+          <div class="strategy-route-ledger">
+            <div class="strategy-route-ledger__head">
+              <span>Position</span><span>Route</span><span>Share</span><span>Proof</span>
+            </div>
+            <div data-advanced-routes></div>
+          </div>
+          <div class="strategy-proof">
+            <i></i>
+            <div>
+              <span>Verification package</span><strong
+                >Contract · transaction · block · timestamp</strong
+              >
+            </div>
+            <button type="button" data-inspector-proof>Inspect</button>
+          </div>
+          <div class="strategy-proof-note" data-inspector-proof-note hidden>
+            In a live product, each record would link to the corresponding on-chain evidence. This
+            preview uses illustrative route identifiers only.
+          </div>
+        </article>
+      </div>
+
+      <footer class="strategy-inspector__footer">
+        <i></i><span
+          >Illustrative interface—not live allocations, available products or promised returns.</span
+        ><strong>Same strategy · progressively deeper explanation</strong>
+      </footer>
+    </div>
+  </div>
+</section>

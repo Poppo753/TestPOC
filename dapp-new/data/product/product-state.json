@@ -1,0 +1,41 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-07-23",
+  "horizons": [
+    {
+      "id": "today",
+      "label": "Today",
+      "title": "Private USDC PoC",
+      "status": "poc",
+      "description": "Supply-only validation on Arbitrum with recorded Aave, Euler and Morpho integrations."
+    },
+    {
+      "id": "multi-asset",
+      "label": "Step 2",
+      "title": "Multi-asset vaults",
+      "status": "planned",
+      "description": "Additional authorized stablecoin and crypto vault families after asset-specific risk and liquidity validation."
+    },
+    {
+      "id": "multi-chain",
+      "label": "Step 3",
+      "title": "Multi-chain vaults",
+      "status": "planned",
+      "description": "Network-specific vault routes after chain, bridge, oracle, operational and exit assumptions are validated."
+    },
+    {
+      "id": "consumer",
+      "label": "Step 4",
+      "title": "Consumer app",
+      "status": "planned",
+      "description": "A complete and approachable product experience that lets people choose how much technical complexity to manage."
+    },
+    {
+      "id": "vision",
+      "label": "Vision",
+      "title": "Complete self-custodial financial home",
+      "status": "vision",
+      "description": "Hold, invest, understand and eventually use digital assets through suitable partners."
+    }
+  ]
+}

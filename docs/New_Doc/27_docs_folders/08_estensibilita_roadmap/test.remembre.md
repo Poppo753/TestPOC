@@ -1,0 +1,1 @@
+I test esistenti usano la vecchia signature ParameterManager.deploy(beacon) — andranno aggiornati a ParameterManager.deploy(beacon, 18) per WETH o ParameterManager.deploy(beacon, 6) per USDC.

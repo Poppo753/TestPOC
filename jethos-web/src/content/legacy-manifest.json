@@ -1,0 +1,302 @@
+{
+  "schemaVersion": 1,
+  "generatedFrom": "../dapp-new",
+  "files": [
+    {
+      "sourcePath": "assets/brand/jethos-mark.svg",
+      "targetPath": "public/assets/brand/jethos-mark.svg",
+      "sha256": "bba4946013a2eefc8f967bc5c4ab29165ba510f16ed3b245a102f3865cfc47bc"
+    },
+    {
+      "sourcePath": "assets/css/demo.css",
+      "targetPath": "src/styles/legacy/demo.css",
+      "sha256": "bb16f488e84c8d0929145a4f4c6c45ecf5c72417f424fbf90478df0440eac90c"
+    },
+    {
+      "sourcePath": "assets/css/documentation.css",
+      "targetPath": "src/styles/legacy/documentation.css",
+      "sha256": "07681471dba27bd1a4d6a9c013653c439be24d51eee797be2b4639faa9c978e8"
+    },
+    {
+      "sourcePath": "assets/css/home-refresh.css",
+      "targetPath": "src/styles/legacy/home-refresh.css",
+      "sha256": "42806344071af0a5cdd8d1c14f9c254e61c6800841e87a97b457fa0f50bbe7c3"
+    },
+    {
+      "sourcePath": "assets/css/pages.css",
+      "targetPath": "src/styles/legacy/pages.css",
+      "sha256": "297e7de079e63303dd1ef3a0f2ccf55ad58b5be82453e121baf8cace5511493e"
+    },
+    {
+      "sourcePath": "assets/css/webgl.css",
+      "targetPath": "src/styles/legacy/webgl.css",
+      "sha256": "c918f58c1d9d9e051aa8b085f7af10065207fea0d247c528d765d8529e24d964"
+    },
+    {
+      "sourcePath": "assets/js/app/controller.js",
+      "targetPath": "src/features/app/legacy/controller.js",
+      "sha256": "ea1fcfd771d09205ee763f121ea7a613f51e5ea73feb6bfae06be00807cb21fb"
+    },
+    {
+      "sourcePath": "assets/js/app/dom.js",
+      "targetPath": "src/features/app/legacy/dom.js",
+      "sha256": "f02ef6b1e5b3053af2899638a6d3e86dc978df484c6d124df6d9823ff8fbe8bc"
+    },
+    {
+      "sourcePath": "assets/js/app/forms.js",
+      "targetPath": "src/features/app/legacy/forms.js",
+      "sha256": "94a2e838ffd7c928e9f10dd09e7f45defa751cd27977e71e0dc155066aa42c62"
+    },
+    {
+      "sourcePath": "assets/js/app/renderers.js",
+      "targetPath": "src/features/app/legacy/renderers.js",
+      "sha256": "54cb2fdd61473264444fcca8f474b5a9dd44a081f919025a9e7bda52524cd0d1"
+    },
+    {
+      "sourcePath": "assets/js/app/workflow.js",
+      "targetPath": "src/features/app/legacy/workflow.js",
+      "sha256": "36c140276e80b5a4297b870b8c68d5b6d8c66a1f2ab41a4baebe6957ea5df820"
+    },
+    {
+      "sourcePath": "assets/js/demo/controller.js",
+      "targetPath": "src/features/demo/legacy/controller.js",
+      "sha256": "b45b5b039fe81fbe37632fc44268eba39a6e3b1a32a5ac280214a95dd79d2af0"
+    },
+    {
+      "sourcePath": "assets/js/demo/data.js",
+      "targetPath": "src/features/demo/legacy/data.js",
+      "sha256": "6e7b3e23da14745d0d0f948ff8f5a272bd8cb293df7864c906ee3241f30ed079"
+    },
+    {
+      "sourcePath": "assets/js/demo/engine.js",
+      "targetPath": "src/features/demo/legacy/engine.js",
+      "sha256": "088aaf5d41d0cfaa2cf82e5c90c9cc0c55fce160aabeba631bfb82a931dad5fe"
+    },
+    {
+      "sourcePath": "assets/js/demo/storage.js",
+      "targetPath": "src/features/demo/legacy/storage.js",
+      "sha256": "536dd3e20cb124f3f1b316e410ade59610740b2e26dda846cea6d4a05cff0290"
+    },
+    {
+      "sourcePath": "assets/js/webgl/scenes/capital-journey.js",
+      "targetPath": "src/features/webgl/legacy/scenes/capital-journey.js",
+      "sha256": "f0ed21d08cf9114ab82184c7d869f0d6b2e4190960574071a17b4cc822628190"
+    },
+    {
+      "sourcePath": "assets/js/webgl/scenes/evidence-reactor.js",
+      "targetPath": "src/features/webgl/legacy/scenes/evidence-reactor.js",
+      "sha256": "459ed16d753d296ac206e57bad6508858c82d48d4d7214c018c6848ce5596c47"
+    },
+    {
+      "sourcePath": "assets/js/webgl/scenes/ownership-core.js",
+      "targetPath": "src/features/webgl/legacy/scenes/ownership-core.js",
+      "sha256": "2f32405be2fba51b6bb825143aeed0e9778ce3062d044e83ed9f2af5db5c991c"
+    },
+    {
+      "sourcePath": "assets/js/webgl/scenes/protocol-stack.js",
+      "targetPath": "src/features/webgl/legacy/scenes/protocol-stack.js",
+      "sha256": "7aab76f6873c4a90eeea9b0bb6ab36852e84831ff9f7f372fbff8aba9c2b1938"
+    },
+    {
+      "sourcePath": "assets/js/webgl/visual-kit.js",
+      "targetPath": "src/features/webgl/legacy/visual-kit.js",
+      "sha256": "e1e79ca1c3e9429fc8c1dc9ea285908b400ebca7a70f5ecc8bcda545b0ee9d6d"
+    },
+    {
+      "sourcePath": "content/docs/00_Jethos_Document_Map_v0.1.md",
+      "targetPath": "public/content/docs/00_Jethos_Document_Map_v0.1.md",
+      "sha256": "7e795ee558fab0dde445bf357342719633637f7b1f15a69d9749a27da4523614"
+    },
+    {
+      "sourcePath": "content/docs/00_Jethos_Document_Map_v0.1.md",
+      "targetPath": "src/content/docs/00_Jethos_Document_Map_v0.1.md",
+      "sha256": "7e795ee558fab0dde445bf357342719633637f7b1f15a69d9749a27da4523614"
+    },
+    {
+      "sourcePath": "content/docs/01_Jethos_Master_Vision_v0.1.md",
+      "targetPath": "public/content/docs/01_Jethos_Master_Vision_v0.1.md",
+      "sha256": "fac58e031c35f74186480ffd923373e6c96b2e2cf0b77760cc4c0585c9318730"
+    },
+    {
+      "sourcePath": "content/docs/01_Jethos_Master_Vision_v0.1.md",
+      "targetPath": "src/content/docs/01_Jethos_Master_Vision_v0.1.md",
+      "sha256": "fac58e031c35f74186480ffd923373e6c96b2e2cf0b77760cc4c0585c9318730"
+    },
+    {
+      "sourcePath": "content/docs/02_Jethos_Product_Vault_Taxonomy_v0.1.md",
+      "targetPath": "public/content/docs/02_Jethos_Product_Vault_Taxonomy_v0.1.md",
+      "sha256": "4e23094cb1941f68f8c8cf949a0586ff7724089ee52fbae373e5bc4deac814d2"
+    },
+    {
+      "sourcePath": "content/docs/02_Jethos_Product_Vault_Taxonomy_v0.1.md",
+      "targetPath": "src/content/docs/02_Jethos_Product_Vault_Taxonomy_v0.1.md",
+      "sha256": "4e23094cb1941f68f8c8cf949a0586ff7724089ee52fbae373e5bc4deac814d2"
+    },
+    {
+      "sourcePath": "content/docs/03_Jethos_Protocol_Architecture_v0.1.md",
+      "targetPath": "public/content/docs/03_Jethos_Protocol_Architecture_v0.1.md",
+      "sha256": "6148876ca9b51d473f5862b6477bbeea5b5e7da87b5e234b5342b83550c5b0a8"
+    },
+    {
+      "sourcePath": "content/docs/03_Jethos_Protocol_Architecture_v0.1.md",
+      "targetPath": "src/content/docs/03_Jethos_Protocol_Architecture_v0.1.md",
+      "sha256": "6148876ca9b51d473f5862b6477bbeea5b5e7da87b5e234b5342b83550c5b0a8"
+    },
+    {
+      "sourcePath": "content/docs/04_Jethos_Accounting_Shares_ERC4626_v0.1.md",
+      "targetPath": "public/content/docs/04_Jethos_Accounting_Shares_ERC4626_v0.1.md",
+      "sha256": "2f8d66a3dd930aa7eb095a83ddb07ed11a03be15e5915988f640bcd4ea62f62f"
+    },
+    {
+      "sourcePath": "content/docs/04_Jethos_Accounting_Shares_ERC4626_v0.1.md",
+      "targetPath": "src/content/docs/04_Jethos_Accounting_Shares_ERC4626_v0.1.md",
+      "sha256": "2f8d66a3dd930aa7eb095a83ddb07ed11a03be15e5915988f640bcd4ea62f62f"
+    },
+    {
+      "sourcePath": "content/docs/05_Jethos_Risk_Framework_v0.1.md",
+      "targetPath": "public/content/docs/05_Jethos_Risk_Framework_v0.1.md",
+      "sha256": "d56fe42fabde062dfef34388e5b9a02abed07cbd8dce8e866507567219a9ccee"
+    },
+    {
+      "sourcePath": "content/docs/05_Jethos_Risk_Framework_v0.1.md",
+      "targetPath": "src/content/docs/05_Jethos_Risk_Framework_v0.1.md",
+      "sha256": "d56fe42fabde062dfef34388e5b9a02abed07cbd8dce8e866507567219a9ccee"
+    },
+    {
+      "sourcePath": "content/docs/06_Jethos_Strategy_Automation_v0.1.md",
+      "targetPath": "public/content/docs/06_Jethos_Strategy_Automation_v0.1.md",
+      "sha256": "b82db3963aa5ee606c1e51545f87a0b3b3dad7f1157dc6cb6cecc3a713e12e8a"
+    },
+    {
+      "sourcePath": "content/docs/06_Jethos_Strategy_Automation_v0.1.md",
+      "targetPath": "src/content/docs/06_Jethos_Strategy_Automation_v0.1.md",
+      "sha256": "b82db3963aa5ee606c1e51545f87a0b3b3dad7f1157dc6cb6cecc3a713e12e8a"
+    },
+    {
+      "sourcePath": "content/docs/07_Jethos_Liquidity_Withdrawals_v0.1.md",
+      "targetPath": "public/content/docs/07_Jethos_Liquidity_Withdrawals_v0.1.md",
+      "sha256": "c692db4957fe19b682e81c78093aee1beb88822dc779dc1533e294495c16dd60"
+    },
+    {
+      "sourcePath": "content/docs/07_Jethos_Liquidity_Withdrawals_v0.1.md",
+      "targetPath": "src/content/docs/07_Jethos_Liquidity_Withdrawals_v0.1.md",
+      "sha256": "c692db4957fe19b682e81c78093aee1beb88822dc779dc1533e294495c16dd60"
+    },
+    {
+      "sourcePath": "content/docs/08_Jethos_Governance_Security_v0.1.md",
+      "targetPath": "public/content/docs/08_Jethos_Governance_Security_v0.1.md",
+      "sha256": "a4f2d65d18bff1c5f3f159b87e4e8929c8e75d0d38973729fc001f6c1a3b1f62"
+    },
+    {
+      "sourcePath": "content/docs/08_Jethos_Governance_Security_v0.1.md",
+      "targetPath": "src/content/docs/08_Jethos_Governance_Security_v0.1.md",
+      "sha256": "a4f2d65d18bff1c5f3f159b87e4e8929c8e75d0d38973729fc001f6c1a3b1f62"
+    },
+    {
+      "sourcePath": "content/docs/09_Jethos_Multichain_Composability_v0.1.md",
+      "targetPath": "public/content/docs/09_Jethos_Multichain_Composability_v0.1.md",
+      "sha256": "8271ed4502fb0d11d3b0445148e14740c6aedf5f49962a993913a4b66bca7ba7"
+    },
+    {
+      "sourcePath": "content/docs/09_Jethos_Multichain_Composability_v0.1.md",
+      "targetPath": "src/content/docs/09_Jethos_Multichain_Composability_v0.1.md",
+      "sha256": "8271ed4502fb0d11d3b0445148e14740c6aedf5f49962a993913a4b66bca7ba7"
+    },
+    {
+      "sourcePath": "content/docs/10_Jethos_PoC_Roadmap_v0.1.md",
+      "targetPath": "public/content/docs/10_Jethos_PoC_Roadmap_v0.1.md",
+      "sha256": "4cbe4fdca0e5a82394788b4f2dbda30a404c3b88c6bfad0324a1a4d6109f5d03"
+    },
+    {
+      "sourcePath": "content/docs/10_Jethos_PoC_Roadmap_v0.1.md",
+      "targetPath": "src/content/docs/10_Jethos_PoC_Roadmap_v0.1.md",
+      "sha256": "4cbe4fdca0e5a82394788b4f2dbda30a404c3b88c6bfad0324a1a4d6109f5d03"
+    },
+    {
+      "sourcePath": "content/docs/11_Jethos_Open_Questions_Decision_Backlog_v0.1.md",
+      "targetPath": "public/content/docs/11_Jethos_Open_Questions_Decision_Backlog_v0.1.md",
+      "sha256": "4f55652dc8773495630c4bb37cd6a74e42779df8a112757c00aaeb020cf1dd25"
+    },
+    {
+      "sourcePath": "content/docs/11_Jethos_Open_Questions_Decision_Backlog_v0.1.md",
+      "targetPath": "src/content/docs/11_Jethos_Open_Questions_Decision_Backlog_v0.1.md",
+      "sha256": "4f55652dc8773495630c4bb37cd6a74e42779df8a112757c00aaeb020cf1dd25"
+    },
+    {
+      "sourcePath": "content/docs/12_Jethos_Code_Derived_Clarifications_v0.1.md",
+      "targetPath": "public/content/docs/12_Jethos_Code_Derived_Clarifications_v0.1.md",
+      "sha256": "06f5046a7024319387006fce4a1c401476404f81fd23db62bf3484c0c43f7f66"
+    },
+    {
+      "sourcePath": "content/docs/12_Jethos_Code_Derived_Clarifications_v0.1.md",
+      "targetPath": "src/content/docs/12_Jethos_Code_Derived_Clarifications_v0.1.md",
+      "sha256": "06f5046a7024319387006fce4a1c401476404f81fd23db62bf3484c0c43f7f66"
+    },
+    {
+      "sourcePath": "content/docs/manifest.json",
+      "targetPath": "public/content/docs/manifest.json",
+      "sha256": "6d1358899a4bd17df56f9768be79f403c3fa45b079c35f35e80c325258e85dcd"
+    },
+    {
+      "sourcePath": "content/docs/manifest.json",
+      "targetPath": "src/content/docs/manifest.json",
+      "sha256": "6d1358899a4bd17df56f9768be79f403c3fa45b079c35f35e80c325258e85dcd"
+    },
+    {
+      "sourcePath": "data/editorial/site-content.json",
+      "targetPath": "src/content/data/editorial/site-content.json",
+      "sha256": "98eb9ead1239b0d0db616063734014bd9f4eda03e68cf501ae02d0c621d38c87"
+    },
+    {
+      "sourcePath": "data/product/changelog.json",
+      "targetPath": "src/content/data/product/changelog.json",
+      "sha256": "f7f4d7686fbc40dc5cc0c273204ca1a54b1317c1b67343d04a828b047b95a671"
+    },
+    {
+      "sourcePath": "data/product/product-state.json",
+      "targetPath": "src/content/data/product/product-state.json",
+      "sha256": "b9f2d03e55d46cf5d2c37ebc3deeae93f789324011586937953b8a997f69fb79"
+    },
+    {
+      "sourcePath": "data/product/risk-policy.json",
+      "targetPath": "src/content/data/product/risk-policy.json",
+      "sha256": "efec771d18c9cc2dbf8317adfd08b7a99ba55fb011eedb4b1128e7fb69dbf8ae"
+    },
+    {
+      "sourcePath": "data/product/roadmap.json",
+      "targetPath": "src/content/data/product/roadmap.json",
+      "sha256": "2b4a67dfb0d7effb7e94d59f7150bba4deb3b2bc955f98be166de962dd36fe4b"
+    },
+    {
+      "sourcePath": "data/product/vaults.json",
+      "targetPath": "src/content/data/product/vaults.json",
+      "sha256": "2382d10fdb4376ac6fb4ccff157074f1cf273b83898c863572683ccd5d1d149c"
+    },
+    {
+      "sourcePath": "data/protocol/deployments.json",
+      "targetPath": "src/content/data/protocol/deployments.json",
+      "sha256": "a59c9c6a374c8e9e42aa0673b2f8b6715b867468075bff80f569dcb0a573f593"
+    },
+    {
+      "sourcePath": "data/protocol/protocols.json",
+      "targetPath": "src/content/data/protocol/protocols.json",
+      "sha256": "cab275203d33226a6ac6a87bc80f12a782213f2967ae1639011aaaef3c1809cd"
+    },
+    {
+      "sourcePath": "data/protocol/trust-evidence.json",
+      "targetPath": "src/content/data/protocol/trust-evidence.json",
+      "sha256": "3aaa3877f9905d790a91756c61ee37dadfc631a979e9077bd7b8aa19595c3631"
+    },
+    {
+      "sourcePath": "data/README.md",
+      "targetPath": "src/content/data/README.md",
+      "sha256": "f40264d6769de3cb4e0e379a336662e84e30055f703159f0751b04609237a8dc"
+    }
+  ],
+  "redirects": {
+    "/config.html": "/pages/protocol.html",
+    "/documentation.html": "/pages/docs.html",
+    "/landing.html": "/index.html",
+    "/portfolio.html": "/app.html"
+  }
+}

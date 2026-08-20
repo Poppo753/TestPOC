@@ -1,0 +1,91 @@
+# Foundry configuration — sidecar to Hardhat (§S5 checklist).
+# Il progetto principale resta Hardhat. Foundry viene usato per unit Solidity,
+# fuzz e invariant testing su proprietà economiche.
+#
+# Vincoli di build parity con hardhat.config.ts:
+#   - solc version: 0.8.27
+#   - optimizer runs: 100
+#   - via_ir: true
+#   - EIP-170: allowUnlimitedContractSize NON attivato (parita' con Hardhat).
+
+[profile.default]
+src = "contracts"
+out = "out-foundry"                 # separato da 'artifacts/' di Hardhat
+libs = ["node_modules", "lib"]
+test = "test/foundry"                # nuova cartella dedicata, non tocca test Hardhat
+cache_path = "cache-foundry"         # separato da 'cache/' di Hardhat
+script = "script/foundry"            # non usato per ora
+
+solc_version = "0.8.27"
+optimizer = true
+optimizer_runs = 100
+via_ir = true
+evm_version = "paris"                # coerente con default solc 0.8.27
+
+# EIP-170 enforcement (allow_unlimited_contract_size = default false)
+# Non impostiamo 'allow_unlimited_contract_size = true' — parita' con Hardhat.
+
+# Remappings per usare node_modules invece di lib/ (Foundry default)
+remappings = [
+    "@openzeppelin/=node_modules/@openzeppelin/",
+    "@chainlink/=node_modules/@chainlink/",
+    "@uniswap/v3-periphery/=node_modules/@uniswap/v3-periphery/",
+    "@uniswap/v3-core/=node_modules/@uniswap/v3-core/",
+    "@safe-global/=node_modules/@safe-global/",
+    "forge-std/=lib/forge-std/src/",
+    "ds-test/=lib/ds-test/src/",
+]
+
+# Consenti solo lettura in test — nessun accesso a segreti locali
+fs_permissions = [
+    { access = "read", path = "./out-foundry" },
+    { access = "read", path = "./test/foundry" },
+]
+
+# =============================================================================
+# Fuzz profile (PR run breve)
+# =============================================================================
+[profile.default.fuzz]
+runs = 1000
+max_test_rejects = 65536
+seed = "0x1"                         # seed fisso per riproducibilita' PR
+dictionary_weight = 40
+
+[profile.default.invariant]
+runs = 100
+depth = 50
+fail_on_revert = false
+call_override = false
+shrink_run_limit = 1000
+
+# =============================================================================
+# CI profile — piu' profondo, usato in nightly
+# =============================================================================
+[profile.ci]
+[profile.ci.fuzz]
+runs = 10000
+max_test_rejects = 100000
+seed = "0x1"                         # stessa seed per riproducibilita' cross-run
+
+[profile.ci.invariant]
+runs = 500
+depth = 100
+fail_on_revert = false
+
+# =============================================================================
+# Nightly profile — campagne profonde (background)
+# =============================================================================
+[profile.nightly]
+[profile.nightly.fuzz]
+runs = 100000
+max_test_rejects = 500000
+
+[profile.nightly.invariant]
+runs = 2000
+depth = 200
+
+# =============================================================================
+# RPC endpoints (nessun fork on-chain qui — RPC letti da env)
+# =============================================================================
+[rpc_endpoints]
+arbitrum = "${ARBITRUM_RPC_URL}"

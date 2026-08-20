@@ -1,0 +1,162 @@
+{
+  "generated_at": "2026-07-15",
+  "commit": "786a5b92d3bb7e60ef0bdfb37a7f07a3f60d7c89",
+  "total_low_tier": 628,
+  "suspicious_clusters_count": 14,
+  "clusters": [
+    {
+      "check": "reentrancy-events",
+      "file": "contracts/ProtocolManager.sol",
+      "count": 9,
+      "sample_lines": [
+        451,
+        451,
+        451
+      ],
+      "sample_desc": "Reentrancy in ProtocolManager.executeProtocolCall(string,bytes) (contracts/ProtocolManager.sol#451-480):"
+    },
+    {
+      "check": "timestamp",
+      "file": "contracts/EmergencyHandler.sol",
+      "count": 8,
+      "sample_lines": [
+        780,
+        780,
+        780
+      ],
+      "sample_desc": "EmergencyHandler.getRemainingCooldown() (contracts/EmergencyHandler.sol#780-785) uses timestamp for comparisons"
+    },
+    {
+      "check": "reentrancy-events",
+      "file": "contracts/ProxyGeneral.sol",
+      "count": 6,
+      "sample_lines": [
+        191,
+        191,
+        191
+      ],
+      "sample_desc": "Reentrancy in ProxyGeneral.transferFunds(address,address,uint256) (contracts/ProxyGeneral.sol#191-210):"
+    },
+    {
+      "check": "timestamp",
+      "file": "contracts/Liquiditymanager.sol",
+      "count": 6,
+      "sample_lines": [
+        808,
+        808,
+        808
+      ],
+      "sample_desc": "LiquidityManager.getRemainingHourlyLimit(address) (contracts/Liquiditymanager.sol#808-821) uses timestamp for comparisons"
+    },
+    {
+      "check": "reentrancy-benign",
+      "file": "contracts/plugins/EulerV2Plugin.sol",
+      "count": 5,
+      "sample_lines": [
+        713,
+        713,
+        713
+      ],
+      "sample_desc": "Reentrancy in EulerV2Plugin.openLeverageAtomic(EulerV2Plugin.OpenLeverageAtomicParams) (contracts/plugins/EulerV2Plugin.sol#713-814):"
+    },
+    {
+      "check": "reentrancy-events",
+      "file": "contracts/EmergencyHandler.sol",
+      "count": 5,
+      "sample_lines": [
+        291,
+        291,
+        291
+      ],
+      "sample_desc": "Reentrancy in EmergencyHandler.emergencyWithdraw() (contracts/EmergencyHandler.sol#291-389):"
+    },
+    {
+      "check": "reentrancy-benign",
+      "file": "contracts/plugins/MorphoPlugin.sol",
+      "count": 4,
+      "sample_lines": [
+        662,
+        662,
+        662
+      ],
+      "sample_desc": "Reentrancy in MorphoPlugin.openLeverageAtomic(MorphoPlugin.OpenLeverageAtomicParams) (contracts/plugins/MorphoPlugin.sol#662-735):"
+    },
+    {
+      "check": "reentrancy-benign",
+      "file": "contracts/plugins/AaveV3Plugin.sol",
+      "count": 4,
+      "sample_lines": [
+        656,
+        656,
+        656
+      ],
+      "sample_desc": "Reentrancy in AaveV3Plugin.closeLeverageAtomic(AaveV3Plugin.CloseLeverageAtomicParams) (contracts/plugins/AaveV3Plugin.sol#656-706):"
+    },
+    {
+      "check": "reentrancy-benign",
+      "file": "contracts/SwapManager.sol",
+      "count": 4,
+      "sample_lines": [
+        413,
+        413,
+        413
+      ],
+      "sample_desc": "Reentrancy in SwapManager.swapWithBestPlugin(string,string,uint256,uint256,uint256) (contracts/SwapManager.sol#413-509):"
+    },
+    {
+      "check": "reentrancy-events",
+      "file": "contracts/SwapManager.sol",
+      "count": 4,
+      "sample_lines": [
+        616,
+        616,
+        616
+      ],
+      "sample_desc": "Reentrancy in SwapManager._swapFromBaseAsset(string,uint256,SwapManager.SwapValidation,IProxyGeneral,ISimpleSwap) (contracts/SwapManager.sol#616-666):"
+    },
+    {
+      "check": "timestamp",
+      "file": "contracts/ValueCalculator.sol",
+      "count": 4,
+      "sample_lines": [
+        451,
+        451,
+        451
+      ],
+      "sample_desc": "ValueCalculator.getCachedTokenPrice(string) (contracts/ValueCalculator.sol#451-459) uses timestamp for comparisons"
+    },
+    {
+      "check": "events-maths",
+      "file": "contracts/ValueCalculator.sol",
+      "count": 3,
+      "sample_lines": [
+        725,
+        725,
+        725
+      ],
+      "sample_desc": "ValueCalculator.setMaxErrors(uint256) (contracts/ValueCalculator.sol#725-728) should emit an event for: "
+    },
+    {
+      "check": "reentrancy-benign",
+      "file": "contracts/plugins/MorphoVaultPlugin.sol",
+      "count": 3,
+      "sample_lines": [
+        376,
+        376,
+        376
+      ],
+      "sample_desc": "Reentrancy in MorphoVaultPlugin._vaultDeposit(address,uint256) (contracts/plugins/MorphoVaultPlugin.sol#376-393):"
+    },
+    {
+      "check": "timestamp",
+      "file": "contracts/SwapManager.sol",
+      "count": 3,
+      "sample_lines": [
+        1535,
+        1535,
+        1535
+      ],
+      "sample_desc": "SwapManager.validateSwapParams(string,string,uint256,uint256,uint256) (contracts/SwapManager.sol#1535-1559) uses timestamp for comparisons"
+    }
+  ]
+}

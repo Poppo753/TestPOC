@@ -1,0 +1,77 @@
+{
+  "lastUpdated": "2026-04-08",
+  "phases": [
+    {
+      "id": "q1-2026",
+      "title": "Q1 2026",
+      "status": "completed",
+      "label": "Foundation",
+      "description": "Core architecture deployed on Arbitrum. All 9 core contracts live.",
+      "milestones": [
+        { "text": "Beacon module registry deployed & verified", "done": true },
+        { "text": "ProxyGeneral — sole asset custodian", "done": true },
+        { "text": "LiquidityManager — deposit/withdraw engine", "done": true },
+        { "text": "Aave V3, Euler V2, Morpho Blue plugins live", "done": true },
+        { "text": "EmergencyHandler + rate limiting safeguards", "done": true },
+        { "text": "Lens adapters for real-time health monitoring", "done": true }
+      ]
+    },
+    {
+      "id": "q2-2026",
+      "title": "Q2 2026",
+      "status": "in-progress",
+      "label": "Multi-Pool",
+      "description": "Base asset abstraction — same core, three pool types: ETH, USDC, WBTC.",
+      "milestones": [
+        { "text": "Base asset abstraction (WETH → configurable)", "done": true },
+        { "text": "WETH pool — DepositHelper for native ETH", "done": true },
+        { "text": "USDC pool deployed on Arbitrum", "done": false },
+        { "text": "WBTC pool deployed on Arbitrum", "done": false },
+        { "text": "Landing page & new DApp UI", "done": false },
+        { "text": "Chainlink oracle feeds per pool type", "done": false }
+      ]
+    },
+    {
+      "id": "q3-2026",
+      "title": "Q3 2026",
+      "status": "planned",
+      "label": "New Protocols",
+      "description": "Plugin expansion — each new integration works for all 3 pool types automatically.",
+      "milestones": [
+        { "text": "Compound V3 plugin (Arbitrum + Base)", "done": false },
+        { "text": "Silo V2 isolated lending plugin", "done": false },
+        { "text": "Dolomite lending + margin plugin", "done": false },
+        { "text": "Multi-chain deploy config layer", "done": false },
+        { "text": "Base network — initial deployment (Aave + Euler)", "done": false }
+      ]
+    },
+    {
+      "id": "q4-2026",
+      "title": "Q4 2026",
+      "status": "planned",
+      "label": "Expansion",
+      "description": "Complex strategies and cross-chain expansion to Base and BNB Chain.",
+      "milestones": [
+        { "text": "Pendle yield tokenization plugin", "done": false },
+        { "text": "GMX V2 perpetuals / delta-neutral plugin", "done": false },
+        { "text": "BNB Chain deployment (Aave + Venus)", "done": false },
+        { "text": "Venus BNB-native plugin", "done": false },
+        { "text": "Moonwell Base-native plugin", "done": false }
+      ]
+    },
+    {
+      "id": "2027-plus",
+      "title": "2027+",
+      "status": "vision",
+      "label": "Vault Pyramid",
+      "description": "Composable vault architecture — higher-level vaults invest in lower-level vaults.",
+      "milestones": [
+        { "text": "VaultPlugin — treat any vault as an external protocol", "done": false },
+        { "text": "Level 1: Lending, Stable, No-Risk, Degen vaults", "done": false },
+        { "text": "Level 2: Delta-neutral and strategy vaults", "done": false },
+        { "text": "Level 3: ETH / USDC / WBTC risk-tiered vaults", "done": false },
+        { "text": "Ethena + Sky Protocol integrations", "done": false }
+      ]
+    }
+  ]
+}

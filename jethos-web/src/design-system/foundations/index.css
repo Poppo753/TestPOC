@@ -1,0 +1,32 @@
+@layer reset, tokens, base, primitives, composition, components, patterns, utilities, overrides;
+
+@import url('./tokens.css') layer(tokens);
+@import url('./reset.css') layer(reset);
+@import url('./typography.css') layer(base);
+@import url('./motion.css') layer(base);
+
+@layer base {
+  html {
+    background: var(--color-background-canvas);
+  }
+
+  body {
+    min-width: 20rem;
+    overflow-x: clip;
+    background:
+      radial-gradient(circle at 8% 3%, rgb(139 92 246 / 15%), transparent 28rem),
+      radial-gradient(circle at 92% 18%, rgb(34 211 238 / 9%), transparent 26rem),
+      var(--color-background-canvas);
+    color: var(--color-text-default);
+  }
+
+  :focus-visible {
+    outline: var(--focus-ring-width) solid var(--color-focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  ::selection {
+    background: var(--color-selection-background);
+    color: var(--color-selection-text);
+  }
+}

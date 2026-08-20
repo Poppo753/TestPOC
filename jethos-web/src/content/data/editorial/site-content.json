@@ -1,0 +1,26 @@
+{
+  "version": "1.1.0",
+  "updatedAt": "2026-07-23",
+  "positioning": "Home banking, rebuilt around ownership.",
+  "messageSystem": [
+    "Jethos cannot move assets you have not deposited or separately approved.",
+    "Invest only what you choose.",
+    "See the route, not just the result."
+  ],
+  "principles": [
+    "Assets in the connected wallet are not invested automatically.",
+    "A vault deposit is an explicit on-chain action.",
+    "Invested capital follows public smart-contract rules and approved integrations.",
+    "Risk and liquidity remain present and must be communicated.",
+    "Live, recorded, estimated and illustrative data must never be confused."
+  ],
+  "statuses": {
+    "poc": "Private deployment used for controlled validation",
+    "implemented": "Present in the repository, not necessarily a public product",
+    "validation": "Implemented and being validated",
+    "planned": "Intended direction, not yet implemented",
+    "vision": "Long-term possibility",
+    "illustrative": "Explanatory example, not live data",
+    "live": "Read from chain with a timestamp"
+  }
+}

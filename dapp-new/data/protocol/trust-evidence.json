@@ -1,0 +1,25 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-07-23",
+  "deploymentId": "arbitrum-usdc-poc-1",
+  "evidence": [
+    { "label": "Contract version", "value": "PoC configuration record", "status": "recorded" },
+    { "label": "Deployment record date", "value": "2026-07-14", "status": "recorded" },
+    { "label": "Latest verified block", "value": "Read at runtime where RPC is available", "status": "live" },
+    { "label": "Source commit", "value": "Not linked to the public deployment record", "status": "unavailable" },
+    { "label": "Owner and admin addresses", "value": "Not yet published in this evidence pack", "status": "unavailable" },
+    { "label": "Multisig status", "value": "Not evidenced", "status": "unavailable" },
+    { "label": "Timelock status", "value": "Not evidenced", "status": "unavailable" },
+    { "label": "Upgradeability", "value": "Beacon-based modules are present; authority review remains open", "status": "implemented" },
+    { "label": "Monitoring", "value": "Operational procedure still to be finalized", "status": "planned" },
+    { "label": "Independent audit", "value": "No whole-system audit claimed", "status": "planned" },
+    { "label": "Security contact", "value": "Public channel not yet published", "status": "unavailable" },
+    { "label": "Bug bounty", "value": "Not announced", "status": "unavailable" }
+  ],
+  "assuranceGates": [
+    { "title": "Independent audit", "status": "Open", "evidence": "No report linked" },
+    { "title": "Fork write tests", "status": "In progress", "evidence": "Scenario count is not yet published" },
+    { "title": "Operations", "status": "Draft", "evidence": "Monitoring and incident procedures require final evidence" },
+    { "title": "Legal review", "status": "Not started", "evidence": "No legal-readiness claim" }
+  ]
+}

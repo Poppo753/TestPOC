@@ -1,0 +1,31 @@
+---
+import Container from './Container.astro';
+
+interface Props {
+  id?: string;
+  compact?: boolean;
+  band?: boolean;
+  narrow?: boolean;
+  class?: string;
+  labelledby?: string;
+}
+
+const {
+  id,
+  compact = false,
+  band = false,
+  narrow = false,
+  class: className,
+  labelledby,
+} = Astro.props;
+---
+
+<section
+  {id}
+  class:list={['section', compact && 'section--compact', band && 'section-band', className]}
+  aria-labelledby={labelledby}
+>
+  <Container size={narrow ? 'narrow' : 'default'}>
+    <slot />
+  </Container>
+</section>

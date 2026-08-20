@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Poppo753/TestPOC/security/findings/schema.json",
+  "title": "TestPOC security finding",
+  "description": "Schema autorevole per ogni finding di security registrato nella suite di sicurezza. Rispetta i requisiti della checklist S1.1 (docs/New_Doc/1_Documentation/6. audit_2026_07/11-security-testing-suite/02_Checklist_Implementazione_Verificata.md).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "title",
+    "component",
+    "severity",
+    "confidence",
+    "state",
+    "history"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Identificatore stabile univoco. Formato: <PREFIX>-<NNN>. Prefix riservati: CORE, PLG, ADP, IFC, NEW, VALUATION, LP, WDR, CUST, GOV, ORC, HF, SWP, EMG, INTERVAULT, SLIT, ECH, HAL, MEV.",
+      "pattern": "^[A-Z]+-[0-9]{3,4}$"
+    },
+    "title": {
+      "type": "string",
+      "description": "Titolo breve, action-oriented se possibile. Max 160 char.",
+      "minLength": 5,
+      "maxLength": 160
+    },
+    "aliases": {
+      "type": "array",
+      "description": "ID storici deprecati che puntavano allo stesso finding. Popolato quando due finding vengono deduplicati.",
+      "items": { "$ref": "#/properties/id" },
+      "uniqueItems": true
+    },
+    "commit": {
+      "type": "string",
+      "description": "Commit git in cui il finding è stato scoperto o riverificato.",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "component": {
+      "type": "string",
+      "description": "Componente production impattato. Prima riga se multipli. Riferimento a security/scope/production-paths.txt.",
+      "examples": [
+        "contracts/Liquiditymanager.sol",
+        "contracts/plugins/MorphoPlugin.sol",
+        "contracts/metavault/InterVaultRegistry.sol",
+        "off-chain:scripts/automation/service.ts"
+      ]
+    },
+    "location": {
+      "type": "object",
+      "description": "Riferimento puntuale al codice.",
+      "additionalProperties": false,
+      "properties": {
+        "file": { "type": "string" },
+        "line_start": { "type": "integer", "minimum": 1 },
+        "line_end": { "type": "integer", "minimum": 1 },
+        "function": { "type": "string" }
+      }
+    },
+    "category": {
+      "type": "string",
+      "description": "Classificazione del finding.",
+      "enum": [
+        "solvency",
+        "reentrancy",
+        "access-control",
+        "math",
+        "oracle",
+        "slippage",
+        "mev",
+        "governance",
+        "upgrade",
+        "storage",
+        "emergency",
+        "custody",
+        "interface-drift",
+        "integration",
+        "gas",
+        "griefing",
+        "precision",
+        "logic",
+        "docs",
+        "deployment-hygiene",
+        "code-quality"
+      ]
+    },
+    "severity": {
+      "type": "string",
+      "description": "Impatto se il finding è vero. Usare SEV-Severity per il livello economico atteso.",
+      "enum": ["critical", "high", "medium", "low", "info"]
+    },
+    "confidence": {
+      "type": "string",
+      "description": "Solidità della dimostrazione. Alto = PoC dimostrato / verificato via read del codice. Medio = pattern coerente ma non riprodotto. Basso = suggerimento non dimostrato.",
+      "enum": ["high", "medium", "low"]
+    },
+    "state": {
+      "type": "string",
+      "description": "Stato ciclo di vita del finding. Vedi transizioni ammesse in state_transitions_notes.",
+      "enum": [
+        "candidate",
+        "triaged",
+        "confirmed",
+        "false-positive",
+        "duplicate",
+        "accepted-risk",
+        "out-of-scope",
+        "fix-in-progress",
+        "fixed-pending-verification",
+        "closed"
+      ]
+    },
+    "actor": {
+      "type": "string",
+      "description": "Chi può innescare il finding.",
+      "examples": [
+        "permissionless-user",
+        "authenticated-lp",
+        "compromised-owner",
+        "compromised-module",
+        "mev-searcher",
+        "erc777-token-callback",
+        "oracle-provider",
+        "protocol-lens"
+      ]
+    },
+    "prerequisites": {
+      "type": "array",
+      "description": "Condizioni necessarie perché il finding sia sfruttabile.",
+      "items": { "type": "string" }
+    },
+    "impact": {
+      "type": "string",
+      "description": "Cosa succede se il finding viene sfruttato. Deve essere concreto (asset a rischio, invariante violato, DoS)."
+    },
+    "invariant_violated": {
+      "type": "string",
+      "description": "ID della proprietà del catalogo (security/properties/PROPERTY_CATALOG.md) violata. Vuoto se il catalogo non copre ancora questo caso."
+    },
+    "root_finding": {
+      "$ref": "#/properties/id",
+      "description": "ID del finding root a cui questo è collegato (se subfinding). Es. VALUATION-001."
+    },
+    "sub_findings": {
+      "type": "array",
+      "description": "ID dei subfinding coperti da questo root.",
+      "items": { "$ref": "#/properties/id" },
+      "uniqueItems": true
+    },
+    "poc": {
+      "type": "object",
+      "description": "Prova di concetto. Preferibile un test Solidity/TypeScript. Se non riproducibile, motivazione.",
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string", "description": "Path al test/PoC nel repository." },
+        "type": {
+          "type": "string",
+          "enum": ["hardhat-test", "foundry-test", "echidna-property", "halmos-check", "manual-trace", "not-reproducible"]
+        },
+        "command": { "type": "string", "description": "Comando esatto per riprodurre il PoC." },
+        "not_reproducible_reason": { "type": "string" }
+      },
+      "required": ["type"]
+    },
+    "fix": {
+      "type": "object",
+      "description": "Riferimento al fix applicato. Vuoto se non ancora fixato.",
+      "additionalProperties": false,
+      "properties": {
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+        "pr": { "type": "integer", "minimum": 1 },
+        "summary": { "type": "string" }
+      }
+    },
+    "regression": {
+      "type": "object",
+      "description": "Test di regressione che protegge dal ritorno del bug.",
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": ["hardhat-test", "foundry-test", "echidna-property", "halmos-check"]
+        },
+        "was_red_before_fix": {
+          "type": "boolean",
+          "description": "Se true, il test falliva sul codice pre-fix. Requisito §S1.6."
+        }
+      }
+    },
+    "residual_risk": {
+      "type": "string",
+      "description": "Rischio che rimane anche dopo il fix (spesso vuoto). Usato quando il fix è mitigazione parziale."
+    },
+    "reviewer": {
+      "type": "string",
+      "description": "Handle GitHub del reviewer che ha approvato lo stato corrente. Vuoto se non ancora reviewed."
+    },
+    "last_verified": {
+      "type": "string",
+      "format": "date",
+      "description": "Data (YYYY-MM-DD) dell'ultima verifica sul codice corrente."
+    },
+    "history": {
+      "type": "array",
+      "description": "Storia degli stati. Ogni entry aggiunta senza sovrascrivere le precedenti.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["date", "state", "commit"],
+        "properties": {
+          "date": { "type": "string", "format": "date" },
+          "state": { "$ref": "#/properties/state" },
+          "commit": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+          "actor": { "type": "string", "description": "Chi ha registrato il cambio (agente/handle)" },
+          "note": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "state_transitions_notes": {
+      "description": "Le transizioni ammesse tra stati sono:\n- candidate → triaged\n- triaged → confirmed | false-positive | duplicate | accepted-risk | out-of-scope\n- confirmed → fix-in-progress\n- fix-in-progress → fixed-pending-verification\n- fixed-pending-verification → closed\n- Da 'closed' o 'accepted-risk' si può tornare a 'triaged' solo con una nuova evidenza e una nuova entry in history.\n- 'duplicate' richiede sempre la valorizzazione di root_finding o aliases.\n- 'false-positive' non richiede fix ma resta nel registro per storicità."
+    },
+    "id_prefix_convention": {
+      "description": "Prefissi ID e loro semantica:\n- CORE-XXX: finding del primo audit su contratti core.\n- PLG-XXX: primo audit plugin.\n- ADP-XXX: primo audit adapter/services.\n- IFC-XXX: primo audit interfaces.\n- NEW-XXX: second pass audit.\n- VALUATION-XXX: root finding aggregati sulla valuation.\n- LP-XXX, WDR-XXX, CUST-XXX, GOV-XXX, ORC-XXX, HF-XXX, SWP-XXX, EMG-XXX: proprietà catalogate.\n- INTERVAULT-XXX: finding specifici del gap InterVault.\n- SLIT-XXX: output Slither triagato.\n- ECH-XXX: counterexample Echidna.\n- HAL-XXX: counterexample Halmos.\n- MEV-XXX: scenari MEV specifici."
+    }
+  }
+}

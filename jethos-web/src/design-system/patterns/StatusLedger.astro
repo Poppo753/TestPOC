@@ -1,0 +1,17 @@
+---
+interface Props {
+  kind?: 'policy' | 'evidence' | 'roadmap';
+  label: string;
+  class?: string;
+}
+
+const { kind = 'evidence', label, class: className } = Astro.props;
+const kindClass =
+  kind === 'policy'
+    ? 'policy-ledger'
+    : kind === 'roadmap'
+      ? 'roadmap-evidence'
+      : 'evidence-register';
+---
+
+<div class:list={[kindClass, className]} role="list" aria-label={label}><slot /></div>

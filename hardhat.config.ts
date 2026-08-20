@@ -3,6 +3,7 @@ import "@nomicfoundation/hardhat-toolbox";
 import "dotenv/config";
 import "@typechain/hardhat";
 import "@nomicfoundation/hardhat-toolbox";
+import "hardhat-gas-reporter";
 
 
 
@@ -12,19 +13,50 @@ const config: HardhatUserConfig = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200,
+        runs: 100, // Balance between bytecode size and runtime gas cost
       },
+      viaIR: true, // Enable IR optimizer to avoid "stack too deep" errors
     },
   },
   networks: {
     arbitrumSepolia: {
       url: process.env.ARBITRUM_SEPOLIA_RPC_URL || "https://sepolia-rollup.arbitrum.io/rpc",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      timeout: 60000, // 60 seconds
     },
     arbitrum: {
       url: process.env.ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      timeout: 120000, // 120 seconds (increased for nonce sync)
+      chainId: 42161,
+      gasMultiplier: 1.2, // 20% buffer for gas estimation
+      // Fix nonce management issues
+      httpHeaders: {
+        "Content-Type": "application/json",
+      },
     },
+    hardhat: {
+      forking: {
+        url: process.env.ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc",
+        enabled: process.env.FORK_ENABLED === "true",
+        blockNumber: process.env.FORK_BLOCK_NUMBER ? parseInt(process.env.FORK_BLOCK_NUMBER) : undefined,
+      },
+      chainId: 42161, // Arbitrum mainnet chain ID
+      // Keep the production EIP-170 limit active on forks. Disabling it hid an
+      // oversized SwapManager during rehearsal and allowed a false-positive
+      // deployment certification.
+      allowUnlimitedContractSize: false,
+      // Increase stack trace limit to suppress "Failed to generate N stack traces" warning from DolomitePlugin
+      throwOnCallFailures: true,
+      throwOnTransactionFailures: true,
+    },
+  },
+  gasReporter: {
+    enabled: process.env.REPORT_GAS === "true",
+    currency: "USD",
+    coinmarketcap: process.env.COINMARKETCAP_API_KEY || "",
+    outputFile: "gas-report.txt",
+    noColors: true,
   },
   etherscan: {
     apiKey: process.env.ARBITRUM_ETHERSCAN_API_KEY || "",
@@ -34,7 +66,7 @@ const config: HardhatUserConfig = {
     target: "ethers-v6", // Target compatibile con Ethers.js
   },
   sourcify: {
-    enabled: true
+    enabled: false
   },
   paths: {
     sources: "./contracts",
@@ -46,3 +78,14 @@ const config: HardhatUserConfig = {
 };
 
 export default config;
+
+
+
+
+
+
+
+
+
+
+

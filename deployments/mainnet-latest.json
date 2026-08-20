@@ -1,0 +1,184 @@
+{
+  "timestamp": "2026-04-02T14:44:31.304Z",
+  "network": "arbitrum-mainnet",
+  "chainId": 42161,
+  "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+  "contracts": {
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+    "proxyGeneral": "0x8750344c6cf493f4F5d13F52b7F7Bf1d285978e1",
+    "chainlinkAdapter": "0x018f6392eb912624930d68c3c226b707B1D8B2A7",
+    "tokenManager": "0xc4c8581a7Cbb4e046adB6A6e9008375F38441517",
+    "swapManager": "0xA1b7B8C442c3c1F342BB9C44b7d0733D0c9Ff357",
+    "valueCalculator": "0x2E042874BcFc6bE51e0D6b23F8Da22bDd8B215B0",
+    "parameterManager": "0xe5401565c77B41A5206e3E1b6A2b7F54E93bED5e",
+    "emergencyHandler": "0xcaf7DD1cA3A5857893D97BA3A9C029986A5CAc66",
+    "liquidityManager": "0xfb26C7A0CF5b4e86Dcf870b2349A29DA4F630150",
+    "protocolManager": "0x5b8314319CB56864b002caFEB92540B7A7559fBB",
+    "uniswapV3Plugin": "0x7ec91aEc1bD85E63D671b23E5deC8157D1f8aE01",
+    "aaveV3Plugin": "0x7aEA35f66d054bB6C68957A8A27b10F08c33aA7A",
+    "flashLoanService": "0x3486b561CA1E3Dc146F97D8Ed4B9e4f2cd10822d",
+    "morphoPlugin": "0xf653f0E3FddA2937C2A76C385FA381599BDb65dB",
+    "morphoLensAdapter": "0x37CbA12B65fA59f1D242a02c955b0C87db4d5088",
+    "morphoRegistry": "0xe2e3a074aC000c087fCa87ae2fe0741139660f94",
+    "morphoVaultPlugin": "0x118fd15a78C0Dada24c49343A55142938Ca1868E",
+    "morphoVaultLensAdapter": "0xd5dE87464d1C77417f5a47C8B5F73f7B351F47Cc"
+  },
+  "status": "✅ ALL DEPLOYED SUCCESSFULLY",
+  "EulerRegistry": {
+    "address": "0xe55c78577c84E2cB6E71F8Eb134a66e7B1d9fd56",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "timestamp": "2026-04-01T01:53:57.300Z",
+    "vaults": {
+      "WETH": "0x78E3E051D32157AACD550fBB78458762d8f7edFF",
+      "USDC": "0x0a1eCC5Fe8C9be3C809844fcBe615B46A869b899"
+    },
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870"
+  },
+  "EulerLensAdapter": {
+    "address": "0xfb76C4475149F1843bdF1d327569A12a027Be833",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "timestamp": "2026-02-02T00:00:00.000Z",
+    "dependencies": {
+      "eulerRegistry": "0xa2bE49a4b89F7e7131f8e72015E8a6CD20201BC6"
+    }
+  },
+  "EulerV2Plugin": {
+    "address": "0x383cc6487772bc1AABd2e74884ad23F313005ACB",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "timestamp": "2026-04-01T01:50:09.629Z",
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+    "evc": "0x6302ef0F34100CDDFb5489fbcB6eE1AA95CD1066",
+    "size": 22538,
+    "previousVersion": "0x46B5f0D51311c09e9d93be7d16fA75BECC654D5b",
+    "upgradeType": "EVC Batch Refactor (fifthPhase)",
+    "dependencies": {
+      "eulerRegistry": "0x52c2D0645f5Bea7fE159d9Db9C27Ba6b50D1bAe3"
+    }
+  },
+  "FlashLoanService": {
+    "address": "0x3486b561CA1E3Dc146F97D8Ed4B9e4f2cd10822d",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "timestamp": "2026-04-01T15:03:08.080Z",
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+    "balancerVault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+    "simpleSwap": "0xa0DB78167CBAccD47524a261b7741C6B41Bbd096",
+    "previousVersion": "0x638C0175a1883063F22fc2439C85364e4aC27b03",
+    "upgradeReason": "Dynamic _isRegisteredPlugin via beacon.getRegisteredModules()"
+  },
+  "AaveV3Registry": {
+    "address": "0xEeb0EA1C430E956266C8027E39cA7A5C855B1a73",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "owner": "0x4cFDCb4215F562DC3Bc36D28fCf093E993AdC026",
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+    "tokens": {
+      "WETH": {
+        "underlying": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+        "aToken": "0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8",
+        "variableDebtToken": "0x0c84331e39d6658Cd6e6b9ba04736cC4c4734351"
+      },
+      "USDC": {
+        "underlying": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+        "aToken": "0x724dc807b04555b71ed48a6896b6F41593b8C637",
+        "variableDebtToken": "0xf611aEb5013fD2c0511c9CD55c7dc5C1140741A6"
+      },
+      "USDT": {
+        "underlying": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+        "aToken": "0x6ab707Aca953eDAeFBc4fD23bA73294241490620",
+        "variableDebtToken": "0xfb00AC187a8Eb5AFAE4eACE434F493Eb62672df7"
+      },
+      "WBTC": {
+        "underlying": "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f",
+        "aToken": "0x078f358208685046a11C85e8ad32895DED33A249",
+        "variableDebtToken": "0x92b42c66840C7AD907b4BF74879FF3eF7c529473"
+      }
+    }
+  },
+  "AaveV3Plugin": {
+    "address": "0x7aEA35f66d054bB6C68957A8A27b10F08c33aA7A",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "owner": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+    "aavePool": "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
+    "proxyGeneral": "0x8750344c6cf493f4F5d13F52b7F7Bf1d285978e1",
+    "authorizedInProxyGeneral": true,
+    "timestamp": "2026-04-01T15:03:08.080Z",
+    "previousVersion": "0x4cFDCb4215F562DC3Bc36D28fCf093E993AdC026",
+    "upgradeReason": "Added leverage: openLeverageAtomic, closeLeverageAtomic"
+  },
+  "AaveV3LensAdapter": {
+    "address": "0xF9d5Cb5a86f0aD469f37F08B27AEf7FdF46ac3E3",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+    "dependencies": {
+      "aaveV3Registry": "0xEeb0EA1C430E956266C8027E39cA7A5C855B1a73",
+      "aaveV3Plugin": "0x4cFDCb4215F562DC3Bc36D28fCf093E993AdC026"
+    }
+  },
+  "MorphoPlugin": {
+    "address": "0xf653f0E3FddA2937C2A76C385FA381599BDb65dB",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+    "morphoSingleton": "0x6c247b1F6182318877311737BaC0844bAa518F5e",
+    "proxyGeneral": "0x8750344c6cf493f4F5d13F52b7F7Bf1d285978e1",
+    "authorizedInProxyGeneral": true,
+    "flashLoanService": "0x3486b561CA1E3Dc146F97D8Ed4B9e4f2cd10822d",
+    "leverage": true,
+    "markets": ["WETH/USDC"]
+  },
+  "MorphoLensAdapter": {
+    "address": "0x37CbA12B65fA59f1D242a02c955b0C87db4d5088",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+    "dependencies": {
+      "morphoPlugin": "0xf653f0E3FddA2937C2A76C385FA381599BDb65dB",
+      "morphoRegistry": "0xe2e3a074aC000c087fCa87ae2fe0741139660f94"
+    }
+  },
+  "MorphoRegistry": {
+    "address": "0xe2e3a074aC000c087fCa87ae2fe0741139660f94",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "owner": "0xf653f0E3FddA2937C2A76C385FA381599BDb65dB",
+    "markets": [
+      "WETH/USDC"
+    ],
+    "vaults": [
+      {
+        "name": "HexaOne USDC",
+        "address": "0xaE73875437c86abb60cD7fA77286D63cb94F9a25",
+        "assetCode": "USDC"
+      },
+      {
+        "name": "Clearstar USDC Reactor",
+        "address": "0xa53Cf822FE93002aEaE16d395CD823Ece161a6AC",
+        "assetCode": "USDC"
+      },
+      {
+        "name": "usdc staging",
+        "address": "0xd2d46099B70880e268B0c7557b9D22d3AA848654",
+        "assetCode": "USDC"
+      }
+    ],
+    "defaultVaults": {
+      "USDC": "0xaE73875437c86abb60cD7fA77286D63cb94F9a25"
+    },
+    "previousVersion": "0x9370CC33F5336186849a4bAA2ecD3dd75263d86d",
+    "upgradeReason": "Added vault config methods (configureVault, setDefaultVault, etc.)"
+  },
+  "MorphoVaultPlugin": {
+    "address": "0x118fd15a78C0Dada24c49343A55142938Ca1868E",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+    "timestamp": "2026-04-02T14:44:31.304Z",
+    "vaults": [
+      "0xaE73875437c86abb60cD7fA77286D63cb94F9a25",
+      "0xa53Cf822FE93002aEaE16d395CD823Ece161a6AC",
+      "0xd2d46099B70880e268B0c7557b9D22d3AA848654"
+    ]
+  },
+  "MorphoVaultLensAdapter": {
+    "address": "0xd5dE87464d1C77417f5a47C8B5F73f7B351F47Cc",
+    "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+    "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+    "timestamp": "2026-04-02T14:44:31.304Z"
+  }
+}

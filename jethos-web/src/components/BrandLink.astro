@@ -1,0 +1,18 @@
+---
+import { siteConfig, sitePath } from '../config/site';
+
+interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+---
+
+<a
+  class:list={['brand', className]}
+  href={sitePath('/index.html')}
+  aria-label={`${siteConfig.name} home`}
+>
+  <img class="brand-mark" src={sitePath('/assets/brand/jethos-mark.svg')} alt="" />
+  <span>{siteConfig.name}</span>
+</a>

@@ -1,0 +1,15 @@
+
+in base alla tua idea descritta nel documenti/chat che hai appena detto che ti ho dato in allegato, creati un documento di spiegazione in cui spieghi nel complesso la situazione, e poi molto piu nel dettaglio, ripensando molto bene a cosa si puo implementare, come dove e perche e cosa conviene fare, strategia ecc ecc ecc
+
+successivamente, prendendo il documento appena creato, ne creerai un'altro, in cui espandi enormemente la spiegazione e cosa converrebbe fare essendo il piu dettagliato possibile e pensandoci molto bene su ogni step: quanta e che roba c'è da fare? come converrebbe agire? con che ordine? 
+
+successivamente, prendi il documento spiegazione espanso appena creato e rileggilo interamente e rianalizza se è veramente la strategia migliore analizzando ogni task e fix proposto e lasciando intatti quelli corretti e fixando quelli sbagliati
+
+successivamente, al documento di spiegazione espanso, stando super puntuale su ogni implementazione necessaria, vai a crearti un nuovo documento "checklist" in cui crei una checklist indicando task per task in modo super dettagliato cosa è necessario fare, indicandoli tutti.
+
+successivamente prendi il documento checklist e il documento spiegazione espansa e controlla che nella checklist ci sia tutto quanto e fixa quanto necessario sulla checklist
+
+infine, vai a eseguire ogni singolo task della checklist appena controllata, in maniera organizzata, ordinata e aggiornata, segnando sul doc checklist ogni task che concludi volta per volta (sii molto ampio nei commenti all'interno del codice che spiegano logiche, come usare, ecc ecc
+infine, crea dei documenti (anche piu di uno, con specifiche/argometni diversi) in cui spieghi qual'è la situazione, cosa hai fatto, cosa hai fixato, cosa hai implementato, come, perche, ecc ecc
+infine crea un documento per ogni cartella o documento generale per tutti o che ne so come vuoi, in cui spieghi come utilizzare ogni singolo script (sapendo che comuqnue hanno dentro tutti i commenti gli script)
+tutti i file di documento che creerai, inseriscili al path indicato

@@ -1,0 +1,148 @@
+@layer primitives {
+  .button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0.72rem 1.05rem;
+    border: 1px solid transparent;
+    border-radius: 0.75rem;
+    font-weight: 760;
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+      transform var(--motion-duration-fast) ease,
+      border-color var(--motion-duration-fast) ease,
+      background var(--motion-duration-fast) ease;
+  }
+
+  .button:hover {
+    transform: translateY(-1px);
+  }
+
+  .button--primary {
+    background: linear-gradient(135deg, var(--violet-600), #8b36e8);
+    box-shadow: 0 12px 30px rgb(115 69 232 / 25%);
+    color: var(--color-text-strong);
+  }
+
+  .button--secondary {
+    border-color: var(--color-border-strong);
+    background: var(--surface-soft);
+    color: var(--color-text-strong);
+  }
+
+  .button--ghost {
+    border-color: var(--color-border-default);
+    background: transparent;
+    color: var(--color-text-muted);
+  }
+
+  .button--danger {
+    border-color: rgb(251 113 133 / 35%);
+    background: rgb(251 113 133 / 13%);
+    color: var(--color-text-strong);
+  }
+
+  .button:disabled,
+  .button[aria-disabled='true'] {
+    opacity: 0.48;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.42rem;
+    width: fit-content;
+    padding: 0.35rem 0.65rem;
+    border: 1px solid var(--color-border-default);
+    border-radius: 999px;
+    background: rgb(255 255 255 / 4%);
+    color: var(--color-text-muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.025em;
+  }
+
+  .badge::before {
+    width: 0.42rem;
+    height: 0.42rem;
+    border-radius: 50%;
+    background: currentcolor;
+    content: '';
+  }
+
+  .badge--live {
+    border-color: rgb(52 211 153 / 32%);
+    background: rgb(52 211 153 / 8%);
+    color: var(--green-400);
+  }
+
+  .badge--implemented {
+    border-color: rgb(34 211 238 / 30%);
+    background: rgb(34 211 238 / 7%);
+    color: var(--cyan-300);
+  }
+
+  .badge--poc {
+    border-color: rgb(196 181 253 / 34%);
+    background: rgb(139 92 246 / 11%);
+    color: var(--violet-300);
+  }
+
+  .badge--validation,
+  .badge--illustrative {
+    border-color: rgb(251 191 36 / 30%);
+    background: rgb(251 191 36 / 7%);
+    color: var(--amber-400);
+  }
+
+  .badge--planned {
+    border-color: rgb(96 165 250 / 30%);
+    border-style: dashed;
+    background: rgb(96 165 250 / 4.5%);
+    color: var(--blue-400);
+  }
+
+  .badge--vision {
+    border-color: rgb(196 181 253 / 24%);
+    background: transparent;
+    color: var(--violet-300);
+  }
+
+  .badge--recorded {
+    border-color: var(--color-border-strong);
+    background: rgb(255 255 255 / 3.5%);
+    color: var(--color-text-muted);
+  }
+
+  .badge--unavailable {
+    border-color: var(--color-border-strong);
+    border-style: dashed;
+    background: transparent;
+    color: var(--color-text-subtle);
+  }
+
+  .eyebrow {
+    color: var(--violet-300);
+    font-size: 0.78rem;
+    font-weight: 750;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .sr-only {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    margin: -1px !important;
+    clip: rect(0, 0, 0, 0) !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+  }
+}

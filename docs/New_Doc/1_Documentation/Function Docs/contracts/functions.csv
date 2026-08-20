@@ -1,0 +1,49 @@
+Contract,Function,Visibility,Parameters,Returns,Modifiers,Description
+ProtocolManager,constructor,public,,,"onlyOwner",Initializes the protocol manager with owner privileges
+ProtocolManager,deposit,external,protocolName: string,tokenCode: string,amount: uint256,onlyOwner,Deposits tokens into a specified protocol
+ProtocolManager,withdraw,external,protocolName: string,tokenCode: string,amount: uint256,onlyOwner,Withdraws tokens from a specified protocol
+ProtocolManager,executeOperation,external,amount: uint256,fee: uint256,onlyOwner,Executes a flash loan operation
+AaveV3Plugin,constructor,public,,,"onlyOwner",Initializes the Aave V3 plugin
+AaveV3Plugin,deposit,external,token: address,amount: uint256,onlyOwner,Deposits tokens into Aave V3
+AaveV3Plugin,withdraw,external,token: address,amount: uint256,onlyOwner,Withdraws tokens from Aave V3
+DolomitePlugin,constructor,public,,,"onlyOwner",Initializes the Dolomite plugin
+DolomitePlugin,deposit,external,token: address,amount: uint256,onlyOwner,Deposits tokens into Dolomite
+DolomitePlugin,withdraw,external,token: address,amount: uint256,onlyOwner,Withdraws tokens from Dolomite
+EulerV2Plugin,constructor,public,,,"onlyOwner",Initializes the Euler V2 plugin
+EulerV2Plugin,deposit,external,token: address,amount: uint256,onlyOwner,Deposits tokens into Euler V2
+EulerV2Plugin,withdraw,external,token: address,amount: uint256,onlyOwner,Withdraws tokens from Euler V2
+MorphoPlugin,constructor,public,,,"onlyOwner",Initializes the Morpho plugin
+MorphoPlugin,deposit,external,token: address,amount: uint256,onlyOwner,Deposits tokens into Morpho
+MorphoPlugin,withdraw,external,token: address,amount: uint256,onlyOwner,Withdraws tokens from Morpho
+MorphoVaultPlugin,constructor,public,,,"onlyOwner",Initializes the Morpho Vault plugin
+MorphoVaultPlugin,deposit,external,token: address,amount: uint256,onlyOwner,Deposits tokens into Morpho Vault
+MorphoVaultPlugin,withdraw,external,token: address,amount: uint256,onlyOwner,Withdraws tokens from Morpho Vault
+UniswapV3Plugin,constructor,public,,,"onlyOwner",Initializes the Uniswap V3 plugin
+UniswapV3Plugin,swap,external,tokenIn: address,tokenOut: address,amountIn: uint256,onlyOwner,Swaps tokens using Uniswap V3
+UniswapV3Plugin,addLiquidity,external,tokenA: address,tokenB: address,amountA: uint256,amountB: uint256,onlyOwner,Adds liquidity to a Uniswap V3 pool
+UniswapV3Plugin,removeLiquidity,external,tokenA: address,tokenB: address,amountA: uint256,amountB: uint256,onlyOwner,Removes liquidity from a Uniswap V3 pool
+FlashLoanService,constructor,public,,,"onlyOwner",Initializes the flash loan service
+FlashLoanService,executeFlashLoan,external,token: address,amount: uint256,onlyOwner,Executes a flash loan operation
+AaveV3Registry,constructor,public,,,"onlyOwner",Initializes the Aave V3 registry
+AaveV3Registry,addProtocol,external,protocolName: string,protocolAddress: address,onlyOwner,Adds a new Aave V3 protocol to the registry
+AaveV3Registry,removeProtocol,external,protocolName: string,onlyOwner,Removes a protocol from the registry
+EulerRegistry,constructor,public,,,"onlyOwner",Initializes the Euler registry
+EulerRegistry,addProtocol,external,protocolName: string,protocolAddress: address,onlyOwner,Adds a new Euler protocol to the registry
+EulerRegistry,removeProtocol,external,protocolName: string,onlyOwner,Removes a protocol from the registry
+MorphoRegistry,constructor,public,,,"onlyOwner",Initializes the Morpho registry
+MorphoRegistry,addProtocol,external,protocolName: string,protocolAddress: address,onlyOwner,Adds a new Morpho protocol to the registry
+MorphoRegistry,removeProtocol,external,protocolName: string,onlyOwner,Removes a protocol from the registry
+AaveV3LensAdapter,constructor,public,,,"onlyOwner",Initializes the Aave V3 lens adapter
+AaveV3LensAdapter,getReserves,external,token: address,onlyOwner,Retrieves reserve information for a token
+AaveV3LensAdapter,getLiquidity,external,token: address,onlyOwner,Retrieves liquidity information for a token
+ChainlinkAdapter,constructor,public,,,"onlyOwner",Initializes the Chainlink adapter
+ChainlinkAdapter,getPrice,external,token: address,onlyOwner,Retrieves price information for a token
+EulerLensAdapter,constructor,public,,,"onlyOwner",Initializes the Euler lens adapter
+EulerLensAdapter,getReserves,external,token: address,onlyOwner,Retrieves reserve information for a token
+EulerLensAdapter,getLiquidity,external,token: address,onlyOwner,Retrieves liquidity information for a token
+MorphoLensAdapter,constructor,public,,,"onlyOwner",Initializes the Morpho lens adapter
+MorphoLensAdapter,getReserves,external,token: address,onlyOwner,Retrieves reserve information for a token
+MorphoLensAdapter,getLiquidity,external,token: address,onlyOwner,Retrieves liquidity information for a token
+MorphoVaultLensAdapter,constructor,public,,,"onlyOwner",Initializes the Morpho Vault lens adapter
+MorphoVaultLensAdapter,getReserves,external,token: address,onlyOwner,Retrieves reserve information for a token
+MorphoVaultLensAdapter,getLiquidity,external,token: address,onlyOwner,Retrieves liquidity information for a token

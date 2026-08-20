@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-02-01T18:15:02.886Z",
+  "network": "arbitrum-mainnet",
+  "chainId": 42161,
+  "deployer": "0x8390e98483a9b39265428c8610371134B5d11C3F",
+  "protocolManager": "0x5b8314319CB56864b002caFEB92540B7A7559fBB",
+  "beacon": "0xdB997aBb94D11DfE6a10A866cce5a3eF9f804870",
+  "bytecodeSize": 13736,
+  "gasUsed": "3048818",
+  "registeredInBeacon": true
+}

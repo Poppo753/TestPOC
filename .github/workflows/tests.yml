@@ -1,0 +1,364 @@
+name: Tests (Hardhat, non-fork)
+
+# CI consolidata Hardhat — vedi §S2 di
+# docs/New_Doc/1_Documentation/6. audit_2026_07/11-security-testing-suite/02_Checklist_Implementazione_Verificata.md
+#
+# Trigger:
+#   - push: main, develop, dev-* (matching current work branch dev-26)
+#   - pull_request: verso main, develop, dev-*
+# Fork tests: separati in .github/workflows/fork.yml (nightly + manual dispatch).
+
+on:
+  push:
+    branches: [main, develop, "dev-*"]
+  pull_request:
+    branches: [main, develop, "dev-*"]
+
+# S2.4: permessi minimi (solo lettura + write status per il commento sui PR).
+# NON abilitare 'actions:write' o 'secrets' fuori dal necessario.
+permissions:
+  contents: read
+  pull-requests: write   # per commentare il summary su PR
+  checks: write          # per pubblicare status check custom
+
+# S2.1: concurrency — se arrivano più push/pr sullo stesso ref, cancellare le run in corso.
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# S2.1: variabili globali per riproducibilità.
+env:
+  NODE_VERSION: "22"
+  # S2.4: NON esporre PRIVATE_KEY qui. Fork usa RPC read-only.
+  # (verifica assenza con: grep -R "PRIVATE_KEY" .github/workflows/ )
+
+jobs:
+  # =========================================================================
+  # Job 0: compile + typecheck (baseline di tutti gli altri job)
+  # =========================================================================
+  build:
+    name: Compile & typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4      # S2.1: aggiornato v3 → v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4    # S2.1: aggiornato v3 → v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies (frozen lockfile)
+        run: npm ci                     # S2.1: fallisce su lockfile incoerente
+
+      - name: Compile Solidity contracts
+        run: npx hardhat compile
+
+      - name: Typecheck TypeScript scripts
+        run: npm run scripts:typecheck
+
+      # S2.1: artifact anche in caso di failure (compilation error, typecheck)
+      - name: Upload compile artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            artifacts/build-info/**
+            cache/solidity-files-cache.json
+            typechain-types/**
+          retention-days: 7
+          if-no-files-found: warn
+
+  # =========================================================================
+  # Job 1: Unit tests
+  # =========================================================================
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - run: npm ci
+      - run: npx hardhat compile
+      - name: Run unit tests
+        run: npm run test:unit
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: |
+            test-results/**
+            gas-report.txt
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # =========================================================================
+  # Job 2: Integration tests (esclusi Dolomite/GMX)
+  # =========================================================================
+  integration-tests:
+    name: Integration tests (no fork, no Dolomite/GMX)
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - run: npm ci
+      - run: npx hardhat compile
+
+      # S2.2 + S0.2 exclusions: escludere Dolomite/GMX per path.
+      # Glob espliciti invece di **/*.test.ts per non catturare sottocartelle escluse.
+      - name: Run integration tests (Aave, Euler, Morpho, flash-loan, governance, liquidity, metavault, scripts, swap, system)
+        run: |
+          npx hardhat test \
+            test/integration/aave/**/*.test.ts \
+            test/integration/euler/**/*.test.ts \
+            test/integration/morpho/**/*.test.ts \
+            test/integration/flash-loan/**/*.test.ts \
+            test/integration/governance/**/*.test.ts \
+            test/integration/liquidity/**/*.test.ts \
+            test/integration/metavault/**/*.test.ts \
+            test/integration/scripts/**/*.test.ts \
+            test/integration/swap/**/*.test.ts \
+            test/integration/system/**/*.test.ts
+
+      - name: Upload integration results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: test-results/**
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # =========================================================================
+  # Job 3: Security regression tests (Hardhat)
+  # =========================================================================
+  security-tests:
+    name: Security regression tests
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - run: npm ci
+      - run: npx hardhat compile
+      - name: Run security tests
+        run: npm run test:security
+
+  # =========================================================================
+  # Job 4: Invariant tests (TypeScript, existing)
+  # =========================================================================
+  invariant-tests:
+    name: Invariant tests
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - run: npm ci
+      - run: npx hardhat compile
+      - name: Run invariant tests
+        run: npm run test:invariants
+
+  # =========================================================================
+  # Job 5: MetaVault (InterVault) tests locali
+  # =========================================================================
+  metavault-tests:
+    name: MetaVault (InterVault) tests (local)
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - run: npm ci
+      - run: npx hardhat compile
+      - name: Run MetaVault tests (unit + integration non-fork)
+        run: |
+          npx hardhat test \
+            test/unit/metavault/**/*.test.ts \
+            test/integration/metavault/InterVault.Core.integration.test.ts \
+            test/e2e/InterVault.AutomaticWithdrawal.local.e2e.test.ts
+
+  # =========================================================================
+  # Job 6: Script framework tests
+  # =========================================================================
+  script-tests:
+    name: Script framework tests
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - run: npm ci
+      - run: npx hardhat compile
+      - name: Run script tests (Framework, Operations, Deployment, Phase1.Core)
+        run: npm run scripts:test
+
+  # =========================================================================
+  # Job 7: Automation (VAC) tests
+  # =========================================================================
+  automation-tests:
+    name: Vault Automation Controller tests
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - run: npm ci
+      - run: npx hardhat compile
+      - name: Run automation tests
+        run: npm run automation:test
+
+  # =========================================================================
+  # Job 8: Scope drift check (nuovi file Solidity non classificati)
+  # =========================================================================
+  # Requisito S0.2: segnalare file .sol nuovi non classificati in production-paths.txt.
+  scope-drift:
+    name: Scope drift check
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify all .sol files are classified in security/scope/production-paths.txt
+        run: |
+          set -euo pipefail
+          DECLARED=$(grep -vE '^(#|$)' security/scope/production-paths.txt | grep -E '\.sol$' | sort -u)
+          ACTUAL=$(find contracts -name "*.sol" -type f | sort -u)
+
+          # Applica le esclusioni note (allineate con security/scope/exclusions.md)
+          FILTERED=$(echo "$ACTUAL" | grep -vE '(plugins/old/|SwapManager\.sol\.backup|EulerV2Plugin copy\.sol\.md|DolomitePlugin\.sol|contracts/mocks/|contracts/MockChainlinkOracle\.sol|contracts/MockERC20\.sol|contracts/MockWETH\.sol)')
+
+          UNCLASSIFIED=$(comm -23 <(echo "$FILTERED") <(echo "$DECLARED"))
+          if [ -n "$UNCLASSIFIED" ]; then
+            echo "::error::Solidity file(s) not classified in security/scope/production-paths.txt:"
+            echo "$UNCLASSIFIED" | while read f; do echo "::error file=$f::unclassified"; done
+            echo "→ Add explicit include or exclusion (with motivation in security/scope/exclusions.md) before merge."
+            exit 1
+          fi
+          echo "OK — all .sol files under contracts/ are classified."
+
+  # =========================================================================
+  # Job 9: Findings register validation
+  # =========================================================================
+  # Requisito S1.1: register.json deve validare contro schema.json.
+  findings-schema:
+    name: Findings register schema validation
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install jsonschema
+        run: pip install jsonschema
+      - name: Validate register.json against schema.json
+        run: |
+          python -c "
+          import json, jsonschema, sys
+          schema = json.load(open('security/findings/schema.json', encoding='utf-8'))
+          reg = json.load(open('security/findings/register.json', encoding='utf-8'))
+          try:
+              jsonschema.validate(reg, {'type':'array','items':schema})
+              print(f'OK — {len(reg)} entries validate against schema.')
+          except jsonschema.ValidationError as e:
+              print(f'FAIL — {e.message}', file=sys.stderr)
+              sys.exit(1)
+          "
+
+  # =========================================================================
+  # Summary aggregator (opzionale, aiuta il branch protection required-check)
+  # =========================================================================
+  tests-summary:
+    name: Tests summary
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - build
+      - unit-tests
+      - integration-tests
+      - security-tests
+      - invariant-tests
+      - metavault-tests
+      - script-tests
+      - automation-tests
+      - scope-drift
+      - findings-schema
+    timeout-minutes: 2
+
+    steps:
+      - name: Aggregate result
+        run: |
+          echo "=== Job results ==="
+          echo "build:             ${{ needs.build.result }}"
+          echo "unit-tests:        ${{ needs.unit-tests.result }}"
+          echo "integration-tests: ${{ needs.integration-tests.result }}"
+          echo "security-tests:    ${{ needs.security-tests.result }}"
+          echo "invariant-tests:   ${{ needs.invariant-tests.result }}"
+          echo "metavault-tests:   ${{ needs.metavault-tests.result }}"
+          echo "script-tests:      ${{ needs.script-tests.result }}"
+          echo "automation-tests:  ${{ needs.automation-tests.result }}"
+          echo "scope-drift:       ${{ needs.scope-drift.result }}"
+          echo "findings-schema:   ${{ needs.findings-schema.result }}"
+
+          # Fallisce se qualsiasi upstream ha fallito
+          if [[ "${{ needs.build.result }}"              != "success" \
+             || "${{ needs.unit-tests.result }}"         != "success" \
+             || "${{ needs.integration-tests.result }}"  != "success" \
+             || "${{ needs.security-tests.result }}"     != "success" \
+             || "${{ needs.invariant-tests.result }}"    != "success" \
+             || "${{ needs.metavault-tests.result }}"    != "success" \
+             || "${{ needs.script-tests.result }}"       != "success" \
+             || "${{ needs.automation-tests.result }}"   != "success" \
+             || "${{ needs.scope-drift.result }}"        != "success" \
+             || "${{ needs.findings-schema.result }}"    != "success" ]]; then
+            echo "::error::One or more upstream jobs failed."
+            exit 1
+          fi
+          echo "All jobs succeeded."

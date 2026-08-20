@@ -1,0 +1,20 @@
+---
+import Container from '../composition/Container.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  class?: string;
+  labelledby?: string;
+}
+
+const { title, description, class: className, labelledby = 'final-cta-title' } = Astro.props;
+---
+
+<section class:list={['final-cta', className]} aria-labelledby={labelledby}>
+  <Container size="narrow">
+    <h2 id={labelledby}>{title}</h2>
+    {description && <p class="lede">{description}</p>}
+    <div class="cluster final-cta__actions"><slot /></div>
+  </Container>
+</section>

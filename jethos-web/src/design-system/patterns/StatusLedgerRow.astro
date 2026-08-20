@@ -1,0 +1,24 @@
+---
+interface Props {
+  kind?: 'policy' | 'evidence';
+  label: string;
+  value: string;
+  pending?: boolean;
+  class?: string;
+}
+
+const { kind = 'evidence', label, value, pending = false, class: className } = Astro.props;
+---
+
+<div
+  class:list={[
+    kind === 'policy' ? 'policy-row' : 'evidence-row',
+    pending && 'policy-pending',
+    className,
+  ]}
+  role="listitem"
+>
+  <span>{label}</span>
+  <strong>{value}</strong>
+  <slot />
+</div>

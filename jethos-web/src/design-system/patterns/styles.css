@@ -1,0 +1,44 @@
+@layer patterns {
+  .page-hero {
+    position: relative;
+    padding-block: calc(var(--header-height) + 5rem) 4rem;
+    border-block-end: 1px solid var(--color-border-default);
+    overflow: hidden;
+  }
+
+  .page-hero .lede {
+    max-width: 750px;
+  }
+
+  .section-heading {
+    max-width: 720px;
+    margin-block-end: clamp(2rem, 5vw, 4rem);
+  }
+
+  .section-heading--center {
+    margin-inline: auto;
+    text-align: center;
+  }
+
+  .lede {
+    max-width: var(--measure-copy);
+    color: var(--color-text-muted);
+    font-size: clamp(1.05rem, 2vw, 1.3rem);
+  }
+
+  .final-cta {
+    padding-block: clamp(4rem, 8vw, 7rem);
+    border-block-start: 1px solid var(--color-border-default);
+    background: var(--color-background-subtle);
+    text-align: center;
+  }
+
+  .final-cta .lede {
+    margin-inline: auto;
+  }
+
+  .final-cta__actions {
+    justify-content: center;
+    margin-block-start: var(--space-6);
+  }
+}

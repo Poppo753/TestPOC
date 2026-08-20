@@ -1,0 +1,67 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/legacy/demo.css';
+---
+
+<BaseLayout
+  title="Jethos Interactive Demo"
+  description="Experience an entirely simulated Jethos deposit, portfolio, transparency and withdrawal journey. No wallet and no real funds."
+  page="demo"
+  canonicalPath="/demo/index.html"
+  robots="noindex,nofollow"
+  showFooter={false}
+  mainClass="demo-app"
+>
+  <div class="demo-notice" role="note">
+    <strong>Interactive demo</strong>
+    <span>No wallet, blockchain or real funds. Every value and operation is illustrative.</span>
+  </div>
+
+  <div class="demo-shell">
+    <aside class="demo-rail" aria-label="Demo navigation">
+      <div class="demo-profile">
+        <span class="demo-profile__mark" aria-hidden="true">JD</span>
+        <div><strong>Demo profile</strong><span>$12,480 visible · $9,200 liquid</span></div>
+      </div>
+      <nav class="demo-nav">
+        <a href="#overview" data-demo-route="overview">Overview</a>
+        <a href="#wallet" data-demo-route="wallet">Wallet</a>
+        <a href="#vaults" data-demo-route="vaults">Vaults</a>
+        <a href="#portfolio" data-demo-route="portfolio">Positions</a>
+        <a href="#transparency" data-demo-route="transparency">Understand</a>
+        <a href="#activity" data-demo-route="activity">Activity</a>
+      </nav>
+      <div class="demo-rail__footer">
+        <button class="button button--ghost" type="button" data-demo-reset>Reset demo</button>
+        <a href="/app.html">Open technical PoC →</a>
+      </div>
+    </aside>
+
+    <section class="demo-workspace" aria-live="polite">
+      <h1 class="sr-only">Jethos Interactive Demo</h1>
+      <div id="demo-view"></div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop demo-modal-backdrop" data-demo-modal hidden>
+    <section
+      class="modal demo-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="demo-modal-title"
+    >
+      <button
+        class="demo-modal__close"
+        type="button"
+        aria-label="Close dialog"
+        data-demo-modal-close>×</button
+      >
+      <div id="demo-modal-content"></div>
+    </section>
+  </div>
+
+  <div class="toast-region" aria-live="polite" aria-atomic="true" data-demo-toasts></div>
+  <script>
+    void import('../../features/demo/legacy/controller.js');
+  </script>
+</BaseLayout>

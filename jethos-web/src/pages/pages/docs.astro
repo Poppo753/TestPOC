@@ -1,0 +1,168 @@
+---
+import Callout from '../../design-system/components/Callout.astro';
+import Card from '../../design-system/components/Card.astro';
+import Section from '../../design-system/composition/Section.astro';
+import Badge from '../../design-system/primitives/Badge.astro';
+import PageHero from '../../design-system/patterns/PageHero.astro';
+import { editorialContentRepository } from '../../content/local-repository';
+import { documentDownload, documentRoute } from '../../features/docs/model';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/legacy/documentation.css';
+
+const manifest = await editorialContentRepository.getDocsManifest();
+const toneByCategory = {
+  Vision: 'vision',
+  Multichain: 'vision',
+  Architecture: 'implemented',
+  Accounting: 'implemented',
+  Evidence: 'implemented',
+  Roadmap: 'validation',
+} as const;
+
+const badgeTone = (category: string) =>
+  toneByCategory[category as keyof typeof toneByCategory] ?? 'planned';
+---
+
+<BaseLayout
+  title="Jethos documentation"
+  description="Navigate Jethos user, risk, assurance, architecture and developer documentation."
+  page="docs"
+  canonicalPath="/pages/docs.html"
+>
+  <div data-docs-root>
+    <PageHero
+      eyebrow="Documentation"
+      title="Start with the question you need answered."
+      description="Choose a user, assurance or developer path, then open the complete synchronized source documents without leaving Jethos."
+    />
+
+    <Section compact>
+      <div class="audience-paths">
+        <Card>
+          <span class="trust-index">USER DOCUMENTATION</span>
+          <h2>Use Jethos</h2>
+          <p>Wallet control, approvals, deposits, shares, withdrawals and product risks.</p>
+          <div class="footer-links">
+            <a href="/pages/how-it-works.html">How it works →</a>
+            <a href="/pages/vaults.html">Vaults →</a>
+            <a href="/pages/faq.html">FAQ →</a>
+          </div>
+        </Card>
+        <Card>
+          <span class="trust-index">RISK &amp; ASSURANCE</span>
+          <h2>Verify claims</h2>
+          <p>Risk framework, governance, security, deployment evidence and open gates.</p>
+          <div class="footer-links">
+            <a href="/pages/risk-transparency.html">Risk framework →</a>
+            <a href="/pages/trust-center.html">Trust Center →</a>
+            <a href="/pages/security.html">Security →</a>
+          </div>
+        </Card>
+        <Card>
+          <span class="trust-index">DEVELOPER DOCUMENTATION</span>
+          <h2>Inspect the system</h2>
+          <p>Architecture, contracts, integrations, evidence and local diagnostics.</p>
+          <div class="footer-links">
+            <a href="/pages/protocol.html">Protocol →</a>
+            <a href="/pages/developers.html">Developer guide →</a>
+            <a href="#source-pack">Source pack ↓</a>
+          </div>
+        </Card>
+      </div>
+    </Section>
+
+    <Section id="source-pack">
+      <header class="section-heading">
+        <p class="eyebrow">Documentation pack v{manifest.version}</p>
+        <h2>Read the detailed source.</h2>
+        <p class="lede">
+          Search or select a document. JavaScript adds an in-site reader, section index, deep links
+          and Markdown download; every link remains a complete page without JavaScript.
+        </p>
+      </header>
+      <div class="docs-toolbar">
+        <label class="docs-search">
+          <span>Search documents</span>
+          <input
+            type="search"
+            placeholder="Architecture, risk, roadmap…"
+            autocomplete="off"
+            data-doc-search
+          />
+        </label>
+        <span class="docs-count" aria-live="polite">
+          <strong data-doc-count>{manifest.documents.length}</strong> documents
+        </span>
+      </div>
+      <div class="doc-catalog" data-doc-catalog>
+        {
+          manifest.documents.map((document) => (
+            <a
+              class="doc-entry"
+              href={documentRoute(document.id)}
+              data-doc-entry
+              data-doc-id={document.id}
+              data-doc-title={document.title}
+              data-doc-meta={`${document.category} · ${document.sourceType}`}
+              data-doc-file={document.file}
+              data-doc-download={documentDownload(document.file)}
+              data-doc-search={[document.id, document.title, document.subtitle, document.category]
+                .join(' ')
+                .toLocaleLowerCase()}
+            >
+              <Badge tone={badgeTone(document.category)}>{document.category}</Badge>
+              <span class="doc-entry__copy">
+                <strong>{document.title}</strong>
+                <span>{document.subtitle}</span>
+              </span>
+              <code>{document.id}</code>
+            </a>
+          ))
+        }
+      </div>
+      <Callout class="docs-source-status">
+        <strong>Source status.</strong> The website reads a synchronized documentation pack. Each document
+        states whether it represents vision, current implementation, evidence or an open decision.
+      </Callout>
+    </Section>
+
+    <dialog class="document-dialog" data-doc-dialog aria-labelledby="document-viewer-title">
+      <div class="document-viewer">
+        <header class="document-viewer__header">
+          <div class="document-viewer__title">
+            <h2 id="document-viewer-title" data-doc-title>Document</h2>
+            <p data-doc-meta></p>
+          </div>
+          <div class="document-viewer__actions">
+            <a class="button button--secondary" data-doc-download>Download .md</a>
+            <button
+              class="button button--ghost"
+              type="button"
+              data-doc-close
+              aria-label="Close document">Close</button
+            >
+          </div>
+        </header>
+        <div class="document-viewer__main">
+          <nav class="doc-toc" data-doc-toc aria-label="Document sections"></nav>
+          <article class="doc-article" tabindex="0" aria-label="Document content">
+            <div class="doc-article__inner" data-doc-body></div>
+          </article>
+        </div>
+      </div>
+    </dialog>
+  </div>
+</BaseLayout>
+
+<script>
+  import { mountDocs } from '../../features/docs/controller';
+
+  const root = document.querySelector<HTMLElement>('[data-docs-root]');
+  if (root) mountDocs(root);
+</script>
+
+<style>
+  .docs-source-status {
+    margin-top: 2rem;
+  }
+</style>

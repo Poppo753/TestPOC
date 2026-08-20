@@ -1,0 +1,40 @@
+---
+import ArchitectureMap from '../components/home/ArchitectureMap.astro';
+import CurrentProduct from '../components/home/CurrentProduct.astro';
+import DecisionRunway from '../components/home/DecisionRunway.astro';
+import FinancialSynthesis from '../components/home/FinancialSynthesis.astro';
+import HomeFinalCta from '../components/home/HomeFinalCta.astro';
+import HomeHero from '../components/home/HomeHero.astro';
+import OwnershipJourney from '../components/home/OwnershipJourney.astro';
+import ProductHorizons from '../components/home/ProductHorizons.astro';
+import StrategyInspector from '../components/home/StrategyInspector.astro';
+import TransparencyReceipt from '../components/home/TransparencyReceipt.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import '../styles/legacy/home-refresh.css';
+---
+
+<BaseLayout
+  title="Jethos — Home banking, rebuilt around ownership"
+  description="Hold, invest and understand digital assets from a self-custodial financial home built around transparent vaults and verifiable capital routes."
+  page="home"
+  canonicalPath="/index.html"
+  webglScene="ownership"
+>
+  <HomeHero />
+  <ProductHorizons />
+  <OwnershipJourney />
+  <TransparencyReceipt />
+  <DecisionRunway />
+  <FinancialSynthesis />
+  <StrategyInspector />
+  <ArchitectureMap />
+  <CurrentProduct />
+  <HomeFinalCta />
+</BaseLayout>
+
+<script>
+  import { mountSimpleHomeFeatures } from '../features/home/bootstrap';
+
+  const controller = mountSimpleHomeFeatures();
+  window.addEventListener('pagehide', () => controller.destroy(), { once: true });
+</script>

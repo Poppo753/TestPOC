@@ -1,0 +1,44 @@
+[Unit]
+Description=Vault Automation Controller - Arbitrum USDC POC observe
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=900
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=vaultops
+Group=vaultops
+WorkingDirectory=/opt/vault-automation/TestSmartContract
+Environment=HARDHAT_NETWORK=arbitrum
+Environment=XDG_CONFIG_HOME=/opt/vault-automation/TestSmartContract/.automation-state/runtime-config
+Environment=NPM_CONFIG_CACHE=/opt/vault-automation/TestSmartContract/.automation-state/npm-cache
+EnvironmentFile=/etc/vault-automation/arbitrum-usdc-poc-1.env
+ExecStart=/usr/local/bin/npm run automation:cli -- loop --config=scripts/automation/config.arbitrum-usdc-poc-1.json
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=180
+KillSignal=SIGTERM
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+LockPersonality=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+ReadWritePaths=/opt/vault-automation/TestSmartContract/.automation-state
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

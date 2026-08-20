@@ -1,0 +1,60 @@
+{
+  "totalFunctions": 193,
+  "completeFunctions": 37,
+  "incompleteFunctions": 156,
+  "byModule": {
+    "beacon": {
+      "total": 16,
+      "complete": 7,
+      "incomplete": 9
+    },
+    "proxygeneral": {
+      "total": 26,
+      "complete": 11,
+      "incomplete": 15
+    },
+    "tokenmanager": {
+      "total": 19,
+      "complete": 10,
+      "incomplete": 9
+    },
+    "valuecalculator": {
+      "total": 14,
+      "complete": 7,
+      "incomplete": 7
+    },
+    "liquiditymanager": {
+      "total": 21,
+      "complete": 1,
+      "incomplete": 20
+    },
+    "swapmanager": {
+      "total": 24,
+      "complete": 1,
+      "incomplete": 23
+    },
+    "emergencyhandler": {
+      "total": 39,
+      "complete": 0,
+      "incomplete": 39
+    },
+    "parametermanager": {
+      "total": 34,
+      "complete": 0,
+      "incomplete": 34
+    }
+  },
+  "missingFieldsSummary": {
+    "description": 4,
+    "signature": 0,
+    "parameters": 0,
+    "returns": 0,
+    "accessControl": 115,
+    "validations": 13,
+    "events": 11,
+    "gasCost": 7,
+    "usageExample": 99,
+    "calledBy": 32,
+    "securityNotes": 25
+  }
+}

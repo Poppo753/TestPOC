@@ -1,0 +1,8 @@
+{
+  "Beacon.deploy": "1612418",
+  "ParameterManager.deploy": "5679513",
+  "AaveV3Plugin.deploy": "3915692",
+  "LiquidityManager.deploy": "5028015",
+  "Beacon.setImplementation": "130383",
+  "AaveV3Plugin.deposit": "270257"
+}

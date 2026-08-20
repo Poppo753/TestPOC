@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "vaultId": "arbitrum-usdc-poc-1",
+  "chainId": 42161,
+  "manifestPath": "../manifests/arbitrum-usdc-poc-1.json",
+  "mode": "observe",
+  "baseAssetCode": "USDC",
+  "baseAssetDecimals": 6,
+  "protocols": [
+    { "name": "AaveV3", "enabled": true, "targetBps": 3500, "maxBps": 4000 },
+    { "name": "EulerV2", "enabled": true, "targetBps": 2500, "maxBps": 3000 },
+    { "name": "MorphoVault", "enabled": true, "targetBps": 2000, "maxBps": 2500 },
+    {
+      "name": "Morpho",
+      "enabled": false,
+      "targetBps": 0,
+      "maxBps": 0,
+      "collateralTokenCode": "WETH",
+      "loanTokenCode": "USDC"
+    }
+  ],
+  "policy": {
+    "reserveTargetBps": 2000,
+    "reserveMinimumBps": 1500,
+    "rebalanceThresholdBps": 500,
+    "minimumActionAmount": "100000",
+    "maxMovementBpsPerCycle": 1000,
+    "cooldownSeconds": 3600,
+    "maxPlanAgeBlocks": 1200,
+    "maxStateDriftBps": 5,
+    "maxObservationBlockSpan": 10,
+    "minHealthFactor": "1500000000000000000",
+    "requireOracleFreshness": false,
+    "supplyOnly": true,
+    "verificationToleranceBps": 100
+  },
+  "autonomous": {
+    "enabled": false,
+    "acknowledgement": ""
+  },
+  "execution": {
+    "kind": "disabled"
+  },
+  "runtime": {
+    "stateDirectory": "../../.automation-state/arbitrum-usdc-poc-1",
+    "intervalSeconds": 300,
+    "lockTtlSeconds": 900,
+    "confirmations": 2,
+    "rpcRetries": 5,
+    "rpcRetryDelayMs": 1000,
+    "heartbeatPath": "../../.automation-state/arbitrum-usdc-poc-1/service-heartbeat.json",
+    "maxConsecutiveFailures": 5
+  }
+}

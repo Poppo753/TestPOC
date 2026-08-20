@@ -1,0 +1,13 @@
+# Pre-tag evidence — 2026-07-14
+# Recompute after the final commit/tag; this file does not replace the tagged archive checksums.
+
+historicalDeploymentCommit=8f53e98df974dd1b5d59ba0484ba1a4f157b2a7e
+historicalContractsTree=a9bee2b7593c4239249c980f5d220dbed2c7bf5b
+contractsDiffAgainstHistoricalCommit=empty
+
+3210bcf1adf3467963936c214336bfc2f8a8e53e6f9ce72d408b86216b91e618  scripts/manifests/arbitrum-usdc-poc-1.json
+46222bcaf4fb1fcf198b0cef31dadbf1505124790771862a3d4a886885c8e253  package-lock.json
+6ecd54ecf713acc3f60228a55dbf2379b5f95279cfdcac7aa19d311fcb8c8cee  hardhat.config.ts
+a093bb2fed59d699b7f9a62a5203cc196054c624e9c39c6d908c9e7db5dd2464  .npmrc
+bce18c49707452b88c5dbc1b4a770a774bb21873415b05d02644ba87dd786be7  scripts/verification/verify-poc.ts
+73f05dc46bd17af4afded6d7627ede6bcef8aa68d9caaba63a4f3b1c09b43a97  reports/verification/arbitrum-usdc-poc-1.json

@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "recordedAt": "2026-07-14T17:29:00.000Z",
+  "source": "scripts/manifests/arbitrum-usdc-poc-1.json",
+  "notice": "Registration in the deployment record does not prove a current allocation or imply a live public product.",
+  "protocols": [
+    { "id": "aave-v3", "name": "Aave V3", "kind": "Lending", "status": "implemented", "role": "Approved supply integration in the PoC record." },
+    { "id": "euler-v2", "name": "Euler V2", "kind": "Lending", "status": "implemented", "role": "Approved ERC-4626-based lending integration in the PoC record." },
+    { "id": "morpho-blue", "name": "Morpho Blue", "kind": "Lending market", "status": "implemented", "role": "Market-based supply and borrowing capability; PoC policy remains supply-only." },
+    { "id": "morpho-vault", "name": "Morpho Vault", "kind": "External vault", "status": "implemented", "role": "Approved external vault integration in the PoC record." }
+  ]
+}
+

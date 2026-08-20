@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "vaultId": "arbitrum-weth-poc-1",
+  "chainId": 42161,
+  "manifestPath": "../manifests/arbitrum-weth-poc.json",
+  "mode": "observe",
+  "baseAssetCode": "WETH",
+  "baseAssetDecimals": 18,
+  "protocols": [
+    { "name": "AaveV3", "enabled": true, "targetBps": 4500, "maxBps": 5000 },
+    { "name": "EulerV2", "enabled": true, "targetBps": 2500, "maxBps": 3000 },
+    { "name": "MorphoVault", "enabled": true, "targetBps": 2000, "maxBps": 2500 }
+  ],
+  "policy": {
+    "reserveTargetBps": 1000,
+    "reserveMinimumBps": 750,
+    "rebalanceThresholdBps": 250,
+    "minimumActionAmount": "1000000000000000",
+    "maxMovementBpsPerCycle": 1000,
+    "cooldownSeconds": 3600,
+    "maxPlanAgeBlocks": 1200,
+    "maxStateDriftBps": 5,
+    "maxObservationBlockSpan": 3,
+    "minHealthFactor": "1500000000000000000",
+    "requireOracleFreshness": false,
+    "supplyOnly": true,
+    "verificationToleranceBps": 100
+  },
+  "autonomous": {
+    "enabled": false,
+    "acknowledgement": ""
+  },
+  "execution": {
+    "kind": "disabled"
+  },
+  "runtime": {
+    "stateDirectory": "../../.automation-state/arbitrum-weth-poc-1",
+    "intervalSeconds": 300,
+    "lockTtlSeconds": 900,
+    "confirmations": 2,
+    "rpcRetries": 5,
+    "rpcRetryDelayMs": 1000,
+    "heartbeatPath": "../../.automation-state/arbitrum-weth-poc-1/service-heartbeat.json",
+    "maxConsecutiveFailures": 5
+  }
+}

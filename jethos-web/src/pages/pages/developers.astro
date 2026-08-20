@@ -1,0 +1,99 @@
+---
+import { protocolEvidenceRepository } from '../../content/local-repository';
+import Callout from '../../design-system/components/Callout.astro';
+import Card from '../../design-system/components/Card.astro';
+import SourceLabel from '../../design-system/components/SourceLabel.astro';
+import Grid from '../../design-system/composition/Grid.astro';
+import Section from '../../design-system/composition/Section.astro';
+import Split from '../../design-system/composition/Split.astro';
+import DataTable from '../../design-system/patterns/DataTable.astro';
+import PageHero from '../../design-system/patterns/PageHero.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const deployments = await protocolEvidenceRepository.getDeployments();
+const deployment = deployments.deployments[0];
+if (!deployment) throw new Error('Developer page requires a recorded deployment.');
+const addressRows = [
+  ['USDC', deployment.baseAsset.address],
+  ['LiquidityManager', deployment.contracts.liquidityManager],
+  ['ProxyGeneral', deployment.contracts.proxyGeneral],
+  ['ValueCalculator', deployment.contracts.valueCalculator],
+  ['ProtocolManager', deployment.contracts.protocolManager],
+] as const;
+if (addressRows.some(([, address]) => !address))
+  throw new Error('Developer address table is incomplete.');
+---
+
+<BaseLayout
+  title="Jethos developers — PoC integration guide"
+  description="Developer entry point for the Jethos USDC PoC, contract addresses, frontend modules and safe local setup."
+  page="developers"
+  canonicalPath="/pages/developers.html"
+>
+  <PageHero
+    eyebrow="Developers"
+    title="Build against explicit deployment records."
+    description="The current web console targets the private Arbitrum USDC PoC and keeps deployment config, ABI, readers, estimates and transactions in separate modules."
+  />
+  <Section
+    ><Split
+      ><div>
+        <h2>Run locally</h2><p>From <code>jethos-web</code>:</p><Card
+          ><code>npm run dev</code><p class="muted u-margin-top-4">
+            Then open the local URL printed by Astro.
+          </p></Card
+        >
+      </div><div>
+        <h2>User entry points</h2><ul>
+          <li>USDC <code>approve</code> to LiquidityManager.</li><li>
+            <code>LiquidityManager.deposit(uint256)</code>.
+          </li><li><code>LiquidityManager.withdrawWithDeadline(uint256,uint256)</code>.</li><li>
+            Events for deposit and withdrawal history.
+          </li>
+        </ul><p>Normal users do not call plugins directly.</p>
+      </div></Split
+    ></Section
+  >
+  <Section
+    ><h2>PoC addresses</h2><DataTable label="PoC contract addresses"
+      ><table>
+        <thead><tr><th>Component</th><th>Address</th></tr></thead><tbody
+          >{
+            addressRows.map(([name, address]) => (
+              <tr>
+                <>
+                  <td>{name}</td>
+                  <td>
+                    <code>{address}</code>
+                  </td>
+                </>
+              </tr>
+            ))
+          }</tbody
+        >
+      </table></DataTable
+    ><SourceLabel class="u-margin-top-4"
+      >Recorded in {deployment.id} on 14 July 2026; verify live before use</SourceLabel
+    ></Section
+  >
+  <Section
+    ><h2>Frontend module boundaries</h2><Grid columns={3}
+      ><Card
+        ><h3>Config & ABI</h3><p>
+          Immutable PoC description and minimal callable interfaces.
+        </p></Card
+      ><Card
+        ><h3>Readers & estimates</h3><p>
+          Read-only snapshots and explicitly indicative client-side calculations.
+        </p></Card
+      ><Card
+        ><h3>Transactions</h3><p>
+          Validated approval, deposit, withdrawal and revoke workflows.
+        </p></Card
+      ></Grid
+    ><Callout tone="warning" class="u-margin-top-4"
+      ><strong>Do not copy addresses between deployments.</strong> A base-asset deployment is a distinct
+      vault system. Update config from a verified manifest and test every ABI against deployed bytecode.</Callout
+    ></Section
+  >
+</BaseLayout>
